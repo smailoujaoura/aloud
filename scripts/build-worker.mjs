@@ -12,6 +12,13 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const stub = resolve(root, 'src/worker/empty-stub.ts');
 
+// One worker bundle serves both browsers: esbuild takes the lowest common denominator of these
+// baselines, and the worker's own browser differences are runtime capability checks
+// (src/shared/browser-env.ts), not build-time ones. Keeping a single bundle also means the
+// generated files copied into the shared public/ directory can't be clobbered by whichever
+// browser was built last.
+const BROWSER_TARGETS = ['firefox128', 'chrome120'];
+
 export async function buildWorker(options) {
   const minify = !(options && options.minify === false);
   await build({
@@ -31,7 +38,7 @@ export async function buildWorker(options) {
     define: { 'process.env.NODE_ENV': JSON.stringify('production') },
     worker: { format: 'es' },
     build: {
-      target: 'firefox128',
+      target: BROWSER_TARGETS,
       outDir: '.gen/worker',
       emptyOutDir: true,
       // Vite otherwise copies <root>/public/* into outDir *after* bundling — and public/ holds a
@@ -44,9 +51,10 @@ export async function buildWorker(options) {
         input: resolve(root, 'src/worker/entry.ts'),
         // onnxruntime-web / -common are provided at run time as a real ESM module served from
         // the extension package. Keeping them external stops Vite inlining ORT's ~30 MB of
-        // .wasm. `output.paths` rewrites the bare specifier to that URL (Firefox workers have
-        // no import maps). The transformers bundle only actually touches this import when
-        // globalThis[Symbol.for('onnxruntime')] is unset — which it never is (see ort-loader).
+        // .wasm. `output.paths` rewrites the bare specifier to that URL, because module workers
+        // have no import maps in either browser. The transformers bundle only actually touches
+        // this import when globalThis[Symbol.for('onnxruntime')] is unset — which it never is
+        // (see ort-loader).
         external: ['onnxruntime-web', 'onnxruntime-common'],
         output: {
           format: 'es',
@@ -95,7 +103,7 @@ export async function buildWorker(options) {
  *
  * It must NOT be an ES module with a `crossorigin` attribute (what a bundler HTML entrypoint
  * emits): when public/synth-host.html is framed by web content, a `crossorigin` module script
- * fails to load because moz-extension resources send no CORS headers, leaving the page inert.
+ * fails to load because extension resources send no CORS headers, leaving the page inert.
  * A same-origin classic `<script src>` has no such problem.
  */
 export async function buildSynthHost(options) {
@@ -107,7 +115,7 @@ export async function buildSynthHost(options) {
     resolve: { alias: { '@': resolve(root, 'src') }, conditions: ['browser', 'import', 'default'] },
     define: { 'process.env.NODE_ENV': JSON.stringify('production') },
     build: {
-      target: 'firefox128',
+      target: BROWSER_TARGETS,
       outDir: '.gen/worker',
       emptyOutDir: false,
       // Critical: without this Vite copies public/* (including a stale tts-worker.js) over the
