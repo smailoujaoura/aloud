@@ -84,6 +84,9 @@ export class ReaderSession {
   private engineReady = false;
   private wantsPlayback = false;
   private disposed = false;
+  /** Sample rate the active engine produces. Used to build the silence that replaces a
+   *  sentence which failed to synthesise. */
+  private sampleRate = 22050;
 
   private state: SessionState = {
     status: 'idle',
@@ -141,9 +144,10 @@ export class ReaderSession {
       },
       onAudio: (playId, pcm, sr) =>
         this.scheduler.provide(playId, pcm, sr, leadSilenceSec(this.playlist[playId], this.settings)),
-      onError: ({ message, fatal, stack }) => {
+      onError: ({ message, fatal, stack, playId }) => {
         log.error('worker error:', message, stack ? `\n${stack}` : '');
         if (fatal) this.fail(message);
+        else if (playId != null) this.skipSentence(playId);
       },
     });
 
@@ -184,6 +188,7 @@ export class ReaderSession {
 
   private onEngineReady(executionProvider: string, sampleRate: number): void {
     this.engineReady = true;
+    this.sampleRate = sampleRate;
     this.state.engineInfo = executionProvider;
     log.info('engine ready', executionProvider, `${sampleRate}Hz`);
     this.setStatus(this.wantsPlayback ? 'playing' : 'paused');
@@ -462,6 +467,19 @@ export class ReaderSession {
 
     this.ensureSynth(playId + 1);
     this.pushState();
+  }
+
+  /**
+   * Replace a sentence that could not be synthesised with a moment of silence.
+   *
+   * Without this the scheduler waits on that slot forever — it plays strictly in order — so one
+   * failed sentence stalls the rest of the article behind a permanent "Buffering…", with no way
+   * out but a manual seek past it.
+   */
+  private skipSentence(playId: number): void {
+    log.warn(`sentence ${playId} could not be synthesised — skipping it`);
+    this.requested.delete(playId);
+    this.scheduler.provide(playId, new Float32Array(0), this.sampleRate, 0);
   }
 
   private onChunkEnd(playId: number): void {

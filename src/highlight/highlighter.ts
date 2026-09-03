@@ -91,19 +91,22 @@ export class Highlighter {
     if (this.opts.scrollMode !== 'off') this.scrollIntoView(range);
   }
 
+  /**
+   * Fallback highlight: wrap the range in a `<span>`.
+   *
+   * `surroundContents` throws when the range partially selects a non-Text node (a sentence that
+   * spans the end of an `<em>`, say). The tempting recovery — `extractContents()` then
+   * `insertNode()` — must **not** be used: it moves nodes out of the document and back, which
+   * silently invalidates every other `Range` the playlist is holding, so the rest of the
+   * article's highlights land on the wrong text. Skipping the highlight for one sentence is far
+   * cheaper than corrupting the index; the sentence is still spoken either way.
+   */
   private showWithSpan(range: Range): void {
     this.unwrapSpan();
     try {
       const span = this.doc.createElement('span');
       span.className = SPAN_CLASS;
-      // surroundContents throws if the range partially selects a non-Text node; fall back to
-      // extract + insert which tolerates that at the cost of a heavier mutation.
-      try {
-        range.surroundContents(span);
-      } catch {
-        span.appendChild(range.extractContents());
-        range.insertNode(span);
-      }
+      range.surroundContents(span);
       this.currentSpan = span;
     } catch {
       this.currentSpan = null;
@@ -119,7 +122,9 @@ export class Highlighter {
     const parent = span.parentNode;
     while (span.firstChild) parent.insertBefore(span.firstChild, span);
     parent.removeChild(span);
-    parent.normalize();
+    // Deliberately no `parent.normalize()`: merging the text nodes back together would shift the
+    // offsets that the playlist's cached Ranges are built on, and drift the highlight from the
+    // audio for the rest of the article. A few extra adjacent text nodes are harmless.
     this.currentSpan = null;
   }
 

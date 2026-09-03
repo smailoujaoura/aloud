@@ -150,6 +150,10 @@ export class WorkerClient {
         if (msg.fatal) {
           this.handshake?.reject(new Error(message));
           this.engineReady?.reject(new Error(message));
+        } else if (msg.chunkIndex != null) {
+          // This sentence will never arrive. Stop counting it as in-flight, or the session can
+          // never re-request it and `isPending` misreports it as still coming.
+          this.wanted.delete(msg.chunkIndex);
         }
         this.cb.onError({
           message,
