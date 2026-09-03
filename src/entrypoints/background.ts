@@ -62,6 +62,10 @@ export default defineBackground({
 
     // Right-click entries. Absent on Firefox for Android.
     optional('contextMenus', () => {
+      // Checked before registering anything, so we don't leave an onInstalled listener behind
+      // that would throw later on a browser without the namespace.
+      if (!browser.contextMenus) throw new Error('browser.contextMenus is undefined');
+
       browser.runtime.onInstalled.addListener(() => {
         // `onInstalled` also fires on update and on browser update, when the items already
         // exist; Chromium rejects a duplicate id outright, so start from a clean slate.
