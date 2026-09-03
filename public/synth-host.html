@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Aloud synthesis host</title>
+    <!--
+      Not user-facing. The content script loads this page in a hidden, same-extension <iframe>
+      so the synthesis Worker can be created here — Firefox forbids a content script from
+      spawning a moz-extension: Worker directly. Kept as a hand-written static file (not a WXT
+      HTML entrypoint) so its script is a plain same-origin <script src> with no `crossorigin`
+      attribute: a `crossorigin` module script fails to load when the page is framed by web
+      content, because moz-extension resources send no CORS headers. See engine/worker-client.ts
+      and scripts/build-worker.mjs (which emits synth-host.js next to tts-worker.js).
+    -->
+    <script src="/synth-host.js"></script>
+  </head>
+  <body></body>
+</html>

@@ -1,0 +1,157 @@
+/**
+ * In-place sentence highlighting.
+ *
+ * Primary path: the CSS Custom Highlight API (`CSS.highlights`), which paints a `Range` with
+ * zero DOM mutation — no reflow, no risk of breaking the page's layout. Requires Firefox 140+.
+ *
+ * Fallback (older Firefox): wrap the range in a `<span>` and unwrap it on advance. This can
+ * disturb layout in rare inline-splitting cases, so it is only used when `CSS.highlights` is
+ * absent.
+ */
+
+const HIGHLIGHT_NAME = 'aloud-sentence';
+const STYLE_ID = 'aloud-highlight-style';
+const SPAN_CLASS = 'aloud-hl-span';
+
+export type ScrollMode = 'off' | 'keep-visible' | 'snap';
+
+export interface HighlighterOptions {
+  color: string;
+  /**
+   * `off` — never scroll. `keep-visible` — scroll only when the sentence leaves a margin
+   * near the viewport edge. `snap` — pull the sentence to the vertical centre on every advance.
+   */
+  scrollMode: ScrollMode;
+}
+
+export class Highlighter {
+  private readonly supportsCSSHighlight: boolean;
+  private highlight: Highlight | null = null;
+  private currentSpan: HTMLElement | null = null;
+  private styleEl: HTMLStyleElement | null = null;
+  private lastScroll = 0;
+  private readonly reduceMotion: boolean;
+
+  constructor(private readonly doc: Document, private opts: HighlighterOptions) {
+    this.supportsCSSHighlight =
+      typeof CSS !== 'undefined' && 'highlights' in CSS && typeof Highlight !== 'undefined';
+    this.reduceMotion = doc.defaultView?.matchMedia('(prefers-reduced-motion: reduce)').matches ?? false;
+    this.injectStyle();
+  }
+
+  private injectStyle(): void {
+    if (this.doc.getElementById(STYLE_ID)) {
+      this.styleEl = this.doc.getElementById(STYLE_ID) as HTMLStyleElement;
+      return;
+    }
+    const style = this.doc.createElement('style');
+    style.id = STYLE_ID;
+    style.textContent = `
+      ::highlight(${HIGHLIGHT_NAME}) {
+        background-color: ${this.opts.color};
+        color: inherit;
+        border-radius: 2px;
+      }
+      .${SPAN_CLASS} {
+        background-color: ${this.opts.color};
+        border-radius: 2px;
+        box-decoration-break: clone;
+        -webkit-box-decoration-break: clone;
+      }
+    `;
+    (this.doc.head ?? this.doc.documentElement).appendChild(style);
+    this.styleEl = style;
+  }
+
+  setOptions(opts: Partial<HighlighterOptions>): void {
+    this.opts = { ...this.opts, ...opts };
+    if (this.styleEl) {
+      this.styleEl.remove();
+      this.styleEl = null;
+    }
+    this.injectStyle();
+  }
+
+  show(range: Range | null): void {
+    if (!range) {
+      this.clear();
+      return;
+    }
+    if (this.supportsCSSHighlight) {
+      if (!this.highlight) {
+        this.highlight = new Highlight();
+        CSS.highlights.set(HIGHLIGHT_NAME, this.highlight);
+      }
+      this.highlight.clear();
+      this.highlight.add(range);
+    } else {
+      this.showWithSpan(range);
+    }
+    if (this.opts.scrollMode !== 'off') this.scrollIntoView(range);
+  }
+
+  private showWithSpan(range: Range): void {
+    this.unwrapSpan();
+    try {
+      const span = this.doc.createElement('span');
+      span.className = SPAN_CLASS;
+      // surroundContents throws if the range partially selects a non-Text node; fall back to
+      // extract + insert which tolerates that at the cost of a heavier mutation.
+      try {
+        range.surroundContents(span);
+      } catch {
+        span.appendChild(range.extractContents());
+        range.insertNode(span);
+      }
+      this.currentSpan = span;
+    } catch {
+      this.currentSpan = null;
+    }
+  }
+
+  private unwrapSpan(): void {
+    const span = this.currentSpan;
+    if (!span || !span.parentNode) {
+      this.currentSpan = null;
+      return;
+    }
+    const parent = span.parentNode;
+    while (span.firstChild) parent.insertBefore(span.firstChild, span);
+    parent.removeChild(span);
+    parent.normalize();
+    this.currentSpan = null;
+  }
+
+  private scrollIntoView(range: Range): void {
+    const snap = this.opts.scrollMode === 'snap';
+    const now = Date.now();
+    if (now - this.lastScroll < (snap ? 250 : 500)) return;
+    const rect = range.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) return;
+    const view = this.doc.defaultView!;
+    const margin = view.innerHeight * 0.15;
+    const outOfView = rect.top < margin || rect.bottom > view.innerHeight - margin;
+    if (snap || outOfView) {
+      this.lastScroll = now;
+      const el = range.startContainer.parentElement;
+      el?.scrollIntoView({
+        block: 'center',
+        inline: 'nearest',
+        behavior: this.reduceMotion ? 'auto' : 'smooth',
+      });
+    }
+  }
+
+  clear(): void {
+    if (this.highlight) this.highlight.clear();
+    this.unwrapSpan();
+  }
+
+  dispose(): void {
+    this.clear();
+    if (this.supportsCSSHighlight) CSS.highlights.delete(HIGHLIGHT_NAME);
+    this.highlight = null;
+    this.styleEl?.remove();
+    this.styleEl = null;
+  }
+}

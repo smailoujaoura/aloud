@@ -1,0 +1,37 @@
+{
+  "$comment": "Hand-authored base for public/models.json. scripts/gen-voices.mjs fills in the full `piper` catalogue from rhasspy/piper-voices at the pinned revision and writes the merged file to public/models.json (which is committed).",
+  "piper": {},
+  "kokoro": {
+    "modelId": "onnx-community/Kokoro-82M-v1.0-ONNX",
+    "license": "Apache-2.0",
+    "voices": {}
+  },
+  "supertonic": {
+    "modelId": "Supertone/supertonic-2",
+    "license": "OpenRAIL-M (use-restricted model licence)",
+    "base": "https://huggingface.co/Supertone/supertonic-2/resolve/main",
+    "sampleRate": 44100,
+    "files": {
+      "textEncoder": "onnx/text_encoder.onnx",
+      "durationPredictor": "onnx/duration_predictor.onnx",
+      "vectorEstimator": "onnx/vector_estimator.onnx",
+      "vocoder": "onnx/vocoder.onnx"
+    },
+    "config": {
+      "tts": "onnx/tts.json",
+      "unicodeIndexer": "onnx/unicode_indexer.json"
+    },
+    "voices": {
+      "F1": { "label": "Female 1", "gender": "female" },
+      "F2": { "label": "Female 2", "gender": "female" },
+      "F3": { "label": "Female 3", "gender": "female" },
+      "F4": { "label": "Female 4", "gender": "female" },
+      "F5": { "label": "Female 5", "gender": "female" },
+      "M1": { "label": "Male 1", "gender": "male" },
+      "M2": { "label": "Male 2", "gender": "male" },
+      "M3": { "label": "Male 3", "gender": "male" },
+      "M4": { "label": "Male 4", "gender": "male" },
+      "M5": { "label": "Male 5", "gender": "male" }
+    }
+  }
+}

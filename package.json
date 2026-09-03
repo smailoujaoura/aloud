@@ -1,0 +1,33 @@
+{
+  "name": "tts-reader",
+  "version": "0.1.0",
+  "description": "Fast offline neural text-to-speech for Firefox: Readability extraction, Piper/Kokoro via ONNX Runtime Web, gapless Web Audio playback, in-place sentence highlighting.",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "scripts": {
+    "postinstall": "wxt prepare",
+    "dev": "wxt --browser firefox",
+    "build": "wxt build --browser firefox --mv3",
+    "zip": "wxt zip --browser firefox --mv3",
+    "prebuild:assets": "node scripts/prebuild.mjs",
+    "compile": "tsc --noEmit",
+    "test": "vitest run",
+    "lint:ext": "web-ext lint --source-dir .output/firefox-mv3"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "3.7.5",
+    "@mozilla/readability": "0.6.0",
+    "kokoro-js": "1.2.1",
+    "onnxruntime-web": "1.22.0",
+    "phonemizer": "1.2.1"
+  },
+  "devDependencies": {
+    "happy-dom": "17.4.4",
+    "playwright": "^1.62.1",
+    "typescript": "5.7.3",
+    "vite": "^8.2.0",
+    "vitest": "3.0.5",
+    "web-ext": "10.6.0",
+    "wxt": "0.21.4"
+  }
+}

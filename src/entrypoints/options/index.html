@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- WXT reads options-page flags from here, not from wxt.config's manifest.options_ui. -->
+    <meta name="manifest.open_in_tab" content="true" />
+    <title>Aloud — Settings</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Aloud — Offline Neural Reader</h1>
+      <p class="sub">Everything runs locally. Voice models download once and are cached on this device.</p>
+
+      <section>
+        <h2>Voice</h2>
+        <label class="row">
+          <span>Engine</span>
+          <select id="engine">
+            <option value="piper">Piper — fast, runs anywhere</option>
+            <option value="kokoro">Kokoro — best quality, slow on Firefox</option>
+            <option value="supertonic">Supertonic — expressive, medium speed</option>
+          </select>
+        </label>
+        <p class="row-hint" id="engineHint"></p>
+
+        <label class="row">
+          <span>Voice</span>
+          <select id="voice"></select>
+          <span id="voicePreviewSlot"></span>
+        </label>
+        <p class="row-hint" id="voiceHint" hidden></p>
+
+        <label class="row">
+          <span>Speed</span>
+          <input type="range" id="speed" min="0.5" max="4" step="0.05" />
+          <output id="speedOut"></output>
+        </label>
+      </section>
+
+      <section>
+        <h2>Reading</h2>
+        <label class="row check">
+          <input type="checkbox" id="highlight" />
+          <span>Highlight the sentence being read</span>
+        </label>
+        <label class="row">
+          <span>Highlight colour</span>
+          <input type="color" id="highlightColor" />
+        </label>
+        <label class="row">
+          <span>Follow the reader</span>
+          <select id="scrollMode">
+            <option value="off">Don’t scroll</option>
+            <option value="keep-visible">Keep the sentence visible</option>
+            <option value="snap">Snap the sentence to the centre</option>
+          </select>
+        </label>
+        <label class="row">
+          <span>Pause between sections</span>
+          <input type="range" id="sectionPauseMs" min="0" max="2000" step="50" />
+          <output id="sectionPauseOut"></output>
+        </label>
+        <label class="row">
+          <span>Pause between sentences</span>
+          <input type="range" id="sentencePauseMs" min="0" max="1000" step="25" />
+          <output id="sentencePauseOut"></output>
+        </label>
+        <label class="row check">
+          <input type="checkbox" id="tapToSeek" />
+          <span>Click a sentence in the page to jump there</span>
+        </label>
+        <label class="row check">
+          <input type="checkbox" id="skipUrls" />
+          <span>Say “link” instead of reading URLs aloud</span>
+        </label>
+        <label class="row check">
+          <input type="checkbox" id="expandAbbreviations" />
+          <span>Expand abbreviations (“e.g.” → “for example”)</span>
+        </label>
+      </section>
+
+      <section>
+        <h2>Voices &amp; downloads</h2>
+        <p class="muted">
+          Each voice is stored on this device only. <b>Preview</b> hears a voice before you commit,
+          <b>Download</b> fetches it for offline use, <b>Use</b> makes it the active voice. Your
+          selected voice downloads by itself the first time you read a page.
+        </p>
+        <input type="search" id="voiceFilter" class="model-filter" placeholder="Filter voices by name or language…" />
+        <div id="enginePanels"></div>
+        <p id="usage" class="muted">Calculating…</p>
+        <button id="clearModels" class="danger">Delete all cached models</button>
+      </section>
+
+      <section>
+        <h2>Advanced</h2>
+        <label class="row" id="kokoro-dtype-row">
+          <span>Kokoro precision</span>
+          <select id="kokoroDtype">
+            <option value="q8">Quantised — ~86 MB (default)</option>
+            <option value="fp32">Full precision — ~320 MB, ~10% faster</option>
+          </select>
+        </label>
+        <label class="row" id="supertonic-steps-row">
+          <span>Supertonic detail</span>
+          <input type="range" id="supertonicSteps" min="2" max="10" step="1" />
+          <output id="supertonicStepsOut"></output>
+        </label>
+        <label class="row">
+          <span>Parallel synthesis workers</span>
+          <input type="range" id="synthWorkers" min="0" max="6" step="1" />
+          <output id="synthWorkersOut"></output>
+        </label>
+        <p class="row-hint">
+          Kokoro (and to a lesser extent Supertonic) runs several times slower than real-time on
+          Firefox, so a few sentences are synthesised at once to keep up with playback.
+          <b>0 = auto</b>, based on your CPU cores. Each extra worker adds one in-memory copy of
+          the model (~90&nbsp;MB for Kokoro), so higher isn’t always better. Piper ignores this.
+        </p>
+        <label class="row check">
+          <input type="checkbox" id="preferWebGPU" />
+          <span>Use WebGPU acceleration when available</span>
+        </label>
+        <p class="row-hint">Firefox does not yet expose WebGPU to extensions on most platforms; this currently has no effect there.</p>
+        <label class="row check">
+          <input type="checkbox" id="debug" />
+          <span>Verbose console logging</span>
+        </label>
+        <button id="reset">Reset all settings to defaults</button>
+      </section>
+
+      <p class="saved" id="saved" hidden>Saved</p>
+      <footer>
+        GPLv3 · bundles eSpeak-NG, ONNX Runtime Web, Piper &amp; Kokoro. Supertonic weights are
+        under the use-restricted OpenRAIL-M licence. Model licences are listed in the repository’s
+        <code>THIRD_PARTY.md</code>.
+      </footer>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

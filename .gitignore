@@ -1,0 +1,11 @@
+node_modules/
+.output/
+.gen/
+.wxt/
+stats.html
+*.zip
+*.log
+
+# vendored/generated — reproduced by `pnpm build` (see BUILD.md)
+public/vendor/
+public/tts-worker.js
