@@ -1,3 +1,5 @@
+import { CONTROL_HOST_ID } from '@/ui/control-bar';
+
 /**
  * Click (or tap) a sentence in the page to jump playback there.
  *
@@ -22,9 +24,6 @@ const INTERACTIVE_SELECTOR = [
   '[contenteditable=""]',
   '[contenteditable="true"]',
 ].join(', ');
-
-/** The id of the control bar's shadow host, so we can recognise our own UI in a composed path. */
-export const CONTROL_HOST_ID = 'aloud-control-host';
 
 export interface TapToSeekOptions {
   /** Playlist index at a viewport point, or null when the point is not on readable text. */
