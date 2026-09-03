@@ -1,15 +1,81 @@
-# Offline TTS Firefox Extension — Technical Design & Implementation Plan
+# Offline TTS Extension — Technical Design & Implementation Plan
 
 ## Context
 
-Goal: a Firefox (Manifest V3) extension that reads web articles aloud, entirely offline, faster
-and higher quality than "Read Aloud". Pipeline: Readability extraction → sentence segmentation →
-local neural TTS (Piper by default, Kokoro optional) via ONNX Runtime Web (WASM) → gapless Web
-Audio playback → in-place sentence highlighting via the CSS Custom Highlight API.
+Goal: a Manifest V3 extension that reads web articles aloud, entirely offline, faster and higher
+quality than "Read Aloud". Pipeline: Readability extraction → sentence segmentation → local
+neural TTS via ONNX Runtime Web → gapless Web Audio playback → in-place sentence highlighting via
+the CSS Custom Highlight API.
 
-This document is the senior-architect analysis of the stack's pitfalls in a Firefox MV3 extension,
-followed by a concrete build plan. The sections below are the original plan; the extension has
-since been built against it.
+This document is the senior-architect analysis of the stack's pitfalls in a Firefox MV3
+extension, followed by a concrete build plan. **§1–§7 are the original Firefox-only plan**, kept
+because the constraints they analyse are still the ones that shape the code. §0 below records
+what changed when the extension was extended to Chromium and Firefox for Android.
+
+---
+
+## 0. Cross-browser (added after the Firefox-only v1)
+
+Aloud targets Gecko (Firefox desktop + Android) and Chromium (Chrome, Edge, Brave, Opera).
+Everything that genuinely differs is a named capability in `src/shared/browser-env.ts`; the rest
+of the codebase branches on those, never on a browser name.
+
+### 0.1 What actually differs
+
+| | Gecko | Chromium |
+|---|---|---|
+| Background | Event page (`background.scripts`), real DOM | Service worker (`background.service_worker`), no DOM |
+| `navigator.gpu` in a Worker | **Not exposed to extensions** | **Exposed** |
+| `SharedArrayBuffer` in extensions | No ([bug 1673477](https://bugzilla.mozilla.org/show_bug.cgi?id=1673477)) | Only in a cross-origin-isolated top-level context |
+| Content script → `new Worker(runtime.getURL(…))` | Forbidden (same-origin, no WAR exception) | Allowed |
+| `menus.getTargetElement()` | Yes | No |
+| `offscreen` API | No | Yes |
+
+Consequences, in order of how much they matter:
+
+1. **WebGPU is the whole ballgame for engine choice.** The `webgpu → wasm` ladder in
+   `engine/engines/kokoro.ts` was written for Firefox and never fires there, because
+   `navigator.gpu` is absent in the worker. On Chromium it fires, and Kokoro goes from ~3×
+   slower than real time to comfortably faster. So the *same* engine is the worst practical
+   choice on one browser and the best on the other. `shared/engine-catalog.ts` encodes this as a
+   per-browser `standing` and drives all the UI copy from it, rather than the UI hardcoding
+   "slow on Firefox".
+2. **The worker pool inverts on the GPU path.** The pool in `synth-host/entry.ts` exists purely
+   to work around slow CPU synthesis. On WebGPU every worker queues onto the same device, so
+   parallelism buys nothing and each copy costs VRAM and shader compilation — `autoPoolSize`
+   returns 1 there, and on phones (memory).
+3. **The `synth-host.html` iframe is kept on both browsers** even though Chromium would let the
+   content script build the Worker directly. One code path is worth more than one saved frame,
+   and the iframe is also what keeps the worker's event loop off the throttled-background path.
+4. **`SharedArrayBuffer` remains out of reach on both**, so `numThreads = 1` stays. Chromium
+   *can* grant SAB to a cross-origin-isolated extension document (COEP/COOP manifest keys), but
+   only to a *top-level* one — an iframe embedded in an ordinary article page can never be
+   cross-origin isolated. Reaching multi-threaded WASM on Chromium would mean moving synthesis
+   into an `offscreen` document, which is a genuinely different architecture. Not done; WebGPU
+   makes it mostly unnecessary.
+5. **`menus.getTargetElement` degrades gracefully.** Without it, "Read from here" falls back to
+   the first sentence in the viewport (`content/playlist-navigation.ts`), which is what "here"
+   means anyway when there is no click target.
+
+### 0.2 Firefox for Android
+
+Supported, with `gecko_android` declared in the manifest so AMO does not treat the add-on as
+desktop-only. Two adaptations:
+
+- **The control bar is touch-first below 560px** (and on any coarse pointer): two rows, 40px hit
+  targets, a 12px scrubber, and `env(safe-area-inset-bottom)` to clear the home indicator. The
+  in-bar voice picker is hidden — a native `<select>` of 175 options is unusable on a phone, and
+  the gear button reaches the options page.
+- **Piper only, in practice.** Phone CPUs have no GPU path here and not enough cores or memory
+  for the neural engines; `engine-catalog` marks both `unsuitable` and `engine-tuning` primes
+  longer with shorter chunks.
+
+### 0.3 Build
+
+One WXT config, `manifest` as a function of the target browser (`wxt.config.ts`).
+`browser_specific_settings` is emitted for Firefox only. `pnpm build` produces both outputs. The
+synthesis worker is a *single* bundle targeting both baselines, so the shared `public/` directory
+cannot be clobbered by whichever browser built last. See `BUILD.md`.
 
 ---
 
@@ -44,9 +110,15 @@ Where the shipped code deviates from the plan below, and why:
    activation gesture does not survive the message hop to the content script; extraction and
    model download start immediately on activation so they overlap with the user reaching for Play.
 
-Pure-logic modules (`normalize`, `sentences`, `fuzzy-align`, `text-index`) have vitest coverage
-(`pnpm test`). The audio pipeline, WASM execution and highlighting need a real Firefox — see
-`BUILD.md` for the manual test procedure.
+10. **The content script is split by concern, not by file size.** `content/session.ts` is a
+    lifecycle orchestrator only; planning (`content/playlist.ts`), geometry
+    (`content/playlist-navigation.ts`), click-to-jump (`content/tap-to-seek.ts`) and pipeline
+    tuning (`content/engine-tuning.ts`) are separate and independently testable. The options page
+    is split the same way (`options/{model-status,downloads,preview-button,voice-panels}.ts`).
+
+Pure-logic and DOM-planning modules (`normalize`, `sentences`, `fuzzy-align`, `text-index`,
+`block-model`, `playlist`, `engine-catalog`) have vitest coverage (`pnpm test`). The audio
+pipeline, WASM execution and highlighting need a real browser — see `BUILD.md`.
 
 ### Decisions locked in with the user
 - **Default engine: Piper VITS.** Kokoro-82M ships as an optional "high quality" engine.
