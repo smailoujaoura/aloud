@@ -1,6 +1,6 @@
 /**
  * Piper (VITS) engine — hand-rolled ONNX Runtime Web session so we fully control the execution
- * provider, threading (single-threaded: no SharedArrayBuffer in Firefox extensions) and caching.
+ * provider, threading (single-threaded: no SharedArrayBuffer in extension contexts) and caching.
  *
  * Pipeline: text -> eSpeak-NG IPA -> phoneme ids (interleaved with the pad symbol, wrapped in
  * BOS/EOS) -> VITS -> mono float PCM.

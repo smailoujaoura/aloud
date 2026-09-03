@@ -17,8 +17,21 @@ import { activeVoice, type EngineId, type Settings } from '@/shared/settings';
 import type { ModelManifest, PiperVoiceEntry } from '@/engine/engines/types';
 
 import { RowProgress, downloadPiperVoice, downloadViaWorker } from './downloads';
-import { previewConfig, previewFor } from './preview-button';
-import { piperDownloaded, piperVoiceBytes, sharedModelBytes, type CacheSizes } from './model-status';
+import { previewFor } from './preview-button';
+import { engineConfigFor } from './engine-config';
+import {
+  kokoroInstalledPrecision,
+  piperDownloaded,
+  piperVoiceBytes,
+  sharedModelBytes,
+  type CacheSizes,
+} from './model-status';
+
+/** How the Kokoro precision options are named in the Advanced section. */
+const PRECISION_LABEL: Record<'q8' | 'fp32', string> = {
+  q8: 'quantised (~86 MB)',
+  fp32: 'full precision (~320 MB)',
+};
 
 export interface PanelContext {
   settings: Settings;
@@ -275,18 +288,41 @@ function sharedModelRow(
     ),
   );
 
+  // Kokoro exists at several precisions. If the installed one is not the selected one, say so
+  // and offer the fetch — otherwise the row reads "downloaded" while reading still has to
+  // download, and pressing Delete then Download appears to change nothing.
+  const wantedPrecision = engine === 'kokoro' ? ctx.settings.kokoroDtype : null;
+  const installedPrecision = engine === 'kokoro' ? kokoroInstalledPrecision(ctx.sizes) : null;
+  const precisionMismatch =
+    wantedPrecision != null && installedPrecision != null && wantedPrecision !== installedPrecision;
+  if (engine === 'kokoro' && installedPrecision) {
+    name.append(
+      el(
+        document,
+        'small',
+        { class: precisionMismatch ? 'warn' : '' },
+        precisionMismatch
+          ? `Installed: ${PRECISION_LABEL[installedPrecision]} — you selected ` +
+              `${PRECISION_LABEL[wantedPrecision]}. Download to fetch it.`
+          : `Installed: ${PRECISION_LABEL[installedPrecision]}`,
+      ),
+    );
+  }
+
   const progress = new RowProgress();
-  const btn = el(document, 'button', { class: 'model-btn' }, state.downloaded ? 'Delete' : 'Download');
-  if (state.downloaded) btn.classList.add('danger');
+  // A mismatch needs a download, not a delete, even though something is already installed.
+  const isDelete = state.downloaded && !precisionMismatch;
+  const btn = el(document, 'button', { class: 'model-btn' }, isDelete ? 'Delete' : 'Download');
+  if (isDelete) btn.classList.add('danger');
 
   btn.addEventListener('click', () => {
     void runModelAction(btn, async () => {
       try {
-        if (state.downloaded) {
+        if (isDelete) {
           await cacheClear(info.cacheHint);
         } else {
           progress.start(`Downloading ${info.name}…`);
-          await downloadViaWorker(previewConfig(ctx.settings, { engine }), progress);
+          await downloadViaWorker(engineConfigFor(ctx.settings, { engine, purpose: 'download' }), progress);
           progress.done();
         }
         ctx.flashSaved();

@@ -21,17 +21,18 @@ export interface Settings {
   /** Supertonic voice-style key, e.g. `F1`. */
   supertonicVoice: string;
   /**
-   * Kokoro weight precision for the WASM path. `q8` (~86 MB) is the default — on Firefox's
-   * single thread fp32 is only marginally faster for 4× the download and RAM. `fp32` is worth
-   * it only for a single-worker setup or once WebGPU is available.
+   * Kokoro weight precision. `q8` (~86 MB) is the default: on the single-threaded CPU path
+   * fp32 is only marginally faster for 4× the download and RAM. `fp32` is worth it on the
+   * WebGPU path (Chromium), which runs one worker and absorbs the extra precision cheaply.
    */
   kokoroDtype: 'q8' | 'fp32';
   /** Supertonic flow-matching denoising steps (more = better, slower). 3–8 is sensible. */
   supertonicSteps: number;
   /**
-   * Parallel synthesis workers for the neural engines. `0` = auto (from the engine and the CPU
-   * core count). Higher = the slow engines (Kokoro especially) keep up with playback better, at
-   * the cost of one extra in-memory model copy per worker.
+   * Parallel synthesis workers for the neural engines. `0` = auto (from the engine, the
+   * browser's GPU access and the CPU core count — see src/synth-host/entry.ts). Higher lets the
+   * slow CPU path keep up with playback, at the cost of one in-memory model copy per worker.
+   * On the GPU path extra workers only add memory pressure, so auto returns 1 there.
    */
   synthWorkers: number;
   /** Speaking rate multiplier applied at the model level (pitch-preserving). */

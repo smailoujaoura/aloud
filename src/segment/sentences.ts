@@ -1,7 +1,7 @@
 /**
  * Sentence segmentation.
  *
- * Uses `Intl.Segmenter` (Firefox 125+) for locale-aware sentence breaking, then:
+ * Uses `Intl.Segmenter` (Firefox 125+, Chromium 87+) for locale-aware sentence breaking, then:
  *   - re-joins fragments left dangling after an abbreviation that Intl split on,
  *   - splits sentences longer than `maxChars` at clause boundaries so that first-audio latency
  *     and re-synthesis after a seek stay bounded.

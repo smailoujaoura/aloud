@@ -3,13 +3,17 @@
  *
  * Why this page exists: Firefox does **not** let a content script create a `Worker` from a
  * `moz-extension://` URL. This page *is* at the extension origin (and under the extension CSP,
- * so `wasm-unsafe-eval` is allowed for ONNX Runtime Web), so it can.
+ * so `wasm-unsafe-eval` is allowed for ONNX Runtime Web), so it can. Chromium would let the
+ * content script construct the Worker directly, but routing both browsers through this page
+ * keeps one code path rather than two.
  *
  * What it does: it owns a **pool** of identical synthesis Workers and load-balances `synthesize`
- * requests across them. The heavy neural engines run several times slower than real-time on
- * Firefox's single WASM thread (no `SharedArrayBuffer`, and `navigator.gpu` is not exposed to
- * workers on Firefox), so one worker can't keep up with playback of a long article. N workers,
- * each synthesising a different sentence, brings the *effective* rate below real-time.
+ * requests across them. On the CPU path the heavy neural engines run several times slower than
+ * real time — Firefox gives extension workers no `SharedArrayBuffer` (so ONNX Runtime is stuck
+ * on one WASM thread) and no `navigator.gpu` — so one worker cannot keep up with playback of a
+ * long article, while N workers each synthesising a different sentence bring the *effective*
+ * rate below real time. Where the GPU is reachable the pool collapses to one worker; see
+ * autoPoolSize().
  *
  * Start-up is progressive: worker 0 is spawned first and, the moment it is ready, `ready` is
  * forwarded to the content script so playback can begin — the remaining workers are spawned in
@@ -20,6 +24,7 @@
  * same-origin classic `<script src>`.
  */
 import type { EngineConfig, WorkerRequest, WorkerResponse } from '@/engine/protocol';
+import { capabilities } from '@/shared/browser-env';
 
 const WORKER_URL = new URL('/tts-worker.js', location.href).href;
 
@@ -42,14 +47,30 @@ const clamp = (n: number, lo: number, hi: number): number => Math.max(lo, Math.m
 /** Hard ceiling on pool size regardless of the setting — each worker is a full model copy. */
 const MAX_POOL = 6;
 
-/** Auto pool size: Piper is already faster than real-time; the neural engines are not. */
+/**
+ * Auto pool size.
+ *
+ * The pool exists to work around slow *CPU* synthesis: Piper is already faster than real time,
+ * but Kokoro and Supertonic are not, so several workers each take a different sentence and the
+ * effective rate drops below real time.
+ *
+ * That reasoning inverts where a Worker can reach the GPU. Every worker would queue onto the
+ * same physical device, so parallelism buys nothing while each copy still costs its own VRAM and
+ * shader compilation — one worker is both faster to start and lighter. Phones get one worker for
+ * the same memory reason, minus the GPU.
+ */
 function autoPoolSize(engine: EngineConfig['engine']): number {
-  const hc = Math.max(1, navigator.hardwareConcurrency || 4);
   if (engine === 'piper') return 1;
+
+  const caps = capabilities();
+  if (caps.workerWebGPU) return 1;
+  if (caps.touchFirst) return 1;
+
+  const cores = Math.max(1, navigator.hardwareConcurrency || 4);
   // Supertonic is ~real-time already and ~260 MB per copy — only a little help, kept cheap.
-  if (engine === 'supertonic') return clamp(hc - 2, 1, 2);
+  if (engine === 'supertonic') return clamp(cores - 2, 1, 2);
   // Kokoro is the heaviest (~3× real-time) but small (q8 ≈ 86 MB).
-  return clamp(hc - 2, 2, 4);
+  return clamp(cores - 2, 2, 4);
 }
 
 let port: MessagePort | null = null;

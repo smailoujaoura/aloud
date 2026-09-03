@@ -13,9 +13,9 @@
 import { el } from '@/shared/dom';
 import { engineInfo } from '@/shared/engine-catalog';
 import { playClip, playSynthesized, stopPreview, type PreviewStatus } from '@/ui/voice-preview';
-import type { EngineConfig } from '@/engine/protocol';
 import type { EngineId, Settings } from '@/shared/settings';
 import type { ModelManifest } from '@/engine/engines/types';
+import { engineConfigFor } from './engine-config';
 import { sharedModelBytes, type CacheSizes } from './model-status';
 
 const IDLE_LABEL = '▶ Preview';
@@ -93,27 +93,6 @@ export function previewButton(
   return btn;
 }
 
-/** The engine config a one-off preview should run with. */
-export function previewConfig(settings: Settings, over: Partial<EngineConfig> = {}): EngineConfig {
-  const engine = (over.engine ?? settings.engine) as EngineId;
-  const voiceOf: Record<EngineId, string> = {
-    piper: settings.piperVoice,
-    kokoro: settings.kokoroVoice,
-    supertonic: settings.supertonicVoice,
-  };
-  return {
-    engine,
-    voice: over.voice ?? voiceOf[engine],
-    // A preview is one sentence in one worker — always use the small q8 Kokoro weights, whatever
-    // the user picked for reading, so previewing never triggers a 320 MB download.
-    dtype: over.dtype ?? (engine === 'kokoro' ? 'q8' : settings.kokoroDtype),
-    steps: over.steps ?? settings.supertonicSteps,
-    preferWebGPU: over.preferWebGPU ?? settings.preferWebGPU,
-    speed: settings.speed,
-    workers: 1,
-  };
-}
-
 /** Preview `voiceId` for `engine`: a hosted clip for Piper, on-device synthesis otherwise. */
 export function previewFor(
   engine: EngineId,
@@ -131,7 +110,11 @@ export function previewFor(
   const info = engineInfo(engine);
   const ready = info.cacheHint ? sharedModelBytes(ctx.sizes, info.cacheHint) > 0 : false;
   return previewButton(
-    (onStatus) => playSynthesized(previewConfig(ctx.settings, { engine, voice: voiceId }), onStatus),
+    (onStatus) =>
+      playSynthesized(
+        engineConfigFor(ctx.settings, { engine, voice: voiceId, purpose: 'preview' }),
+        onStatus,
+      ),
     { disabledReason: ready ? undefined : `Download ${info.name} first to preview` },
   );
 }

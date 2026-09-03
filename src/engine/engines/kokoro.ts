@@ -55,9 +55,10 @@ export class KokoroEngine implements SynthEngine {
     const wantGpu = eps[0] === 'webgpu';
     log.info(`[kokoro] init: preferWebGPU=${ctx.preferWebGPU} → execution providers ${JSON.stringify(eps)}`);
 
-    // WASM path precision. On Firefox (no threads, no WebGPU) fp32 is only ~10% faster than q8
-    // for 4× the download and 4× the RAM per pooled worker, so q8 is the sensible default; fp32
-    // stays available for a single-worker / future-WebGPU setup.
+    // WASM path precision. Without a GPU there are also no threads, and fp32 is only ~10%
+    // faster than q8 there for 4× the download and 4× the RAM per pooled worker — so q8 is the
+    // sensible default on the CPU path. fp32 is worth it on the WebGPU path, which runs a single
+    // worker and where the extra precision is close to free.
     const wasmDtype: KokoroDtype = ctx.dtype === 'fp32' ? 'fp32' : 'q8';
 
     const load = (device: KokoroDevice, dtype: KokoroDtype) =>

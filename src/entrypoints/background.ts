@@ -1,8 +1,15 @@
 /**
- * Background event page (Firefox MV3). Deliberately thin: it routes activation, keeps a
- * single-active-session invariant, mirrors playback state to the toolbar badge, and relays
- * settings changes. No audio, no inference, no model downloads happen here — those would not
- * survive the ~30s event-page idle timeout.
+ * Background: an event page on Firefox, a service worker on Chromium.
+ *
+ * Deliberately thin, and it has to be: it routes activation, keeps a single-active-session
+ * invariant, mirrors playback state to the toolbar badge, and relays settings changes. No audio,
+ * no inference, no model downloads happen here — none of those would survive the ~30s idle
+ * eviction either browser applies, and a Chromium service worker has no DOM to play audio with
+ * in the first place. All of that lives in the content script and the workers it owns.
+ *
+ * The one piece of state here, `active`, is a cache rather than a source of truth: if the
+ * background is evicted it is rebuilt by the next port connection, and a stale badge is the
+ * worst case.
  */
 import { browser } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';

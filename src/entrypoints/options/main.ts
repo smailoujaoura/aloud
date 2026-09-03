@@ -153,8 +153,11 @@ function toHex(color: string): string {
 
 async function refreshUsage(): Promise<void> {
   const [bytes, entries] = await Promise.all([cacheUsageBytes(), cacheEntries()]);
+  // `bytes` also counts the Cache API stores our dependencies write to (Kokoro's voice
+  // vectors), which have no entry in our own store — so report the count separately rather than
+  // implying every byte belongs to one of those files.
   $('usage').textContent = entries.length
-    ? `${humanBytes(bytes)} across ${entries.length} cached file(s).`
+    ? `${humanBytes(bytes)} on this device, including ${entries.length} model file(s).`
     : 'No models cached yet.';
 }
 

@@ -119,6 +119,7 @@ output { min-width: 3ch; text-align: right; }
 .model-name { min-width: 0; }
 .model-name b { font-weight: 600; }
 .model-name small { display: block; color: var(--muted); }
+.model-name small.warn { color: var(--warn); }
 .model-status {
   font-variant-numeric: tabular-nums;
   font-size: 12px;

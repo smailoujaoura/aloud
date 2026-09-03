@@ -2,7 +2,8 @@
  * In-place sentence highlighting.
  *
  * Primary path: the CSS Custom Highlight API (`CSS.highlights`), which paints a `Range` with
- * zero DOM mutation — no reflow, no risk of breaking the page's layout. Requires Firefox 140+.
+ * zero DOM mutation — no reflow, no risk of breaking the page's layout. Requires Firefox 140+
+ * or Chromium 105+.
  *
  * Fallback (older Firefox): wrap the range in a `<span>` and unwrap it on advance. This can
  * disturb layout in rare inline-splitting cases, so it is only used when `CSS.highlights` is

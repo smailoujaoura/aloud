@@ -118,14 +118,73 @@ export async function cacheEntries(): Promise<Array<{ key: string; size: number;
   }
 }
 
-export async function cacheClear(prefix?: string): Promise<void> {
-  const entries = await cacheEntries();
-  await Promise.all(entries.filter((e) => !prefix || e.key.includes(prefix)).map((e) => cacheDelete(e.key)));
+/**
+ * Cache API stores written by our dependencies rather than by us.
+ *
+ * `kokoro-js` fetches its per-voice `.bin` style vectors itself through `caches.open(
+ * 'kokoro-voices')`, bypassing `env.customCache` entirely, and `@huggingface/transformers` falls
+ * back to `transformers-cache` if the custom cache is ever not in force. Both are invisible to
+ * the IndexedDB store, so unless they are cleared alongside it "Delete" leaves files on disk and
+ * the reported usage is wrong.
+ */
+const EXTERNAL_CACHE_STORES = ['kokoro-voices', 'transformers-cache'] as const;
+
+/** Cache API stores that hold files for a given engine, keyed by the engine's cache hint. */
+const EXTERNAL_STORES_BY_MODEL: Record<string, readonly string[]> = {
+  'Kokoro-82M': ['kokoro-voices', 'transformers-cache'],
+};
+
+async function deleteCacheStores(names: readonly string[]): Promise<void> {
+  if (typeof caches === 'undefined') return;
+  await Promise.all(
+    names.map(async (name) => {
+      try {
+        await caches.delete(name);
+      } catch {
+        /* storage disabled, or the store never existed */
+      }
+    }),
+  );
 }
 
+async function cacheStoreBytes(names: readonly string[]): Promise<number> {
+  if (typeof caches === 'undefined') return 0;
+  let total = 0;
+  for (const name of names) {
+    try {
+      if (!(await caches.has(name))) continue;
+      const store = await caches.open(name);
+      for (const request of await store.keys()) {
+        const res = await store.match(request);
+        if (!res) continue;
+        const declared = Number(res.headers.get('content-length'));
+        total += Number.isFinite(declared) && declared > 0 ? declared : (await res.blob()).size;
+      }
+    } catch {
+      /* unreadable store — leave it out of the total rather than failing the page */
+    }
+  }
+  return total;
+}
+
+/**
+ * Delete cached model files. With no argument, everything — including the Cache API stores our
+ * dependencies write to. With a `prefix`, only the IndexedDB entries whose key contains it, plus
+ * any external store belonging to that model.
+ */
+export async function cacheClear(prefix?: string): Promise<void> {
+  const entries = await cacheEntries();
+  await Promise.all(
+    entries.filter((e) => !prefix || e.key.includes(prefix)).map((e) => cacheDelete(e.key)),
+  );
+  await deleteCacheStores(prefix ? (EXTERNAL_STORES_BY_MODEL[prefix] ?? []) : EXTERNAL_CACHE_STORES);
+}
+
+/** Total bytes held on this device, across both our store and our dependencies'. */
 export async function cacheUsageBytes(): Promise<number> {
   const entries = await cacheEntries();
-  return entries.reduce((sum, e) => sum + e.size, 0);
+  const ours = entries.reduce((sum, e) => sum + e.size, 0);
+  return ours + (await cacheStoreBytes(EXTERNAL_CACHE_STORES));
 }
 
 /** True in private windows where IndexedDB writes silently fail / are wiped. */
