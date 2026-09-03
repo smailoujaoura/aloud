@@ -17,11 +17,9 @@
         <h2>Voice</h2>
         <label class="row">
           <span>Engine</span>
-          <select id="engine">
-            <option value="piper">Piper — fast, runs anywhere</option>
-            <option value="kokoro">Kokoro — best quality, slow on Firefox</option>
-            <option value="supertonic">Supertonic — expressive, medium speed</option>
-          </select>
+          <!-- Options are built in main.ts from shared/engine-catalog: which engine is worth
+               recommending depends on whether this browser gives workers a GPU. -->
+          <select id="engine"></select>
         </label>
         <p class="row-hint" id="engineHint"></p>
 
@@ -113,17 +111,12 @@
           <input type="range" id="synthWorkers" min="0" max="6" step="1" />
           <output id="synthWorkersOut"></output>
         </label>
-        <p class="row-hint">
-          Kokoro (and to a lesser extent Supertonic) runs several times slower than real-time on
-          Firefox, so a few sentences are synthesised at once to keep up with playback.
-          <b>0 = auto</b>, based on your CPU cores. Each extra worker adds one in-memory copy of
-          the model (~90&nbsp;MB for Kokoro), so higher isn’t always better. Piper ignores this.
-        </p>
+        <p class="row-hint" id="workersHint"></p>
         <label class="row check">
           <input type="checkbox" id="preferWebGPU" />
           <span>Use WebGPU acceleration when available</span>
         </label>
-        <p class="row-hint">Firefox does not yet expose WebGPU to extensions on most platforms; this currently has no effect there.</p>
+        <p class="row-hint" id="webgpuHint"></p>
         <label class="row check">
           <input type="checkbox" id="debug" />
           <span>Verbose console logging</span>

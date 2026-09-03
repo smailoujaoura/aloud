@@ -5,6 +5,8 @@
   --muted: #6b6b76;
   --border: rgba(0, 0, 0, 0.12);
   --accent: #c99700;
+  --warn: #a4610a;
+  --danger: #c0392b;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -13,6 +15,8 @@
     --muted: #9a9aa4;
     --border: rgba(255, 255, 255, 0.14);
     --accent: #ffd60a;
+    --warn: #e8a33d;
+    --danger: #ff6b5e;
   }
 }
 * { box-sizing: border-box; }
@@ -37,7 +41,7 @@ select, input[type="color"], button {
 }
 button { cursor: pointer; }
 button:hover { border-color: var(--accent); }
-button.danger { color: #c0392b; border-color: #c0392b55; }
+button.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
 .muted { color: var(--muted); }
 .saved {
   position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
@@ -63,6 +67,14 @@ output { min-width: 3ch; text-align: right; }
 .engine-panel > summary .panel-status {
   font-size: 12px; color: var(--accent); white-space: nowrap; font-variant-numeric: tabular-nums;
 }
+/* "slow on this browser" / "not usable on this device" — see shared/engine-catalog.ts. */
+.engine-panel > summary .panel-warn {
+  font-size: 11px; white-space: nowrap;
+  color: var(--warn); border: 1px solid var(--warn);
+  border-radius: 999px; padding: 1px 8px;
+}
+.row-hint.warn { color: var(--warn); }
+.option-unsuitable { color: var(--muted); }
 .panel-blurb { margin: 0 12px 8px; font-size: 12.5px; }
 .panel-body { padding: 0 12px 12px; }
 .sub-head {
@@ -99,7 +111,7 @@ output { min-width: 3ch; text-align: right; }
 .preview-btn { min-width: 104px; text-align: center; font-variant-numeric: tabular-nums; }
 .preview-btn.busy { border-color: var(--accent); color: var(--accent); }
 .preview-btn.loading { animation: preview-pulse 1.2s ease-in-out infinite; }
-.preview-btn.error { border-color: #c0392b; color: #c0392b; }
+.preview-btn.error { border-color: var(--danger); color: var(--danger); }
 .preview-btn[disabled] { opacity: 0.5; cursor: default; }
 @keyframes preview-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
 @media (prefers-reduced-motion: reduce) { .preview-btn.loading { animation: none; } }
@@ -133,7 +145,7 @@ output { min-width: 3ch; text-align: right; }
   font-size: 12px;
   color: var(--muted);
 }
-.model-row .progress-msg.error { color: #c0392b; }
+.model-row .progress-msg.error { color: var(--danger); }
 @media (max-width: 520px) {
   .model-row { grid-template-columns: auto 1fr auto; }
   .model-status { grid-column: 2 / -1; justify-self: start; }
