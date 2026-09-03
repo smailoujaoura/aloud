@@ -90,12 +90,17 @@ is verified after download (`src/engine/model-cache.ts`).
 
 ## Known `web-ext lint` warnings (all non-blocking)
 
-| Warning | Why it is expected |
-|---|---|
-| `DANGEROUS_EVAL` in `vendor/ort/*.mjs` | ONNX Runtime's WASM bootstrap. Covered by our CSP `'wasm-unsafe-eval'`. |
-| `UNSAFE_VAR_ASSIGNMENT` "call to import" in `tts-worker.js` / `ort.bundle.min.mjs` | Deliberate runtime `import()` of the vendored ORT module by URL. |
+| Warning | Count | Why it is expected |
+|---|---|---|
+| `DANGEROUS_EVAL` in `vendor/ort/ort.bundle.min.mjs` and `vendor/ort/ort-wasm-simd-threaded.jsep.mjs` | 2 | ONNX Runtime's WASM bootstrap. Covered by our CSP `'wasm-unsafe-eval'`. |
+| `UNSAFE_VAR_ASSIGNMENT` "call to import" in `vendor/rt/ort-loader-*.js` and `vendor/ort/ort.bundle.min.mjs` | 2 | Deliberate runtime `import()` of the vendored ORT module by URL — the loader resolves it with `browser.runtime.getURL`, so the argument is never page-controlled. |
+| `UNSAFE_VAR_ASSIGNMENT` "assignment to innerHTML" in `reader-inject.js` | 2 | Inside the bundled `@mozilla/readability`, which parses a *clone* of the document. None of our own code assigns `innerHTML`; the control bar and options page build every node with `createElement` (see `src/shared/dom.ts`). |
 
-There are **no errors**.
+There are **no errors** — 6 warnings, 0 notices, all from vendored code. Verify with:
+
+```bash
+npx web-ext lint --source-dir .output/firefox-mv3 -o json | jq '{errors: (.errors|length), warnings: (.warnings|length)}'
+```
 
 ## Architecture summary
 
