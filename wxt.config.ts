@@ -162,6 +162,12 @@ export default defineConfig({
       // baselines; keep the two in step.
       target: env.browser === 'firefox' ? 'firefox128' : 'chrome120',
       chunkSizeWarningLimit: 8192,
+      // Vite adds <link rel="modulepreload"> for every chunk an extension page imports. Chromium
+      // refuses those for extension resources ("A preload … is not used because it is a
+      // cross-world extension resource mismatch") and then warns again that each was never used,
+      // which buried real errors in every page's console. The chunks are local files, so
+      // preloading them gains nothing anyway.
+      modulePreload: false,
     },
   }),
 });
