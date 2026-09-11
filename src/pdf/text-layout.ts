@@ -590,3 +590,21 @@ function pickTitle(sized: SizedBlock[], metadataTitle?: string): string {
   const first = sized.find((b) => b.block.text.trim().length >= 3);
   return first ? first.block.text.slice(0, 120) : 'PDF document';
 }
+
+/**
+ * Is `title` already part of the body text?
+ *
+ * Only a title from the PDF's *metadata* is text the body does not contain. When `pickTitle` had
+ * to take it from the page — the biggest heading, or failing that the opening words — that text
+ * is still in `blocks`, and a reader page that adds its own `<h1>` on top reads it aloud twice.
+ * Compared whitespace-insensitively, and as a prefix of the first block, because the fallback
+ * title is a 120-character slice of it.
+ */
+export function titleIsInBody(title: string, blocks: readonly { text: string }[]): boolean {
+  const norm = (s: string): string => s.replace(/\s+/g, ' ').trim().toLowerCase();
+  const t = norm(title);
+  if (!t) return true; // nothing worth a heading of its own
+  if (blocks.slice(0, 12).some((b) => norm(b.text) === t)) return true;
+  const first = blocks.find((b) => norm(b.text).length > 0);
+  return first ? norm(first.text).startsWith(t) : false;
+}

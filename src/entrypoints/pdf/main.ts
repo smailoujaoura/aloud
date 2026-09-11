@@ -24,7 +24,7 @@ import { ReaderSession, type KnownArticle } from '@/content/session';
 import { readPdf, type LoadedPdf, type PdfPageView, type PdfRenderer } from '@/pdf/load-pdf';
 import { takePdf } from '@/pdf/handoff';
 import { buildTextLayer } from '@/pdf/page-view';
-import type { PdfBlock, PdfLineBox } from '@/pdf/text-layout';
+import { titleIsInBody, type PdfBlock, type PdfLineBox } from '@/pdf/text-layout';
 import { getSettings, watchSettings, type PdfView } from '@/shared/settings';
 import { applyTheme, watchSystemTheme } from '@/ui/theme';
 import { log } from '@/shared/log';
@@ -85,7 +85,7 @@ interface PickerAction {
  */
 function renderReflow(doc: LoadedPdf): void {
   const article = $('article');
-  article.replaceChildren(titleHeading(doc.title));
+  article.replaceChildren(...titleNodes(doc));
 
   let page = 0;
   let list: HTMLUListElement | null = null;
@@ -136,6 +136,17 @@ function titleHeading(title: string): HTMLElement {
   return h1;
 }
 
+/**
+ * The document's own `<h1>`, unless the title is already on the page.
+ *
+ * A title taken from the PDF's metadata is text the body does not contain, so it earns a heading.
+ * A title `pickTitle` lifted from the first page is still in `doc.blocks`; adding it again made
+ * the reader say it twice — for most PDFs, since few carry a usable metadata title.
+ */
+function titleNodes(doc: LoadedPdf): HTMLElement[] {
+  return titleIsInBody(doc.title, doc.blocks) ? [] : [titleHeading(doc.title)];
+}
+
 // ---- rendering: the pages themselves ---------------------------------------
 
 /** Page images are drawn only near the viewport; this much beyond it, in viewport heights. */
@@ -161,7 +172,7 @@ interface PageSlot {
  */
 function renderPages(doc: LoadedPdf, renderer: PdfRenderer, scale: number): Promise<void> {
   const article = $('article');
-  article.replaceChildren(titleHeading(doc.title));
+  article.replaceChildren(...titleNodes(doc));
 
   const byPage = blocksByPage(doc.blocks);
   const slots = new WeakMap<Element, PageSlot>();
@@ -325,7 +336,7 @@ async function present(source: Parameters<typeof readPdf>[0], name: string): Pro
   // From here on it is an ordinary article, and the ordinary reader handles it.
   await session?.dispose();
   session = new ReaderSession();
-  await session.begin('article', { knownArticle: knownArticle(doc) }).catch((err) =>
+  await session.begin('article', { knownArticle: knownArticle(doc, name) }).catch((err) =>
     log.error('[pdf] reader failed to start:', err),
   );
 }
@@ -337,13 +348,17 @@ async function present(source: Parameters<typeof readPdf>[0], name: string): Pro
  * from that. Readability looking at the result could only disagree — and in the page view it
  * would be looking at absolutely-positioned transparent lines, which is not what it is for.
  */
-function knownArticle(doc: LoadedPdf): KnownArticle {
+function knownArticle(doc: LoadedPdf, name: string): KnownArticle {
   const root = $('article');
   return {
     root,
     title: doc.title,
-    text: [doc.title, ...doc.blocks.map((b) => b.text)].join('\n'),
+    // Must match what is on the page, or alignment hunts for a title that was never rendered.
+    text: [...(titleIsInBody(doc.title, doc.blocks) ? [] : [doc.title]), ...doc.blocks.map((b) => b.text)].join('\n'),
     lang: document.documentElement.lang || 'en',
+    // This page's own URL carries a one-off job id, so it cannot identify the document. The file
+    // name plus page count does, well enough to resume the same report opened again tomorrow.
+    key: `pdf:${name}:${doc.pageCount}`,
   };
 }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { layoutPdfText, type PdfPageInput, type PdfTextItem } from '@/pdf/text-layout';
+import { layoutPdfText, titleIsInBody, type PdfPageInput, type PdfTextItem } from '@/pdf/text-layout';
 
 /**
  * The tests build pages the way a PDF producer does: a baseline per line, x for the left edge,
@@ -205,5 +205,29 @@ describe('layoutPdfText', () => {
     const out = layoutPdfText([{ pageNumber: 1, width: PAGE_W, height: PAGE_H, items: [] }]);
     expect(out.blocks).toEqual([]);
     expect(out.title).toBe('PDF document');
+  });
+});
+
+describe('titleIsInBody', () => {
+  const blocks = [
+    { text: 'Annual Report 2025' },
+    { text: 'Revenue grew by a tenth. Costs were flat.' },
+  ];
+
+  it('recognises a title lifted from a heading on the page', () => {
+    expect(titleIsInBody('Annual Report 2025', blocks)).toBe(true);
+  });
+
+  it('recognises the fallback title, a slice of the opening text', () => {
+    const body = [{ text: 'Paragraph 1 says something about the smoke test. It goes on for a while.' }];
+    expect(titleIsInBody('Paragraph 1 says something about the smoke test.', body)).toBe(true);
+  });
+
+  it('ignores whitespace and case differences', () => {
+    expect(titleIsInBody('annual   report\n2025', blocks)).toBe(true);
+  });
+
+  it('treats a metadata title that appears nowhere as needing its own heading', () => {
+    expect(titleIsInBody('Q4 Board Pack (confidential)', blocks)).toBe(false);
   });
 });
