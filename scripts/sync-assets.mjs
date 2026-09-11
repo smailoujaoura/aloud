@@ -1,11 +1,15 @@
-// Copies the ONNX Runtime Web runtime files that must be served from the extension package into
-// public/vendor/ort/. The worker loads ort.bundle.min.mjs at run time (onnxruntime-web is
-// externalised from the worker bundle) and ORT then loads its own .mjs/.wasm siblings from the
-// same directory via ort.env.wasm.wasmPaths.
+// Copies the third-party runtime files that must be served from the extension package itself.
 //
-// The transformers/Kokoro path uses the SAME ORT instance (globalThis[Symbol.for('onnxruntime')]).
+//  - public/vendor/ort/    ONNX Runtime Web. The worker loads ort.bundle.min.mjs at run time
+//    (onnxruntime-web is externalised from the worker bundle) and ORT then loads its own
+//    .mjs/.wasm siblings from the same directory via ort.env.wasm.wasmPaths. The
+//    transformers/Kokoro path uses the SAME ORT instance (globalThis[Symbol.for('onnxruntime')]).
+//  - public/vendor/pdfjs/  pdf.js, for reading PDFs (src/pdf/). Same reasoning as ORT: the
+//    library is imported by URL at run time so its 1.3 MB worker is never inlined into a page
+//    bundle, and pdf.js can resolve its own worker from the extension origin under our CSP.
+//
 // eSpeak-NG is not here: the `phonemizer` package inlines its WASM + data as base64.
-import { existsSync, mkdirSync, copyFileSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, copyFileSync, statSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -18,6 +22,19 @@ const ORT_FILES = [
   'ort-wasm-simd-threaded.jsep.wasm',
   'ort-wasm-simd-threaded.jsep.mjs',
 ];
+
+const PDFJS_FILES = ['pdf.min.mjs', 'pdf.worker.min.mjs'];
+
+/**
+ * Whole directories pdf.js loads by URL at run time when it *renders* a page.
+ *
+ * `standard_fonts/` supplies the Base-14 fonts (Helvetica, Times, Courier …) that PDFs are
+ * allowed to reference without embedding; without it pdf.js warns "Ensure that the
+ * standardFontDataUrl API parameter is provided" and draws those pages with substituted glyphs.
+ * `cmaps/` does the same job for the predefined CJK encodings. Both are only fetched for
+ * documents that actually need them.
+ */
+const PDFJS_DIRS = ['standard_fonts', 'cmaps'];
 
 export function syncAssets() {
   const src = join(root, 'node_modules/onnxruntime-web/dist');
@@ -33,6 +50,37 @@ export function syncAssets() {
     copied++;
   }
   console.log(`[sync-assets] ${copied} ORT file(s) refreshed into public/vendor/ort/`);
+
+  // The *legacy* build, deliberately: the modern one assumes very recent engines (it calls
+  // `Map.prototype.getOrInsertComputed`, which Chrome 143 still does not have) and fails at run
+  // time with "getOrInsertComputed is not a function". Legacy matches the browsers this
+  // extension supports (Chrome 120+, Firefox 142+) and is within a few KB of the same size.
+  const pdfSrc = join(root, 'node_modules/pdfjs-dist/legacy/build');
+  const pdfDest = join(root, 'public/vendor/pdfjs');
+  mkdirSync(pdfDest, { recursive: true });
+  let pdfCopied = 0;
+  for (const f of PDFJS_FILES) {
+    const s = join(pdfSrc, f);
+    const d = join(pdfDest, f);
+    if (!existsSync(s)) throw new Error(`missing ${s} — reinstall pdfjs-dist`);
+    if (existsSync(d) && statSync(d).size === statSync(s).size) continue;
+    copyFileSync(s, d);
+    pdfCopied++;
+  }
+  for (const dir of PDFJS_DIRS) {
+    const s = join(root, 'node_modules/pdfjs-dist', dir);
+    const d = join(pdfDest, dir);
+    if (!existsSync(s)) throw new Error(`missing ${s} — reinstall pdfjs-dist`);
+    mkdirSync(d, { recursive: true });
+    for (const f of readdirSync(s)) {
+      const sf = join(s, f);
+      const df = join(d, f);
+      if (existsSync(df) && statSync(df).size === statSync(sf).size) continue;
+      copyFileSync(sf, df);
+      pdfCopied++;
+    }
+  }
+  console.log(`[sync-assets] ${pdfCopied} pdf.js file(s) refreshed into public/vendor/pdfjs/`);
 }
 
 if (import.meta.url === 'file://' + process.argv[1]) syncAssets();

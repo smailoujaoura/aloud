@@ -25,6 +25,15 @@ export default defineUnlistedScript(() => {
   w.__aloudLoaded = true;
 
   const activate = (mode: ActivateMode, targetElement?: Element | null): void => {
+    // Chromium hands a PDF tab to a plugin `<embed>`: the document's URL is the PDF, but its DOM
+    // holds no text at all, so extraction can only ever fail here ("this page doesn't look like
+    // an article"). The background opens Aloud's own PDF reader instead — it catches PDFs by URL
+    // already, and this catches the rest, which are served without a `.pdf` in the path.
+    if (document.contentType === 'application/pdf') {
+      void browser.runtime.sendMessage({ type: 'open-pdf-reader' }).catch(() => undefined);
+      return;
+    }
+
     const session = w.__aloudSession;
     if (session && mode === 'article') {
       // Toolbar button / shortcut on an already-running session = play/pause toggle.

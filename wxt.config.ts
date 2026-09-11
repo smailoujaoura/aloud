@@ -51,7 +51,28 @@ export default defineConfig({
       'https://cdn-lfs.huggingface.co/*',
       'https://cdn-lfs-us-1.huggingface.co/*',
       'https://cdn-lfs-eu-1.huggingface.co/*',
+      // Local PDFs. Chromium only: this is what makes `fetch('file:///…')` work *once the user
+      // also switches on "Allow access to file URLs"* for the extension — verified empirically;
+      // without the permission the fetch fails even with the toggle on. Gecko never grants
+      // add-ons file access (bug 1266960), so declaring it there would be a permission warning
+      // in exchange for nothing: on Firefox the PDF page falls back to its file picker.
+      ...(browser === 'firefox' ? [] : ['file:///*']),
     ],
+
+    /**
+     * Asked for one site at a time, only when a PDF cannot be fetched without it.
+     *
+     * A PDF linked from a website is served from that site, and reading it means downloading it
+     * — which is a cross-origin request the extension has no standing permission to make, so it
+     * fails CORS however the file is served. `activeTab` does not help: the tab is showing the
+     * browser's own PDF viewer, not a page we were invoked on.
+     *
+     * Declaring `<all_urls>` outright would be a "read all your data on every website" warning
+     * for a reader that never touches a site until you point it at a PDF there. So the reader
+     * page asks for the one origin, at the moment it needs it, from the user's own click — and
+     * once granted it stays granted for that site.
+     */
+    optional_host_permissions: ['*://*/*'],
 
     content_security_policy: {
       extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'",

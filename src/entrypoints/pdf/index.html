@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Aloud — PDF</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <!-- Status region: everything before the text is readable. Replaced by main.ts. -->
+    <div id="status" class="status">
+      <p class="status-line" id="statusLine">Opening the PDF…</p>
+      <div class="bar"><div class="bar-fill" id="statusBar"></div></div>
+    </div>
+
+    <!-- The picker is the fallback for every case where the extension cannot read the file
+         itself — Firefox (no file access for add-ons at all) and Chromium without "Allow access
+         to file URLs". Also how anyone opens a PDF that is not in a tab. -->
+    <div id="picker" class="picker" hidden>
+      <h1 id="pickerTitle">Open a PDF</h1>
+      <p class="muted" id="pickerHint">Choose a PDF file to read it aloud.</p>
+      <!-- Shown only when a remote PDF needs one-off permission for its own site. -->
+      <button id="pickerAction" class="primary" hidden></button>
+      <label class="file-button">
+        <input type="file" id="file" accept="application/pdf,.pdf" />
+        <span>Choose a PDF…</span>
+      </label>
+      <p class="muted small" id="pickerNote"></p>
+    </div>
+
+    <!-- The reconstructed document. The reader session runs on this exactly as it does on any
+         article page, which is what gives PDFs sentence highlighting and tap-to-seek. -->
+    <main id="doc" hidden>
+      <article id="article"></article>
+    </main>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
