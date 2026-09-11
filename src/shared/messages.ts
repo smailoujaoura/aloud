@@ -43,7 +43,8 @@ export type ToBackgroundMessage =
   | { type: 'state'; state: SessionState }
   | { type: 'session-started' }
   | { type: 'session-ended' }
-  | { type: 'open-options' };
+  | { type: 'open-options' }
+  | { type: 'open-walkthrough' };
 
 export const PORT_NAME = 'aloud-session';
 

@@ -128,6 +128,27 @@ export class Highlighter {
     this.currentSpan = null;
   }
 
+  /**
+   * Scroll the page to `range` because the *user* asked — the control bar's "take me back to
+   * what is being read" button.
+   *
+   * Deliberately not `scrollIntoView`'s automatic path: it ignores the scroll-mode setting (the
+   * request was explicit, so "don't scroll" does not apply to it) and ignores the rate limit
+   * (which exists to stop automatic scrolling from fighting the reader, not to throttle a
+   * button). Returns false when the range has no box to scroll to — a sentence in a collapsed
+   * section, say — so the caller can say so instead of appearing to do nothing.
+   */
+  reveal(range: Range | null): boolean {
+    if (!range) return false;
+    const rect = range.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) return false;
+    const el = range.startContainer.parentElement;
+    if (!el) return false;
+    this.lastScroll = Date.now();
+    el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: this.reduceMotion ? 'auto' : 'smooth' });
+    return true;
+  }
+
   private scrollIntoView(range: Range): void {
     const snap = this.opts.scrollMode === 'snap';
     const now = Date.now();

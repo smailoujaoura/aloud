@@ -10,8 +10,20 @@
   </head>
   <body>
     <main>
-      <h1>Aloud — Offline Neural Reader</h1>
-      <p class="sub">Everything runs locally. Voice models download once and are cached on this device.</p>
+      <header class="page-head">
+        <div class="brand">
+          <img src="/icon/48.png" alt="" width="34" height="34" />
+          <span>
+            <b>Aloud</b>
+            <small class="muted">Offline neural reader — everything runs on this device</small>
+          </span>
+        </div>
+        <div class="head-actions">
+          <!-- Built in main.ts, shared with the walkthrough (src/ui/theme-switch.ts). -->
+          <div id="themeSwitch"></div>
+          <button id="walkthrough" class="ghost" type="button">How it works</button>
+        </div>
+      </header>
 
       <section>
         <h2>Voice</h2>
@@ -38,7 +50,15 @@
       </section>
 
       <section>
-        <h2>Reading</h2>
+        <h2>Appearance</h2>
+        <label class="row">
+          <span>Theme</span>
+          <!-- A second mount of the same control as the header's; both stay in step. -->
+          <span id="themeSwitchRow"></span>
+        </label>
+        <p class="row-hint">
+          Applies to the reading bar, this page, the PDF reader and the walkthrough.
+        </p>
         <label class="row check">
           <input type="checkbox" id="highlight" />
           <span>Highlight the sentence being read</span>
@@ -55,6 +75,14 @@
             <option value="snap">Snap the sentence to the centre</option>
           </select>
         </label>
+        <p class="row-hint">
+          Whatever this says, the bar’s “scroll to the sentence being read” button always takes
+          you back to it on request.
+        </p>
+      </section>
+
+      <section>
+        <h2>Reading</h2>
         <label class="row">
           <span>Pause between sections</span>
           <input type="range" id="sectionPauseMs" min="0" max="2000" step="50" />
@@ -80,6 +108,31 @@
       </section>
 
       <section>
+        <h2>PDFs</h2>
+        <p class="muted">
+          A PDF in a tab has no text an extension can reach — Chrome renders it in a plugin and
+          Firefox in its own viewer — so Aloud opens PDFs in a reader of its own. Click the
+          toolbar button on a PDF and it appears there automatically; on Firefox, and on Chrome
+          without <b>Allow access to file URLs</b>, local files have to be chosen by hand. A PDF
+          on a website has to be downloaded from that site, so Aloud asks for permission for that
+          one site the first time you open a PDF there.
+        </p>
+        <label class="row">
+          <span>Show PDFs as</span>
+          <select id="pdfView">
+            <option value="pages">The original pages</option>
+            <option value="reflow">Reflowed text</option>
+          </select>
+        </label>
+        <p class="muted small">
+          The original pages keep figures, tables and columns, and the sentence is highlighted on
+          the page itself. Reflowed text is easier on a small screen and follows the page’s text
+          size, but loses the document’s appearance.
+        </p>
+        <button id="openPdf">Open a PDF…</button>
+      </section>
+
+      <section>
         <h2>Voices &amp; downloads</h2>
         <p class="muted">
           Each voice is stored on this device only. <b>Preview</b> hears a voice before you commit,
@@ -101,6 +154,11 @@
             <option value="fp32">Full precision — ~320 MB, ~10% faster</option>
           </select>
         </label>
+        <p class="row-hint" id="kokoroDtypeHint">
+          This applies when Kokoro runs on the CPU. On the GPU it always loads the full-precision
+          model (~320 MB, downloaded once), because that is the build with complete WebGPU
+          coverage.
+        </p>
         <label class="row" id="supertonic-steps-row">
           <span>Supertonic detail</span>
           <input type="range" id="supertonicSteps" min="2" max="10" step="1" />
@@ -117,6 +175,31 @@
           <span>Use WebGPU acceleration when available</span>
         </label>
         <p class="row-hint" id="webgpuHint"></p>
+        <div class="gpu-actions">
+          <button id="gpuRecheck" type="button">Check for a GPU again</button>
+          <span class="muted small" id="gpuChecked"></span>
+        </div>
+        <!-- Shown only on Firefox, and only while the worker has no GPU: the prefs that change
+             that. Built in main.ts so each one gets a copy button. -->
+        <details class="gpu-help" id="firefoxGpu" hidden>
+          <summary>Make Kokoro fast on Firefox (about:config)</summary>
+          <p class="small">
+            Firefox has WebGPU, but ships it switched off — and switches it off separately for
+            web workers, which is where Aloud runs synthesis. Turning both on lets Kokoro run on
+            your graphics card: measured on a machine that did it, it went from roughly three
+            times slower than real time to faster than Piper.
+          </p>
+          <ol class="pref-list" id="prefList"></ol>
+          <p class="small">
+            Then restart Firefox and press <b>Check for a GPU again</b>. The first GPU run
+            downloads Kokoro's full-precision model (~320 MB) once.
+          </p>
+          <p class="small muted">
+            These are experimental settings. If Firefox misbehaves afterwards — crashes, blank
+            pages, heavy battery use — set the same prefs back to <code>false</code> and Aloud
+            goes back to the CPU path on its own.
+          </p>
+        </details>
         <label class="row check">
           <input type="checkbox" id="debug" />
           <span>Verbose console logging</span>
@@ -124,8 +207,12 @@
         <button id="reset">Reset all settings to defaults</button>
       </section>
 
-      <p class="saved" id="saved" hidden>Saved</p>
+      <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <footer>
+        <p>
+          New here, or want a reminder of what the buttons do?
+          <button id="walkthroughFooter" class="ghost" type="button">Open the walkthrough</button>
+        </p>
         GPLv3 · bundles eSpeak-NG, ONNX Runtime Web, Piper &amp; Kokoro. Supertonic weights are
         under the use-restricted OpenRAIL-M licence. Model licences are listed in the repository’s
         <code>THIRD_PARTY.md</code>.

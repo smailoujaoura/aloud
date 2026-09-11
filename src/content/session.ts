@@ -17,7 +17,7 @@
  */
 import { browser } from 'wxt/browser';
 
-import { extractArticle } from '@/extract/readability';
+import { extractArticle, type ExtractedArticle } from '@/extract/readability';
 import { resolveLiveRoot } from '@/extract/live-container';
 import { buildTextIndex, type TextIndex } from '@/extract/text-index';
 import { normalizeForSpeech } from '@/segment/normalize';
@@ -32,7 +32,8 @@ import { listVoices } from '@/shared/voice-catalog';
 import { PORT_NAME, type ActivateMode, type SessionState } from '@/shared/messages';
 import { log } from '@/shared/log';
 
-import { tuningFor } from './engine-tuning';
+import { backendOf, tuningFor, type SynthBackend } from './engine-tuning';
+import { loadLastBackend, saveLastBackend, saveWorkerGpu } from '@/shared/backend-memory';
 import {
   buildArticlePlaylist,
   buildSelectionPlaylist,
@@ -45,6 +46,31 @@ import { TapToSeek } from './tap-to-seek';
 interface BeginOptions {
   /** For "Read from here": the element that was right-clicked, when the browser can tell us. */
   targetElement?: Element | null;
+  /**
+   * A document whose structure the caller already knows, supplied instead of guessing at it.
+   *
+   * The PDF reader builds its own DOM from the PDF's own layout — including the column order
+   * Readability cannot see — so asking Readability to re-derive an article from that would only
+   * be a chance to get it wrong. Everything downstream (planning, alignment, highlighting) is
+   * unchanged; only the "what is the article, and where does it live" step is skipped.
+   */
+  knownArticle?: KnownArticle | null;
+  /**
+   * Whether this session may show the one-time tips card above the bar. The walkthrough passes
+   * `false`: its demo session exists to *show* the bar, with every one of those tips already
+   * spelled out on the page around it, and spending the one-time card there would mean the first
+   * real article someone reads gets no explanation at all.
+   */
+  showTips?: boolean;
+}
+
+export interface KnownArticle {
+  /** The element whose visible text is the document, in reading order. */
+  root: Element;
+  /** The same text the root contains, used to align sentences to the DOM. */
+  text: string;
+  title: string;
+  lang?: string;
 }
 
 /** A selection snapshot, taken before any async work can disturb it. */
@@ -55,6 +81,9 @@ interface SelectionSnapshot {
 
 /** Below this many characters a selection isn't worth reading — fall back to the whole article. */
 const MIN_SELECTION_CHARS = 15;
+
+/** How far either side of the current sentence to look for one that exists in the DOM. */
+const NEARBY_RANGE_SEARCH = 20;
 
 export class ReaderSession {
   // ---- subsystems (built in begin()) --------------------------------------
@@ -84,6 +113,16 @@ export class ReaderSession {
   private engineReady = false;
   private wantsPlayback = false;
   private disposed = false;
+  /** The voice a switch is waiting on, so its arrival can be confirmed by name. */
+  private pendingVoiceLabel: string | null = null;
+  /** The one-time tips card is offered once per session, and only once per profile. */
+  private tipsOffered = false;
+  private tipsAllowed = true;
+  /** Removes the scroll/resize listeners that drive the "snap back" button's state. */
+  private stopViewportWatch: (() => void) | null = null;
+  /** Coalesces scroll events into one visibility check per frame. */
+  private offScreenFrame = 0;
+  private currentOffScreen = false;
   /** Sample rate the active engine produces. Used to build the silence that replaces a
    *  sentence which failed to synthesise. */
   private sampleRate = 22050;
@@ -98,8 +137,17 @@ export class ReaderSession {
 
   // ---- tuning --------------------------------------------------------------
 
+  /**
+   * Which path synthesis actually took, straight from the worker's `ready`.
+   *
+   * Assume the CPU until told otherwise: a machine whose `requestAdapter()` returns null looks
+   * identical to a GPU machine from here, and guessing "GPU" gives a stalling reader a queue
+   * built for a fast one.
+   */
+  private backend: SynthBackend = 'cpu';
+
   private get tuning() {
-    return tuningFor(this.settings.engine);
+    return tuningFor(this.settings.engine, this.backend);
   }
 
   // ---- startup -------------------------------------------------------------
@@ -107,12 +155,17 @@ export class ReaderSession {
   async begin(mode: ActivateMode = 'article', opts: BeginOptions = {}): Promise<void> {
     this.mode = mode;
     this.startTarget = opts.targetElement ?? null;
+    this.knownArticle = opts.knownArticle ?? null;
+    this.tipsAllowed = opts.showTips ?? true;
     // Snapshot the page selection *now*, before any await or DOM work can disturb it.
     if (mode === 'selection') this.selection = snapshotSelection();
     // "Read selection" / "Read from here" are explicit "start reading now" actions.
     this.wantsPlayback = mode === 'selection' || mode === 'from-cursor';
 
     this.settings = await getSettings();
+    // Chunk sizes are fixed at planning time, before any engine exists, so start from what
+    // synthesis did last time on this device rather than from an assumption about the browser.
+    this.backend = (await loadLastBackend()) ?? 'cpu';
     this.manifest = await this.loadManifest();
     this.connectPort();
     this.buildSubsystems();
@@ -144,6 +197,12 @@ export class ReaderSession {
       },
       onAudio: (playId, pcm, sr) =>
         this.scheduler.provide(playId, pcm, sr, leadSilenceSec(this.playlist[playId], this.settings)),
+      onNotice: (message) => {
+        // The engine has something to say that is not a failure — most often that it is running
+        // on the CPU, and why. Worth a line in the bar: otherwise "slow" is all the user sees.
+        log.info('engine notice:', message);
+        this.bar?.flash(message);
+      },
       onError: ({ message, fatal, stack, playId }) => {
         log.error('worker error:', message, stack ? `\n${stack}` : '');
         if (fatal) this.fail(message);
@@ -151,8 +210,13 @@ export class ReaderSession {
       },
     });
 
-    this.bar = new ControlBar(document, this.controlCallbacks(), this.settings.speed, this.settings.tapToSeek);
+    this.bar = new ControlBar(document, this.controlCallbacks(), {
+      speed: this.settings.speed,
+      tapToSeek: this.settings.tapToSeek,
+      theme: this.settings.theme,
+    });
     this.refreshBarVoices();
+    this.watchViewport();
 
     this.highlighter = new Highlighter(document, {
       color: this.settings.highlightColor,
@@ -190,8 +254,24 @@ export class ReaderSession {
     this.engineReady = true;
     this.sampleRate = sampleRate;
     this.state.engineInfo = executionProvider;
-    log.info('engine ready', executionProvider, `${sampleRate}Hz`);
+    // The provider is the only honest answer to "is this machine fast?", and it decides how deep
+    // the queue runs from here on (`tuning`). Chunk sizes were already fixed at planning time,
+    // so only lookahead / prime length change — which is exactly what stops the CPU path from
+    // running dry between sentences.
+    this.backend = backendOf(executionProvider);
+    void saveLastBackend(this.backend);
+    // Positive evidence only: a session that ran on WASM proves nothing about the GPU (Piper
+    // never asks for one, and the user may have switched acceleration off), but a session that
+    // ran on WebGPU proves the worker can reach it — which is how a Firefox user who turned on
+    // the about:config prefs stops being told their browser has no GPU access.
+    if (executionProvider.startsWith('webgpu')) void saveWorkerGpu(true);
+    log.info('engine ready', executionProvider, `${sampleRate}Hz`, `→ ${this.backend} tuning`);
     this.setStatus(this.wantsPlayback ? 'playing' : 'paused');
+    if (this.pendingVoiceLabel) {
+      this.bar?.flash(`${this.pendingVoiceLabel} ready`, 'ok');
+      this.pendingVoiceLabel = null;
+    }
+    this.maybeShowTips();
     // Pre-synthesise around wherever the user is now — they may have jumped to a section while
     // the model was still loading.
     if (this.currentPlayId > 0) this.scheduler.seek(this.currentPlayId);
@@ -216,8 +296,13 @@ export class ReaderSession {
       expandAbbreviations: this.settings.expandAbbreviations,
     });
 
+  private knownArticle: KnownArticle | null = null;
+
   private extractAndPlan(): void {
-    const article = extractArticle(document);
+    const known = this.knownArticle;
+    const article: ExtractedArticle = known
+      ? { title: known.title, text: known.text, lang: known.lang ?? 'en', byline: null, html: '', readerable: true }
+      : extractArticle(document);
     this.state.title = article.title || document.title;
 
     const useSelection = this.mode === 'selection' && this.selection.text.length > MIN_SELECTION_CHARS;
@@ -236,7 +321,8 @@ export class ReaderSession {
       if (!article.text || article.text.length < 40) {
         throw new Error("This page doesn't look like an article.");
       }
-      this.textIndex = buildTextIndex(resolveLiveRoot(article, document));
+      const liveRoot = known ? known.root : resolveLiveRoot(article, document);
+      this.textIndex = buildTextIndex(liveRoot);
       this.playlist = buildArticlePlaylist({
         index: this.textIndex,
         lang: article.lang,
@@ -285,7 +371,10 @@ export class ReaderSession {
       onSpeed: (s: number) => void this.setSpeed(s),
       onVoice: (v: string) => void this.changeVoice(v),
       onToggleTapToSeek: (on: boolean) => void this.setTapToSeek(on),
+      onSnapToCurrent: () => this.snapToCurrent(),
       onOpenSettings: () => this.port?.postMessage({ type: 'open-options' }),
+      onOpenWalkthrough: () => this.port?.postMessage({ type: 'open-walkthrough' }),
+      onTipsDismissed: () => void setSettings({ tipsSeen: true }),
       onClose: () => this.stop('user'),
     };
   }
@@ -361,23 +450,29 @@ export class ReaderSession {
 
     // The worker drops its whole queue on cancel; clear our matching bookkeeping so ensureSynth
     // actually re-requests the sentences around the new position (even if we've been here before).
+    // Work already running on a sentence in the new window is kept — it is about to be asked for
+    // again on the very next line.
     this.requested.clear();
-    this.worker.cancelFrom(target);
+    this.worker.cancelFrom(target, this.tuning.lookahead + 1);
     this.scheduler.seek(target);
     if (this.engineReady) this.ensureSynth(target);
     // Playback has to wait for the new sentence to synthesise; show that.
     this.state.busy = this.engineReady && this.scheduler.isPlaying();
     this.pushState();
+    this.bar?.flash(`Sentence ${target + 1} of ${this.playlist.length}`);
+    this.refreshOffScreen();
   }
 
   async setSpeed(speed: number): Promise<void> {
     this.settings = await setSettings({ speed });
     this.bar?.setSpeed(speed);
+    this.bar?.flash(`Speed ${speed}×`);
     if (!this.engineReady) return;
     // The sentence already playing keeps its old rate; everything after it is re-synthesised.
     const keepFrom = this.currentPlayId + 1;
     this.requested.clear();
-    this.worker.cancelFrom(keepFrom);
+    // Nothing in flight survives a speed change: every sentence has to be spoken at the new rate.
+    this.worker.cancelFrom(keepFrom, 0);
     this.scheduler.reprimeForSpeed();
     this.ensureSynth(keepFrom);
     this.state.busy = this.scheduler.isPlaying();
@@ -417,8 +512,18 @@ export class ReaderSession {
   /** Switch voice from the in-page bar, keeping the plan and position. */
   private async changeVoice(voice: string): Promise<void> {
     if (activeVoice(this.settings) === voice) return;
+    // Named, not just "switching": the picker collapses the moment it is used, so the
+    // confirmation is the only thing left saying which voice was chosen.
+    this.pendingVoiceLabel = this.voiceLabel(voice);
+    this.bar?.flash(`Switching to ${this.pendingVoiceLabel}…`);
     this.settings = await setSettings({ [voiceKeyFor(this.settings.engine)]: voice });
     await this.reloadEngine();
+  }
+
+  /** The human name of a voice id for the active engine, falling back to the id itself. */
+  private voiceLabel(voice: string): string {
+    if (!this.manifest) return voice;
+    return listVoices(this.settings.engine, this.manifest).find((v) => v.id === voice)?.label ?? voice;
   }
 
   /** Re-initialise the worker for a new engine/voice, keeping the plan and position. */
@@ -467,6 +572,8 @@ export class ReaderSession {
 
     this.ensureSynth(playId + 1);
     this.pushState();
+    this.refreshOffScreen();
+    this.maybeShowTips();
   }
 
   /**
@@ -503,6 +610,8 @@ export class ReaderSession {
     this.currentPlayId = 0;
     this.state.currentIndex = this.playlist.length;
     this.setStatus('paused');
+    this.bar?.flash('Finished reading this page', 'ok');
+    this.bar?.setCurrentOffScreen(false);
   }
 
   // ---- settings ------------------------------------------------------------
@@ -512,6 +621,10 @@ export class ReaderSession {
     this.settings = await setSettings({ tapToSeek: on });
     this.tapToSeek?.setEnabled(on);
     this.bar?.setTapToSeek(on);
+    this.bar?.flash(
+      on ? 'Click-to-jump on — click any sentence to jump there' : 'Click-to-jump off',
+      on ? 'ok' : 'info',
+    );
   }
 
   private async onSettingsChanged(): Promise<void> {
@@ -527,8 +640,127 @@ export class ReaderSession {
       this.bar?.setTapToSeek(this.settings.tapToSeek);
     }
     if (prev.speed !== this.settings.speed) this.bar?.setSpeed(this.settings.speed);
+    if (prev.theme !== this.settings.theme) this.bar?.setTheme(this.settings.theme);
 
-    if (needsEngineReload(prev, this.settings)) await this.reloadEngine();
+    if (needsEngineReload(prev, this.settings)) {
+      this.pendingVoiceLabel = this.voiceLabel(activeVoice(this.settings));
+      this.bar?.flash(`Loading ${this.pendingVoiceLabel}…`);
+      await this.reloadEngine();
+    } else if (changedVisibly(prev, this.settings)) {
+      // Only for changes that came from somewhere else — the bar's own controls confirm
+      // themselves as they are used, and `this.settings` is already up to date by the time the
+      // relayed change arrives, so those produce no second message.
+      this.bar?.flash('Settings updated', 'ok');
+    }
+  }
+
+  // ---- following the reader ------------------------------------------------
+
+  /** The DOM range of one playlist item: its own, or the block it sits in. */
+  private rangeOf(index: number): Range | null {
+    const item = this.playlist[index];
+    return item?.range ?? item?.blockRange ?? null;
+  }
+
+  /**
+   * Where the reader is, on the page — the current sentence's range, or the nearest one that
+   * exists.
+   *
+   * Not every item has a home in the DOM. The first chunk is the article's *title*, which is
+   * synthesised from metadata and often matches no text node at all, and a sentence the aligner
+   * could not place has no range either. Refusing to scroll in those cases is what made the snap
+   * button do nothing at all before playback had started — the commonest moment to press it.
+   * Looking a few items either way lands the reader within a paragraph of the truth, which is
+   * the whole point of the button.
+   */
+  private currentRange(): Range | null {
+    const own = this.rangeOf(this.currentPlayId);
+    if (own) return own;
+    for (let step = 1; step <= NEARBY_RANGE_SEARCH; step++) {
+      // Forward first: that is where the reading is heading.
+      const ahead = this.rangeOf(this.currentPlayId + step);
+      if (ahead) return ahead;
+      const behind = this.rangeOf(this.currentPlayId - step);
+      if (behind) return behind;
+    }
+    return this.lastShownRange;
+  }
+
+  /**
+   * "Take me back to what is being read" — the bar's snap button.
+   *
+   * Scrolls unconditionally, whatever the follow-the-reader setting says: someone who has just
+   * pressed the button has asked for this one scroll, and "don't scroll" was about the automatic
+   * ones. The confirmation names the sentence, so pressing it while already there still tells
+   * the user something rather than looking inert.
+   */
+  private snapToCurrent(): void {
+    const range = this.currentRange();
+    if (!this.highlighter?.reveal(range)) {
+      this.bar?.flash('There is nothing on this page to scroll to');
+      return;
+    }
+    // Only re-paint the highlight when the range really is this sentence's. When it is a
+    // neighbour standing in for a sentence with no place in the DOM, moving the highlight there
+    // would point at text that is not being spoken.
+    if (this.rangeOf(this.currentPlayId)) this.highlighter.show(range);
+    this.bar?.flash(`Sentence ${this.currentPlayId + 1} of ${this.playlist.length}`, 'ok');
+    // The scroll is smooth, so the sentence is not on screen yet; re-check once it lands.
+    setTimeout(() => this.refreshOffScreen(), 600);
+  }
+
+  /**
+   * Keep the snap button lit while the sentence being read is off screen.
+   *
+   * Scrolling away from the reader is the one situation where a control has to advertise itself:
+   * nothing else on the page says "Aloud can take you back". Checks are coalesced into one per
+   * animation frame, because scroll events arrive far faster than layout answers change.
+   */
+  private watchViewport(): void {
+    const view = document.defaultView;
+    if (!view) return;
+    const onChange = (): void => {
+      if (this.offScreenFrame) return;
+      this.offScreenFrame = view.requestAnimationFrame(() => {
+        this.offScreenFrame = 0;
+        this.refreshOffScreen();
+      });
+    };
+    view.addEventListener('scroll', onChange, { passive: true, capture: true });
+    view.addEventListener('resize', onChange, { passive: true });
+    this.stopViewportWatch = () => {
+      if (this.offScreenFrame) view.cancelAnimationFrame(this.offScreenFrame);
+      view.removeEventListener('scroll', onChange, { capture: true });
+      view.removeEventListener('resize', onChange);
+    };
+  }
+
+  private refreshOffScreen(): void {
+    if (this.disposed) return;
+    const range = this.currentRange();
+    const view = document.defaultView;
+    if (!range || !view) return;
+    const rect = range.getBoundingClientRect();
+    // A zero box is a sentence with no layout (display:none, a collapsed section): not something
+    // the user can be "away from", so leave the button quiet.
+    const offScreen =
+      (rect.width !== 0 || rect.height !== 0) && (rect.bottom < 0 || rect.top > view.innerHeight);
+    if (offScreen === this.currentOffScreen) return;
+    this.currentOffScreen = offScreen;
+    this.bar?.setCurrentOffScreen(offScreen);
+  }
+
+  /**
+   * Offer the one-time tips card the first time a reader gets past the waiting.
+   *
+   * Deliberately not at start-up: while the voice loads, the space above the bar is carrying
+   * "Loading voice… 40%", and burying that behind a tutorial would trade the feedback someone
+   * needs now for an explanation they need once.
+   */
+  private maybeShowTips(): void {
+    if (!this.tipsAllowed || this.tipsOffered || this.settings.tipsSeen || this.disposed) return;
+    this.tipsOffered = true;
+    this.bar?.showTips();
   }
 
   // ---- state / messaging ---------------------------------------------------
@@ -582,6 +814,7 @@ export class ReaderSession {
     this.disposed = true;
 
     this.tapToSeek?.dispose();
+    this.stopViewportWatch?.();
     try {
       this.port?.postMessage({ type: 'session-ended' });
       this.port?.disconnect();
@@ -624,6 +857,19 @@ function selectionRoot(selection: SelectionSnapshot): Element {
     root = root.parentElement ?? document.body;
   }
   return root;
+}
+
+/**
+ * Did anything the reader can see change?
+ *
+ * `tipsSeen` is bookkeeping, not a setting: dismissing the tips card would otherwise come back
+ * through the settings relay as "Settings updated", which is both untrue and the last thing
+ * someone wants to read immediately after closing a card.
+ */
+function changedVisibly(prev: Settings, next: Settings): boolean {
+  return (Object.keys(next) as Array<keyof Settings>).some(
+    (key) => key !== 'tipsSeen' && prev[key] !== next[key],
+  );
 }
 
 /** Settings that require tearing the engine down and loading a different model. */

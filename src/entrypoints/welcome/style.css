@@ -1,0 +1,263 @@
+/* The walkthrough. Shares Aloud's tokens and primitives; everything below is layout. */
+@import '../../ui/theme.css';
+
+body {
+  /* Room for the real control bar, which appears at the bottom during the demo. */
+  padding-bottom: 140px;
+}
+
+.shell {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 24px 24px 40px;
+}
+
+/* ---- header -------------------------------------------------------------- */
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand span { display: flex; flex-direction: column; line-height: 1.25; }
+.brand b { font-size: 15px; }
+.brand small { font-size: 12px; }
+
+.theme-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.theme-switch .seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-pill);
+  padding: 5px 11px;
+  font-size: 12.5px;
+  color: var(--fg-muted);
+}
+.theme-switch .seg:hover:not([aria-pressed='true']) { background: var(--surface-3); color: var(--fg); }
+.theme-switch .seg[aria-pressed='true'] {
+  background: var(--accent-solid);
+  color: var(--accent-on);
+  font-weight: 600;
+}
+
+/* Progress through the walkthrough: one line, always visible, never a surprise. */
+.rail {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--surface-3);
+  overflow: hidden;
+  margin-bottom: 28px;
+}
+.rail > i {
+  display: block;
+  height: 100%;
+  width: 20%;
+  background: var(--accent-solid);
+  transition: width 220ms ease;
+}
+
+/* ---- steps --------------------------------------------------------------- */
+
+.step[hidden] { display: none; }
+.eyebrow {
+  margin: 0 0 6px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+h1 {
+  font-size: 27px;
+  line-height: 1.22;
+  letter-spacing: -0.015em;
+  margin: 0 0 12px;
+}
+/* Each step moves focus to its heading so screen readers and the keyboard follow along; that is
+   a programmatic focus, not a navigation the user made, so it must not draw a focus ring. */
+h1:focus, h1:focus-visible { outline: none; }
+h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--fg-muted); margin: 28px 0 10px; }
+.lede { font-size: 15.5px; line-height: 1.6; color: var(--fg-muted); margin: 0 0 24px; max-width: 62ch; }
+.note {
+  margin: 20px 0 0;
+  padding: 12px 14px;
+  border-left: 3px solid var(--accent-solid);
+  background: var(--accent-soft);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 13px;
+}
+
+.facts { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.fact {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 13px;
+}
+
+/* ---- the demo ------------------------------------------------------------ */
+
+.demo { margin-top: 22px; padding: 18px 20px; }
+.demo-quote {
+  margin: 0 0 16px;
+  font-size: 16px;
+  line-height: 1.6;
+}
+.demo-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.demo-actions .muted { max-width: 42ch; }
+
+/* ---- step 2: ways in ----------------------------------------------------- */
+
+.ways { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.ways li {
+  display: grid;
+  grid-template-columns: 132px 1fr;
+  gap: 16px;
+  align-items: start;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 13.5px;
+}
+.way-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+kbd {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  background: var(--surface-2);
+  font: 11.5px/1.4 var(--sans);
+  color: var(--fg);
+}
+@media (max-width: 560px) {
+  .ways li { grid-template-columns: 1fr; gap: 8px; }
+}
+
+/* ---- step 3: the bar replica --------------------------------------------- */
+
+.bar-diagram { margin: 4px 0 8px; }
+.replica {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 11px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  overflow-x: auto;
+}
+.rep-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  color: var(--fg);
+  background: var(--surface-2);
+}
+.rep-btn.accent { background: var(--accent-solid); color: var(--accent-on); }
+.rep-progress {
+  flex: 1 1 auto;
+  min-width: 80px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-3);
+  position: relative;
+}
+.rep-progress > i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 38%;
+  border-radius: 3px;
+  background: var(--accent-solid);
+}
+.rep-count { color: var(--fg-muted); font-variant-numeric: tabular-nums; font-size: 12.5px; }
+.rep-select {
+  padding: 3px 9px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-size: 12.5px;
+}
+
+.legend { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 10px; }
+.legend li { display: grid; grid-template-columns: 32px 1fr; gap: 12px; align-items: start; font-size: 13.5px; }
+.legend-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--fg);
+}
+.mini-track { display: block; width: 16px; height: 5px; border-radius: 3px; background: var(--accent-solid); }
+.mini-speed { font-size: 11.5px; font-weight: 600; }
+
+.keys { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+.keys td { padding: 8px 0; border-top: 1px solid var(--border); vertical-align: top; }
+.keys tr:first-child td { border-top: 0; }
+.keys td:first-child { width: 170px; white-space: nowrap; }
+
+/* ---- step 4: engines ----------------------------------------------------- */
+
+.engine-cards { display: grid; gap: 12px; }
+.engine-card { padding: 14px 16px; }
+.engine-card p { margin: 6px 0 0; }
+.engine-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.engine-card.standing-recommended { border-color: color-mix(in srgb, var(--accent-solid) 55%, var(--border)); }
+.engine-card.standing-unsuitable { opacity: 0.72; }
+
+.finish-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px; }
+
+/* ---- footer nav ---------------------------------------------------------- */
+
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 34px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+.nav button[hidden] { display: none; }
+.dots { display: flex; gap: 8px; margin: 0 auto; }
+.dot {
+  width: 9px;
+  height: 9px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+}
+.dot.on { background: var(--accent-solid); border-color: transparent; }
+.dot:hover { border-color: var(--accent-solid); }

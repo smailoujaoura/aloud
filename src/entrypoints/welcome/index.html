@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Aloud — How it works</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="top">
+        <div class="brand">
+          <img src="/icon/48.png" alt="" width="32" height="32" />
+          <span>
+            <b>Aloud</b>
+            <small class="muted">Offline neural reader</small>
+          </span>
+        </div>
+        <!-- Built in main.ts so the segmented control, the settings page and the control bar all
+             read their labels and icons from one place. -->
+        <div id="themeSwitch"></div>
+      </header>
+
+      <div class="rail"><i id="railFill"></i></div>
+
+      <main id="steps">
+        <!-- 1 ------------------------------------------------------------ -->
+        <section class="step" data-title="Welcome">
+          <p class="eyebrow">Step 1 of 5</p>
+          <h1>Anything you can read, read aloud.</h1>
+          <p class="lede">
+            Aloud finds the article on the page, speaks it with a neural voice that runs inside
+            your browser, and highlights each sentence as it goes. The voice is downloaded once;
+            after that it works with the network switched off.
+          </p>
+
+          <div class="facts">
+            <div class="fact">
+              <b>Nothing leaves this device</b>
+              <span class="muted">No account, no upload, no telemetry. The text never travels.</span>
+            </div>
+            <div class="fact">
+              <b>Free, and staying that way</b>
+              <span class="muted">GPLv3, built on eSpeak-NG, ONNX Runtime, Piper and Kokoro.</span>
+            </div>
+            <div class="fact">
+              <b>Works on what you already read</b>
+              <span class="muted">Articles, documentation, your own selection — and PDFs.</span>
+            </div>
+          </div>
+
+          <div class="demo card">
+            <p class="demo-quote" id="demoText">
+              This is Aloud. It reads the page you are on with a voice that runs entirely on your
+              own computer, and it follows along, sentence by sentence, so you never lose your
+              place. Press the button and hear it for yourself.
+            </p>
+            <div class="demo-actions">
+              <button id="demo" class="primary">Hear it now</button>
+              <span id="demoStatus" class="muted small" role="status" aria-live="polite">
+                The first voice downloads once — you will see its progress in the bar that appears.
+              </span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2 ------------------------------------------------------------ -->
+        <section class="step" data-title="Starting" hidden>
+          <p class="eyebrow">Step 2 of 5</p>
+          <h1>Four ways to start reading.</h1>
+
+          <ul class="ways">
+            <li>
+              <span class="way-key"><img src="/icon/32.png" alt="" width="20" height="20" /></span>
+              <span>
+                <b>Click the Aloud button</b> in the toolbar on any article. Click it again to
+                pause, and again to carry on.
+              </span>
+            </li>
+            <li>
+              <span class="way-key"><kbd>Alt</kbd><kbd>Shift</kbd><kbd>R</kbd></span>
+              <span><b>Press the shortcut</b> — the same thing, without leaving the keyboard.</span>
+            </li>
+            <li>
+              <span class="way-key">Right-click</span>
+              <span>
+                <b>Select some text and choose “Read selection aloud”</b>, or right-click anywhere
+                and choose <b>“Read from here”</b> to start at that paragraph rather than the top.
+              </span>
+            </li>
+            <li>
+              <span class="way-key">PDF</span>
+              <span>
+                <b>Open a PDF and click the button.</b> Aloud reopens it in a reader of its own,
+                because a PDF in a browser tab has no text an extension can reach.
+              </span>
+            </li>
+          </ul>
+
+          <p class="note">
+            A page Aloud cannot read — a browser settings page, a blank tab, an add-on gallery —
+            shows <b>n/a</b> on the toolbar icon for a moment instead of failing silently.
+          </p>
+        </section>
+
+        <!-- 3 ------------------------------------------------------------ -->
+        <section class="step" data-title="The bar" hidden>
+          <p class="eyebrow">Step 3 of 5</p>
+          <h1>The bar at the bottom is the whole interface.</h1>
+          <p class="lede">
+            It appears over the page you are reading and never moves: whatever Aloud has to say —
+            loading a voice, buffering, an error — is said in a pill above it, so a button is
+            never anywhere but where you last saw it.
+          </p>
+
+          <!-- Built in main.ts from the same icon paths the real bar uses. -->
+          <div id="barDiagram" class="bar-diagram"></div>
+
+          <h2>From the keyboard</h2>
+          <table class="keys">
+            <tbody>
+              <tr><td><kbd>Space</kbd></td><td>Play or pause</td></tr>
+              <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Previous / next sentence</td></tr>
+              <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Faster / slower</td></tr>
+              <tr><td><kbd>Home</kbd> <kbd>End</kbd></td><td>Jump to the start or the end</td></tr>
+              <tr><td><kbd>Alt</kbd><kbd>Shift</kbd><kbd>R</kbd></td><td>Start or stop from anywhere</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <!-- 4 ------------------------------------------------------------ -->
+        <section class="step" data-title="Voices" hidden>
+          <p class="eyebrow">Step 4 of 5</p>
+          <h1>Pick a voice that suits your machine.</h1>
+          <p class="lede">
+            Every voice runs locally, so the honest trade is speed against warmth. Aloud has
+            measured what this browser gives it and ordered them accordingly.
+          </p>
+
+          <!-- Engine cards, browser-aware, built in main.ts from shared/engine-catalog. -->
+          <div id="engineCards" class="engine-cards"></div>
+
+          <p class="note">
+            Voices download once and are stored on this device — the settings page lists what is
+            installed, previews any voice before you commit to it, and deletes what you no longer
+            want.
+          </p>
+          <button id="toVoices" class="primary">Choose a voice…</button>
+        </section>
+
+        <!-- 5 ------------------------------------------------------------ -->
+        <section class="step" data-title="Make it yours" hidden>
+          <p class="eyebrow">Step 5 of 5</p>
+          <h1>Then make it yours.</h1>
+
+          <div class="facts">
+            <div class="fact">
+              <b>Light, dark, or whatever the system says</b>
+              <span class="muted">
+                The switch at the top of this page sets it everywhere Aloud draws — this page, the
+                settings, the PDF reader and the bar itself.
+              </span>
+            </div>
+            <div class="fact">
+              <b>Following the reader</b>
+              <span class="muted">
+                Keep the sentence visible, snap it to the middle of the screen, or never scroll at
+                all and use the bar's <b>↧</b> button when you want to catch up.
+              </span>
+            </div>
+            <div class="fact">
+              <b>Pauses and pronunciation</b>
+              <span class="muted">
+                Add a breath between sentences or sections, say “link” instead of reading a URL
+                aloud, and expand abbreviations like “e.g.”.
+              </span>
+            </div>
+            <div class="fact">
+              <b>The highlight</b>
+              <span class="muted">
+                Any colour you like, or off entirely if you would rather just listen.
+              </span>
+            </div>
+          </div>
+
+          <p class="note">
+            You can reopen this walkthrough at any time from the bottom of the settings page.
+          </p>
+          <div class="finish-actions">
+            <button id="toSettings" class="primary">Open settings</button>
+            <button id="done" class="ghost">Done — take me back</button>
+          </div>
+        </section>
+      </main>
+
+      <footer class="nav">
+        <button id="back" class="ghost" hidden>Back</button>
+        <div id="dots" class="dots"></div>
+        <button id="next" class="primary">Next</button>
+      </footer>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

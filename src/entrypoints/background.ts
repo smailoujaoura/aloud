@@ -19,9 +19,11 @@
 import { browser } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
 import { PORT_NAME, type ActivateMode, type ToBackgroundMessage } from '@/shared/messages';
+import { putPdf, sweepPdfHandoffs } from '@/pdf/handoff';
 import { watchSettings } from '@/shared/settings';
 
 const CONTENT_FILE = '/reader-inject.js';
+const WALKTHROUGH_PAGE = '/welcome.html';
 
 const MENU_READ_SELECTION = 'aloud-read-selection';
 const MENU_READ_FROM_HERE = 'aloud-read-from-here';
@@ -29,11 +31,22 @@ const MENU_READ_FROM_HERE = 'aloud-read-from-here';
 type Port = Parameters<Parameters<typeof browser.runtime.onConnect.addListener>[0]>[0];
 
 interface ActiveSession {
-  tabId: number;
+  /** Absent for the PDF reader page, which is an extension page and has no badge of its own. */
+  tabId: number | null;
   port: Port;
 }
 
 let active: ActiveSession | null = null;
+
+/**
+ * PDFs are fetched *here*, at the moment of the click, because this is where the permission
+ * exists: `activeTab` covers the tab's own URL for as long as the user stays on it, and
+ * Chromium's per-extension "Allow access to file URLs" covers `file://`. Handing the reader page
+ * a bare URL instead would ask it to re-fetch something it may have no permission for.
+ *
+ * The bytes travel through IndexedDB (`pdf/handoff.ts`), not through a message: Chromium
+ * serialises extension messages as JSON, which turns an ArrayBuffer into `{}`.
+ */
 
 /** Run `fn`, logging and swallowing a missing-API failure rather than aborting startup. */
 function optional(feature: string, fn: () => void): void {
@@ -47,6 +60,15 @@ function optional(feature: string, fn: () => void): void {
 export default defineBackground({
   type: 'module',
   main() {
+    // First run: open the walkthrough. An extension whose entire UI is a toolbar button and a
+    // bar that appears on top of someone else's page has nowhere to explain itself in place, so
+    // the one moment it can is the moment it is installed. Only on `install` — nobody wants a
+    // tutorial tab every time their browser updates the add-on.
+    browser.runtime.onInstalled.addListener((details) => {
+      if (details.reason !== 'install') return;
+      void openWalkthrough();
+    });
+
     browser.action.onClicked.addListener((tab) => {
       if (tab.id != null) void activate(tab.id, 'article');
     });
@@ -97,10 +119,25 @@ export default defineBackground({
       });
     });
 
+    // The content script telling us the page it was injected into is really a PDF: Chromium
+    // renders one inside a plugin <embed> whose document has no text, which is what used to
+    // surface as "this page doesn't look like an article".
+    browser.runtime.onMessage.addListener((msg: unknown, sender) => {
+      const m = msg as { type?: string };
+      if (m?.type === 'open-pdf-reader') {
+        const tab = sender.tab;
+        if (tab?.url) void openPdfReader(tab.url, tab.id ?? null, tab.index);
+      } else if (m?.type === 'open-walkthrough') {
+        void openWalkthrough();
+      }
+      return false;
+    });
+
     browser.runtime.onConnect.addListener((port) => {
       if (port.name !== PORT_NAME) return;
-      const tabId = port.sender?.tab?.id;
-      if (tabId == null) return;
+      // No tab id means the PDF reader page (an extension page, not a content script). It is a
+      // real session and must supersede any other one; it simply has no toolbar badge.
+      const tabId = port.sender?.tab?.id ?? null;
 
       // Supersede any other active session.
       if (active && active.tabId !== tabId) {
@@ -111,19 +148,21 @@ export default defineBackground({
         }
       }
       active = { tabId, port };
-      setBadge(tabId, '•');
+      if (tabId != null) setBadge(tabId, '•');
 
       port.onMessage.addListener((msg: ToBackgroundMessage) => {
         if (msg.type === 'state') {
-          setBadge(tabId, badgeFor(msg.state.status));
+          if (tabId != null) setBadge(tabId, badgeFor(msg.state.status));
         } else if (msg.type === 'open-options') {
           void browser.runtime.openOptionsPage();
+        } else if (msg.type === 'open-walkthrough') {
+          void openWalkthrough();
         } else if (msg.type === 'session-ended') {
           // Compare the port, not just the tab: a replacement session ("Read from here" /
           // "Read selection" on a running reader) may already hold the slot for this tab.
           if (active?.port === port) {
             active = null;
-            clearBadge(tabId);
+            if (tabId != null) clearBadge(tabId);
           }
         }
       });
@@ -131,7 +170,7 @@ export default defineBackground({
       port.onDisconnect.addListener(() => {
         if (active?.port === port) {
           active = null;
-          clearBadge(tabId);
+          if (tabId != null) clearBadge(tabId);
         }
       });
     });
@@ -152,7 +191,41 @@ export default defineBackground({
   },
 });
 
+/**
+ * Show the walkthrough, reusing its tab if it is already open.
+ *
+ * Opening a second copy of a tutorial someone already has open is the kind of small rudeness
+ * that makes an extension feel careless, and the page keeps no state worth restarting.
+ */
+async function openWalkthrough(): Promise<void> {
+  const url = browser.runtime.getURL(WALKTHROUGH_PAGE);
+  try {
+    const [existing] = await browser.tabs.query({ url });
+    if (existing?.id != null) {
+      await browser.tabs.update(existing.id, { active: true });
+      return;
+    }
+  } catch {
+    // `tabs.query` by URL needs the tabs permission, which we have — but Android builds have
+    // been known to reject the filter. Falling through just opens a new tab.
+  }
+  try {
+    await browser.tabs.create({ url });
+  } catch (err) {
+    console.warn('[aloud] could not open the walkthrough:', err);
+  }
+}
+
 async function activate(tabId: number, mode: ActivateMode, targetElementId?: number): Promise<void> {
+  // A PDF is never an article: Chromium hands the tab to a plugin <embed> with no text in its
+  // DOM, and Firefox renders it in a privileged viewer no content script can touch. Read it in
+  // Aloud's own PDF page instead of injecting into something unreadable.
+  const tab = await browser.tabs.get(tabId).catch(() => null);
+  if (tab?.url && looksLikePdf(tab.url)) {
+    await openPdfReader(tab.url, tabId, tab.index);
+    return;
+  }
+
   try {
     await browser.scripting.executeScript({ target: { tabId }, files: [CONTENT_FILE] });
   } catch (err) {
@@ -184,6 +257,68 @@ async function sendActivate(
       return sendActivate(tabId, mode, targetElementId, retries - 1);
     }
     console.warn('[aloud] activate message not delivered:', err);
+  }
+}
+
+/** Does this URL name a PDF? The only signal available before anything is loaded. */
+function looksLikePdf(url: string): boolean {
+  try {
+    const { pathname, protocol } = new URL(url);
+    if (!/^(https?|file|ftp):$/.test(protocol)) return false;
+    return /\.pdf$/i.test(pathname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Open a PDF in Aloud's reader page.
+ *
+ * The bytes are fetched here and now, while the user's click still grants `activeTab` for that
+ * URL. If the fetch fails — Firefox refuses `file://` to add-ons entirely, and Chromium does
+ * until "Allow access to file URLs" is switched on — the page still opens, carrying the reason,
+ * and offers the file picker, which needs no permission anywhere.
+ */
+async function openPdfReader(url: string, sourceTabId: number | null, index?: number): Promise<void> {
+  let job: string | null = null;
+  let reason = '';
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.arrayBuffer();
+    job = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    void sweepPdfHandoffs();
+    await putPdf(job, { data, name: fileNameOf(url), url });
+  } catch (err) {
+    reason = err instanceof Error ? err.message : String(err);
+    console.info(`[aloud] could not read ${url} in the background:`, reason);
+  }
+
+  const params = new URLSearchParams({ src: url });
+  if (job) params.set('job', job);
+  else if (reason) params.set('reason', reason);
+
+  const readerUrl = browser.runtime.getURL(`/pdf.html?${params.toString()}`);
+  try {
+    // In place, not in a new tab: the user asked to read *this* document, and a second tab
+    // showing the same file is clutter they then have to close. Back returns to the original.
+    if (sourceTabId != null) await browser.tabs.update(sourceTabId, { url: readerUrl });
+    else await browser.tabs.create({ url: readerUrl, index: index == null ? undefined : index + 1 });
+  } catch (err) {
+    console.warn('[aloud] could not open the PDF reader tab:', err);
+    if (sourceTabId != null) {
+      setBadge(sourceTabId, 'n/a');
+      setTimeout(() => clearBadge(sourceTabId), 2500);
+    }
+  }
+}
+
+function fileNameOf(url: string): string {
+  try {
+    const path = new URL(url).pathname;
+    return decodeURIComponent(path.slice(path.lastIndexOf('/') + 1)) || url;
+  } catch {
+    return url;
   }
 }
 

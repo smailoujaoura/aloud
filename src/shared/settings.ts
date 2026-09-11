@@ -11,6 +11,25 @@ export type EngineId = 'piper' | 'kokoro' | 'supertonic';
 /** How the page scrolls to follow the sentence being read. */
 export type ScrollMode = 'off' | 'keep-visible' | 'snap';
 
+/**
+ * How a PDF is presented in Aloud's reader page.
+ *
+ * `pages` draws the real pages and highlights the sentence on the page itself, so the document
+ * still looks like the document — figures, tables, columns and all. `reflow` rebuilds it as
+ * ordinary article HTML, which is the readable option on a phone and the only one that gets
+ * dark mode and resizable text, at the cost of the original appearance.
+ */
+export type PdfView = 'pages' | 'reflow';
+
+/**
+ * Which colour theme Aloud paints itself in.
+ *
+ * `system` follows the OS/browser preference and keeps following it while a page is open;
+ * `light` and `dark` are explicit and override it everywhere Aloud draws its own UI — the
+ * in-page control bar, the options page, the PDF reader and the walkthrough.
+ */
+export type ThemeChoice = 'system' | 'light' | 'dark';
+
 export interface Settings {
   /** Active synthesis engine. */
   engine: EngineId;
@@ -45,6 +64,8 @@ export interface Settings {
   highlightColor: string;
   /** How the page follows the current sentence. */
   scrollMode: ScrollMode;
+  /** How a PDF is shown in Aloud's reader page. */
+  pdfView: PdfView;
   /**
    * Deliberate silence inserted before a chunk that starts a new block (paragraph, list
    * item, heading, …), in milliseconds. `0` = the old fully gapless behaviour.
@@ -58,6 +79,13 @@ export interface Settings {
   expandAbbreviations: boolean;
   /** Click a sentence in the page while reading to jump playback there. */
   tapToSeek: boolean;
+  /** Colour theme for every surface Aloud draws. */
+  theme: ThemeChoice;
+  /**
+   * Whether the one-time tips card has already been shown above the control bar. Set the first
+   * time a reader session starts, so the card teaches the controls once and never again.
+   */
+  tipsSeen: boolean;
   /** Verbose console logging. */
   debug: boolean;
 }
@@ -75,18 +103,31 @@ export const DEFAULT_SETTINGS: Settings = {
   highlight: true,
   highlightColor: 'rgba(255, 214, 10, 0.45)',
   scrollMode: 'keep-visible',
+  pdfView: 'pages',
   sectionPauseMs: 0,
   sentencePauseMs: 0,
   skipUrls: true,
   expandAbbreviations: true,
   tapToSeek: true,
+  theme: 'system',
+  tipsSeen: false,
   debug: false,
 };
 
 const item = storage.defineItem<Settings>('local:settings', {
   fallback: DEFAULT_SETTINGS,
-  version: 2,
+  version: 3,
   migrations: {
+    // v2 -> v3: the manifest used to list Kokoro voices in nine languages, but kokoro-js only
+    // ships English (ids starting `a` = US, `b` = UK). A saved French or Japanese voice would fail
+    // on every sentence, so reset it to the default rather than carry it forward.
+    3(prev: Record<string, unknown>): Record<string, unknown> {
+      const voice = prev.kokoroVoice;
+      if (typeof voice === 'string' && !/^[ab][fm]_/.test(voice)) {
+        return { ...prev, kokoroVoice: 'af_heart' };
+      }
+      return prev;
+    },
     // v1 -> v2: the boolean `autoScroll` became the `scrollMode` enum.
     2(prev: Record<string, unknown>): Record<string, unknown> {
       const next = { ...prev };

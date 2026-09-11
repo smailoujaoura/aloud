@@ -1,14 +1,19 @@
 /**
  * Styles for the in-page control bar, scoped to its Shadow DOM.
  *
- * Two things drive the layout:
+ * Three things drive the layout:
  *
  *  - **The bar must not move when text changes.** Its width is a function of the viewport only,
- *    and transient status ("Loading…", "Buffering…", an error) is shown in a pill floated above
- *    the bar rather than inside it, so the buttons never shift under the pointer.
+ *    and everything transient — status ("Loading…", "Buffering…", an error), the scrub preview,
+ *    the first-run tips card — is drawn in an element floated *above* the bar rather than inside
+ *    it, so the buttons never shift under the pointer.
  *  - **It has to work with a thumb.** Below the narrow breakpoint the controls wrap onto two
  *    rows, hit targets grow to the 44px normally recommended for touch, and the bar sits above
  *    the phone's home indicator via `env(safe-area-inset-bottom)`.
+ *  - **It is themed by Aloud, not by the page.** Colours come from custom properties defined on
+ *    `:host`, switched by the `data-theme` attribute the session stamps from the user's setting
+ *    (src/ui/theme.ts). The `prefers-color-scheme` block below only covers the instant before
+ *    that attribute exists.
  *
  * `:host { all: initial }` plus the closed shadow root means the host page's CSS cannot reach
  * anything here, and nothing here escapes.
@@ -18,86 +23,289 @@
 export const NARROW_BREAKPOINT_PX = 560;
 
 export const CONTROL_BAR_CSS = `
-:host { all: initial; }
+:host {
+  all: initial;
 
-.bar {
+  --bar-bg: rgba(255,255,255,.92);
+  --bar-solid: #ffffff;
+  --bar-fg: #17171c;
+  --bar-muted: #5f5f6d;
+  --bar-hover: rgba(20,20,35,.07);
+  --bar-active: rgba(20,20,35,.12);
+  --bar-track: rgba(20,20,35,.14);
+  --bar-border: rgba(20,20,35,.12);
+  --bar-shadow: 0 10px 34px rgba(15,15,30,.18), 0 2px 6px rgba(15,15,30,.08);
+  --accent: #ffd60a;
+  --accent-hi: #ffe14d;
+  --accent-on: #1c1c22;
+  --accent-soft: rgba(255,214,10,.22);
+  --danger: #c0392b;
+  --font: 13px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  /*
+   * Tells the browser which palette to draw its *own* widgets in — above all the popup list a
+   * native <select> opens. That popup is not part of our shadow tree's layout: it takes its
+   * background from the OS palette but inherits our text colour, so without this a dark bar on a
+   * light OS opened a white list with near-white text in it. Set after "all: initial", which
+   * would otherwise reset it.
+   */
+  color-scheme: light;
+}
+
+:host([data-theme="dark"]) {
+  color-scheme: dark;
+  --bar-bg: rgba(24,24,30,.94);
+  --bar-solid: #191920;
+  --bar-fg: #f0f0f4;
+  --bar-muted: #a0a0ae;
+  --bar-hover: rgba(255,255,255,.10);
+  --bar-active: rgba(255,255,255,.16);
+  --bar-track: rgba(255,255,255,.18);
+  --bar-border: rgba(255,255,255,.12);
+  --bar-shadow: 0 10px 34px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.35);
+  --danger: #ff8a8a;
+}
+
+/* Only for the blink before the session stamps data-theme from the saved setting. */
+@media (prefers-color-scheme: dark) {
+  :host(:not([data-theme])) {
+    color-scheme: dark;
+    --bar-bg: rgba(24,24,30,.94);
+    --bar-solid: #191920;
+    --bar-fg: #f0f0f4;
+    --bar-muted: #a0a0ae;
+    --bar-hover: rgba(255,255,255,.10);
+    --bar-active: rgba(255,255,255,.16);
+    --bar-track: rgba(255,255,255,.18);
+    --bar-border: rgba(255,255,255,.12);
+    --bar-shadow: 0 10px 34px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.35);
+    --danger: #ff8a8a;
+  }
+}
+
+/*
+ * The dock is the fixed, viewport-anchored column that holds everything: the tips card, the
+ * status pill and the bar, stacked bottom-up. It exists so the floating pieces are positioned
+ * *against the bar* — as siblings in a column that grows upwards — rather than against the
+ * viewport, and so the bar itself never moves when one of them appears.
+ */
+.dock {
   position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
   z-index: 2147483647;
   box-sizing: border-box;
   width: min(760px, calc(100vw - 20px));
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 12px; border-radius: 14px;
-  background: #1c1c22; color: #f2f2f5;
-  font: 13px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  box-shadow: 0 8px 30px rgba(0,0,0,.35);
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  /* The gaps between the pieces must not swallow clicks meant for the page underneath. */
+  pointer-events: none;
 }
-.bar:focus-visible { outline: 2px solid #ffd60a; outline-offset: 2px; }
+.dock > * { pointer-events: auto; }
+
+.bar {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 10px; border-radius: 16px;
+  background: var(--bar-bg);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+  border: 1px solid var(--bar-border);
+  color: var(--bar-fg);
+  font: var(--font);
+  box-shadow: var(--bar-shadow);
+}
+.bar:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 button {
-  all: unset; box-sizing: border-box; flex: 0 0 auto;
+  all: unset; box-sizing: border-box; flex: 0 0 auto; position: relative;
   cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
-  width: 30px; height: 30px; border-radius: 8px; color: inherit;
+  width: 30px; height: 30px; border-radius: 9px; color: inherit;
+  transition: background 120ms ease, color 120ms ease, transform 120ms ease, opacity 120ms ease;
 }
-button:hover { background: rgba(255,255,255,.12); }
-button:focus-visible { outline: 2px solid #ffd60a; outline-offset: 1px; }
-button[disabled] { opacity: .4; cursor: default; }
+button:hover { background: var(--bar-hover); }
+button:active { background: var(--bar-active); transform: scale(.94); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+button[disabled] { opacity: .35; cursor: default; }
+button[disabled]:hover { background: none; }
 
-.play { width: 34px; height: 34px; background: #ffd60a; color: #1c1c22; font-weight: 700; }
-.play:hover { background: #ffe14d; }
+.play {
+  width: 36px; height: 36px; border-radius: 11px;
+  background: var(--accent); color: var(--accent-on);
+}
+.play:hover { background: var(--accent-hi); }
+.play:active { background: var(--accent-hi); }
 .play.attn { animation: aloud-pulse 1.4s ease-in-out infinite; }
 .play.loading { cursor: progress; }
-.play.loading:hover { background: #ffd60a; }
+.play.loading:hover { background: var(--accent); }
 .play .btn-spin {
   width: 16px; height: 16px; box-sizing: border-box;
-  border: 2px solid rgba(28,28,34,.3); border-top-color: #1c1c22;
+  border: 2px solid rgba(28,28,34,.28); border-top-color: #1c1c22;
   border-radius: 50%; animation: aloud-spin .8s linear infinite;
 }
 
-.tap.on { background: #ffd60a; color: #1c1c22; }
-.tap.on:hover { background: #ffe14d; }
+/* Toggle-style buttons (click-to-jump) read as "on" the way a pressed key does. */
+.tap.on { background: var(--accent); color: var(--accent-on); }
+.tap.on:hover { background: var(--accent-hi); }
+
+/* The snap button lights up on its own when the sentence being read has scrolled out of
+   sight — that is exactly the moment it is worth pressing. */
+.snap.offscreen { background: var(--accent-soft); color: var(--bar-fg); }
+.snap.offscreen::after {
+  content: ''; position: absolute; top: 3px; right: 3px;
+  width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+}
+
+.sep {
+  flex: 0 0 auto; width: 1px; height: 20px; margin: 0 2px;
+  background: var(--bar-border);
+}
+
+/* The secondary controls, kept together — see the note in control-bar.ts. */
+.side { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; }
 
 .progress {
-  flex: 1 1 auto; min-width: 40px; height: 6px; border-radius: 3px;
-  background: rgba(255,255,255,.18); cursor: pointer; position: relative;
+  flex: 1 1 auto; min-width: 40px; height: 20px; position: relative;
+  cursor: pointer; touch-action: none;
+  display: flex; align-items: center;
 }
-.progress > i {
+.progress > .track {
+  position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%);
+  height: 6px; border-radius: 3px; background: var(--bar-track);
+  transition: height 120ms ease;
+}
+.progress > .track > i {
   position: absolute; left: 0; top: 0; bottom: 0;
-  border-radius: 3px; background: #ffd60a; width: 0%;
+  border-radius: 3px; background: var(--accent); width: 0%;
 }
-.count { flex: 0 0 auto; font-variant-numeric: tabular-nums; opacity: .7; white-space: nowrap; }
+/* The knob only appears on hover/drag: at rest the bar should read as a slim progress line. */
+.progress > .knob {
+  position: absolute; top: 50%; left: 0;
+  width: 12px; height: 12px; margin-left: -6px; border-radius: 50%;
+  background: var(--accent); border: 2px solid var(--bar-solid);
+  transform: translateY(-50%) scale(0);
+  transition: transform 120ms ease;
+  pointer-events: none;
+}
+.progress:hover > .knob, .progress.dragging > .knob { transform: translateY(-50%) scale(1); }
+.progress:hover > .track, .progress.dragging > .track { height: 8px; }
+.progress:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
 
+/* Scrub preview: which sentence a click would land on. A child of the bar, but absolutely
+   positioned, so it is drawn above it without taking part in its layout. */
+.scrub {
+  position: absolute; bottom: calc(100% + 10px); left: 0;
+  transform: translateX(-50%);
+  padding: 4px 9px; border-radius: 8px;
+  background: var(--bar-solid); color: var(--bar-fg);
+  border: 1px solid var(--bar-border);
+  box-shadow: var(--bar-shadow);
+  font: var(--font); font-size: 12px; white-space: nowrap;
+  pointer-events: none;
+}
+.scrub[hidden] { display: none; }
+
+.count {
+  flex: 0 0 auto; font-variant-numeric: tabular-nums; color: var(--bar-muted);
+  white-space: nowrap; padding: 0 2px;
+}
+
+/*
+ * "all: unset" turns a <select> into an inline box that *wraps*, so a two-word voice name made
+ * the bar two lines tall — the one thing the bar must never do. Nowrap + hidden overflow keeps
+ * every control on one line whatever the voice is called.
+ */
 select {
   all: unset; box-sizing: border-box; flex: 0 0 auto;
-  cursor: pointer; padding: 3px 6px; border-radius: 7px;
-  background: rgba(255,255,255,.12); color: inherit; font: inherit;
-  max-width: 120px; text-overflow: ellipsis;
+  cursor: pointer; padding: 4px 7px; border-radius: 8px;
+  background: var(--bar-hover); color: inherit; font: inherit;
+  max-width: 120px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: background 120ms ease;
 }
-select:focus-visible { outline: 2px solid #ffd60a; }
+select:hover { background: var(--bar-active); }
+select:focus-visible { outline: 2px solid var(--accent); }
+/*
+ * The open list. Belt and braces with color-scheme above: Chromium paints <option> backgrounds
+ * from these rules, and the bar's own translucent background (--bar-bg) would show the page
+ * through the popup, so the solid variant is used.
+ */
+select option, select optgroup { background: var(--bar-solid); color: var(--bar-fg); }
+select optgroup { color: var(--bar-muted); font-weight: 600; }
 .voice[hidden] { display: none; }
 
+/* ---- floated status ------------------------------------------------------ */
+
 .toast {
-  position: absolute; left: 4px; right: 4px; bottom: calc(100% + 8px);
-  display: flex; align-items: center; justify-content: center; gap: 6px;
-  padding: 6px 12px; border-radius: 10px;
-  background: #1c1c22; color: #f2f2f5;
-  font: 12px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  box-shadow: 0 6px 22px rgba(0,0,0,.3);
+  box-sizing: border-box; max-width: 100%;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 7px 12px; border-radius: 11px;
+  background: var(--bar-solid); color: var(--bar-fg);
+  border: 1px solid var(--bar-border);
+  font: var(--font); font-size: 12.5px;
+  box-shadow: var(--bar-shadow);
   text-align: center;
 }
 .toast[hidden] { display: none; }
-.toast.err { color: #ff8a8a; }
+.toast.err { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 50%, var(--bar-border)); }
+.toast.ok { border-color: color-mix(in srgb, var(--accent) 55%, var(--bar-border)); }
 
 .spinner {
   width: 12px; height: 12px; flex: 0 0 auto;
-  border: 2px solid rgba(255,255,255,.3); border-top-color: #ffd60a;
+  border: 2px solid color-mix(in srgb, currentColor 25%, transparent); border-top-color: var(--accent);
   border-radius: 50%; animation: aloud-spin .8s linear infinite;
 }
+
+/* ---- first-run tips ------------------------------------------------------ */
+/*
+ * Shown once, above the bar, the first time someone reads a page. Same rule as the toast: it is
+ * absolutely positioned out of flow, so appearing and disappearing never resizes the bar.
+ */
+.tips {
+  box-sizing: border-box;
+  width: min(420px, 100%);
+  padding: 14px 16px 12px;
+  border-radius: 14px;
+  background: var(--bar-solid); color: var(--bar-fg);
+  border: 1px solid var(--bar-border);
+  box-shadow: var(--bar-shadow);
+  font: var(--font);
+  animation: aloud-rise 160ms ease-out;
+}
+.tips[hidden] { display: none; }
+.tips h2 {
+  all: unset; display: block;
+  font: inherit; font-size: 13.5px; font-weight: 700; margin-bottom: 8px;
+}
+.tips ul { all: unset; display: flex; flex-direction: column; gap: 7px; margin-bottom: 12px; }
+.tips li { all: unset; display: flex; align-items: flex-start; gap: 9px; font-size: 12.5px; }
+.tips .key {
+  flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+  min-width: 22px; height: 20px; padding: 0 5px; border-radius: 6px;
+  background: var(--bar-hover); color: var(--bar-fg);
+  font-size: 11px; font-weight: 600;
+}
+.tips .tip-text { color: var(--bar-muted); }
+.tips .tip-text b { color: var(--bar-fg); font-weight: 600; }
+.tips .tips-actions { display: flex; align-items: center; gap: 8px; }
+.tips button {
+  all: unset; box-sizing: border-box; cursor: pointer;
+  padding: 6px 12px; border-radius: 8px; font: inherit; font-size: 12.5px;
+  transition: background 120ms ease;
+}
+.tips button.ok { background: var(--accent); color: var(--accent-on); font-weight: 650; }
+.tips button.ok:hover { background: var(--accent-hi); }
+.tips button.link { color: var(--bar-muted); }
+.tips button.link:hover { background: var(--bar-hover); color: var(--bar-fg); }
+.tips button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 @keyframes aloud-spin { to { transform: rotate(360deg); } }
 @keyframes aloud-pulse {
   0%,100% { box-shadow: 0 0 0 0 rgba(255,214,10,.6); }
-  50% { box-shadow: 0 0 0 6px rgba(255,214,10,0); }
+  50% { box-shadow: 0 0 0 7px rgba(255,214,10,0); }
+}
+@keyframes aloud-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* ---- narrow viewports and touch ---------------------------------------- */
@@ -108,22 +316,34 @@ select:focus-visible { outline: 2px solid #ffd60a; }
  * and the gear button opens the settings page where voices are chosen properly.
  */
 @media (max-width: ${NARROW_BREAKPOINT_PX}px) {
-  .bar {
+  .dock {
     width: calc(100vw - 12px);
     bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    gap: 6px;
+  }
+  .bar {
     flex-wrap: wrap;
-    gap: 6px 8px;
-    padding: 10px;
+    gap: 6px 6px;
+    padding: 9px 10px;
   }
   button { width: 40px; height: 40px; }
   .play { width: 46px; height: 46px; }
   .play .btn-spin { width: 20px; height: 20px; }
   select { padding: 8px 10px; max-width: none; }
-  /* Push the scrubber and its counter onto a second row. */
-  .progress { order: 10; flex: 1 1 100%; height: 12px; border-radius: 6px; }
-  .progress > i { border-radius: 6px; }
+  /*
+   * Three rows, in the order they are used: transport and speed, then the scrubber with its
+   * counter, then the secondary buttons. Eight controls and a speed picker do not fit across a
+   * phone, and a predictable three-row bar is far better than a two-row one that reshuffles
+   * itself as the sentence counter grows a digit.
+   */
+  .progress { order: 10; flex: 1 1 60%; height: 22px; }
+  .progress > .track { height: 10px; border-radius: 5px; }
+  .progress > .track > i { border-radius: 5px; }
+  .progress > .knob { width: 16px; height: 16px; margin-left: -8px; transform: translateY(-50%) scale(1); }
   .count { order: 11; }
+  .side { order: 12; flex: 1 1 100%; justify-content: flex-end; }
   .voice { display: none; }
+  .sep { display: none; }
   .spacer { flex: 1 1 auto; }
 }
 
@@ -134,23 +354,15 @@ select:focus-visible { outline: 2px solid #ffd60a; }
 @media (pointer: coarse) {
   button { width: 40px; height: 40px; }
   .play { width: 46px; height: 46px; }
-  .progress { height: 12px; border-radius: 6px; }
-  .progress > i { border-radius: 6px; }
-}
-
-@media (prefers-color-scheme: light) {
-  .bar, .toast {
-    background: #fff; color: #1c1c22;
-    box-shadow: 0 8px 30px rgba(0,0,0,.18);
-    border: 1px solid rgba(0,0,0,.08);
-  }
-  button:hover { background: rgba(0,0,0,.06); }
-  .progress { background: rgba(0,0,0,.12); }
-  select { background: rgba(0,0,0,.06); }
+  .progress > .track { height: 10px; border-radius: 5px; }
+  .progress > .track > i { border-radius: 5px; }
+  .progress > .knob { transform: translateY(-50%) scale(1); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .spinner, .play .btn-spin { animation-duration: 2s; }
+  .spinner, .play .btn-spin { animation-duration: 2.4s; }
   .play.attn { animation: none; box-shadow: 0 0 0 3px rgba(255,214,10,.5); }
+  .tips { animation: none; }
+  button, select, .progress > .track, .progress > .knob { transition: none; }
 }
 `;

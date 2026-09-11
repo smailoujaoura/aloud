@@ -1,0 +1,280 @@
+/*
+ * Aloud's shared design tokens and UI primitives, used by every extension page: the options
+ * page, the PDF reader and the walkthrough.
+ *
+ * Theming contract (see src/ui/theme.ts):
+ *   :root                            -> the light palette, always defined
+ *   @media (prefers-color-scheme: dark) :root:not([data-theme='light'])
+ *                                    -> dark, for the moment before the page's script runs
+ *   :root[data-theme='dark' | 'light'] -> the user's explicit choice, which wins either way
+ *
+ * Never give a colour its only definition inside a media query: a page that has been stamped
+ * `data-theme="light"` on a dark OS must still find every token.
+ */
+
+:root {
+  color-scheme: light;
+
+  --bg: #fbfbfd;
+  --surface: #ffffff;
+  --surface-2: #f2f2f6;
+  --surface-3: #e8e8ef;
+  --fg: #17171c;
+  --fg-muted: #5f5f6d;
+  --fg-faint: #8a8a97;
+  --border: rgba(20, 20, 35, 0.13);
+  --border-strong: rgba(20, 20, 35, 0.28);
+
+  /* Amber is Aloud's accent. `--accent` is the *text* amber (contrast-safe on the page
+     background); `--accent-solid` is the fill used on buttons and the progress bar. */
+  --accent: #9a6f00;
+  --accent-solid: #ffd60a;
+  --accent-soft: rgba(255, 214, 10, 0.18);
+  --accent-on: #1c1c22;
+
+  --ok: #1f7a4d;
+  --warn: #a4610a;
+  --danger: #c0392b;
+
+  --shadow-1: 0 1px 2px rgba(15, 15, 30, 0.06), 0 4px 16px rgba(15, 15, 30, 0.06);
+  --shadow-2: 0 8px 30px rgba(15, 15, 30, 0.16);
+
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-pill: 999px;
+
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --speed: 140ms;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    --bg: #101014;
+    --surface: #191920;
+    --surface-2: #22222b;
+    --surface-3: #2d2d38;
+    --fg: #ececf1;
+    --fg-muted: #a0a0ae;
+    --fg-faint: #7c7c8b;
+    --border: rgba(255, 255, 255, 0.13);
+    --border-strong: rgba(255, 255, 255, 0.3);
+
+    --accent: #ffd60a;
+    --accent-solid: #ffd60a;
+    --accent-soft: rgba(255, 214, 10, 0.16);
+    --accent-on: #1c1c22;
+
+    --ok: #4ade80;
+    --warn: #e8a33d;
+    --danger: #ff6b5e;
+
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.3);
+    --shadow-2: 0 10px 34px rgba(0, 0, 0, 0.5);
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: #101014;
+  --surface: #191920;
+  --surface-2: #22222b;
+  --surface-3: #2d2d38;
+  --fg: #ececf1;
+  --fg-muted: #a0a0ae;
+  --fg-faint: #7c7c8b;
+  --border: rgba(255, 255, 255, 0.13);
+  --border-strong: rgba(255, 255, 255, 0.3);
+
+  --accent: #ffd60a;
+  --accent-solid: #ffd60a;
+  --accent-soft: rgba(255, 214, 10, 0.16);
+  --accent-on: #1c1c22;
+
+  --ok: #4ade80;
+  --warn: #e8a33d;
+  --danger: #ff6b5e;
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.3);
+  --shadow-2: 0 10px 34px rgba(0, 0, 0, 0.5);
+}
+
+* { box-sizing: border-box; }
+
+/*
+ * `hidden` must win. Any author rule that sets `display` — `button.primary { display: block }`
+ * on the PDF page, say — otherwise beats the user-agent's `[hidden] { display: none }` and
+ * leaves an empty control on screen. This bit us with a stray yellow button on the PDF picker.
+ */
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.55 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--accent); }
+
+::selection { background: var(--accent-soft); }
+
+:focus-visible {
+  outline: 2px solid var(--accent-solid);
+  outline-offset: 2px;
+}
+
+/* ---- primitives ---------------------------------------------------------- */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+}
+
+button,
+.btn {
+  font: inherit;
+  color: inherit;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: background var(--speed) ease, border-color var(--speed) ease, color var(--speed) ease,
+    transform var(--speed) ease;
+}
+button:hover:not(:disabled),
+.btn:hover:not(:disabled) { background: var(--surface-3); border-color: var(--border-strong); }
+button:active:not(:disabled),
+.btn:active:not(:disabled) { transform: translateY(1px); }
+button:disabled,
+.btn:disabled { opacity: 0.55; cursor: default; }
+
+button.primary,
+.btn.primary {
+  background: var(--accent-solid);
+  color: var(--accent-on);
+  border-color: transparent;
+  font-weight: 600;
+}
+button.primary:hover:not(:disabled),
+.btn.primary:hover:not(:disabled) { background: #ffe14d; border-color: transparent; }
+
+button.danger,
+.btn.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
+button.danger:hover:not(:disabled),
+.btn.danger:hover:not(:disabled) { border-color: var(--danger); }
+
+button.ghost,
+.btn.ghost { background: transparent; }
+button.ghost:hover:not(:disabled),
+.btn.ghost:hover:not(:disabled) { background: var(--surface-2); }
+
+/* A button that is doing something: it says so, and says it in a fixed-width slot so the
+   surrounding layout never jumps while the work runs. */
+button.busy,
+.btn.busy {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent-solid) 55%, var(--border));
+  cursor: progress;
+}
+
+select,
+input[type='search'],
+input[type='text'],
+input[type='number'] {
+  font: inherit;
+  color: inherit;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 9px;
+}
+input[type='color'] {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  height: 30px;
+  width: 52px;
+  cursor: pointer;
+}
+input[type='range'] { accent-color: var(--accent-solid); }
+input[type='checkbox'], input[type='radio'] { accent-color: var(--accent-solid); }
+
+.muted { color: var(--fg-muted); }
+.small { font-size: 12.5px; }
+
+/* The universal "something is happening" mark. Always paired with words — a spinner alone
+   never says *what* is happening. */
+.spinner {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  vertical-align: -2px;
+  border: 2px solid color-mix(in srgb, var(--fg) 22%, transparent);
+  border-top-color: var(--accent-solid);
+  border-radius: 50%;
+  animation: aloud-spin 0.8s linear infinite;
+}
+
+@keyframes aloud-spin { to { transform: rotate(360deg); } }
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+.pill.accent { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+
+/* Bottom-centred status toast. Fixed position and out of flow, so a message can appear or
+   change length without moving a single control on the page. */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 9px 16px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-2);
+  font-size: 13px;
+  z-index: 50;
+  animation: aloud-rise var(--speed) ease-out;
+}
+.toast[hidden] { display: none; }
+.toast.ok { border-color: color-mix(in srgb, var(--ok) 45%, var(--border)); }
+.toast.error { border-color: color-mix(in srgb, var(--danger) 55%, var(--border)); color: var(--danger); }
+
+@keyframes aloud-rise {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { scroll-behavior: auto !important; }
+  .toast { animation: none; }
+  .spinner { animation-duration: 2.4s; }
+  button, .btn { transition: none; }
+}
