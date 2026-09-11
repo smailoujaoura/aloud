@@ -79,6 +79,12 @@ const KOKORO_LANG = {
   p: { code: 'pt-BR', name: 'Portuguese (BR)' },
   z: { code: 'zh', name: 'Mandarin' },
 };
+/**
+ * Voice-id prefixes (the language letter) that the pinned kokoro-js can synthesise: US and UK
+ * English. Revisit when upgrading kokoro-js — its `voices` table in dist/kokoro.js is the source.
+ */
+const KOKORO_SUPPORTED_PREFIXES = new Set(['a', 'b']);
+
 // Quality grades from the Kokoro-82M voice table, where published.
 const KOKORO_GRADE = {
   af_heart: 'A', af_bella: 'A-', af_nicole: 'B-', bf_emma: 'B-', af_kore: 'C+', af_sarah: 'C+',
@@ -95,6 +101,11 @@ function buildKokoro(hfInfo) {
     .sort();
   for (const id of bins) {
     if (!id.includes('_')) continue; // skip the blended base vectors ("af", "am")
+    // The Hugging Face repo carries style vectors for nine languages, but kokoro-js only ships a
+    // phonemiser and a voice table for English: any other voice fails at synthesis time with
+    // `Voice "ff_siwis" not found`. Listing them would offer 26 voices that cannot speak, so the
+    // manifest only includes what the bundled runtime can actually use.
+    if (!KOKORO_SUPPORTED_PREFIXES.has(id[0])) continue;
     const lang = KOKORO_LANG[id[0]] ?? { code: 'en-US', name: 'English (US)' };
     const gender = id[1] === 'm' ? 'male' : 'female';
     const entry = { label: titleCase(id.split('_')[1]), language: lang.code, gender };
