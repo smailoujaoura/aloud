@@ -25,47 +25,129 @@ of the codebase branches on those, never on a browser name.
 | | Gecko | Chromium |
 |---|---|---|
 | Background | Event page (`background.scripts`), real DOM | Service worker (`background.service_worker`), no DOM |
-| `navigator.gpu` in a Worker | **Not exposed to extensions** | **Exposed** |
-| `SharedArrayBuffer` in extensions | No ([bug 1673477](https://bugzilla.mozilla.org/show_bug.cgi?id=1673477)) | Only in a cross-origin-isolated top-level context |
+| `navigator.gpu` in a Worker | **Off by default**, behind `dom.webgpu.enabled` + `dom.webgpu.workers.enabled` — real when both are on (measured) | **Exposed — but often adapter-less** (measured) |
+| `SharedArrayBuffer` in extensions | No ([bug 1673477](https://bugzilla.mozilla.org/show_bug.cgi?id=1673477)) | **Yes, without cross-origin isolation** (measured) |
 | Content script → `new Worker(runtime.getURL(…))` | Forbidden (same-origin, no WAR exception) | Allowed |
 | `menus.getTargetElement()` | Yes | No |
 | `offscreen` API | No | Yes |
 
 Consequences, in order of how much they matter:
 
-1. **WebGPU is the whole ballgame for engine choice.** The `webgpu → wasm` ladder in
-   `engine/engines/kokoro.ts` was written for Firefox and never fires there, because
-   `navigator.gpu` is absent in the worker. On Chromium it fires, and Kokoro goes from ~3×
-   slower than real time to comfortably faster. So the *same* engine is the worst practical
-   choice on one browser and the best on the other. `shared/engine-catalog.ts` encodes this as a
-   per-browser `standing` and drives all the UI copy from it, rather than the UI hardcoding
-   "slow on Firefox".
+1. **WebGPU is the whole ballgame for engine choice — but "Chromium" is not the same as "has a
+   GPU".** The `webgpu → wasm` ladder in `engine/engines/kokoro.ts` never fires on Firefox,
+   because `navigator.gpu` is absent in the worker. On Chromium it fires *if the machine gives
+   us an adapter*, and Kokoro then goes from ~3× slower than real time to comfortably faster.
+
+   Plenty of Chromium desktops give us none: `navigator.gpu` exists, `requestAdapter()` returns
+   `null`, and the browser logs "No available adapters." — routine on Linux without a Vulkan
+   driver, on blocklisted GPUs, over remote desktop and under `--disable-gpu`. Treating the
+   browser as the answer made those machines **worse than Firefox**: the pipeline picked GPU
+   settings (one worker, `lookahead: 6`, 1.5 s prime) and then ran single-threaded WASM anyway.
+
+   So GPU access is a *probed* fact (`shared/gpu-probe.ts`), taken in three places: the
+   synth-host probes before sizing the pool, the content script re-tunes from the provider the
+   worker reports in `ready`, and the options page probes to describe the machine honestly (and
+   to say what would enable WebGPU: `chrome://gpu`, a Vulkan driver, Chrome 137+ on Linux).
+   `shared/browser-env.ts` keeps `workerWebGPU` as an *upper bound* that a probe can only
+   subtract from — Firefox extension workers get no `navigator.gpu` however capable the machine.
 2. **The worker pool inverts on the GPU path.** The pool in `synth-host/entry.ts` exists purely
    to work around slow CPU synthesis. On WebGPU every worker queues onto the same device, so
    parallelism buys nothing and each copy costs VRAM and shader compilation — `autoPoolSize`
    returns 1 there, and on phones (memory).
+
+   A seek has to **terminate** workers, because synthesis cannot be interrupted.
+   `engine.synthesize()` is a blocking WASM call, so a worker in the middle of one does not read
+   its messages at all — the `cancel` sits unseen until the sentence finishes. Measured on a real
+   seek before this was handled: three of four workers spent 40-65 s each finishing sentences the
+   user had already skipped past, while the sentence they jumped to waited for the one worker that
+   happened to be free. So `cancel` carries `keepAhead`, the number of sentences from the new
+   position that are still wanted: a worker inside that window is left to land (the reader is
+   about to ask for that very sentence again, and the queue recognises the duplicate rather than
+   starting it twice), and every other busy worker is terminated and replaced. The replacement
+   reloads from the model cache in a few seconds, against up to a minute of a worker being
+   useless. A speed change sends `keepAhead: 0` — nothing in flight survives it, since every
+   sentence has to be spoken at the new rate.
+
+   The pool is fed from **one queue** (`synth-host/job-queue.ts`), one sentence per idle worker.
+   Dispatching each request round-robin as it arrives looks equivalent and is not: the reader
+   requests its whole lookahead (24 sentences for Kokoro on the CPU) the moment worker 0 reports
+   `ready`, which is seconds before workers 1..N have compiled their own copy of the model. Every
+   one of those requests therefore went to worker 0 and sat in *its* private queue, and the rest
+   of the pool came up to find nothing to do — measured on the PDF reader page: four sentences in
+   ~50 s, each starting only after the previous finished, from a pool of four. Holding the jobs in
+   the host instead also makes a seek cheap, because the sentences the user skipped are dropped
+   here rather than buried in four workers' backlogs.
 3. **The `synth-host.html` iframe is kept on both browsers** even though Chromium would let the
    content script build the Worker directly. One code path is worth more than one saved frame,
    and the iframe is also what keeps the worker's event loop off the throttled-background path.
-4. **`SharedArrayBuffer` remains out of reach on both**, so `numThreads = 1` stays. Chromium
-   *can* grant SAB to a cross-origin-isolated extension document (COEP/COOP manifest keys), but
-   only to a *top-level* one — an iframe embedded in an ordinary article page can never be
-   cross-origin isolated. Reaching multi-threaded WASM on Chromium would mean moving synthesis
-   into an `offscreen` document, which is a genuinely different architecture. Not done; WebGPU
-   makes it mostly unnecessary.
+4. **`SharedArrayBuffer` is out of reach on Firefox — but not on Chromium**, and `numThreads = 1`
+   stays anyway. Measured in Chrome 143 with the extension loaded, in the embedded
+   `synth-host.html` iframe *and* its dedicated worker: `crossOriginIsolated === false`, yet
+   `typeof SharedArrayBuffer === 'function'` and `new SharedArrayBuffer(8)` succeeds — Chromium
+   grants SAB to extension contexts without cross-origin isolation, so ORT's multi-threaded WASM
+   path is genuinely available there, no `offscreen` document required.
+
+   It is not switched on because the measurements do not justify spending cores that way. One
+   worker, Kokoro, WASM, on a 14-core desktop, seconds per ~4.5 s sentence:
+
+   | threads | q8 | q4f16 |
+   |---|---|---|
+   | 1 | RTF 3.19× | RTF 3.02× |
+   | 2 | RTF 3.20× | RTF 1.84× |
+   | 4 | RTF 2.80× | RTF 1.72× |
+   | 8 | RTF 2.20× | RTF 1.35× |
+
+   For the shipped q8 weights, four threads buy ~12%, while a fourth *worker* buys ~4× the
+   throughput on the same cores. Threads only pay on the f16 weights, and only well past two of
+   them. The pool stays the CPU-path lever; the thread count is a knob to revisit if the default
+   precision ever changes. (Firefox remains hard-blocked by bug 1673477.)
 5. **`menus.getTargetElement` degrades gracefully.** Without it, "Read from here" falls back to
    the first sentence in the viewport (`content/playlist-navigation.ts`), which is what "here"
    means anyway when there is no click target.
+
+### 0.1.1 Who is allowed to answer "is there a GPU?"
+
+Three contexts can ask, and they do not agree — so the code ranks them by authority rather than
+merging them:
+
+| Asked in | Function | May it *add* the GPU? |
+|---|---|---|
+| The options page (a document) | `probeGpu()` → `capabilitiesWithGpu()` | **No.** Firefox gates documents (`dom.webgpu.enabled`) and workers (`dom.webgpu.workers.enabled`) separately, so a page with WebGPU proves nothing about synthesis. |
+| A synthesis worker, asked on demand | `probe-gpu` message → `options/gpu-check.ts` | **Yes.** This is the context that runs inference, so its answer replaces the expectation (`applyWorkerGpuProbe`). |
+| A synthesis worker, observed in passing | `ready.executionProvider` | **Yes, positively.** A session that ran on `webgpu/*` is proof; one that ran on WASM is not (Piper never asks for a GPU). |
+
+The worker answer is remembered (`shared/backend-memory.ts`) so pages that should not pay for a
+worker — the walkthrough, the first paint of the settings page — can still describe the machine
+correctly. The settings page then measures it live, which is what makes "turn these prefs on,
+press *Check for a GPU again*" work without a reload.
+
+This ranking exists because the old code hard-coded `workerWebGPU = chromium`, and a Firefox user
+who switched the prefs on was told by the settings page that their browser gives extensions no
+GPU access — while their worker was, at that moment, running Kokoro on `webgpu/fp32` faster than
+Piper. A capability that the runtime can disprove has to be measurable, in both directions.
+
+### 0.1.2 Falling back must be explained, not silent
+
+The GPU path loads Kokoro's **fp32** weights (~320 MB), which the CPU path never downloads, so the
+first GPU run on a machine is a large fresh download. A single dropped connection there used to
+push the whole session onto the CPU — three times slower — with nothing said beyond a line in the
+console. Two changes: a load that fails with a *network*-shaped error is retried once (a failure
+that is not about the network, such as an unsupported operator, is not — it would fail
+identically), and abandoning the GPU emits a `notice` on the worker protocol, which the session
+flashes in the control bar ("The GPU version of this voice could not be downloaded — reading on
+the CPU for now."). `notice` is deliberately not an `error`: nothing failed for the user, but the
+reason they are now waiting is worth a sentence.
 
 ### 0.2 Firefox for Android
 
 Supported, with `gecko_android` declared in the manifest so AMO does not treat the add-on as
 desktop-only. Two adaptations:
 
-- **The control bar is touch-first below 560px** (and on any coarse pointer): two rows, 40px hit
-  targets, a 12px scrubber, and `env(safe-area-inset-bottom)` to clear the home indicator. The
-  in-bar voice picker is hidden — a native `<select>` of 175 options is unusable on a phone, and
-  the gear button reaches the options page.
+- **The control bar is touch-first below 560px** (and on any coarse pointer): three rows
+  (transport and speed, scrubber and counter, secondary buttons), 40px hit targets, a 10px
+  scrubber, and `env(safe-area-inset-bottom)` to clear the home indicator. The in-bar voice
+  picker is hidden — a native `<select>` of 175 options is unusable on a phone, and the gear
+  button reaches the options page. See §0.9.2 for why the secondary buttons wrap as a group.
 - **Piper only, in practice.** Phone CPUs have no GPU path here and not enough cores or memory
   for the neural engines; `engine-catalog` marks both `unsuitable` and `engine-tuning` primes
   longer with shorter chunks.
@@ -127,6 +209,89 @@ pipeline, WASM execution and highlighting need a real browser — see `BUILD.md`
 - **Licensing: GPLv3 accepted.** eSpeak-NG (GPLv3) is bundled as the phonemizer.
 - **Injection: on activation only.** No declared content scripts; inject with `scripting.executeScript`
   on toolbar-button / context-menu activation. Uses `activeTab`.
+
+---
+
+## 0.9 The interface layer (added after the cross-browser work)
+
+Aloud draws four surfaces — the in-page control bar, the settings page, the PDF reader and the
+first-run walkthrough — and three rules hold across all of them.
+
+### 0.9.1 One theme, stamped rather than inherited
+
+`Settings.theme` is `system | light | dark`, and `src/ui/theme.ts` is the only thing that decides
+what that means right now. Every stylesheet defines the light palette on bare `:root`, repeats
+the dark palette twice — once under `prefers-color-scheme: dark` for the moment before scripts
+run, once under `:root[data-theme='dark']` — and `applyTheme()` stamps the resolved value plus a
+matching `color-scheme`. An explicit choice therefore survives a system that disagrees, in both
+directions, and native widgets (scrollbars, `<select>` popups) follow it.
+
+The control bar cannot use a document attribute: it lives in a closed shadow root over a page
+whose own colours are irrelevant to it. Its tokens hang off `:host`, switched by the same
+`data-theme` attribute set on the shadow host, and the session re-stamps it when the setting
+changes or the OS flips. Our CSP forbids the inline script that would normally beat the first
+paint, which is why the media-query fallback exists at all.
+
+### 0.9.2 The bar's size is a function of the viewport, and of nothing else
+
+Everything transient is drawn in the **dock**: a fixed, bottom-anchored flex column
+(`.dock` in `control-bar-styles.ts`) holding, bottom-up, the bar, the status pill and the
+first-run tips card. The pieces above the bar grow *upwards*; the bar itself never moves, never
+resizes, and never shifts a button under the pointer.
+
+This is also where a real bug lived: the status pill was `position: absolute; bottom: calc(100%
++ 8px)` while its only positioned ancestor was the initial containing block, so every
+"Loading voice… 40%" was rendered off the top of the viewport. The dock makes the anchor
+structural rather than incidental. The one exception is the scrub bubble, which must follow the
+pointer along the scrubber: it is absolutely positioned *inside* the bar (which is
+`position: relative`), so it is drawn above the bar without joining its layout.
+
+`all: unset` on a `<select>` turns it into a wrapping inline box, so a two-word voice name made
+the bar two lines tall. Every control that can carry text therefore pins `white-space: nowrap`
+and ellipsises.
+
+On a phone the bar is three rows — transport and speed, scrubber and counter, then the four
+secondary buttons as a group (`.side`). The group exists so a wrap can never strand a lone ✕ on
+a row of its own; eight controls plus a speed picker do not fit across 360 CSS pixels, and a
+predictable three-row bar beats a two-row one that reshuffles as the counter gains a digit.
+
+### 0.9.3 Every action answers
+
+Waits that outlive a keystroke are reported by the status pill (`SessionState.busy` / `hint` /
+`modelProgress`), and the play button becomes a spinner. Actions that complete immediately are
+confirmed by `ControlBar.flash()` — "Speed 1.5×", "Sentence 42 of 310", "Danny · low ready" —
+which holds the pill for two seconds and then hands it back to whatever the session is
+reporting. Errors outrank both.
+
+The settings page follows the same rule with a toast and `withBusy()`, which keeps a button's
+width while it says what it is doing. Because the session's own writes update its settings
+snapshot before the storage relay comes back, a change made *in the bar* is confirmed once,
+by the bar, rather than twice.
+
+### 0.9.4 Teaching an interface that has nowhere to live
+
+An extension whose whole UI is a toolbar button and a bar over someone else's page has no
+natural place to explain itself, so it takes the two moments it has:
+
+- **`welcome.html`, opened once on `runtime.onInstalled` with `reason === 'install'`.** Five
+  steps, the bar drawn and labelled from the same `ICON_PATHS` the real bar uses, engine cards
+  ranked by what this machine actually grants (`shared/engine-catalog` + the GPU probe), and a
+  live `ReaderSession` running on the walkthrough's own text — the bar becomes familiar over a
+  paragraph nobody cares about. It passes `showTips: false` so the one-time card is saved for a
+  real page.
+- **The tips card above the bar**, shown once per profile (`Settings.tipsSeen`) and deliberately
+  *not* at start-up: while the voice loads, that space is carrying "Loading voice… 40%", and
+  burying the feedback someone needs now under an explanation they need once is a bad trade. It
+  appears when the engine is ready or the first sentence starts.
+
+### 0.9.5 Following the reader
+
+`scrollMode` decides the automatic behaviour; the bar's snap button is the manual one, and it
+ignores the setting — "don't scroll" is about the scrolls the user did not ask for. The session
+watches scroll and resize (coalesced to one check per animation frame), compares the current
+sentence's rectangle against the viewport, and lights the button when it has gone. That glow is
+the only self-advertising control in the bar, because it is the only one whose moment the user
+cannot otherwise see.
 
 ---
 
@@ -351,6 +516,52 @@ pipeline, WASM execution and highlighting need a real browser — see `BUILD.md`
 - One active playback session globally. Background keeps `activeSessionTabId`. Starting in a new
   tab sends `STOP` to the previous tab (full teardown, `Worker.terminate()`, frees ~150–350MB
   RAM). Non-active tabs keep their content script only if paused-and-parked; default is teardown.
+
+### 2.3b PDFs
+
+A PDF in a tab is unreadable to an extension on **both** browsers, for different reasons:
+Chromium renders it inside an internal plugin `<embed>` whose document contains no text at all
+(`document.body.innerText.length === 0`, measured), and Firefox renders it in a privileged pdf.js
+viewer that content scripts may not touch. There is no way in for either. So Aloud opens the file
+in a reader page of its own (`entrypoints/pdf/`), fetching the bytes in the background while the
+user's click still grants `activeTab`, and handing them over through IndexedDB — **not** a
+message, because Chromium serialises extension messages as JSON and an `ArrayBuffer` arrives as
+`{}`. The reader replaces the PDF in the same tab rather than opening a second one.
+
+Getting at the bytes is its own problem, and it has three cases. A **local** file works on
+Chromium with `file:///*` plus the user's "Allow access to file URLs" toggle, and never on Firefox
+(bug 1266960), which falls back to the file picker. A PDF **on a website** is a cross-origin
+download that fails CORS however the file is served, and `activeTab` does not cover it — the tab
+is showing the browser's own PDF viewer, not a page Aloud was invoked on. Rather than ask for
+`<all_urls>` at install time (a "read all your data on every website" warning for a reader that
+touches nothing until pointed at a file), the reader page asks for **that one origin, from the
+user's click**, via `optional_host_permissions`. Once granted it stays granted for that site, and
+the background's own fetch succeeds from then on.
+
+Two views, one setting (`pdfView`):
+
+- **The pages** (default). pdf.js draws each page to a canvas and an invisible text layer goes
+  over it, so the sentence is highlighted *on the document* — figures, tables, columns and all.
+  Pages are drawn only near the viewport and freed again once well past it, which is what keeps a
+  500-page book from turning into gigabytes of canvas.
+- **Reflowed text.** The same blocks as ordinary HTML: readable on a phone, and the only view
+  that gets dark mode and the page's own text size.
+
+Two things make the page view work, and both are easy to get wrong:
+
+- **DOM order must be reading order.** pdf.js's own `TextLayer` emits spans in the PDF's raw
+  content order, which on a two-column page runs straight across the gutter — the salad that
+  `pdf/text-layout.ts` exists to prevent. So the spans are emitted from *our* ordered blocks
+  instead, wrapped in real `<p>` / `<h2>` / `<li>`, and the reader is told what the article is
+  (`begin({ knownArticle })`) rather than letting Readability re-derive it from transparent
+  absolutely-positioned lines.
+- **A line's box must sit on the glyphs beneath it.** A PDF positions text by its baseline, CSS
+  by the top of a line box, and the offset between them is the font's ascent — measured once from
+  the layer's own font, because assuming it puts every highlight a quarter of a line high. Each
+  line is then scaled horizontally so its width matches the width the PDF gives it.
+
+Everything downstream is unchanged: the text layer is ordinary DOM text, so `buildTextIndex`,
+sentence highlighting, tap-to-seek and the scroll modes all work on it as they do on any article.
 
 ### 2.4 Highlighting detail
 - Build once after extraction: flatten the live container's visible text nodes into a single

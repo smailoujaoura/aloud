@@ -12,9 +12,31 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
   Supertonic-2 (~262 MB). Inference runs on [ONNX Runtime Web](https://onnxruntime.ai/):
   WebGPU where the browser allows it, WebAssembly everywhere else.
 - **Gapless playback** — sentences are synthesised a few ahead of the playhead and scheduled
-  sample-accurately through the Web Audio API, so there is no pause between them.
+  sample-accurately through the Web Audio API, so there is no pause between them. Where the GPU
+  is out of reach a pool of workers synthesises several sentences at once, which is what keeps
+  the slower voices ahead of the playhead.
+- **PDFs, still looking like PDFs** — a PDF in a tab has no text an extension can reach, so
+  Aloud opens it in a reader of its own, draws the real pages with
+  [pdf.js](https://mozilla.github.io/pdf.js/) and highlights each sentence **on the page itself**
+  — figures, tables and columns intact. A reflowed-text view is one setting away for small
+  screens. A PDF on a website needs one click to grant Aloud access to that site; local
+  `file://` PDFs work on Chromium once *Allow access to file URLs* is enabled; Firefox never
+  grants add-ons file access, so drop the file onto the reader page instead.
 - **In-place highlighting** — the sentence being spoken is highlighted with the CSS Custom
-  Highlight API (zero DOM mutation, cannot break page layout), with a `<span>` fallback.
+  Highlight API (zero DOM mutation, cannot break page layout), with a `<span>` fallback. Lost
+  your place? The bar's **↧** button scrolls back to the sentence being read, and lights up by
+  itself once that sentence leaves the screen.
+- **A bar that never moves, and never goes quiet** — the control bar's size depends on the
+  viewport and nothing else. Everything it has to say — loading a voice and how far along it is,
+  buffering, a confirmation of what you just changed, an error — appears in a pill *above* the
+  bar, so no button ever shifts under the pointer. Every control reports back: change the speed
+  and it says so, jump and it names the sentence you landed on.
+- **Light, dark, or whatever your system says** — one setting, applied to the reading bar, the
+  settings page, the PDF reader and the walkthrough alike.
+- **A walkthrough on first run** — five short steps that end with Aloud reading the walkthrough
+  itself aloud, so the bar is familiar before it appears over something you actually wanted to
+  read. Reopen it any time from the settings page; a one-time card above the bar names the
+  controls the first time you read a real page.
 - **Offline & private** — models download once from Hugging Face and are cached on the device.
 
 ## Which voice to use
@@ -26,14 +48,27 @@ extension's Worker can reach the GPU:
 |---|---|---|---|
 | **Chromium desktop** | fast | **best — runs on WebGPU** | good |
 | **Firefox desktop** | **best choice — fast** | works, ~3× slower than real time | roughly real time |
+| **Firefox desktop, WebGPU switched on** | fast | **best — faster than Piper** | good |
 | **Firefox Android** | **the only sensible choice** | too slow | too large |
 
-Firefox does not expose WebGPU to extension workers yet, and extensions get no
-`SharedArrayBuffer` ([bug 1673477](https://bugzilla.mozilla.org/show_bug.cgi?id=1673477)), so
-ONNX Runtime is stuck on a single WASM thread there. Aloud compensates with a pool of synthesis
-workers, but Piper remains the comfortable default. On Chromium the GPU path makes Kokoro both
-the best sounding option and a fast one. The options page tells you which applies to your
-browser; you never have to remember this table.
+Firefox ships WebGPU switched off, and extensions get no `SharedArrayBuffer`
+([bug 1673477](https://bugzilla.mozilla.org/show_bug.cgi?id=1673477)), so ONNX Runtime is stuck
+on a single WASM thread there by default. Aloud compensates with a pool of synthesis workers, and
+Piper is the comfortable default. On Chromium the GPU path makes Kokoro both the best sounding
+option and a fast one.
+
+**Firefox users can have the GPU path too.** In `about:config`, set
+`dom.webgpu.enabled` and `dom.webgpu.workers.enabled` to `true` (the second one is the one that
+matters — synthesis runs in a worker), plus `gfx.webrender.all` if hardware acceleration is off
+on your machine, then restart. Kokoro then loads on `webgpu/fp32` and runs faster than Piper.
+These are experimental settings; set them back to `false` if Firefox misbehaves, and Aloud
+returns to the CPU path on its own. The settings page spells the prefs out, copies them for you,
+and re-checks — it asks a real synthesis worker whether it has a GPU rather than assuming from
+the browser name, so what it tells you is what your machine actually does. The first GPU run
+downloads Kokoro's full-precision model (~320 MB) once.
+
+The options page tells you which of these applies to your machine; you never have to remember
+this table.
 
 ## Install (temporary, for testing)
 
@@ -54,10 +89,12 @@ npm run build          # builds BOTH .output/firefox-mv3 and .output/chrome-mv3
 > `'background.scripts' requires manifest version of 2 or lower`, and because the background then
 > never runs, the toolbar icon appears but does nothing.
 
-Open an article and click the **Aloud** toolbar button (or press `Alt+Shift+R`). The first run
-downloads the voice; after that it works offline. Right-click gives **Read selection aloud** and
-**Read from here**. Settings — engine, voice, speed, highlight colour, cached-model management —
-are on the extension's options page.
+Installing opens the **walkthrough** — five steps, including a live demo that reads the page
+itself aloud. Then open an article and click the **Aloud** toolbar button (or press
+`Alt+Shift+R`). The first run downloads the voice; after that it works offline. Right-click gives
+**Read selection aloud** and **Read from here**. Settings — theme, engine, voice, speed,
+highlight colour, cached-model management — are on the extension's options page, which also
+reopens the walkthrough.
 
 ## How it works
 
@@ -70,9 +107,16 @@ The Worker is created by a hidden `synth-host.html` iframe rather than directly 
 script, because Firefox forbids a content script from constructing a `moz-extension://` Worker.
 Chromium would allow it, but routing both through the iframe keeps one code path.
 
+The iframe owns a **pool** of those Workers, fed from a single queue: one sentence per idle
+worker, so the reader's opening burst of requests spreads across the pool instead of queueing up
+behind worker 0. How many workers there are is decided by *probing* for a GPU adapter rather than
+by which browser this is — Chromium exposes `navigator.gpu` on machines that then hand back no
+adapter at all, and treating those as GPU machines is what used to leave Kokoro running on one
+worker there.
+
 The content script keeps all the DOM work — extraction, sentence planning, highlighting, audio
-scheduling — and the background is a thin coordinator that injects on `activeTab` and enforces
-one active session at a time.
+scheduling — and the background is a thin coordinator that injects on `activeTab`, enforces one
+active session at a time, and hands PDF bytes to the reader page.
 
 Everything that genuinely differs between browsers is a named capability in
 [`src/shared/browser-env.ts`](src/shared/browser-env.ts), so the rest of the code reads

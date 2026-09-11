@@ -52,13 +52,21 @@ the worker are capability checks (`src/shared/browser-env.ts`), not build flags.
 1. `wxt.config.ts`'s `build:before` hook runs `scripts/prebuild.mjs`, which:
    - `scripts/gen-voices.mjs` — regenerates `public/models.json` from `scripts/models.base.json`.
    - `scripts/sync-assets.mjs` — copies ONNX Runtime Web's `ort.bundle.min.mjs` +
-     `ort-wasm-simd-threaded[.jsep].{mjs,wasm}` from `node_modules` into `public/vendor/ort/`.
+     `ort-wasm-simd-threaded[.jsep].{mjs,wasm}` from `node_modules` into `public/vendor/ort/`,
+     and pdf.js's `pdf.min.mjs` + `pdf.worker.min.mjs`, plus its `standard_fonts/` (the Base-14
+     fonts a PDF may reference without embedding) and `cmaps/` (predefined CJK encodings), into
+     `public/vendor/pdfjs/` — about 4 MB, needed only once pages are *drawn* rather than just
+     read. The **legacy**
+     pdf.js build is the one copied: the modern build uses `Map.prototype.getOrInsertComputed`,
+     which Chrome 143 and our Firefox baseline do not have, and the PDF reader page dies with
+     `getOrInsertComputed is not a function` on the first document.
    - `scripts/build-worker.mjs` — a standalone Vite build of `src/worker/entry.ts` →
      `.gen/worker/tts-worker.js` (ES-module worker), plus `src/synth-host/entry.ts` →
      `.gen/worker/synth-host.js` (a classic IIFE). `onnxruntime-web` / `onnxruntime-common` are
      **external**, rewritten via `output.paths` to `./vendor/ort/ort.bundle.min.mjs`, so ORT's
      ~33 MB of WASM is never base64-inlined. The output is copied into `public/`.
-2. WXT builds `background`, `options` and the `reader-inject` unlisted script, then assembles
+2. WXT builds `background`, `options`, `pdf`, `welcome` (the first-run walkthrough) and the
+   `reader-inject` unlisted script, then assembles
    the output directory with a generated `manifest.json`.
 
 ## Loading it
@@ -93,10 +101,12 @@ is verified after download (`src/engine/model-cache.ts`).
 | Warning | Count | Why it is expected |
 |---|---|---|
 | `DANGEROUS_EVAL` in `vendor/ort/ort.bundle.min.mjs` and `vendor/ort/ort-wasm-simd-threaded.jsep.mjs` | 2 | ONNX Runtime's WASM bootstrap. Covered by our CSP `'wasm-unsafe-eval'`. |
-| `UNSAFE_VAR_ASSIGNMENT` "call to import" in `vendor/rt/ort-loader-*.js` and `vendor/ort/ort.bundle.min.mjs` | 2 | Deliberate runtime `import()` of the vendored ORT module by URL — the loader resolves it with `browser.runtime.getURL`, so the argument is never page-controlled. |
-| `UNSAFE_VAR_ASSIGNMENT` "assignment to innerHTML" in `reader-inject.js` | 2 | Inside the bundled `@mozilla/readability`, which parses a *clone* of the document. None of our own code assigns `innerHTML`; the control bar and options page build every node with `createElement` (see `src/shared/dom.ts`). |
+| `DANGEROUS_EVAL` in `vendor/pdfjs/pdf.min.mjs` and `vendor/pdfjs/pdf.worker.min.mjs` | 2 | pdf.js's optional expression evaluator for PDF function objects. We load it with `isEvalSupported: false` (`src/pdf/load-pdf.ts`), so the branch is never taken. |
+| `UNSAFE_VAR_ASSIGNMENT` "call to import" in `vendor/rt/ort-loader-*.js`, `vendor/ort/ort.bundle.min.mjs`, `chunks/pdf-*.js` and `vendor/pdfjs/pdf*.min.mjs` | 4 | Deliberate runtime `import()` of a vendored module by URL — both loaders resolve it with `browser.runtime.getURL`, so the argument is never page-controlled. |
+| `UNSAFE_VAR_ASSIGNMENT` "assignment to innerHTML" in `reader-inject.js` and `chunks/session-*.js` | 4 | Inside the bundled `@mozilla/readability`, which parses a *clone* of the document and is bundled into the content script and into the shared reader-session chunk the PDF page and the walkthrough both load. None of our own code assigns `innerHTML`; the control bar, options page, PDF reader and walkthrough build every node with `createElement` (see `src/shared/dom.ts`). |
+| `UNSAFE_VAR_ASSIGNMENT` in `vendor/pdfjs/pdf.worker.min.mjs` | 1 | pdf.js's own worker bootstrap. |
 
-There are **no errors** — 6 warnings, 0 notices, all from vendored code. Verify with:
+There are **no errors** — 13 warnings, 0 notices, all from vendored code. Verify with:
 
 ```bash
 npx web-ext lint --source-dir .output/firefox-mv3 -o json | jq '{errors: (.errors|length), warnings: (.warnings|length)}'
