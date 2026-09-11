@@ -15,6 +15,7 @@
 import type { EngineConfig, WorkerRequest, WorkerResponse } from './protocol';
 import type { SynthEngine, InitContext, ModelManifest } from './engines/types';
 import { assetUrl } from './runtime-env';
+import { probeGpu } from '@/shared/gpu-probe';
 
 interface Job {
   id: number;
@@ -133,6 +134,8 @@ async function handleInit(req: Extract<WorkerRequest, { kind: 'init' }>): Promis
       });
     };
 
+    const onNotice: InitContext['onNotice'] = (message) => post({ kind: 'notice', id: req.id, message });
+
     phase = `loading ${req.config.engine} engine module`;
     engine = await createEngine(req.config.engine, m);
 
@@ -143,6 +146,7 @@ async function handleInit(req: Extract<WorkerRequest, { kind: 'init' }>): Promis
       steps: req.config.steps,
       preferWebGPU: req.config.preferWebGPU,
       onProgress,
+      onNotice,
     });
 
     post({
@@ -188,12 +192,7 @@ async function drainQueue(): Promise<void> {
         continue;
       }
       try {
-        const ts = Date.now();
         const result = await engine.synthesize(job.text, job.speed, job.voice);
-        // eslint-disable-next-line no-console
-        console.info(
-          `[aloud] worker: chunk ${job.chunkIndex} (${job.text.length} chars) synthesised in ${Date.now() - ts} ms`,
-        );
         if (job.gen !== generation || disposed) continue; // a seek landed mid-synthesis
         const pcm = result.pcm.slice();
         post(
@@ -265,6 +264,22 @@ export function startWorker(): (ev: MessageEvent<WorkerRequest>) => void {
         case 'set-speed':
           // Speed travels with each synthesize request; nothing global to update.
           break;
+
+        case 'probe-gpu': {
+          // Deliberately answered from *inside* the worker and without touching a model: this is
+          // the context whose GPU access decides how synthesis runs, and Firefox can grant
+          // WebGPU to a document while withholding it from that document's workers.
+          const probe = await probeGpu(self);
+          post({
+            kind: 'gpu-probe',
+            id: req.id,
+            webgpu: probe.available,
+            adapterInfo: probe.adapterInfo,
+            shaderF16: probe.shaderF16,
+            detail: probe.detail,
+          });
+          break;
+        }
 
         case 'dispose':
           disposed = true;

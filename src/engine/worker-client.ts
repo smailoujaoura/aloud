@@ -17,6 +17,8 @@ export interface WorkerClientCallbacks {
   onProgress(info: { progress: number; loaded: number; total: number; file: string; phase: string }): void;
   onAudio(playId: number, pcm: Float32Array, sampleRate: number, words?: WordTiming[]): void;
   onError(info: { message: string; fatal: boolean; playId?: number; stack?: string; phase?: string }): void;
+  /** Something worth telling the reader that is not a failure, e.g. "…running on the CPU". */
+  onNotice?(message: string): void;
 }
 
 const HOST_URL = '/synth-host.html' as const;
@@ -164,6 +166,12 @@ export class WorkerClient {
         });
         break;
       }
+      case 'notice':
+        this.cb.onNotice?.(msg.message);
+        break;
+      case 'gpu-probe':
+        // Only the options page asks for this, and it talks to its own worker directly.
+        break;
       case 'cancelled':
         break;
     }
@@ -177,9 +185,14 @@ export class WorkerClient {
   }
 
   /** Seek / speed change: the worker drops its whole queue, so forget every pending request. */
-  cancelFrom(playId: number): void {
+  /**
+   * Drop everything queued, keeping only in-flight work for the `keepAhead` chunks from `playId`.
+   *
+   * `keepAhead: 0` means nothing in flight is reusable (a speed change).
+   */
+  cancelFrom(playId: number, keepAhead: number): void {
     this.wanted.clear();
-    this.send({ kind: 'cancel', id: this.nextId++, fromChunkIndex: playId });
+    this.send({ kind: 'cancel', id: this.nextId++, fromChunkIndex: playId, keepAhead });
   }
 
   isPending(playId: number): boolean {

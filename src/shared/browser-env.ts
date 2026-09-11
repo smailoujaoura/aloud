@@ -28,10 +28,19 @@ export interface BrowserCapabilities {
   /**
    * Is `navigator.gpu` expected inside a dedicated Worker?
    *
-   * Chromium exposes WebGPU to workers. Firefox does not expose it to extension workers yet
-   * (the worker logs "navigator.gpu is not present in this worker"), so the neural engines are
-   * stuck on single-threaded WASM there. This is only the *expectation* used for defaults and
-   * UI copy — `engine/runtime-env.ts` still probes for real before selecting a provider.
+   * Chromium exposes WebGPU to workers. Firefox ships it disabled: with `dom.webgpu.enabled`
+   * *and* `dom.webgpu.workers.enabled` switched on in `about:config` an extension worker really
+   * does get an adapter (measured — Kokoro then loads `webgpu/fp32` and outruns Piper), but
+   * neither pref is on by default, so the expectation for Gecko stays `false`.
+   *
+   * This is an **expectation, not an answer**, and it can be wrong in both directions: Chromium
+   * exposes `navigator.gpu` on every desktop, including machines where `requestAdapter()` then
+   * returns `null` (no Vulkan driver on Linux, blocklisted GPU, remote desktop, `--disable-gpu`),
+   * and a Firefox user can switch the prefs above on. Anything that decides *how to run* — pool
+   * size, queue depth, UI copy — must combine it with a real probe: `capabilitiesWithGpu()` for
+   * a document-side probe, which may only *subtract*, and `applyWorkerGpuProbe()` for one
+   * measured inside a worker, which is the answer and may add. `engine/runtime-env.ts` probes
+   * again in the worker before selecting an execution provider.
    */
   workerWebGPU: boolean;
 
@@ -126,7 +135,8 @@ function computeCapabilities(): BrowserCapabilities {
   return {
     engine,
     formFactor,
-    // Chromium ships WebGPU in dedicated workers; Gecko does not expose it to extension workers.
+    // Chromium ships WebGPU in dedicated workers; Gecko keeps it behind about:config prefs that
+    // are off by default (a worker probe can correct this — see applyWorkerGpuProbe).
     // Android GPUs are also excluded: Firefox is the only Android extension host today.
     workerWebGPU: chromium && formFactor === 'desktop',
     contentScriptCanSpawnExtensionWorker: chromium,
@@ -141,6 +151,46 @@ let cached: BrowserCapabilities | null = null;
 /** The current context's capabilities. Computed once — nothing here changes at run time. */
 export function capabilities(): BrowserCapabilities {
   return (cached ??= computeCapabilities());
+}
+
+/**
+ * The current capabilities, corrected by a **document-side** GPU probe (`shared/gpu-probe.ts`).
+ *
+ * A document probe may only take the GPU *away*. Firefox gates the two contexts with separate
+ * prefs (`dom.webgpu.enabled` for documents, `dom.webgpu.workers.enabled` for workers), so a
+ * page that has WebGPU is no evidence that synthesis does — and claiming a GPU the worker cannot
+ * reach is what sizes the pool at one worker and makes everything slower. Passing `null` (probe
+ * not finished yet) leaves the expectation untouched.
+ */
+export function capabilitiesWithGpu(
+  probe: { available: boolean } | null,
+  base: BrowserCapabilities = capabilities(),
+): BrowserCapabilities {
+  if (!probe) return base;
+  return { ...base, workerWebGPU: base.workerWebGPU && probe.available };
+}
+
+/**
+ * Fold a completed GPU probe into this context's cached capabilities.
+ *
+ * Call it once, early, in a context that can probe (the options page). Everything that reads
+ * `capabilities()` afterwards — engine standings, blurbs, hints — then describes the machine in
+ * front of the user rather than the browser they happen to be running.
+ */
+export function applyGpuProbe(probe: { available: boolean }): BrowserCapabilities {
+  return (cached = capabilitiesWithGpu(probe, capabilities()));
+}
+
+/**
+ * Fold in a GPU probe that was run **inside a synthesis worker**, which is authoritative.
+ *
+ * That worker is the context that actually runs inference, so its answer replaces the
+ * expectation outright rather than only narrowing it — this is how a Firefox user who has turned
+ * on `dom.webgpu.workers.enabled` stops being told their browser has no GPU access, and how a
+ * Chromium machine whose adapter request fails stops being promised one.
+ */
+export function applyWorkerGpuProbe(webgpu: boolean): BrowserCapabilities {
+  return (cached = { ...capabilities(), workerWebGPU: webgpu });
 }
 
 /** Override the detected capabilities. Tests only. */

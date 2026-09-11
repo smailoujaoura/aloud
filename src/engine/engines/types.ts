@@ -14,6 +14,12 @@ export interface InitContext {
   steps?: number;
   preferWebGPU: boolean;
   onProgress: (p: { file: string; loaded: number; total: number; phase: 'download' | 'cache' | 'compile' }) => void;
+  /**
+   * Report something the reader should know that is not a failure — "the GPU model could not be
+   * downloaded, so this is running on the CPU". An engine that quietly settles for a slower path
+   * leaves the user with no way to tell a slow machine from a failed download.
+   */
+  onNotice?: (message: string) => void;
 }
 
 export interface SynthEngine {

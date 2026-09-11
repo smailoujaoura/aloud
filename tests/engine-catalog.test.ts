@@ -34,8 +34,21 @@ describe('engineInfo', () => {
   it('marks Kokoro slow, but still usable, without a GPU', () => {
     const info = engineInfo('kokoro', FIREFOX);
     expect(info.standing).toBe('slow');
-    // The blurb has to say *why*, not just that it is slow.
-    expect(info.blurb).toMatch(/Firefox gives extensions no GPU access/);
+    // The blurb has to say *why*, not just that it is slow — and on Firefox "why" is a setting
+    // the user can change, so it must point at that rather than sounding like a dead end.
+    expect(info.blurb).toMatch(/Firefox has WebGPU switched off for workers/);
+    expect(info.blurb).toMatch(/settings page/);
+  });
+
+  it('treats Firefox with WebGPU switched on exactly like any other GPU machine', () => {
+    // Turning on dom.webgpu.enabled + dom.webgpu.workers.enabled really does give an extension
+    // worker an adapter, so nothing here may key off the browser name: a measured
+    // `workerWebGPU` is the whole input.
+    const firefoxWithGpu = caps({ workerWebGPU: true });
+    expect(engineInfo('kokoro', firefoxWithGpu).standing).toBe('recommended');
+    expect(engineInfo('kokoro', firefoxWithGpu).tag).toMatch(/GPU/i);
+    expect(engineInfo('piper', firefoxWithGpu).standing).toBe('good');
+    expect(rankedEngines(firefoxWithGpu)[0]?.id).toBe('kokoro');
   });
 
   it('rules the neural engines out on phones', () => {

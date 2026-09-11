@@ -1,5 +1,5 @@
 /**
- * What each synthesis engine is, and how good an idea it is *on this browser*.
+ * What each synthesis engine is, and how good an idea it is *on this machine*.
  *
  * The three engines are not equally viable everywhere, and the gap is large enough that
  * presenting them identically would be misleading. The deciding factor is whether a Worker can
@@ -7,10 +7,13 @@
  *
  *  - **Chromium desktop** exposes WebGPU to workers. Kokoro runs on the GPU and is both the best
  *    sounding and comfortably fast, so it is the one to recommend.
- *  - **Firefox** does not expose WebGPU to extension workers (Bug 1673477 also rules out
- *    `SharedArrayBuffer`, so ONNX Runtime is stuck on one WASM thread). Kokoro lands around 3×
- *    slower than real time there and only keeps up by running a pool of workers. It stays
- *    available, clearly marked, but Piper is the sane default.
+ *  - **Firefox** ships WebGPU switched off, and switches it off for workers separately
+ *    (`dom.webgpu.enabled`, `dom.webgpu.workers.enabled`); Bug 1673477 also rules out
+ *    `SharedArrayBuffer`, so ONNX Runtime is stuck on one WASM thread. By default Kokoro lands
+ *    around 3× slower than real time there and only keeps up by running a pool of workers, so
+ *    Piper is the sane default. Turn the two prefs on and an extension worker really does get an
+ *    adapter — Kokoro then runs on `webgpu/fp32` and outruns Piper, which is why nothing here
+ *    keys off the browser name: `caps.workerWebGPU` is measured (`applyWorkerGpuProbe`).
  *  - **Android** has neither the GPU access nor the cores nor the memory. Piper only.
  *
  * Keeping this in one place means the options page, the control bar and the docs cannot drift
@@ -58,7 +61,10 @@ const NAMES: Record<EngineId, { name: string; approxSize: string; cacheHint?: st
 function noGpuReason(caps: BrowserCapabilities): string {
   if (caps.formFactor === 'android') return 'phone CPUs are far too slow for it';
   if (caps.engine === 'gecko') {
-    return 'Firefox gives extensions no GPU access and a single WASM thread';
+    // Not "Firefox can't": it can, behind `dom.webgpu.enabled` + `dom.webgpu.workers.enabled`.
+    // Saying so is the difference between a dead end and a two-minute fix — the settings page
+    // spells the prefs out, so the blurb only has to point at it.
+    return 'Firefox has WebGPU switched off for workers (the settings page shows how to turn it on)';
   }
   return 'no usable GPU was found, so it runs on a single WASM thread';
 }
@@ -92,7 +98,7 @@ function describe(id: EngineId, caps: BrowserCapabilities): { tag: string; blurb
           tag: 'Best quality · GPU accelerated',
           blurb:
             'The most natural, expressive voice here, running on your GPU via WebGPU — comfortably ' +
-            'faster than real time. One 86 MB download unlocks all 54 voices.',
+            'faster than real time. One 86 MB download unlocks all 28 English voices (US and UK).',
           standing: 'recommended',
         };
       }
@@ -101,7 +107,7 @@ function describe(id: EngineId, caps: BrowserCapabilities): { tag: string; blurb
         blurb:
           'The most natural, expressive voice here, but around 3× slower than real time because ' +
           `${noGpuReason(caps)}. It leans on parallel workers and still needs a moment to get ahead. ` +
-          'One 86 MB download unlocks all 54 voices.',
+          'One 86 MB download unlocks all 28 English voices (US and UK).',
         standing: 'slow',
       };
 
