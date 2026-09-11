@@ -19,6 +19,60 @@ describe('segmentSentences', () => {
     expect(chunks).toHaveLength(2);
   });
 
+  /**
+   * Cited prose, the way Wikipedia writes it. `Intl.Segmenter` breaks *between* "[" and "3]",
+   * which used to misalign every boundary in the paragraph and end up chopping it at commas.
+   */
+  it('breaks at the full stop, not inside a reference marker', () => {
+    const text =
+      'The subscription model offers a renewable revenue stream, although vulnerable to ' +
+      'cancellation.[3] If a significant number are cancelled, the viability of the business ' +
+      'can be placed in jeopardy.[34] The ease of canceling leaves customers with leverage.[35]';
+
+    const chunks = segmentSentences(text, { maxChars: 240 });
+
+    expect(chunks).toHaveLength(3);
+    expect(chunks[0]!.text).toMatch(/^The subscription model .* cancellation\.\[3\]$/);
+    expect(chunks[1]!.text).toMatch(/^If a significant number .* jeopardy\.\[34\]$/);
+    expect(chunks[2]!.text).toMatch(/^The ease of canceling .* leverage\.\[35\]$/);
+    for (const c of chunks) expect(text.slice(c.start, c.end)).toBe(c.text);
+  });
+
+  it('keeps a sentence whose only comma is near its start in two clauses, not three fragments', () => {
+    const text =
+      'While recurring revenues can help the business and attract investors, the need for ' +
+      'customer service skills in convincing the customer to renew their subscription is a ' +
+      'challenge for providers switching to subscription from other revenue models.';
+
+    const chunks = segmentSentences(text, { maxChars: 160 });
+
+    expect(chunks).toHaveLength(2);
+    expect(chunks[0]!.text).toBe(
+      'While recurring revenues can help the business and attract investors,',
+    );
+    expect(chunks[1]!.text).toMatch(/^the need for customer service skills .* revenue models\.$/);
+  });
+
+  it('overruns maxChars rather than cutting a clause-free sentence at a space', () => {
+    const text =
+      'The quick brown fox jumped over the lazy dog again and again and again while nobody ' +
+      'in the entire village was watching it happen at all that afternoon.';
+    expect(text.length).toBeGreaterThan(140);
+
+    const chunks = segmentSentences(text, { maxChars: 120 });
+
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0]!.text).toBe(text);
+  });
+
+  it('still hard-wraps a runaway span with no punctuation at all', () => {
+    const text = `${'word '.repeat(120)}end.`;
+    const chunks = segmentSentences(text, { maxChars: 120 });
+
+    expect(chunks.length).toBeGreaterThan(2);
+    for (const c of chunks) expect(c.text.length).toBeLessThanOrEqual(240);
+  });
+
   it('clause-splits an over-long sentence', () => {
     const long =
       'This is a deliberately long sentence that goes on and on about nothing in particular; ' +
