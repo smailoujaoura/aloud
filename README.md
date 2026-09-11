@@ -37,6 +37,10 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
   itself aloud, so the bar is familiar before it appears over something you actually wanted to
   read. Reopen it any time from the settings page; a one-time card above the bar names the
   controls the first time you read a real page.
+- **Picks up where you left off** — close a long article halfway and reopening it lands on the
+  sentence you stopped at, with a one-click "Start over". The position is checked against the
+  sentence's text, so an edited page never resumes in the wrong place; it is stored on this
+  device only and can be cleared from the settings page.
 - **Offline & private** — models download once from Hugging Face and are cached on the device.
 
 ## Which voice to use

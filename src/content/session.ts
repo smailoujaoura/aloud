@@ -29,6 +29,14 @@ import type { EngineConfig } from '@/engine/protocol';
 import type { ModelManifest } from '@/engine/engines/types';
 import { getSettings, setSettings, activeVoice, voiceKeyFor, type Settings } from '@/shared/settings';
 import { listVoices } from '@/shared/voice-catalog';
+import {
+  clearPosition,
+  documentKey,
+  excerptOf,
+  loadPosition,
+  resumeIndex,
+  savePosition,
+} from '@/shared/reading-positions';
 import { PORT_NAME, type ActivateMode, type SessionState } from '@/shared/messages';
 import { log } from '@/shared/log';
 
@@ -71,6 +79,12 @@ export interface KnownArticle {
   text: string;
   title: string;
   lang?: string;
+  /**
+   * Identity for remembering where the reader stopped. Web pages use their URL; a PDF opened from
+   * a hand-off or a file picker has an extension-page URL that changes every time, so the PDF
+   * reader supplies its own.
+   */
+  key?: string;
 }
 
 /** A selection snapshot, taken before any async work can disturb it. */
@@ -81,6 +95,9 @@ interface SelectionSnapshot {
 
 /** Below this many characters a selection isn't worth reading — fall back to the whole article. */
 const MIN_SELECTION_CHARS = 15;
+
+/** How often, at most, the reading position is written while playing. */
+const POSITION_SAVE_INTERVAL_MS = 4000;
 
 /** How far either side of the current sentence to look for one that exists in the DOM. */
 const NEARBY_RANGE_SEARCH = 20;
@@ -126,6 +143,11 @@ export class ReaderSession {
   /** Sample rate the active engine produces. Used to build the silence that replaces a
    *  sentence which failed to synthesise. */
   private sampleRate = 22050;
+  /** Which document this is, for remembering the reading position (`shared/reading-positions`). */
+  private docKey = '';
+  /** Throttles position saves while reading; the last one is always forced on teardown. */
+  private lastPositionSave = 0;
+  private lastSavedIndex = -1;
 
   private state: SessionState = {
     status: 'idle',
@@ -182,6 +204,8 @@ export class ReaderSession {
       return;
     }
 
+    this.docKey = this.knownArticle?.key ?? documentKey(location.href);
+    await this.maybeResume();
     this.tapToSeek?.setEnabled(this.settings.tapToSeek);
     await this.loadEngine();
   }
@@ -284,6 +308,10 @@ export class ReaderSession {
     try {
       await this.worker.init(this.engineConfig());
     } catch (err) {
+      // Closing the tab, pressing ✕ or starting another reader mid-load disposes the worker, which
+      // rejects this init. That is the user's choice, not a failure — logging it as one only
+      // buried the real errors.
+      if (this.disposed) return;
       this.fail(`Failed to load the voice model: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
@@ -574,6 +602,7 @@ export class ReaderSession {
     this.pushState();
     this.refreshOffScreen();
     this.maybeShowTips();
+    this.rememberPosition(playId);
   }
 
   /**
@@ -612,6 +641,51 @@ export class ReaderSession {
     this.setStatus('paused');
     this.bar?.flash('Finished reading this page', 'ok');
     this.bar?.setCurrentOffScreen(false);
+    // Read to the end: next time it opens at the top, not at the last sentence.
+    this.lastSavedIndex = -1;
+    if (this.docKey) void clearPosition(this.docKey);
+  }
+
+  // ---- remembering where we stopped ----------------------------------------
+
+  /**
+   * Start where the reader left off last time, if there is a trustworthy place to start.
+   *
+   * Only for a plain "read this page" activation: "Read from here" and "Read selection" name
+   * their own starting point, and overriding that with an old one would be wrong. Playback is
+   * not started — the reader lands on the sentence, highlighted, with a one-click way back to the
+   * top — because the page might have been reopened to *look* at, not to listen.
+   */
+  private async maybeResume(): Promise<void> {
+    if (this.mode !== 'article' || this.currentPlayId > 0 || !this.docKey) return;
+    const saved = await loadPosition(this.docKey);
+    const at = resumeIndex(saved, this.playlist.map((p) => p.spokenText));
+    if (at == null) return;
+
+    this.currentPlayId = at;
+    this.state.currentIndex = at;
+    this.lastSavedIndex = at;
+    this.highlighter?.show(this.rangeOf(at));
+    this.bar?.flash(`Picking up where you left off — sentence ${at + 1} of ${this.playlist.length}`, 'info', {
+      label: 'Start over',
+      run: () => this.seekTo(0),
+    });
+    log.info(`resuming at sentence ${at} of ${this.playlist.length}`);
+  }
+
+  /** Save the position, at most every few seconds while reading; `force` for teardown. */
+  private rememberPosition(index: number, force = false): void {
+    if (!this.docKey || this.playlist.length === 0 || index === this.lastSavedIndex) return;
+    const now = Date.now();
+    if (!force && now - this.lastPositionSave < POSITION_SAVE_INTERVAL_MS) return;
+    this.lastPositionSave = now;
+    this.lastSavedIndex = index;
+    void savePosition(this.docKey, {
+      index,
+      total: this.playlist.length,
+      excerpt: excerptOf(this.playlist[index]?.spokenText ?? ''),
+      savedAt: now,
+    });
   }
 
   // ---- settings ------------------------------------------------------------
@@ -811,6 +885,9 @@ export class ReaderSession {
 
   async dispose(): Promise<void> {
     if (this.disposed) return;
+    // Before `disposed` is set: the final position is the one that matters most — it is where
+    // the tab was closed or the reader was stopped.
+    if (this.engineReady || this.currentPlayId > 0) this.rememberPosition(this.currentPlayId, true);
     this.disposed = true;
 
     this.tapToSeek?.dispose();

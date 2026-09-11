@@ -29,6 +29,15 @@ import {
   type ThemeChoice,
 } from '@/shared/settings';
 import { disposePreview, stopPreview } from '@/ui/voice-preview';
+import { clearAllPositions, countPositions } from '@/shared/reading-positions';
+
+/** Say how many pages have a remembered position, so the "forget" button has a visible effect. */
+async function refreshPositionsHint(): Promise<void> {
+  const n = await countPositions();
+  const base = 'Aloud remembers where you stopped on each page and PDF, on this device only, and picks up there next time.';
+  $('positionsHint').textContent = n ? `${base} ${n} page${n === 1 ? '' : 's'} remembered.` : base;
+  $<HTMLButtonElement>('clearPositions').disabled = n === 0;
+}
 import { applyTheme, watchSystemTheme, THEME_LABEL } from '@/ui/theme';
 import { createThemeSwitch, type ThemeSwitch } from '@/ui/theme-switch';
 import type { ModelManifest } from '@/engine/engines/types';
@@ -410,6 +419,7 @@ async function render(): Promise<void> {
   renderEnginePanels($('enginePanels'), ctx);
 
   void refreshUsage();
+  void refreshPositionsHint();
 }
 
 // ---- theme -----------------------------------------------------------------
@@ -519,6 +529,17 @@ function wire(): void {
         await render();
       },
       'Every cached model file has been deleted',
+    );
+  });
+  $('clearPositions').addEventListener('click', (e) => {
+    void withBusy(
+      e.currentTarget as HTMLButtonElement,
+      'Forgetting…',
+      async () => {
+        await clearAllPositions();
+        await refreshPositionsHint();
+      },
+      'Every page will start from the top again',
     );
   });
   $('openPdf').addEventListener('click', (e) => {

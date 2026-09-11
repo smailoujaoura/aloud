@@ -42,18 +42,11 @@ export const CONTROL_BAR_CSS = `
   --danger: #c0392b;
   --font: 13px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 
-  /*
-   * Tells the browser which palette to draw its *own* widgets in — above all the popup list a
-   * native <select> opens. That popup is not part of our shadow tree's layout: it takes its
-   * background from the OS palette but inherits our text colour, so without this a dark bar on a
-   * light OS opened a white list with near-white text in it. Set after "all: initial", which
-   * would otherwise reset it.
-   */
-  color-scheme: light;
+  /* color-scheme is NOT set here: the host's inline "all: initial" outranks :host rules, so it
+     is set inline from ControlBar.applyTheme() instead. */
 }
 
 :host([data-theme="dark"]) {
-  color-scheme: dark;
   --bar-bg: rgba(24,24,30,.94);
   --bar-solid: #191920;
   --bar-fg: #f0f0f4;
@@ -69,7 +62,6 @@ export const CONTROL_BAR_CSS = `
 /* Only for the blink before the session stamps data-theme from the saved setting. */
 @media (prefers-color-scheme: dark) {
   :host(:not([data-theme])) {
-    color-scheme: dark;
     --bar-bg: rgba(24,24,30,.94);
     --bar-solid: #191920;
     --bar-fg: #f0f0f4;
@@ -246,6 +238,11 @@ select optgroup { color: var(--bar-muted); font-weight: 600; }
   text-align: center;
 }
 .toast[hidden] { display: none; }
+.toast .toast-action {
+  width: auto; height: auto; padding: 3px 9px; margin-left: 4px; border-radius: 7px;
+  background: var(--bar-hover); color: var(--bar-fg); font: inherit; font-weight: 600;
+}
+.toast .toast-action:hover { background: var(--bar-active); }
 .toast.err { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 50%, var(--bar-border)); }
 .toast.ok { border-color: color-mix(in srgb, var(--accent) 55%, var(--bar-border)); }
 

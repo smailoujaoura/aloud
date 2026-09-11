@@ -55,6 +55,14 @@ const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4];
 
 /** How long a `flash()` confirmation stays up before the bar goes back to reporting status. */
 const FLASH_MS = 1900;
+/** …and one that carries a button, which needs time to be read *and* reached. */
+const FLASH_ACTION_MS = 8000;
+
+/** A one-click follow-up offered inside a flash, e.g. "Start over" after resuming. */
+export interface FlashAction {
+  label: string;
+  run(): void;
+}
 
 /** Shadow host id. `content/tap-to-seek` uses it to ignore clicks landing on our own UI. */
 export const CONTROL_HOST_ID = 'aloud-control-host';
@@ -440,16 +448,27 @@ export class ControlBar {
    * Errors are never overwritten by a flash: a message the user must act on outranks one that
    * only confirms what they already did.
    */
-  flash(text: string, kind: 'info' | 'ok' = 'info'): void {
+  flash(text: string, kind: 'info' | 'ok' = 'info', action?: FlashAction): void {
     if (this.lastState?.status === 'error') return;
     this.flashing = true;
     this.setToast(text, false, kind === 'ok' ? 'ok' : null);
-    clearTimeout(this.flashTimer);
-    this.flashTimer = setTimeout(() => {
+    const dismiss = (): void => {
+      clearTimeout(this.flashTimer);
       this.flashing = false;
       if (this.lastState) this.renderToast(this.lastState);
       else this.clearToast();
-    }, FLASH_MS) as unknown as number;
+    };
+    if (action) {
+      // A flash that offers a choice has to stay long enough to be taken.
+      const btn = this.make('button', { class: 'toast-action', type: 'button' }, action.label);
+      btn.addEventListener('click', () => {
+        dismiss();
+        action.run();
+      });
+      this.toast.appendChild(btn);
+    }
+    clearTimeout(this.flashTimer);
+    this.flashTimer = setTimeout(dismiss, action ? FLASH_ACTION_MS : FLASH_MS) as unknown as number;
   }
 
   update(state: SessionState): void {
@@ -549,7 +568,14 @@ export class ControlBar {
   // ---- rendering -----------------------------------------------------------
 
   private applyTheme(): void {
-    this.host.dataset.theme = resolveTheme(this.theme, this.doc.defaultView);
+    const resolved = resolveTheme(this.theme, this.doc.defaultView);
+    this.host.dataset.theme = resolved;
+    // `color-scheme` decides the palette of the browser's own widgets — above all the popup a
+    // native <select> opens, which otherwise uses the OS palette while inheriting our text colour
+    // (light-on-light in a dark bar). It has to be set *inline*: the host's inline `all: initial`
+    // outranks any `:host` rule in the shadow stylesheet, so a CSS declaration there never applied
+    // (measured: computed color-scheme stayed "normal").
+    this.host.style.colorScheme = resolved;
   }
 
   /**
