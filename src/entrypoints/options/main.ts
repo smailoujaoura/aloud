@@ -44,7 +44,7 @@ import type { ModelManifest } from '@/engine/engines/types';
 
 import { readCacheSizes, usableVoices, type CacheSizes } from '@/engine/installed-voices';
 import { previewFor } from './preview-button';
-import { renderEnginePanels, type PanelContext } from './voice-panels';
+import { renderVoiceSection, type PanelContext } from './voice-panels';
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -430,7 +430,7 @@ async function render(): Promise<void> {
     useVoice,
     flashSaved,
   };
-  renderEnginePanels($('enginePanels'), ctx);
+  renderVoiceSection($('engineTabs'), $('enginePanels'), ctx);
 
   void refreshUsage();
   void refreshPositionsHint();

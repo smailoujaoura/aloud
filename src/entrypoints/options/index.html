@@ -137,8 +137,13 @@
           <b>Download</b> fetches it for offline use, <b>Use</b> makes it the active voice. Your
           selected voice downloads by itself the first time you read a page.
         </p>
-        <input type="search" id="voiceFilter" class="model-filter" placeholder="Filter voices by name or language…" />
-        <div id="enginePanels"></div>
+        <!-- Stays put while the list under it scrolls, so the engine you are looking at and the
+             search that filters it are never scrolled away from what they act on. -->
+        <div class="voice-toolbar">
+          <div class="voice-tabs" id="engineTabs" role="tablist" aria-label="Voice engines"></div>
+          <input type="search" id="voiceFilter" class="model-filter" placeholder="Search voices by name…" />
+        </div>
+        <div id="enginePanels" role="tabpanel"></div>
         <p id="usage" class="muted">Calculating…</p>
         <button id="clearModels" class="danger">Delete all cached models</button>
       </section>

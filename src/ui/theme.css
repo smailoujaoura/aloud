@@ -20,8 +20,8 @@
   --surface-2: #f2f2f6;
   --surface-3: #e8e8ef;
   --fg: #17171c;
-  --fg-muted: #5f5f6d;
-  --fg-faint: #8a8a97;
+  --fg-muted: #54545f;
+  --fg-faint: #73737f;
   --border: rgba(20, 20, 35, 0.13);
   --border-strong: rgba(20, 20, 35, 0.28);
 
@@ -43,7 +43,11 @@
   --radius-sm: 8px;
   --radius-pill: 999px;
 
-  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  /* `system-ui` first: on Linux that is the desktop's own UI face (Cantarell, Inter, Noto Sans)
+     rather than the Helvetica-ish fallback the old stack landed on, and on Windows it picks the
+     variable Segoe. The rest are the per-platform names for when `system-ui` is unavailable. */
+  --sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   --speed: 140ms;
@@ -58,8 +62,8 @@
     --surface-2: #22222b;
     --surface-3: #2d2d38;
     --fg: #ececf1;
-    --fg-muted: #a0a0ae;
-    --fg-faint: #7c7c8b;
+    --fg-muted: #abaab8;
+    --fg-faint: #8d8d9c;
     --border: rgba(255, 255, 255, 0.13);
     --border-strong: rgba(255, 255, 255, 0.3);
 
@@ -85,8 +89,8 @@
   --surface-2: #22222b;
   --surface-3: #2d2d38;
   --fg: #ececf1;
-  --fg-muted: #a0a0ae;
-  --fg-faint: #7c7c8b;
+  --fg-muted: #abaab8;
+  --fg-faint: #8d8d9c;
   --border: rgba(255, 255, 255, 0.13);
   --border-strong: rgba(255, 255, 255, 0.3);
 
@@ -116,8 +120,10 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--fg);
-  font: 14px/1.55 var(--sans);
+  font: 14.5px/1.6 var(--sans);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 a { color: var(--accent); }
