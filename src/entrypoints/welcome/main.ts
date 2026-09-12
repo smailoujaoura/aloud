@@ -17,7 +17,7 @@ import { ICON_PATHS } from '@/ui/icons';
 import { applyTheme, watchSystemTheme, THEME_LABEL } from '@/ui/theme';
 import { createThemeSwitch } from '@/ui/theme-switch';
 import { getSettings, setSettings, type ThemeChoice } from '@/shared/settings';
-import { rankedEngines, type EngineStanding } from '@/shared/engine-catalog';
+import { listEngines } from '@/shared/engine-catalog';
 import { applyGpuProbe, applyWorkerGpuProbe, capabilities } from '@/shared/browser-env';
 import { probeGpu } from '@/shared/gpu-probe';
 import { loadWorkerGpu } from '@/shared/backend-memory';
@@ -139,31 +139,20 @@ function buildBarDiagram(): void {
 
 // ---- engine cards ----------------------------------------------------------
 
-const STANDING_LABEL: Record<EngineStanding, string> = {
-  recommended: 'Recommended here',
-  good: 'Works well here',
-  slow: 'Slow on this browser',
-  unsuitable: 'Not usable on this device',
-};
-
 /**
- * The three engines, in the order that makes sense on *this* browser.
+ * The three engines, described by what each one *is*.
  *
- * The ranking is measured, not assumed: whether a worker can reach the GPU decides whether
- * Kokoro is the best voice available or a curiosity that runs at a third of real time, and
- * `shared/engine-catalog` is where that judgement lives.
+ * Not ranked for this machine: a walkthrough that says "recommended here" has to be right about
+ * "here", and the honest answer depends on a GPU probe that has not necessarily finished. What
+ * does not change is what the engines cost and how they sound.
  */
 function buildEngineCards(): void {
   const host = $('engineCards');
   host.replaceChildren(
-    ...rankedEngines().map((info) => {
-      const card = el(document, 'div', { class: `engine-card card standing-${info.standing}` });
+    ...listEngines().map((info) => {
+      const card = el(document, 'div', { class: 'engine-card card' });
       const head = el(document, 'div', { class: 'engine-head' });
-      head.append(
-        el(document, 'b', {}, info.name),
-        el(document, 'span', { class: `pill ${info.standing === 'recommended' ? 'accent' : ''}` },
-          STANDING_LABEL[info.standing]),
-      );
+      head.append(el(document, 'b', {}, info.name), el(document, 'span', { class: 'pill' }, info.tag));
       card.append(
         head,
         el(document, 'p', { class: 'muted small' }, info.blurb),

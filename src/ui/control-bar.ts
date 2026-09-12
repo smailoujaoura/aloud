@@ -387,7 +387,7 @@ export class ControlBar {
   // ---- public API ----------------------------------------------------------
 
   /** Populate the in-bar voice picker. Pass an empty list to hide it. */
-  setVoices(voices: VoiceOption[], current: string): void {
+  setVoices(voices: VoiceOption[], current: string, opts: { downloadedOnly?: boolean } = {}): void {
     if (!voices.length) {
       this.voiceEl.hidden = true;
       return;
@@ -405,8 +405,17 @@ export class ControlBar {
         group.append(...items.map(option));
         return group;
       }),
+      // Says what the list is, in the list. The bar offers only voices already on the device —
+      // choosing one here should never start a 60 MB download in the middle of an article — and
+      // a picker that silently holds back most of the catalogue owes the reader that sentence.
+      ...(opts.downloadedOnly
+        ? [this.make('option', { value: '', disabled: '' }, '— downloaded voices · add more in Settings —')]
+        : []),
     );
     this.voiceEl.value = current;
+    this.voiceEl.title = opts.downloadedOnly
+      ? 'Voice — only voices downloaded to this device. Add more in Settings.'
+      : 'Voice';
     this.voiceEl.hidden = false;
   }
 

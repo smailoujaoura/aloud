@@ -15,7 +15,18 @@ export const ICON_PATHS = {
   ],
   close: ['M4 3l4 4 4-4 1 1-4 4 4 4-1 1-4-4-4 4-1-1 4-4-4-4z'],
   /** Arrow into a baseline — "scroll back to the sentence being read". */
-  snap: ['M7 1.5h2v6l2.2-2.2 1.4 1.4L8 11.4 3.4 6.7l1.4-1.4L7 7.5z', 'M3 13h10v1.8H3z'],
+  /**
+   * Scroll back to the sentence being read: lines of text with a marker against the middle one.
+   *
+   * It used to be a downward arrow over a baseline, which is the universal "download" glyph —
+   * people read the button as "save this page", which is not what it does.
+   */
+  snap: [
+    'M2.2 2.4h11.6v1.5H2.2z',
+    'M6 7.25h7.8v1.5H6z',
+    'M2.2 12.1h11.6v1.5H2.2z',
+    'M1.4 6.1l3.2 1.9-3.2 1.9z',
+  ],
   /** Sun / moon / monitor — the theme picker on the settings and walkthrough pages. */
   sun: [
     'M8 4.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7zm0 1.6a1.9 1.9 0 110 3.8 1.9 1.9 0 010-3.8z',

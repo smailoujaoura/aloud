@@ -20,6 +20,10 @@ import { browser } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
 import { PORT_NAME, type ActivateMode, type ToBackgroundMessage } from '@/shared/messages';
 import { putPdf, sweepPdfHandoffs } from '@/pdf/handoff';
+import { readCacheSizes, usableVoices } from '@/engine/installed-voices';
+import type { EngineId } from '@/shared/settings';
+import type { VoiceOption } from '@/shared/voice-catalog';
+import type { ModelManifest } from '@/engine/engines/types';
 import { watchSettings } from '@/shared/settings';
 
 const CONTENT_FILE = '/reader-inject.js';
@@ -123,12 +127,17 @@ export default defineBackground({
     // renders one inside a plugin <embed> whose document has no text, which is what used to
     // surface as "this page doesn't look like an article".
     browser.runtime.onMessage.addListener((msg: unknown, sender) => {
-      const m = msg as { type?: string };
+      const m = msg as { type?: string; engine?: EngineId };
       if (m?.type === 'open-pdf-reader') {
         const tab = sender.tab;
         if (tab?.url) void openPdfReader(tab.url, tab.id ?? null, tab.index);
       } else if (m?.type === 'open-walkthrough') {
         void openWalkthrough();
+      } else if (m?.type === 'installed-voices') {
+        // Answered here because only an extension-origin context can read the model cache: the
+        // reading bar lives in the page, whose IndexedDB is a different origin entirely.
+        // Returning a promise is how both browsers reply asynchronously.
+        return installedVoices(m.engine ?? 'piper');
       }
       return false;
     });
@@ -349,4 +358,23 @@ function setBadge(tabId: number, text: string): void {
 
 function clearBadge(tabId: number): void {
   setBadge(tabId, '');
+}
+
+/**
+ * The voices of `engine` whose files are on this device.
+ *
+ * The in-page reading bar offers only these: switching to a voice that is not downloaded used to
+ * stall the reader behind a 60 MB fetch chosen by accident from a list of 175.
+ */
+let manifestCache: ModelManifest | null = null;
+
+async function installedVoices(engine: EngineId): Promise<VoiceOption[]> {
+  try {
+    manifestCache ??= (await (await fetch(browser.runtime.getURL('/models.json'))).json()) as ModelManifest;
+    return usableVoices(engine, manifestCache, await readCacheSizes());
+  } catch (err) {
+    // An empty list means "we do not know", and the bar keeps showing the active voice alone.
+    console.warn('[aloud] could not list installed voices:', err);
+    return [];
+  }
 }

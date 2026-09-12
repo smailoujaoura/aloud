@@ -1,43 +1,22 @@
 /**
- * What each synthesis engine is, and how good an idea it is *on this machine*.
+ * What each synthesis engine is: its name, its size, and what it costs to run.
  *
- * The three engines are not equally viable everywhere, and the gap is large enough that
- * presenting them identically would be misleading. The deciding factor is whether a Worker can
- * reach the GPU:
+ * These descriptions are deliberately about the *engine*, not about the machine reading them.
+ * They used to be written relative to the current browser — "slow here", "works here",
+ * "recommended" — which reads as noise: it does not say what is actually different about the
+ * engine, and it changes under you when a probe comes back. The one fact that genuinely matters
+ * is stated plainly instead: some engines are only fast with GPU acceleration.
  *
- *  - **Chromium desktop** exposes WebGPU to workers. Kokoro runs on the GPU and is both the best
- *    sounding and comfortably fast, so it is the one to recommend.
- *  - **Firefox** ships WebGPU switched off, and switches it off for workers separately
- *    (`dom.webgpu.enabled`, `dom.webgpu.workers.enabled`); Bug 1673477 also rules out
- *    `SharedArrayBuffer`, so ONNX Runtime is stuck on one WASM thread. By default Kokoro lands
- *    around 3× slower than real time there and only keeps up by running a pool of workers, so
- *    Piper is the sane default. Turn the two prefs on and an extension worker really does get an
- *    adapter — Kokoro then runs on `webgpu/fp32` and outruns Piper, which is why nothing here
- *    keys off the browser name: `caps.workerWebGPU` is measured (`applyWorkerGpuProbe`).
- *  - **Android** has neither the GPU access nor the cores nor the memory. Piper only.
- *
- * Keeping this in one place means the options page, the control bar and the docs cannot drift
- * apart, and adding a browser is a change here rather than a hunt for hardcoded "slow on
- * Firefox" strings.
+ * Whether *this* machine has that acceleration is a separate question, answered by a real probe
+ * (`shared/gpu-probe.ts`, `options/gpu-check.ts`) and reported once, in the GPU section of the
+ * settings page — not smeared across every label.
  */
-import { capabilities, type BrowserCapabilities } from '@/shared/browser-env';
 import type { EngineId } from '@/shared/settings';
-
-/** How strongly to steer the user toward an engine on the current browser. */
-export type EngineStanding =
-  /** The best choice here. */
-  | 'recommended'
-  /** Works well; a reasonable pick. */
-  | 'good'
-  /** Usable but slow — shown with a warning, never preselected. */
-  | 'slow'
-  /** Not realistically usable on this device. */
-  | 'unsuitable';
 
 export interface EngineInfo {
   id: EngineId;
   name: string;
-  /** Short chip shown next to the name. */
+  /** Short chip shown next to the name: what this engine is, in a few words. */
   tag: string;
   /** One or two sentences under the engine picker and in its panel. */
   blurb: string;
@@ -48,97 +27,63 @@ export interface EngineInfo {
    * download one model that unlocks all their voices; Piper downloads per voice and has none.
    */
   cacheHint?: string;
-  standing: EngineStanding;
+  /** Comfortably faster than real time only with GPU acceleration. */
+  needsGpuForSpeed: boolean;
+  /** Too slow or too large to be a good idea on a phone. */
+  heavyForMobile: boolean;
 }
 
-const NAMES: Record<EngineId, { name: string; approxSize: string; cacheHint?: string }> = {
-  piper: { name: 'Piper', approxSize: '20–60 MB per voice' },
-  kokoro: { name: 'Kokoro-82M', approxSize: '~86 MB (q8)', cacheHint: 'Kokoro-82M' },
-  supertonic: { name: 'Supertonic-2', approxSize: '~262 MB', cacheHint: 'supertonic-2' },
+const ENGINES: Record<EngineId, EngineInfo> = {
+  piper: {
+    id: 'piper',
+    name: 'Piper',
+    tag: 'Fast, small downloads',
+    blurb:
+      'A small, fast neural voice. Faster than real time on any machine, including phones, with ' +
+      'or without a GPU. Each voice is a separate 20–60 MB download.',
+    approxSize: '20–60 MB per voice',
+    needsGpuForSpeed: false,
+    heavyForMobile: false,
+  },
+  kokoro: {
+    id: 'kokoro',
+    name: 'Kokoro-82M',
+    tag: 'Best quality, wants a GPU',
+    blurb:
+      'The most natural and expressive of the three. With GPU acceleration it is comfortably faster ' +
+      'than real time; without one it runs around 3× slower than real time and leans on parallel ' +
+      'workers to keep up with playback. One 86 MB download unlocks all 28 English voices (US and UK).',
+    approxSize: '~86 MB (q8)',
+    cacheHint: 'Kokoro-82M',
+    needsGpuForSpeed: true,
+    heavyForMobile: true,
+  },
+  supertonic: {
+    id: 'supertonic',
+    name: 'Supertonic-2',
+    tag: 'Expressive, large download',
+    blurb:
+      'Expressive, and roughly real time without a GPU — quicker with one. A single ~262 MB ' +
+      'download unlocks all 10 voices.',
+    approxSize: '~262 MB',
+    cacheHint: 'supertonic-2',
+    needsGpuForSpeed: false,
+    heavyForMobile: true,
+  },
 };
-
-/** The reason the neural engines are slow without a GPU, phrased for whoever is reading it. */
-function noGpuReason(caps: BrowserCapabilities): string {
-  if (caps.formFactor === 'android') return 'phone CPUs are far too slow for it';
-  if (caps.engine === 'gecko') {
-    // Not "Firefox can't": it can, behind `dom.webgpu.enabled` + `dom.webgpu.workers.enabled`.
-    // Saying so is the difference between a dead end and a two-minute fix — the settings page
-    // spells the prefs out, so the blurb only has to point at it.
-    return 'Firefox has WebGPU switched off for workers (the settings page shows how to turn it on)';
-  }
-  return 'no usable GPU was found, so it runs on a single WASM thread';
-}
-
-function describe(id: EngineId, caps: BrowserCapabilities): { tag: string; blurb: string; standing: EngineStanding } {
-  const gpu = caps.workerWebGPU;
-  const mobile = caps.formFactor === 'android';
-
-  switch (id) {
-    case 'piper':
-      return {
-        tag: mobile ? 'The only sensible choice here' : 'Fast · runs anywhere',
-        blurb:
-          'A small, fast neural voice. Comfortably faster than real time on any machine, including phones. ' +
-          'Each voice is a separate 20–60 MB download.',
-        standing: gpu && !mobile ? 'good' : 'recommended',
-      };
-
-    case 'kokoro':
-      if (mobile) {
-        return {
-          tag: 'Too slow on phones',
-          blurb:
-            'The most natural voice here, but it needs a desktop GPU to keep up — ' +
-            `${noGpuReason(caps)}. Use Piper on Android.`,
-          standing: 'unsuitable',
-        };
-      }
-      if (gpu) {
-        return {
-          tag: 'Best quality · GPU accelerated',
-          blurb:
-            'The most natural, expressive voice here, running on your GPU via WebGPU — comfortably ' +
-            'faster than real time. One 86 MB download unlocks all 28 English voices (US and UK).',
-          standing: 'recommended',
-        };
-      }
-      return {
-        tag: 'Best quality · slow here',
-        blurb:
-          'The most natural, expressive voice here, but around 3× slower than real time because ' +
-          `${noGpuReason(caps)}. It leans on parallel workers and still needs a moment to get ahead. ` +
-          'One 86 MB download unlocks all 28 English voices (US and UK).',
-        standing: 'slow',
-      };
-
-    case 'supertonic':
-      if (mobile) {
-        return {
-          tag: 'Too large for phones',
-          blurb: `A 262 MB download and ${noGpuReason(caps)}. Use Piper on Android.`,
-          standing: 'unsuitable',
-        };
-      }
-      return {
-        tag: gpu ? 'Expressive · GPU accelerated' : 'Expressive · medium speed',
-        blurb: gpu
-          ? 'Expressive and GPU accelerated. One ~262 MB download unlocks all 10 voices.'
-          : 'Roughly real time on the CPU and quite expressive. One ~262 MB download unlocks all 10 voices.',
-        standing: 'good',
-      };
-  }
-}
-
-export function engineInfo(id: EngineId, caps: BrowserCapabilities = capabilities()): EngineInfo {
-  return { id, ...NAMES[id], ...describe(id, caps) };
-}
 
 export const ENGINE_IDS: readonly EngineId[] = ['piper', 'kokoro', 'supertonic'];
 
-/** All engines, best-supported first, for building a picker. */
-export function rankedEngines(caps: BrowserCapabilities = capabilities()): EngineInfo[] {
-  const order: Record<EngineStanding, number> = { recommended: 0, good: 1, slow: 2, unsuitable: 3 };
-  return ENGINE_IDS.map((id) => engineInfo(id, caps)).sort(
-    (a, b) => order[a.standing] - order[b.standing],
-  );
+export function engineInfo(id: EngineId): EngineInfo {
+  return ENGINES[id];
+}
+
+/**
+ * Every engine, in a fixed order: cheapest and most portable first.
+ *
+ * Fixed, rather than sorted by how well the current device runs each one, so the list does not
+ * rearrange itself between visits — or a moment after loading, when the GPU probe returns.
+ */
+export function listEngines(): EngineInfo[] {
+  return ENGINE_IDS.map((id) => ENGINES[id]);
 }

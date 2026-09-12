@@ -28,7 +28,7 @@ import { WorkerClient } from '@/engine/worker-client';
 import type { EngineConfig } from '@/engine/protocol';
 import type { ModelManifest } from '@/engine/engines/types';
 import { getSettings, setSettings, activeVoice, voiceKeyFor, type Settings } from '@/shared/settings';
-import { listVoices } from '@/shared/voice-catalog';
+import { listVoices, type VoiceOption } from '@/shared/voice-catalog';
 import {
   clearPosition,
   documentKey,
@@ -239,7 +239,7 @@ export class ReaderSession {
       tapToSeek: this.settings.tapToSeek,
       theme: this.settings.theme,
     });
-    this.refreshBarVoices();
+    void this.refreshBarVoices();
     this.watchViewport();
 
     this.highlighter = new Highlighter(document, {
@@ -532,9 +532,44 @@ export class ReaderSession {
   }
 
   /** Fill the control bar's voice picker for the active engine. */
-  private refreshBarVoices(): void {
+  private async refreshBarVoices(): Promise<void> {
     if (!this.bar || !this.manifest) return;
-    this.bar.setVoices(listVoices(this.settings.engine, this.manifest), activeVoice(this.settings));
+    const current = activeVoice(this.settings);
+    const installed = await this.installedVoices();
+
+    const shown = [...installed];
+    if (!shown.some((v) => v.id === current)) {
+      // A <select> must be able to show its own value, so the active voice is always listed —
+      // labelled, when it is not on the device yet, so picking anything else is the obvious move.
+      const known = listVoices(this.settings.engine, this.manifest).find((v) => v.id === current);
+      shown.unshift({
+        id: current,
+        label: `${known?.label ?? current} · not downloaded yet`,
+        group: known?.group ?? '',
+      });
+    }
+
+    this.bar.setVoices(shown, current, { downloadedOnly: installed.length > 0 });
+  }
+
+  /**
+   * The voices of the active engine that are downloaded, asked of the background.
+   *
+   * The bar used to list all 175 Piper voices from the manifest, so switching voice mid-article
+   * could silently start a 60 MB download and stall the reader. Only the background can answer
+   * this: the model cache is IndexedDB at the *extension* origin, and this code runs in the page.
+   */
+  private async installedVoices(): Promise<VoiceOption[]> {
+    try {
+      const reply = await browser.runtime.sendMessage({
+        type: 'installed-voices',
+        engine: this.settings.engine,
+      });
+      return Array.isArray(reply) ? (reply as VoiceOption[]) : [];
+    } catch (err) {
+      log.warn('could not list installed voices:', err);
+      return [];
+    }
   }
 
   /** Switch voice from the in-page bar, keeping the plan and position. */
@@ -557,7 +592,7 @@ export class ReaderSession {
   /** Re-initialise the worker for a new engine/voice, keeping the plan and position. */
   async reloadEngine(): Promise<void> {
     this.settings = await getSettings();
-    this.refreshBarVoices();
+    await this.refreshBarVoices();
     this.engineReady = false;
     this.requested.clear();
     this.state.modelProgress = 0;

@@ -16,7 +16,7 @@ import { playClip, playSynthesized, stopPreview, type PreviewStatus } from '@/ui
 import type { EngineId, Settings } from '@/shared/settings';
 import type { ModelManifest } from '@/engine/engines/types';
 import { engineConfigFor } from './engine-config';
-import { sharedModelBytes, type CacheSizes } from './model-status';
+import { sharedModelBytes, type CacheSizes } from '@/engine/installed-voices';
 
 const IDLE_LABEL = '▶ Preview';
 

@@ -10,7 +10,7 @@
  */
 import { el } from '@/shared/dom';
 import { humanBytes } from '@/shared/log';
-import { engineInfo, rankedEngines, type EngineStanding } from '@/shared/engine-catalog';
+import { engineInfo, listEngines } from '@/shared/engine-catalog';
 import { isEnglish, listVoices, shortPiperLabel } from '@/shared/voice-catalog';
 import { cacheClear, cacheDelete } from '@/engine/model-cache';
 import { activeVoice, type EngineId, type Settings } from '@/shared/settings';
@@ -25,7 +25,7 @@ import {
   piperVoiceBytes,
   sharedModelBytes,
   type CacheSizes,
-} from './model-status';
+} from '@/engine/installed-voices';
 
 /** How the Kokoro precision options are named in the Advanced section. */
 const PRECISION_LABEL: Record<'q8' | 'fp32', string> = {
@@ -340,18 +340,12 @@ function sharedModelRow(
 
 // ---- the section -----------------------------------------------------------
 
-/** Chip text shown when an engine is a poor fit for this browser. */
-const STANDING_WARNING: Partial<Record<EngineStanding, string>> = {
-  slow: 'slow on this browser',
-  unsuitable: 'not usable on this device',
-};
-
 export function renderEnginePanels(host: HTMLElement, ctx: PanelContext): void {
   // The active engine leads; the rest follow in "how well does this browser run it" order, so
   // the recommendation is visible without reading every blurb.
   const ordered = [
     engineInfo(ctx.settings.engine),
-    ...rankedEngines().filter((e) => e.id !== ctx.settings.engine),
+    ...listEngines().filter((e) => e.id !== ctx.settings.engine),
   ];
 
   const panels = ordered.map((info) => {
@@ -364,8 +358,6 @@ export function renderEnginePanels(host: HTMLElement, ctx: PanelContext): void {
       el(document, 'span', { class: 'tag' }, info.tag),
       el(document, 'span', { class: 'panel-status' }, installedSummary(info.id, ctx)),
     );
-    const warning = STANDING_WARNING[info.standing];
-    if (warning) summary.append(el(document, 'span', { class: 'panel-warn' }, warning));
     details.append(summary);
 
     let built = false;

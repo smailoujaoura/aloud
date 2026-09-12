@@ -92,7 +92,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   engine: 'piper',
-  piperVoice: 'en_US-hfc_female-medium',
+  piperVoice: 'en_GB-alba-medium',
   kokoroVoice: 'af_heart',
   supertonicVoice: 'F1',
   kokoroDtype: 'q8',
@@ -116,8 +116,15 @@ export const DEFAULT_SETTINGS: Settings = {
 
 const item = storage.defineItem<Settings>('local:settings', {
   fallback: DEFAULT_SETTINGS,
-  version: 3,
+  version: 4,
   migrations: {
+    // v3 -> v4: the default Piper voice became Alba (en_GB), which simply sounds better than the
+    // old one. Only moved for profiles still on that old default, so a deliberate choice stands.
+    4(prev: Record<string, unknown>): Record<string, unknown> {
+      return prev.piperVoice === 'en_US-hfc_female-medium'
+        ? { ...prev, piperVoice: 'en_GB-alba-medium' }
+        : prev;
+    },
     // v2 -> v3: the manifest used to list Kokoro voices in nine languages, but kokoro-js only
     // ships English (ids starting `a` = US, `b` = UK). A saved French or Japanese voice would fail
     // on every sentence, so reset it to the default rather than carry it forward.

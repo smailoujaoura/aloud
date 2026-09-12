@@ -15,7 +15,7 @@ import { applyGpuProbe, applyWorkerGpuProbe, capabilities } from '@/shared/brows
 import { probeGpu, gpuProbeIfKnown } from '@/shared/gpu-probe';
 import { loadWorkerGpu } from '@/shared/backend-memory';
 import { probeWorkerGpu, type WorkerGpuResult } from './gpu-check';
-import { engineInfo, rankedEngines } from '@/shared/engine-catalog';
+import { engineInfo, listEngines } from '@/shared/engine-catalog';
 import { groupByLanguage, listVoices } from '@/shared/voice-catalog';
 import { cacheClear, cacheEntries, cacheUsageBytes } from '@/engine/model-cache';
 import {
@@ -42,7 +42,7 @@ import { applyTheme, watchSystemTheme, THEME_LABEL } from '@/ui/theme';
 import { createThemeSwitch, type ThemeSwitch } from '@/ui/theme-switch';
 import type { ModelManifest } from '@/engine/engines/types';
 
-import { readCacheSizes, usableVoices, type CacheSizes } from './model-status';
+import { readCacheSizes, usableVoices, type CacheSizes } from '@/engine/installed-voices';
 import { previewFor } from './preview-button';
 import { renderEnginePanels, type PanelContext } from './voice-panels';
 
@@ -95,7 +95,8 @@ function flashSaved(message = 'Saved'): void {
 async function withBusy(
   button: HTMLButtonElement,
   busyLabel: string,
-  action: () => Promise<void>,
+  /** Returning a string reports *that* instead of `doneMessage` — for work whose outcome varies. */
+  action: () => Promise<void | string>,
   doneMessage?: string,
 ): Promise<void> {
   if (button.disabled) return;
@@ -106,8 +107,9 @@ async function withBusy(
   button.textContent = busyLabel;
   toast(busyLabel, 'info', true);
   try {
-    await action();
-    if (doneMessage) toast(doneMessage, 'ok');
+    const reported = await action();
+    const done = typeof reported === 'string' ? reported : doneMessage;
+    if (done) toast(done, 'ok');
     else $('toast').hidden = true;
   } catch (err) {
     toast(err instanceof Error ? err.message : String(err), 'error');
@@ -144,17 +146,25 @@ function voiceLabel(engine: EngineId, voiceId: string): string {
 // ---- engine picker ---------------------------------------------------------
 
 /**
- * The engine list is built from the catalogue rather than hardcoded in the HTML, because how
- * good an engine is depends on the browser: Kokoro is the best option on Chromium (WebGPU) and
- * a slow curiosity on Firefox, and neither neural engine is usable on a phone.
+ * The engine list, built from the catalogue rather than hardcoded in the HTML.
+ *
+ * Each option says what the engine is, not how well this machine runs it. The one device-shaped
+ * caveat kept here is the phone one, because a 262 MB download on mobile data is worth warning
+ * about before it starts.
  */
 function populateEnginePicker(): void {
   const select = $<HTMLSelectElement>('engine');
+  const onPhone = capabilities().touchFirst;
   select.replaceChildren(
-    ...rankedEngines().map((info) => {
-      const suffix = info.standing === 'unsuitable' ? ' (not usable on this device)' : '';
-      const option = el(document, 'option', { value: info.id }, `${info.name} — ${info.tag}${suffix}`);
-      if (info.standing === 'unsuitable') option.classList.add('option-unsuitable');
+    ...listEngines().map((info) => {
+      const heavy = onPhone && info.heavyForMobile;
+      const option = el(
+        document,
+        'option',
+        { value: info.id },
+        `${info.name} — ${info.tag}${heavy ? ' (not recommended on phones)' : ''}`,
+      );
+      if (heavy) option.classList.add('option-unsuitable');
       return option;
     }),
   );
@@ -162,7 +172,7 @@ function populateEnginePicker(): void {
 
   const active = engineInfo(settings.engine);
   $('engineHint').textContent = active.blurb;
-  $('engineHint').classList.toggle('warn', active.standing === 'slow' || active.standing === 'unsuitable');
+  $('engineHint').classList.toggle('warn', onPhone && active.heavyForMobile);
 }
 
 // ---- voice picker ----------------------------------------------------------
@@ -358,17 +368,21 @@ async function copyPref(name: string, button: HTMLButtonElement): Promise<void> 
  * answer: the hint, the engine standings and blurbs, the walkthrough's cards (through the
  * remembered value), and the worker-count advice.
  */
-async function checkWorkerGpu(): Promise<void> {
+async function checkWorkerGpu(): Promise<string> {
   workerGpu = await probeWorkerGpu();
   // Logged, not just rendered: "is the GPU actually being used" is the first question behind
   // every "why is this slow", and a line in the console is what makes it answerable from a bug
   // report rather than from guesswork.
   log.info(`worker GPU check: webgpu=${workerGpu.webgpu} — ${workerGpu.detail}`);
   applyWorkerGpuProbe(workerGpu.webgpu);
-  $('gpuChecked').textContent = workerGpu.webgpu
+  const summary = workerGpu.webgpu
     ? 'GPU found for the synthesis worker.'
     : workerGpu.detail;
+  $('gpuChecked').textContent = summary;
   await render();
+  // Returned so the button that asked can say what came back. Without this the check ran, found
+  // the same answer as before, changed no visible text, and looked like a dead button.
+  return summary;
 }
 
 async function render(): Promise<void> {
@@ -425,18 +439,18 @@ async function render(): Promise<void> {
 // ---- theme -----------------------------------------------------------------
 
 /**
- * The theme lives in two places on this page — the header, where it is found by eye, and the
- * Appearance section, where it is found by name. Both are the same control, so choosing in one
- * moves the other.
+ * The theme control, mounted once in the Appearance section.
+ *
+ * It was briefly mounted twice — here and in the page header — which just read as the same
+ * setting offered twice. Kept as a list because the walkthrough mounts the same control, and
+ * because a reset has to move whichever ones exist.
  */
 const themeSwitches: ThemeSwitch[] = [];
 
 function mountThemeSwitches(): void {
-  for (const id of ['themeSwitch', 'themeSwitchRow']) {
-    const control = createThemeSwitch(document, settings.theme, (choice) => void chooseTheme(choice));
-    themeSwitches.push(control);
-    $(id).replaceChildren(control.root);
-  }
+  const control = createThemeSwitch(document, settings.theme, (choice) => void chooseTheme(choice));
+  themeSwitches.push(control);
+  $('themeSwitchRow').replaceChildren(control.root);
 }
 
 async function chooseTheme(choice: ThemeChoice): Promise<void> {
