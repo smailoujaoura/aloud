@@ -156,3 +156,57 @@ describe('leadSilenceSec', () => {
     expect(leadSilenceSec(undefined, { sentencePauseMs: 500, sectionPauseMs: 500 })).toBe(0);
   });
 });
+
+describe('prose wrapped across source lines (happy-dom)', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  /**
+   * The walkthrough's own demo paragraph, wrapped in the markup the way almost all HTML is. The
+   * text index copies text nodes verbatim, so those newlines reach the segmenter — and used to be
+   * read as sentence ends, stopping the reader dead in the middle of every line.
+   */
+  it('plans one chunk per sentence, not one per line of markup', () => {
+    const items = articlePlaylist(
+      `<article>
+        <p>
+          This is Aloud. It reads the page you are on with a voice that runs entirely on your
+          own computer, and it follows along, sentence by sentence, so you never lose your
+          place. Press the button and hear it for yourself.
+        </p>
+      </article>`,
+      { title: 'Aloud' },
+    );
+
+    const spoken = items.filter((i) => i.range).map((i) => i.spokenText.replace(/\s+/g, ' ').trim());
+    expect(spoken).toEqual([
+      'This is Aloud.',
+      'It reads the page you are on with a voice that runs entirely on your own computer, ' +
+        'and it follows along, sentence by sentence, so you never lose your place.',
+      'Press the button and hear it for yourself.',
+    ]);
+  });
+
+  it('still starts a new chunk at a real paragraph boundary', () => {
+    const items = articlePlaylist(
+      `<article>
+        <p>
+          A first paragraph that wraps
+          across two lines
+        </p>
+        <p>
+          A second paragraph that also
+          wraps across two lines
+        </p>
+      </article>`,
+      { title: 'Two paragraphs' },
+    );
+
+    const spoken = items.filter((i) => i.range).map((i) => i.spokenText.replace(/\s+/g, ' ').trim());
+    expect(spoken).toEqual([
+      'A first paragraph that wraps across two lines',
+      'A second paragraph that also wraps across two lines',
+    ]);
+  });
+});

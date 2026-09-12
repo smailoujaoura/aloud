@@ -94,3 +94,54 @@ describe('segmentSentences', () => {
     expect(chunks[0]!.text).toBe('just a fragment with no period');
   });
 });
+
+describe('prose wrapped across source lines', () => {
+  // Exactly the walkthrough's demo paragraph, indented across three lines the way it is written
+  // in welcome/index.html. buildTextIndex copies text nodes verbatim, so this is what the
+  // segmenter really sees for most of the web.
+  const wrapped = [
+    'This is Aloud. It reads the page you are on with a voice that runs entirely on your',
+    '              own computer, and it follows along, sentence by sentence, so you never lose your',
+    '              place. Press the button and hear it for yourself.',
+  ].join('\n');
+
+  const flat = (c: { text: string }): string => c.text.replace(/\s+/g, ' ');
+
+  it('does not break a sentence where the markup happens to wrap', () => {
+    expect(segmentSentences(wrapped).map(flat)).toEqual([
+      'This is Aloud.',
+      'It reads the page you are on with a voice that runs entirely on your own computer, ' +
+        'and it follows along, sentence by sentence, so you never lose your place.',
+      'Press the button and hear it for yourself.',
+    ]);
+  });
+
+  it('keeps offsets pointing at the original text, newlines and all', () => {
+    for (const chunk of segmentSentences(wrapped)) {
+      expect(wrapped.slice(chunk.start, chunk.end)).toBe(chunk.text);
+    }
+  });
+
+  it('still treats a blank line as a real break', () => {
+    const chunks = segmentSentences('A first thought that trails off\n\nA second one entirely');
+    expect(chunks).toHaveLength(2);
+  });
+});
+
+describe('other line-break characters', () => {
+  it('treats a CRLF wrap as a space, not a sentence end', () => {
+    const chunks = segmentSentences('A sentence that wraps\r\nacross two lines here. And another.');
+    expect(chunks.map((c) => c.text.replace(/\s+/g, ' '))).toEqual([
+      'A sentence that wraps across two lines here.',
+      'And another.',
+    ]);
+  });
+
+  it('still breaks on a CRLF blank line', () => {
+    expect(segmentSentences('A first thought\r\n\r\nA second thought')).toHaveLength(2);
+  });
+
+  it('keeps U+2029 as the paragraph separator it is', () => {
+    expect(segmentSentences('A first thought A second thought')).toHaveLength(2);
+  });
+});

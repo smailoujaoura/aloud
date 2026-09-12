@@ -3,6 +3,7 @@
  *
  * Uses `Intl.Segmenter` (Firefox 125+, Chromium 87+) for locale-aware sentence breaking, then:
  *   - hides reference markers ("[3]") from the segmenter, which otherwise breaks *inside* them,
+ *   - treats a newline that merely wraps the markup as a space rather than a sentence end,
  *   - re-joins fragments left dangling after an abbreviation that Intl split on,
  *   - splits sentences longer than `maxChars` at clause boundaries so that first-audio latency
  *     and re-synthesis after a seek stay bounded.
@@ -59,6 +60,53 @@ const REFERENCE_MARKER = /\[(?:\d{1,4}[a-z]?|[a-z])(?:\s*[,;–—-]\s*(?:\d{1,4
 
 function hideReferenceMarkers(text: string): string {
   return text.replace(REFERENCE_MARKER, (m) => ' '.repeat(m.length));
+}
+
+/**
+ * Newlines that only wrap the source, hidden from the segmenter the same way.
+ *
+ * `buildTextIndex` copies text nodes verbatim, so the newlines and indentation an author used to
+ * wrap their HTML end up in the text we segment — and `Intl.Segmenter` treats a line feed as a
+ * *mandatory* sentence break (UAX #29, rule SB4). A paragraph written across three lines was
+ * therefore read as three sentences, stopping dead in the middle of each one: "…runs entirely on
+ * your" [pause] "own computer, and it follows along…". Since most HTML is wrapped, this affected
+ * most pages.
+ *
+ * Inside one block every newline is formatting — real block boundaries are segmented separately
+ * (see content/playlist.ts) — so the only one that still means anything is a blank line, which is
+ * left alone. Blanked to a space rather than removed, so every offset still indexes into `text`.
+ */
+function softenWrapNewlines(text: string): string {
+  // CR and U+2028 (LINE SEPARATOR) end a sentence under the same rule, so they get the same
+  // treatment. U+2029 (PARAGRAPH SEPARATOR) is deliberately absent: it means what it says.
+  return text.replace(/[\n\r\u2028]/g, (m, at: number, whole: string) =>
+    isBlankLine(whole, at) ? m : ' ',
+  );
+}
+
+const NEWLINE = /[\n\r\u2028]/;
+/**
+ * A line break that survived softening, and so is a real boundary: a blank line, or an explicit
+ * PARAGRAPH SEPARATOR. Two fragments either side of one belong to different paragraphs and must
+ * not be merged, however unfinished the first one looks.
+ */
+const HARD_BREAK = /[\n\r\u2028\u2029]/;
+/** Anything whitespace-ish that is not itself a line break. */
+const HORIZONTAL_SPACE = /[^\S\n\r\u2028]/;
+
+/** Is the break at `at` part of a blank line — i.e. a paragraph separator rather than a wrap? */
+function isBlankLine(text: string, at: number): boolean {
+  let before = at - 1;
+  while (before >= 0 && HORIZONTAL_SPACE.test(text[before] as string)) before--;
+  // "\r\n" is one break, not a blank line: step over the CR of a CRLF pair before deciding.
+  if (before >= 0 && text[before] === '\r' && text[at] === '\n') before--;
+  while (before >= 0 && HORIZONTAL_SPACE.test(text[before] as string)) before--;
+  if (before >= 0 && NEWLINE.test(text[before] as string)) return true;
+
+  let after = at + 1;
+  if (text[at] === '\r' && text[after] === '\n') after++;
+  while (after < text.length && HORIZONTAL_SPACE.test(text[after] as string)) after++;
+  return after < text.length && NEWLINE.test(text[after] as string);
 }
 
 /**
@@ -180,7 +228,7 @@ export function segmentSentences(text: string, options: SegmentOptions = {}): Ch
   const raw: Array<{ start: number; end: number }> = [];
 
   // Same length as `text`, so every offset below is an offset into `text` itself.
-  const forBreaking = hideReferenceMarkers(text);
+  const forBreaking = softenWrapNewlines(hideReferenceMarkers(text));
 
   const HasSegmenter = typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function';
   if (HasSegmenter) {
@@ -208,9 +256,10 @@ export function segmentSentences(text: string, options: SegmentOptions = {}): Ch
         span.end - span.start < opts.minChars ||
         !endsSentence(prevText))
     ) {
-      // Only merge across a missing terminator if the two are close (same paragraph, no newline).
-      const between = text.slice(prev.end, span.start);
-      if (!between.includes('\n') || DANGLING_ABBR.test(prevText.trimEnd())) {
+      // Only merge across a missing terminator within one paragraph. Read from `forBreaking`, so
+      // a newline that merely wraps the source does not count as the paragraph ending.
+      const between = forBreaking.slice(prev.end, span.start);
+      if (!HARD_BREAK.test(between) || DANGLING_ABBR.test(prevText.trimEnd())) {
         prev.end = span.end;
         continue;
       }
