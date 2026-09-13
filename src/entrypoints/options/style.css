@@ -1,5 +1,5 @@
 /* The settings page. Tokens and primitives come from the shared stylesheet; this file is the
-   page's own layout and the "Voices & downloads" list. */
+   page's own layout and the Voice section. */
 @import '../../ui/theme.css';
 
 main { max-width: 720px; margin: 0 auto; padding: 28px 24px 96px; }
@@ -122,13 +122,65 @@ code {
 }
 .copy-btn { margin-left: 8px; padding: 2px 8px; font-size: 11.5px; border-radius: 6px; }
 
-/* ---- Voices & downloads ---------------------------------------------------- */
+/* ---- Voice ------------------------------------------------------------------ */
 
-/*
- * The toolbar stays with the list. Browsing 175 voices means scrolling a long way, and the tabs
- * and the search box are exactly what you want to reach while doing it — so they stick to the top
- * of the viewport, spanning the section's padding so nothing scrolls out from behind them.
- */
+:root { --avatar-l: 32%; --avatar-bg-l: 90%; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) { --avatar-l: 82%; --avatar-bg-l: 24%; }
+}
+:root[data-theme='dark'] { --avatar-l: 82%; --avatar-bg-l: 24%; }
+
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.section-head h2 { margin-bottom: 12px; }
+.section-head p { margin: 0 0 12px; }
+
+.btn-sm { padding: 5px 11px; font-size: 12.5px; border-radius: 7px; }
+
+.pill.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); border-color: transparent; }
+.pill.warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); border-color: transparent; }
+.pill.in-use { color: var(--accent-on); background: var(--accent-solid); border-color: transparent; font-weight: 600; }
+.warn-text { color: var(--warn); }
+
+/* A coloured initial per voice: a long list scans by shape and colour before it is read. */
+.vi-avatar,
+.now-avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  font-weight: 650;
+  color: hsl(var(--h, 45) 55% var(--avatar-l));
+  background: hsl(var(--h, 45) 60% var(--avatar-bg-l));
+}
+.vi-avatar { width: 34px; height: 34px; font-size: 14px; }
+.now-avatar { width: 52px; height: 52px; font-size: 21px; }
+
+/* ---- reading with ---- */
+
+.now-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent-solid) 40%, var(--border));
+  background:
+    linear-gradient(120deg, var(--accent-soft), transparent 65%),
+    var(--bg);
+}
+.now-text { display: flex; flex-direction: column; min-width: 0; flex: 1 1 0; line-height: 1.3; }
+.now-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-muted); font-weight: 600; }
+.now-name { font-size: 19px; font-weight: 700; margin: 2px 0; }
+.now-meta { font-size: 12.5px; color: var(--fg-muted); }
+/* A column that never grows past its widest child, so the voice's name and details get the room. */
+.now-side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex: 0 0 auto; }
+.vi-name .pill { margin-left: 8px; padding: 0 8px; font-size: 11px; font-weight: 600; vertical-align: 1px; }
+
+.speed-row { margin: 16px 2px 6px; }
+.speed-row > span:first-child { flex: 0 0 auto; min-width: 64px; font-weight: 600; }
+
+/* ---- sticky toolbar ---- */
+
 .voice-toolbar {
   position: sticky;
   top: 0;
@@ -137,67 +189,155 @@ code {
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-  margin: 0 -20px 14px;
+  margin: 16px -20px 4px;
   padding: 10px 20px;
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
 }
-.voice-tabs { display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 auto; }
+.voice-tabs {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
 .voice-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 13px;
-  border-radius: var(--radius-pill);
-  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 6px 13px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  line-height: 1.25;
+  text-align: left;
 }
-.voice-tab b { font-weight: 600; }
-.voice-tab-status { color: var(--fg-muted); font-size: 11.5px; }
-.voice-tab.is-active {
-  background: var(--accent-soft);
-  border-color: color-mix(in srgb, var(--accent-solid) 55%, var(--border));
-}
+.voice-tab:hover:not(.is-active) { background: var(--surface-3); }
+.voice-tab.is-active { background: var(--surface); box-shadow: var(--shadow-1); }
+.voice-tab-name { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; }
+.voice-tab-name b { font-weight: 650; }
+.voice-tab-status { font-size: 11px; color: var(--fg-muted); }
 .voice-tab.is-active .voice-tab-status { color: var(--accent); }
-/* Marks the engine actually in use, so browsing another tab never loses track of it. */
-.voice-tab-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent-solid);
+.voice-tab-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-solid); }
+.model-filter { flex: 1 1 200px; min-width: 150px; margin: 0; padding: 8px 11px; border-radius: 10px; }
+
+/* ---- a tab's contents ---- */
+
+.panel-body { padding: 10px 0 0; }
+.engine-intro { margin: 4px 0 12px; }
+.engine-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+.engine-intro p { margin: 0; }
+
+.panel-controls { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 4px 0 10px; }
+.segmented {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
 }
-.model-filter { flex: 1 1 220px; min-width: 150px; margin: 0; }
+.segmented button {
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-pill);
+  padding: 4px 12px;
+  font-size: 12.5px;
+  color: var(--fg-muted);
+}
+.segmented button:hover:not([aria-pressed='true']) { background: var(--surface-3); color: var(--fg); }
+.segmented button[aria-pressed='true'] { background: var(--surface); color: var(--fg); font-weight: 600; box-shadow: var(--shadow-1); }
+.lang-picker { display: inline-flex; align-items: center; gap: 8px; }
+.lang-picker select { min-width: 190px; }
 
-.panel-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-.panel-blurb { margin: 0; flex: 1 1 320px; }
-.panel-size { margin: 0; color: var(--fg-muted); white-space: nowrap; }
-.panel-body { padding: 2px 0 4px; }
-
-.sub-head {
+.voice-list { display: flex; flex-direction: column; gap: 2px; }
+.voice-list.is-locked .voice-item { opacity: 0.6; }
+.voice-group-title {
   font-size: 11.5px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  font-weight: 600;
   color: var(--fg-muted);
-  margin: 18px 0 2px;
+  margin: 14px 4px 4px;
 }
-.lang-row { margin: 10px 0 4px; }
-.lang-row > span:first-child { flex: 0 0 auto; }
-.lang-row select { flex: 0 1 260px; }
+.list-note { font-size: 12.5px; color: var(--fg-muted); margin: 2px 4px 6px; }
+.voice-empty {
+  margin: 6px 0;
+  padding: 18px;
+  text-align: center;
+  border: 1px dashed var(--border-strong);
+  border-radius: 12px;
+  color: var(--fg-muted);
+  font-size: 13px;
+}
 
-.model-row {
+.voice-item {
   display: grid;
-  grid-template-columns: auto 1fr auto auto auto;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
-  padding: 9px 0;
-  border-top: 1px solid var(--border);
+  column-gap: 12px;
+  row-gap: 6px;
+  padding: 9px 10px;
+  border-radius: 11px;
+  transition: background var(--speed) ease;
 }
-.model-row:first-of-type { border-top: none; }
-.model-row input[type='radio'] { margin: 0; }
-.model-name { min-width: 0; }
-.model-name b { font-weight: 600; }
-.model-name small { display: block; color: var(--fg-muted); font-size: 12.5px; }
-.model-name small.warn { color: var(--warn); }
-.model-btn { padding: 5px 10px; white-space: nowrap; }
+.voice-item:hover { background: var(--surface-2); }
+.voice-item.is-current {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-solid) 45%, transparent);
+}
+.vi-main { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+.vi-name { font-weight: 600; font-size: 14px; }
+.vi-meta { font-size: 12.5px; color: var(--fg-muted); }
+.vi-actions { display: flex; align-items: center; gap: 6px; justify-self: end; flex-wrap: wrap; justify-content: flex-end; }
+.vi-actions .preview-btn { min-width: 98px; padding: 5px 10px; font-size: 12.5px; border-radius: 7px; }
+.vi-actions .remove { color: var(--fg-muted); }
+.vi-actions .remove:hover:not(:disabled) { color: var(--danger); }
+.voice-item .progress-wrap,
+.voice-item .progress-msg,
+.model-card .progress-wrap,
+.model-card .progress-msg { grid-column: 1 / -1; flex-basis: 100%; }
+
+.q-chips { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 5px; }
+.q-chip {
+  padding: 1px 9px;
+  font-size: 11.5px;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--fg-muted);
+}
+.q-chip.is-selected {
+  color: var(--fg);
+  background: var(--surface);
+  border-color: color-mix(in srgb, var(--accent-solid) 60%, var(--border));
+  font-weight: 600;
+}
+
+.model-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 14px;
+  padding: 12px 14px;
+  margin: 0 0 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+.model-card.is-installed { border-color: color-mix(in srgb, var(--ok) 35%, var(--border)); }
+.mc-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; }
+.mc-text b { font-weight: 600; }
+
+.progress-wrap { height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+.progress-wrap > i { display: block; height: 100%; width: 0%; background: var(--accent-solid); transition: width 0.15s linear; }
+.progress-msg { font-size: 12.5px; color: var(--fg-muted); }
+.progress-msg.error { color: var(--danger); }
 
 .preview-btn { min-width: 112px; text-align: center; font-variant-numeric: tabular-nums; }
 .preview-btn.busy { border-color: color-mix(in srgb, var(--accent-solid) 55%, var(--border)); color: var(--accent); }
@@ -207,27 +347,27 @@ code {
 @keyframes preview-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
 @media (prefers-reduced-motion: reduce) { .preview-btn.loading { animation: none; } }
 
-.model-row .progress-wrap {
-  grid-column: 1 / -1;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--surface-3);
-  overflow: hidden;
+.voice-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
 }
-.model-row .progress-wrap > i {
-  display: block;
-  height: 100%;
-  width: 0%;
-  background: var(--accent-solid);
-  transition: width 0.15s linear;
-}
-.model-row .progress-msg { grid-column: 1 / -1; font-size: 12.5px; color: var(--fg-muted); }
-.model-row .progress-msg.error { color: var(--danger); }
+.voice-footer p { margin: 0; }
 
 .option-unsuitable { color: var(--fg-muted); }
 
 @media (max-width: 560px) {
+  .now-card { flex-wrap: wrap; }
+  .now-side { flex: 1 1 100%; flex-direction: row; align-items: center; justify-content: flex-start; }
   .voice-toolbar { margin-inline: -16px; padding-inline: 16px; }
-  .model-row { grid-template-columns: auto 1fr auto; }
-  .preview-btn { grid-column: 2 / 3; justify-self: start; min-width: 0; }
+  .voice-tabs { flex: 1 1 100%; }
+  .voice-tab { flex: 1 1 0; }
+  .voice-item { grid-template-columns: 34px minmax(0, 1fr); }
+  .vi-actions { grid-column: 2; justify-self: start; justify-content: flex-start; }
+  .lang-picker select { min-width: 0; }
 }

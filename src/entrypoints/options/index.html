@@ -23,28 +23,34 @@
         </div>
       </header>
 
-      <section>
-        <h2>Voice</h2>
-        <label class="row">
-          <span>Engine</span>
-          <!-- Options are built in main.ts from shared/engine-catalog: which engine is worth
-               recommending depends on whether this browser gives workers a GPU. -->
-          <select id="engine"></select>
-        </label>
-        <p class="row-hint" id="engineHint"></p>
+      <!-- One section for the voice: who reads now, how fast, and every voice to switch to.
+           Built in main.ts + voice-panels.ts. -->
+      <section class="voice-section" aria-labelledby="voiceHeading">
+        <div class="section-head">
+          <h2 id="voiceHeading">Voice</h2>
+          <p class="muted small">Downloaded once, then everything runs on this device.</p>
+        </div>
 
-        <label class="row">
-          <span>Voice</span>
-          <select id="voice"></select>
-          <span id="voicePreviewSlot"></span>
-        </label>
-        <p class="row-hint" id="voiceHint" hidden></p>
+        <div id="nowReading" class="now-card"></div>
 
-        <label class="row">
+        <label class="row speed-row">
           <span>Speed</span>
           <input type="range" id="speed" min="0.5" max="4" step="0.05" />
           <output id="speedOut"></output>
         </label>
+
+        <!-- Stays put while the list under it scrolls, so the engine you are looking at and the
+             search that filters it are never scrolled away from what they act on. -->
+        <div class="voice-toolbar">
+          <div class="voice-tabs" id="engineTabs" role="tablist" aria-label="Voice engines"></div>
+          <input type="search" id="voiceFilter" class="model-filter" placeholder="Search voices…" aria-label="Search voices" />
+        </div>
+        <div id="enginePanels" role="tabpanel"></div>
+
+        <div class="voice-footer">
+          <p id="usage" class="muted small">Calculating…</p>
+          <button id="clearModels" class="ghost danger btn-sm" type="button">Delete all downloads</button>
+        </div>
       </section>
 
       <section>
@@ -128,24 +134,6 @@
           size, but loses the document’s appearance.
         </p>
         <button id="openPdf">Open a PDF…</button>
-      </section>
-
-      <section>
-        <h2>Voices &amp; downloads</h2>
-        <p class="muted">
-          Each voice is stored on this device only. <b>Preview</b> hears a voice before you commit,
-          <b>Download</b> fetches it for offline use, <b>Use</b> makes it the active voice. Your
-          selected voice downloads by itself the first time you read a page.
-        </p>
-        <!-- Stays put while the list under it scrolls, so the engine you are looking at and the
-             search that filters it are never scrolled away from what they act on. -->
-        <div class="voice-toolbar">
-          <div class="voice-tabs" id="engineTabs" role="tablist" aria-label="Voice engines"></div>
-          <input type="search" id="voiceFilter" class="model-filter" placeholder="Search voices by name…" />
-        </div>
-        <div id="enginePanels" role="tabpanel"></div>
-        <p id="usage" class="muted">Calculating…</p>
-        <button id="clearModels" class="danger">Delete all cached models</button>
       </section>
 
       <section>

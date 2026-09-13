@@ -2,9 +2,9 @@
  * Options page controller.
  *
  * Deliberately thin: it owns the settings object and the redraw cycle, and delegates everything
- * with structure to a neighbouring module — `voice-panels` for the downloads section,
- * `preview-button` for previews, `downloads` for transfer plumbing, `model-status` for reading
- * the cache. Rendering is whole-page and idempotent: every change saves, then redraws from
+ * with structure to a neighbouring module — `voice-panels` for the whole Voice section,
+ * `preview-button` for previews, `downloads` for transfer plumbing, `engine/installed-voices` for
+ * reading the cache. Rendering is whole-page and idempotent: every change saves, then redraws from
  * storage, so the page can never show state that disagrees with what was saved.
  */
 import { browser } from 'wxt/browser';
@@ -15,12 +15,10 @@ import { applyGpuProbe, applyWorkerGpuProbe, capabilities } from '@/shared/brows
 import { probeGpu, gpuProbeIfKnown } from '@/shared/gpu-probe';
 import { loadWorkerGpu } from '@/shared/backend-memory';
 import { probeWorkerGpu, type WorkerGpuResult } from './gpu-check';
-import { engineInfo, listEngines } from '@/shared/engine-catalog';
-import { groupByLanguage, listVoices } from '@/shared/voice-catalog';
+import { listVoices } from '@/shared/voice-catalog';
 import { cacheClear, cacheEntries, cacheUsageBytes } from '@/engine/model-cache';
 import {
   DEFAULT_SETTINGS,
-  activeVoice,
   getSettings,
   setSettings,
   voiceKeyFor,
@@ -42,8 +40,7 @@ import { applyTheme, watchSystemTheme, THEME_LABEL } from '@/ui/theme';
 import { createThemeSwitch, type ThemeSwitch } from '@/ui/theme-switch';
 import type { ModelManifest } from '@/engine/engines/types';
 
-import { readCacheSizes, usableVoices, type CacheSizes } from '@/engine/installed-voices';
-import { previewFor } from './preview-button';
+import { readCacheSizes } from '@/engine/installed-voices';
 import { renderVoiceSection, type PanelContext } from './voice-panels';
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -141,91 +138,6 @@ async function useVoice(engine: EngineId, voiceId: string): Promise<void> {
 function voiceLabel(engine: EngineId, voiceId: string): string {
   if (!manifestCache) return voiceId;
   return listVoices(engine, manifestCache).find((v) => v.id === voiceId)?.label ?? voiceId;
-}
-
-// ---- engine picker ---------------------------------------------------------
-
-/**
- * The engine list, built from the catalogue rather than hardcoded in the HTML.
- *
- * Each option says what the engine is, not how well this machine runs it. The one device-shaped
- * caveat kept here is the phone one, because a 262 MB download on mobile data is worth warning
- * about before it starts.
- */
-function populateEnginePicker(): void {
-  const select = $<HTMLSelectElement>('engine');
-  const onPhone = capabilities().touchFirst;
-  select.replaceChildren(
-    ...listEngines().map((info) => {
-      const heavy = onPhone && info.heavyForMobile;
-      const option = el(
-        document,
-        'option',
-        { value: info.id },
-        `${info.name} — ${info.tag}${heavy ? ' (not recommended on phones)' : ''}`,
-      );
-      if (heavy) option.classList.add('option-unsuitable');
-      return option;
-    }),
-  );
-  select.value = settings.engine;
-
-  const active = engineInfo(settings.engine);
-  $('engineHint').textContent = active.blurb;
-  $('engineHint').classList.toggle('warn', onPhone && active.heavyForMobile);
-}
-
-// ---- voice picker ----------------------------------------------------------
-
-function populateVoicePicker(manifest: ModelManifest, sizes: CacheSizes): void {
-  const select = $<HTMLSelectElement>('voice');
-  const hint = $('voiceHint');
-  const current = activeVoice(settings);
-  const voices = usableVoices(settings.engine, manifest, sizes);
-
-  // Keep the *currently selected* voice listed even when its files are not downloaded yet — it
-  // is what will actually play, since Aloud fetches it on first use.
-  if (current && !voices.some((v) => v.id === current) && settings.engine === 'piper') {
-    const entry = manifest.piper[current];
-    if (entry) {
-      voices.unshift({
-        id: current,
-        label: `${entry.label.split(' — ')[0]} — downloads on first use`,
-        group: entry.languageName ?? entry.language,
-      });
-    }
-  }
-
-  if (voices.length === 0) {
-    select.replaceChildren(
-      el(document, 'option', { value: '', disabled: '', selected: '' }, '— no downloaded voice —'),
-    );
-    select.disabled = true;
-    hint.hidden = false;
-    hint.textContent =
-      settings.engine === 'piper'
-        ? 'Download a Piper voice below, then pick it here.'
-        : `Download ${engineInfo(settings.engine).name} below to unlock its voices.`;
-  } else {
-    select.disabled = false;
-    hint.hidden = true;
-    select.replaceChildren(
-      ...groupByLanguage(voices).map(([language, items]) => {
-        const group = el(document, 'optgroup', { label: language });
-        for (const v of items) {
-          const option = el(document, 'option', { value: v.id }, v.label);
-          if (v.id === current) option.selected = true;
-          group.appendChild(option);
-        }
-        return group;
-      }),
-    );
-    if (voices.some((v) => v.id === current)) select.value = current;
-  }
-
-  $('voicePreviewSlot').replaceChildren(
-    select.value ? previewFor(settings.engine, select.value, { settings, manifest, sizes }) : el(document, 'span'),
-  );
 }
 
 // ---- render ----------------------------------------------------------------
@@ -392,9 +304,6 @@ async function render(): Promise<void> {
   const manifest = await loadManifest();
   const sizes = await readCacheSizes();
 
-  populateEnginePicker();
-  populateVoicePicker(manifest, sizes);
-
   $<HTMLInputElement>('speed').value = String(settings.speed);
   $('speedOut').textContent = `${settings.speed.toFixed(2)}×`;
   $<HTMLInputElement>('highlight').checked = settings.highlight;
@@ -430,7 +339,7 @@ async function render(): Promise<void> {
     useVoice,
     flashSaved,
   };
-  renderVoiceSection($('engineTabs'), $('enginePanels'), ctx);
+  renderVoiceSection({ nowReading: $('nowReading'), tabs: $('engineTabs'), panel: $('enginePanels') }, ctx);
 
   void refreshUsage();
   void refreshPositionsHint();
@@ -483,19 +392,6 @@ function wireCheckbox(id: string, key: keyof Settings): void {
 
 function wire(): void {
   renderPrefList();
-
-  $('engine').addEventListener('change', async (e) => {
-    stopPreview();
-    const engine = (e.target as HTMLSelectElement).value as EngineId;
-    toast(`Switching to ${engineInfo(engine).name}…`, 'info', true);
-    settings = await setSettings({ engine });
-    await render();
-    toast(`${engineInfo(engine).name} selected — its voices are listed below`, 'ok');
-  });
-  $('voice').addEventListener('change', (e) => {
-    const value = (e.target as HTMLSelectElement).value;
-    if (value) void useVoice(settings.engine, value);
-  });
 
   wireSlider('speed', 'speedOut', 'speed', (v) => `${v.toFixed(2)}×`);
   wireSlider('sectionPauseMs', 'sectionPauseOut', 'sectionPauseMs', (v) => `${(v / 1000).toFixed(2)}s`);
