@@ -4,7 +4,7 @@ import type { PlaylistItem } from '@/content/playlist';
 
 /** A tiny article: heading, two paragraphs, heading, one paragraph. */
 function item(playId: number, startsBlock: boolean, isHeading = false): PlaylistItem {
-  return { playId, spokenText: `s${playId}`, sourceText: `s${playId}`, range: null, blockRange: null, role: isHeading ? 'heading' : 'paragraph', startsBlock, isHeading };
+  return { playId, spokenText: `s${playId}`, sourceText: `s${playId}`, range: null, sourceAt: null, blockRange: null, role: isHeading ? 'heading' : 'paragraph', startsBlock, isHeading };
 }
 const list = [
   item(0, true, true),  // # Intro

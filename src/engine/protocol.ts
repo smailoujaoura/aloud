@@ -96,7 +96,7 @@ export type WorkerResponse =
       /** Interleaved not applicable — mono. */
       pcm: ArrayBuffer;
       sampleRate: number;
-      /** Optional per-word timing for future word-level highlighting. */
+      /** When each word is spoken, for engines that can say (Piper). */
       words?: WordTiming[];
     }
   | { kind: 'cancelled'; id: number; fromChunkIndex: number }
@@ -113,7 +113,9 @@ export type WorkerResponse =
     };
 
 export interface WordTiming {
-  word: string;
+  /** The word's span in the text that was synthesised: `[from, to)`. */
+  from: number;
+  to: number;
   /** Seconds from the start of this chunk's audio. */
   start: number;
   end: number;

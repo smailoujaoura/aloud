@@ -19,14 +19,15 @@ import { browser } from 'wxt/browser';
 
 import { extractArticle, type ExtractedArticle } from '@/extract/readability';
 import { resolveLiveRoot } from '@/extract/live-container';
-import { buildTextIndex, type TextIndex } from '@/extract/text-index';
+import { buildTextIndex, rangeForSpan, type TextIndex } from '@/extract/text-index';
+import { spokenToSource } from '@/highlight/word-map';
 import { normalizeForSpeech } from '@/segment/normalize';
 import { applyPronunciations } from '@/segment/pronunciations';
 import { GaplessScheduler } from '@/audio/scheduler';
 import { Highlighter } from '@/highlight/highlighter';
 import { ControlBar, type ExportState } from '@/ui/control-bar';
 import { WorkerClient } from '@/engine/worker-client';
-import type { EngineConfig } from '@/engine/protocol';
+import type { EngineConfig, WordTiming } from '@/engine/protocol';
 import type { ModelManifest } from '@/engine/engines/types';
 import { getSettings, setSettings, activeVoice, voiceKeyFor, type EngineId, type Settings } from '@/shared/settings';
 import { ENGINE_IDS } from '@/shared/engine-catalog';
@@ -171,6 +172,11 @@ export class ReaderSession {
   private lastPositionSave = 0;
   private lastSavedIndex = -1;
   private outputLogged = false;
+  /** When each word of a synthesised sentence is spoken, as the engine reported it (Piper). */
+  private readonly wordTimings = new Map<number, WordTiming[]>();
+  /** The sentence playing now, as page ranges for its words, and the word last marked. */
+  private words: { playId: number; spans: Array<{ start: number; range: Range }>; shown: number } | null = null;
+  private wordTimer = 0;
   private finishedHook: (() => void) | null = null;
   /**
    * A downloaded voice in the page's language, chosen for this page only (never saved), or null
@@ -262,9 +268,14 @@ export class ReaderSession {
         this.state.modelProgress = progress;
         if (this.state.status === 'loading-model') this.pushState();
       },
-      onAudio: (playId, pcm, sr) => {
-        if (this.exporter) this.exporter.accept(playId, pcm, sr);
-        else this.scheduler.provide(playId, pcm, sr, leadSilenceSec(this.playlist[playId], this.settings));
+      onAudio: (playId, pcm, sr, words) => {
+        if (this.exporter) {
+          this.exporter.accept(playId, pcm, sr);
+          return;
+        }
+        if (words?.length) this.wordTimings.set(playId, words);
+        else this.wordTimings.delete(playId);
+        this.scheduler.provide(playId, pcm, sr, leadSilenceSec(this.playlist[playId], this.settings));
       },
       onNotice: (message) => {
         // The engine has something to say that is not a failure — most often that it is running
@@ -545,6 +556,7 @@ export class ReaderSession {
     }
     this.setStatus('playing');
     this.ensureSynth(this.currentPlayId);
+    if (this.words) this.followWords();
 
     // Autoplay (from "Read selection" / "Read from here") can be blocked — the browser wants a
     // real click first. If we wanted to play but aren't, say so and draw the eye to the button.
@@ -561,6 +573,7 @@ export class ReaderSession {
     this.state.busy = false;
     this.state.hint = undefined;
     await this.scheduler.pause();
+    this.stopFollowingWords(false);
     this.setStatus('paused');
   }
 
@@ -592,6 +605,7 @@ export class ReaderSession {
     this.requested.clear();
     this.worker.cancelFrom(target, this.tuning.lookahead + 1);
     this.scheduler.seek(target);
+    this.stopFollowingWords(true);
     // A "stop at the end of this paragraph" timer now means the paragraph just jumped to.
     this.sleepTimer?.onSeek();
     if (this.engineReady) this.ensureSynth(target);
@@ -968,11 +982,91 @@ export class ReaderSession {
       this.highlighter?.show(range);
     }
 
+    this.prepareWords(playId);
     this.ensureSynth(playId + 1);
     this.pushState();
     this.refreshOffScreen();
     this.maybeShowTips();
     this.rememberPosition(playId);
+  }
+
+  // ---- word highlighting ----------------------------------------------------
+
+  /**
+   * Turn the playing sentence's word timings into page ranges, and start following the audio.
+   *
+   * A word lights from the moment its first sound plays until the next word's does, so the mark
+   * rests on the last word through a comma's pause rather than blinking off. Sentences without
+   * timings (other engines, a title that is spoken but not on the page) keep the sentence
+   * highlight alone.
+   */
+  private prepareWords(playId: number): void {
+    for (const id of this.wordTimings.keys()) if (id < playId - 1) this.wordTimings.delete(id);
+    this.highlighter?.showWord(null);
+    this.words = null;
+
+    const item = this.playlist[playId];
+    const timings = this.wordTimings.get(playId);
+    const index = this.textIndex;
+    if (!this.settings.highlight || !this.settings.wordHighlight || !this.highlighter?.canShowWords) return;
+    if (!item || !timings || item.sourceAt == null || !index) return;
+
+    const toSource = spokenToSource(item.spokenText, item.sourceText);
+    const spans: Array<{ start: number; range: Range }> = [];
+    for (const word of timings) {
+      const span = toSource(word.from, word.to);
+      const range = span && rangeForSpan(index, item.sourceAt + span[0], item.sourceAt + span[1]);
+      // Two spoken words on one page word ("e.g." said as "for example") keep the first start.
+      const previous = spans[spans.length - 1];
+      if (range && !(previous && sameRange(previous.range, range))) {
+        spans.push({ start: word.start, range });
+      }
+    }
+    if (spans.length === 0) return;
+    this.words = { playId, spans, shown: -1 };
+    this.followWords();
+  }
+
+  /**
+   * Move the mark as the audio clock passes each word. A timer aimed at the next word's start
+   * rather than a per-frame loop: a dozen wake-ups a second instead of sixty, and no dependence on
+   * how often the page manages to paint. It re-reads the clock on every wake-up, so a late timer
+   * never lets the mark drift.
+   */
+  private followWords(): void {
+    if (this.wordTimer) return;
+    const tick = (): void => {
+      this.wordTimer = 0;
+      const words = this.words;
+      if (!words || this.disposed) return;
+      let wait = 0.25;
+      const position = this.scheduler.playbackPosition();
+      if (position && position.playId === words.playId) {
+        // A few milliseconds early reads as in time; late reads as lagging.
+        const t = position.seconds + 0.04;
+        let index = -1;
+        while (index + 1 < words.spans.length && words.spans[index + 1]!.start <= t) index++;
+        if (index !== words.shown) {
+          words.shown = index;
+          this.highlighter?.showWord(index >= 0 ? words.spans[index]!.range : null);
+        }
+        const next = words.spans[index + 1];
+        if (next) wait = next.start - t;
+      }
+      if (this.scheduler.isPlaying()) {
+        this.wordTimer = window.setTimeout(tick, Math.round(Math.min(0.25, Math.max(0.012, wait)) * 1000));
+      }
+    };
+    tick();
+  }
+
+  private stopFollowingWords(clear: boolean): void {
+    clearTimeout(this.wordTimer);
+    this.wordTimer = 0;
+    if (clear) {
+      this.words = null;
+      this.highlighter?.showWord(null);
+    }
   }
 
   /**
@@ -1006,6 +1100,7 @@ export class ReaderSession {
   }
 
   private onFinished(): void {
+    this.stopFollowingWords(true);
     this.wantsPlayback = false;
     this.state.busy = false;
     this.highlighter?.clear();
@@ -1089,6 +1184,8 @@ export class ReaderSession {
       color: this.settings.highlightColor,
       scrollMode: this.settings.scrollMode,
     });
+    if (!this.settings.highlight || !this.settings.wordHighlight) this.stopFollowingWords(true);
+    else if (!prev.wordHighlight && this.scheduler?.isPlaying()) this.prepareWords(this.currentPlayId);
     if (prev.tapToSeek !== this.settings.tapToSeek) {
       this.tapToSeek?.setEnabled(this.settings.tapToSeek);
       this.bar?.setTapToSeek(this.settings.tapToSeek);
@@ -1288,6 +1385,7 @@ export class ReaderSession {
     if (this.engineReady || this.currentPlayId > 0) this.rememberPosition(this.currentPlayId, true);
     this.disposed = true;
 
+    this.stopFollowingWords(false);
     this.tapToSeek?.dispose();
     this.sleepTimer?.dispose();
     this.exporter?.cancel();
@@ -1369,4 +1467,13 @@ function changesSpokenText(prev: Settings, next: Settings): boolean {
 function engineIdentity(config: EngineConfig): string {
   const { speed: _speed, ...identity } = config;
   return JSON.stringify(identity);
+}
+
+function sameRange(a: Range, b: Range): boolean {
+  return (
+    a.startContainer === b.startContainer &&
+    a.startOffset === b.startOffset &&
+    a.endContainer === b.endContainer &&
+    a.endOffset === b.endOffset
+  );
 }

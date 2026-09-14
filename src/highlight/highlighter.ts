@@ -11,6 +11,7 @@
  */
 
 const HIGHLIGHT_NAME = 'aloud-sentence';
+const WORD_HIGHLIGHT_NAME = 'aloud-word';
 const STYLE_ID = 'aloud-highlight-style';
 const SPAN_CLASS = 'aloud-hl-span';
 
@@ -28,6 +29,7 @@ export interface HighlighterOptions {
 export class Highlighter {
   private readonly supportsCSSHighlight: boolean;
   private highlight: Highlight | null = null;
+  private wordHighlight: Highlight | null = null;
   private currentSpan: HTMLElement | null = null;
   private styleEl: HTMLStyleElement | null = null;
   private lastScroll = 0;
@@ -52,6 +54,12 @@ export class Highlighter {
         background-color: ${this.opts.color};
         color: inherit;
         border-radius: 2px;
+      }
+      ::highlight(${WORD_HIGHLIGHT_NAME}) {
+        background-color: ${wordTone(this.opts.color).fill};
+        color: inherit;
+        text-decoration: underline 3px ${wordTone(this.opts.color).line};
+        text-underline-offset: 2px;
       }
       .${SPAN_CLASS} {
         background-color: ${this.opts.color};
@@ -169,16 +177,60 @@ export class Highlighter {
     }
   }
 
+  /** Whether this browser can mark a word inside the sentence (the CSS Custom Highlight API). */
+  get canShowWords(): boolean {
+    return this.supportsCSSHighlight;
+  }
+
+  /**
+   * Mark the word being spoken, on top of the sentence highlight. Never scrolls: the sentence
+   * already decides where the page is, and a scroll per word would never keep still.
+   */
+  showWord(range: Range | null): void {
+    if (!this.supportsCSSHighlight) return;
+    if (!range) {
+      this.wordHighlight?.clear();
+      return;
+    }
+    if (!this.wordHighlight) {
+      this.wordHighlight = new Highlight();
+      this.wordHighlight.priority = 1;
+      CSS.highlights.set(WORD_HIGHLIGHT_NAME, this.wordHighlight);
+    }
+    this.wordHighlight.clear();
+    this.wordHighlight.add(range);
+  }
+
   clear(): void {
+    this.wordHighlight?.clear();
     if (this.highlight) this.highlight.clear();
     this.unwrapSpan();
   }
 
   dispose(): void {
     this.clear();
-    if (this.supportsCSSHighlight) CSS.highlights.delete(HIGHLIGHT_NAME);
+    if (this.supportsCSSHighlight) {
+      CSS.highlights.delete(HIGHLIGHT_NAME);
+      CSS.highlights.delete(WORD_HIGHLIGHT_NAME);
+    }
     this.highlight = null;
+    this.wordHighlight = null;
     this.styleEl?.remove();
     this.styleEl = null;
   }
+}
+
+/**
+ * The word's colours from the sentence colour. The word is painted *over* the sentence highlight,
+ * so its fill only adds a little (the two stack to about 0.6 at the default colour) — enough to
+ * find the word, not so much that it hides the letters where text is drawn under the highlight,
+ * as on a PDF page. A darker underline in the same hue does the rest.
+ */
+export function wordTone(color: string): { fill: string; line: string } {
+  const m = /rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,/]+([\d.]+))?\s*\)/.exec(color);
+  if (!m) return { fill: color, line: 'currentColor' };
+  const [r, g, b] = [m[1], m[2], m[3]].map(Number) as [number, number, number];
+  const alpha = m[4] === undefined ? 1 : Number(m[4]);
+  const dark = (v: number) => Math.round(v * 0.55);
+  return { fill: `rgba(${r}, ${g}, ${b}, ${Math.min(0.5, alpha * 0.7).toFixed(2)})`, line: `rgb(${dark(r)}, ${dark(g)}, ${dark(b)})` };
 }

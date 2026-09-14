@@ -32,6 +32,12 @@ export interface PlaylistItem {
   sourceText: string;
   /** Highlight range for this exact sentence, or null if it could not be located. */
   range: Range | null;
+  /**
+   * Where `sourceText` starts in the text index, when it is there exactly — what word
+   * highlighting needs to find a word's place on the page. Null when the sentence was located
+   * only approximately, or not at all.
+   */
+  sourceAt: number | null;
   /** Highlight range for the whole enclosing block — the fallback when `range` is null. */
   blockRange: Range | null;
   /** Structural role of the block this sentence belongs to. */
@@ -89,6 +95,7 @@ export function buildArticlePlaylist(
           spokenText: spoken,
           sourceText: title,
           range: null,
+          sourceAt: null,
           blockRange: null,
           role: block.role,
           startsBlock: true,
@@ -106,11 +113,13 @@ export function buildArticlePlaylist(
     for (const chunk of segmentSentences(blockText, { locale: lang, maxChars })) {
       const spoken = normalize(chunk.text);
       if (!isSpeakable(spoken)) continue;
-      const range = rangeForSpan(index, block.start + chunk.start, block.start + chunk.end);
+      const at = block.start + chunk.start;
+      const range = rangeForSpan(index, at, block.start + chunk.end);
       push({
         spokenText: spoken,
         sourceText: chunk.text,
         range: range ?? blockRange,
+        sourceAt: range && index.fullText.startsWith(chunk.text, at) ? at : null,
         blockRange,
         role: block.role,
         startsBlock: first,
@@ -140,6 +149,7 @@ export function buildSelectionPlaylist(opts: PlanOptions & { sourceText: string 
       spokenText: spoken,
       sourceText: chunk.text,
       range: found ? rangeForSpan(index, found.start, found.end) : null,
+      sourceAt: found && index.fullText.startsWith(chunk.text, found.start) ? found.start : null,
       blockRange: null,
       role: 'paragraph',
       startsBlock: false,

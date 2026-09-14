@@ -49,7 +49,9 @@ export class GaplessScheduler {
   /** PCM delivered before `start()` created the AudioContext (pre-buffering). */
   private readonly pendingPcm = new Map<number, PendingChunk>();
   private readonly sources = new Map<number, AudioBufferSourceNode>();
-  private readonly timeline: Array<{ playId: number; start: number; end: number; announced: boolean }> = [];
+  private readonly timeline: Array<{ playId: number; start: number; end: number; lead: number; announced: boolean }> = [];
+  /** Lead silence (seconds) at the front of each ready buffer, so positions can skip it. */
+  private readonly leads = new Map<number, number>();
 
   private count = 0;
   private nextToSchedule = 0;
@@ -74,6 +76,21 @@ export class GaplessScheduler {
 
   get audioContext(): AudioContext | null {
     return this.ctx;
+  }
+
+  /**
+   * What is being heard right now: the sentence, and how far into its speech (lead silence
+   * excluded), allowing for the output device's latency. Null between sentences or when nothing
+   * is scheduled. Frozen while paused, since a suspended context's clock stops.
+   */
+  playbackPosition(): { playId: number; seconds: number } | null {
+    if (!this.ctx) return null;
+    const latency = this.ctx.outputLatency || this.ctx.baseLatency || 0;
+    const now = this.ctx.currentTime - latency;
+    for (const entry of this.timeline) {
+      if (now >= entry.start && now < entry.end) return { playId: entry.playId, seconds: now - entry.start - entry.lead };
+    }
+    return null;
   }
 
   /** True when we want to play but the browser is holding the AudioContext for a user gesture. */
@@ -150,6 +167,7 @@ export class GaplessScheduler {
       this.ready.set(playId, this.silent(sampleRate));
       return;
     }
+    this.leads.set(playId, lead / sampleRate);
     const buf = this.ctx!.createBuffer(1, lead + Math.max(1, pcm.length), sampleRate);
     if (pcm.length > 0) buf.copyToChannel(pcm, 0, lead);
     this.ready.set(playId, buf);
@@ -232,7 +250,8 @@ export class GaplessScheduler {
 
       src.onended = () => this.handleEnded(id);
       this.sources.set(id, src);
-      this.timeline.push({ playId: id, start: startAt, end: endAt, announced: false });
+      this.timeline.push({ playId: id, start: startAt, end: endAt, lead: this.leads.get(id) ?? 0, announced: false });
+      this.leads.delete(id);
 
       this.nextStartTime = endAt;
       this.nextToSchedule++;
@@ -341,6 +360,7 @@ export class GaplessScheduler {
     }
     this.sources.clear();
     this.ready.clear();
+    this.leads.clear();
     this.pendingPcm.clear();
     this.timeline.length = 0;
     this.nextToSchedule = playId;
@@ -380,6 +400,7 @@ export class GaplessScheduler {
     }
     this.sources.clear();
     this.ready.clear();
+    this.leads.clear();
     this.pendingPcm.clear();
     this.timeline.length = 0;
     if (this.ctx && this.ctx.state !== 'closed') {
@@ -424,8 +445,12 @@ export class GaplessScheduler {
     }
     for (let i = this.timeline.length - 1; i >= 0; i--) {
       const entry = this.timeline[i]!;
-      if (entry.playId > playId) this.timeline.splice(i, 1);
-      else if (entry.playId === playId) lastKeptEnd = entry.end;
+      if (entry.playId > playId) {
+        this.timeline.splice(i, 1);
+        this.leads.set(entry.playId, entry.lead);
+      } else if (entry.playId === playId) {
+        lastKeptEnd = entry.end;
+      }
     }
     if (this.nextToSchedule > playId + 1) {
       this.nextToSchedule = playId + 1;

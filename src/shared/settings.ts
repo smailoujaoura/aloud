@@ -81,6 +81,11 @@ export interface Settings {
   highlight: boolean;
   /** CSS color for the sentence highlight background. */
   highlightColor: string;
+  /**
+   * Also mark the word being spoken, inside the sentence highlight. Only voices whose model
+   * reports when each sound plays can do it (Piper); others keep the sentence highlight alone.
+   */
+  wordHighlight: boolean;
   /** How the page follows the current sentence. */
   scrollMode: ScrollMode;
   /** How a PDF is shown in Aloud's reader page. */
@@ -127,6 +132,7 @@ export const DEFAULT_SETTINGS: Settings = {
   preferWebGPU: true,
   highlight: true,
   highlightColor: 'rgba(255, 214, 10, 0.45)',
+  wordHighlight: true,
   scrollMode: 'keep-visible',
   pdfView: 'pages',
   sectionPauseMs: 0,

@@ -311,6 +311,8 @@ async function render(): Promise<void> {
   $<HTMLInputElement>('speed').value = String(settings.speed);
   $('speedOut').textContent = `${settings.speed.toFixed(2)}×`;
   $<HTMLInputElement>('highlight').checked = settings.highlight;
+  $<HTMLInputElement>('wordHighlight').checked = settings.wordHighlight;
+  $<HTMLInputElement>('wordHighlight').disabled = !settings.highlight;
   $<HTMLInputElement>('highlightColor').value = toHex(settings.highlightColor);
   $<HTMLSelectElement>('scrollMode').value = settings.scrollMode;
   $<HTMLSelectElement>('pdfView').value = settings.pdfView;
@@ -439,6 +441,7 @@ function wire(): void {
   wireSlider('synthWorkers', 'synthWorkersOut', 'synthWorkers', (v) => (v === 0 ? 'auto' : String(v)));
 
   wireCheckbox('highlight', 'highlight');
+  wireCheckbox('wordHighlight', 'wordHighlight');
   wireCheckbox('tapToSeek', 'tapToSeek');
   wireCheckbox('matchPageLanguage', 'matchPageLanguage');
   wireCheckbox('skipUrls', 'skipUrls');

@@ -125,7 +125,7 @@ describe('buildSelectionPlaylist (happy-dom)', () => {
 });
 
 describe('leadSilenceSec', () => {
-  const base = { playId: 1, spokenText: 'x', sourceText: 'x', range: null, blockRange: null, role: 'paragraph' as const };
+  const base = { playId: 1, spokenText: 'x', sourceText: 'x', range: null, sourceAt: null, blockRange: null, role: 'paragraph' as const };
 
   it('is zero when both pause settings are off', () => {
     const item: PlaylistItem = { ...base, startsBlock: true, isHeading: false };
@@ -260,5 +260,24 @@ describe('skipping parts of an article (happy-dom)', () => {
     expect(out).not.toContain('Another guide worth reading later.');
     expect(out).not.toContain('Smith, J. A reference entry.');
     expect(out).toContain('Then run it and read the output.');
+  });
+});
+
+describe('sourceAt', () => {
+  it('records where each sentence starts in the page text, exactly', () => {
+    document.body.innerHTML = '<article><h1>Title here</h1><p>First sentence is here. Second one follows it.</p></article>';
+    const index = buildTextIndex(document.querySelector('article')!);
+    const items = buildArticlePlaylist({
+      index,
+      lang: 'en',
+      maxChars: 400,
+      normalize: (t) => t,
+      referenceText: 'Title here\nFirst sentence is here. Second one follows it.',
+      title: 'Title here',
+    });
+    for (const item of items) {
+      expect(item.sourceAt).not.toBeNull();
+      expect(index.fullText.slice(item.sourceAt!, item.sourceAt! + item.sourceText.length)).toBe(item.sourceText);
+    }
   });
 });

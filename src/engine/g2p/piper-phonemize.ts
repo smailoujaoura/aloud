@@ -50,17 +50,36 @@ function load(): Promise<PiperPhonemizeModule> {
 
 /**
  * Phonemise `text` with eSpeak voice `voice` (a Piper config's `espeak.voice`: "fr", "en-us",
- * "cmn", …). Returns one IPA string per sentence eSpeak found — usually one, since the reader
- * already sends a sentence at a time.
+ * "cmn", …). Returns the IPA for the whole text as one string (in a one-element list, so a
+ * caller can treat it as sentences).
+ *
+ * With `words`, each of those is also phonemised on its own, in the same call (eSpeak's start-up
+ * is most of the cost, and one call pays it once). Those are what word timing aligns against.
  */
-export async function phonemizeForPiper(text: string, voice: string): Promise<string[]> {
-  if (!text.trim()) return [];
+export async function phonemizeForPiper(text: string, voice: string): Promise<string[]>;
+export async function phonemizeForPiper(
+  text: string,
+  voice: string,
+  words: readonly string[],
+): Promise<{ sentences: string[]; words: string[] }>;
+export async function phonemizeForPiper(
+  text: string,
+  voice: string,
+  words?: readonly string[],
+): Promise<string[] | { sentences: string[]; words: string[] }> {
+  if (!text.trim()) return words ? { sentences: [], words: words.map(() => '') } : [];
   const mod = await load();
   printed = [];
   complaints = [];
-  mod.callMain(['-l', voice, '--input', JSON.stringify([{ text }]), '--espeak_data', '/espeak-ng-data']);
+  const items = [{ text }, ...(words ?? []).map((word) => ({ text: word }))];
+  mod.callMain(['-l', voice, '--input', JSON.stringify(items), '--espeak_data', '/espeak-ng-data']);
   if (printed.length === 0) {
     throw new Error(complaints.join(' ').trim() || `eSpeak produced no phonemes for voice "${voice}"`);
   }
-  return printed.map((line) => (JSON.parse(line) as { phonemes: string[] }).phonemes.join(''));
+  // One line per input item; `phonemes` is that item's IPA, one code point per entry.
+  const ipa = printed.map((line) => (JSON.parse(line) as { phonemes: string[] }).phonemes.join(''));
+  const sentences = ipa.slice(0, 1);
+  if (!words) return sentences;
+  const perWord = words.map((_, i) => ipa[i + 1] ?? '');
+  return { sentences, words: ipa.length === items.length ? perWord : words.map(() => '') };
 }
