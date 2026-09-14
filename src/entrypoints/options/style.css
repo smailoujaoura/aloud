@@ -361,6 +361,13 @@ code {
 
 .option-unsuitable { color: var(--fg-muted); }
 
+/* ---- Reading: skip switches ---- */
+
+.sub-label { margin: 16px 0 2px; font-size: 13px; font-weight: 600; }
+.skip-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; }
+.skip-grid .row { margin: 6px 0; }
+@media (max-width: 560px) { .skip-grid { grid-template-columns: 1fr; } }
+
 /* ---- Pronunciation ----------------------------------------------------------- */
 
 .pron-list { display: flex; flex-direction: column; gap: 6px; }

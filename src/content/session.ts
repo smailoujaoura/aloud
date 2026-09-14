@@ -406,6 +406,9 @@ export class ReaderSession {
         normalize: this.normalize,
         referenceText: article.text,
         title: this.state.title,
+        // A whole-page read passes over code, tables, … as configured. "Read from here" is aimed
+        // at a specific place, so it still skips — the aim picks where to start, not what to read.
+        skip: this.settings.skip,
       });
     }
 
@@ -841,6 +844,12 @@ export class ReaderSession {
     }
     if (prev.speed !== this.settings.speed) this.bar?.setSpeed(this.settings.speed);
     if (prev.theme !== this.settings.theme) this.bar?.setTheme(this.settings.theme);
+
+    if (!sameValue(prev.skip, this.settings.skip)) {
+      // Skipping changes which sentences exist, not how they sound, so it cannot be patched into
+      // a plan that is already playing without renumbering everything under the listener's feet.
+      this.bar?.flash('Skip settings apply the next time you start reading', 'ok');
+    }
 
     if (changesSpokenText(prev, this.settings)) {
       this.respeak();

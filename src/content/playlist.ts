@@ -17,6 +17,8 @@ import { rangeForSpan, type TextIndex } from '@/extract/text-index';
 import { segmentSentences } from '@/segment/sentences';
 import { isSpeakable } from '@/segment/normalize';
 import { Aligner } from '@/align/fuzzy-align';
+import { blocksToRead } from './skip-rules';
+import type { SkipSettings } from '@/shared/settings';
 
 export interface PlaylistItem {
   /** Position in the playlist. Doubles as the id used across the worker/scheduler protocol. */
@@ -64,10 +66,13 @@ const MIN_HEADING_PAUSE_MS = 250;
  * Article / "read from here": walk the block model in document order and segment each block.
  */
 export function buildArticlePlaylist(
-  opts: PlanOptions & { referenceText: string; title: string },
+  opts: PlanOptions & { referenceText: string; title: string; skip?: SkipSettings },
 ): PlaylistItem[] {
   const { index, lang, maxChars, normalize, referenceText, title } = opts;
-  const blocks = buildBlockModel(index, { referenceText, title });
+  const allBlocks = buildBlockModel(index, { referenceText, title });
+  const blocks = opts.skip
+    ? blocksToRead(allBlocks, opts.skip, (b) => index.fullText.slice(b.start, b.end))
+    : allBlocks;
   const playlist: PlaylistItem[] = [];
 
   const push = (item: Omit<PlaylistItem, 'playId'>): void => {

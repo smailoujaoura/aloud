@@ -210,3 +210,55 @@ describe('prose wrapped across source lines (happy-dom)', () => {
     ]);
   });
 });
+
+describe('skipping parts of an article (happy-dom)', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  const html = `<article>
+    <h1>Guide</h1>
+    <p>Install the package first.</p>
+    <pre><code>npm install something --save</code></pre>
+    <table><tr><td>Cell text that is tabular.</td></tr></table>
+    <figure><figcaption>A caption under a picture.</figcaption></figure>
+    <p>Then run it and read the output.</p>
+    <h2>See also</h2>
+    <p>Another guide worth reading later.</p>
+    <h2>References [edit]</h2>
+    <ol class="references"><li>Smith, J. A reference entry.</li></ol>
+  </article>`;
+
+  function spoken(skip?: { code: boolean; tables: boolean; captions: boolean; references: boolean }): string[] {
+    document.body.innerHTML = html;
+    const root = document.querySelector('article')!;
+    const index = buildTextIndex(root);
+    return buildArticlePlaylist({
+      index, lang: 'en', maxChars: 240, normalize: identity,
+      referenceText: index.fullText, title: 'Guide', skip,
+    }).map((i) => i.spokenText.replace(/\s+/g, ' ').trim());
+  }
+
+  it('reads everything when nothing is skipped', () => {
+    const all = spoken();
+    expect(all).toContain('npm install something --save');
+    expect(all).toContain('Smith, J. A reference entry.');
+  });
+
+  it('skips each kind of block on its own switch', () => {
+    const out = spoken({ code: true, tables: true, captions: true, references: false });
+    expect(out).not.toContain('npm install something --save');
+    expect(out).not.toContain('Cell text that is tabular.');
+    expect(out).not.toContain('A caption under a picture.');
+    expect(out).toContain('Install the package first.');
+    expect(out).toContain('Then run it and read the output.');
+  });
+
+  it('skips a reference section from its heading to the end of that section', () => {
+    const out = spoken({ code: false, tables: false, captions: false, references: true });
+    expect(out).not.toContain('See also');
+    expect(out).not.toContain('Another guide worth reading later.');
+    expect(out).not.toContain('Smith, J. A reference entry.');
+    expect(out).toContain('Then run it and read the output.');
+  });
+});

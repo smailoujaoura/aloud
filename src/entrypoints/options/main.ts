@@ -320,6 +320,7 @@ async function render(): Promise<void> {
   $<HTMLInputElement>('tapToSeek').checked = settings.tapToSeek;
   $<HTMLInputElement>('skipUrls').checked = settings.skipUrls;
   $<HTMLInputElement>('expandAbbreviations').checked = settings.expandAbbreviations;
+  for (const [id, key] of SKIP_SWITCHES) $<HTMLInputElement>(id).checked = settings.skip[key];
 
   $<HTMLSelectElement>('kokoroDtype').value = settings.kokoroDtype;
   $<HTMLInputElement>('supertonicSteps').value = String(settings.supertonicSteps);
@@ -406,6 +407,14 @@ function wireCheckbox(id: string, key: keyof Settings): void {
   $(id).addEventListener('change', (e) => save({ [key]: (e.target as HTMLInputElement).checked }));
 }
 
+/** The skip switches and the part of `settings.skip` each one controls. */
+const SKIP_SWITCHES: Array<[string, keyof Settings['skip']]> = [
+  ['skipCode', 'code'],
+  ['skipTables', 'tables'],
+  ['skipCaptions', 'captions'],
+  ['skipReferences', 'references'],
+];
+
 /** Is the voice that reads to you actually on this device? */
 function currentVoiceInstalled(manifest: ModelManifest, sizes: CacheSizes): boolean {
   if (settings.engine === 'piper') {
@@ -428,6 +437,11 @@ function wire(): void {
   wireCheckbox('tapToSeek', 'tapToSeek');
   wireCheckbox('skipUrls', 'skipUrls');
   wireCheckbox('expandAbbreviations', 'expandAbbreviations');
+  for (const [id, key] of SKIP_SWITCHES) {
+    $(id).addEventListener('change', (e) =>
+      save({ skip: { ...settings.skip, [key]: (e.target as HTMLInputElement).checked } }),
+    );
+  }
   wireCheckbox('preferWebGPU', 'preferWebGPU');
   wireCheckbox('debug', 'debug');
 

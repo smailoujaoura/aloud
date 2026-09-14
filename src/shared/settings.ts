@@ -31,6 +31,24 @@ export type PdfView = 'pages' | 'reflow';
  */
 export type ThemeChoice = 'system' | 'light' | 'dark';
 
+/** Parts of an article to pass over when reading a whole page (see content/skip-rules.ts). */
+export interface SkipSettings {
+  /** Code listings (`<pre>`). Inline `<code>` inside a sentence is always read. */
+  code: boolean;
+  /** Everything inside a `<table>`. */
+  tables: boolean;
+  /** Figure and table captions. */
+  captions: boolean;
+  /** The references / notes / further-reading section at the end, and footnote lists. */
+  references: boolean;
+}
+
+/**
+ * Code is skipped by default (a listing read symbol by symbol helps nobody) and so is the
+ * reference list; tables and captions are read, because they are often part of the argument.
+ */
+export const DEFAULT_SKIP: SkipSettings = { code: true, tables: false, captions: false, references: true };
+
 export interface Settings {
   /** Active synthesis engine. */
   engine: EngineId;
@@ -82,6 +100,8 @@ export interface Settings {
   tapToSeek: boolean;
   /** Your own "say this when you see that" fixes, applied to spoken text only. */
   pronunciations: PronunciationRule[];
+  /** Parts of an article to pass over when reading the whole page. */
+  skip: SkipSettings;
   /** Colour theme for every surface Aloud draws. */
   theme: ThemeChoice;
   /**
@@ -113,6 +133,7 @@ export const DEFAULT_SETTINGS: Settings = {
   expandAbbreviations: true,
   tapToSeek: true,
   pronunciations: [],
+  skip: DEFAULT_SKIP,
   theme: 'system',
   tipsSeen: false,
   debug: false,
@@ -153,8 +174,9 @@ const item = storage.defineItem<Settings>('local:settings', {
 
 export async function getSettings(): Promise<Settings> {
   const stored = await item.getValue();
-  // Merge so new keys added in an update get their defaults.
-  return { ...DEFAULT_SETTINGS, ...stored };
+  // Merge so new keys added in an update get their defaults — one level deep for grouped settings,
+  // so a new skip option also gets its default in a profile that saved the group before it existed.
+  return { ...DEFAULT_SETTINGS, ...stored, skip: { ...DEFAULT_SKIP, ...stored?.skip } };
 }
 
 export async function setSettings(patch: Partial<Settings>): Promise<Settings> {
