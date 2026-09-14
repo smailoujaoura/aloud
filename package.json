@@ -17,6 +17,7 @@
     "prebuild:assets": "node scripts/prebuild.mjs",
     "compile": "tsc --noEmit",
     "test": "vitest run",
+    "test:e2e:firefox": "node scripts/e2e-firefox.mjs",
     "lint:ext": "web-ext lint --source-dir .output/firefox-mv3"
   },
   "dependencies": {

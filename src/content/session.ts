@@ -1034,12 +1034,17 @@ export class ReaderSession {
    * never lets the mark drift.
    */
   private followWords(): void {
-    if (this.wordTimer) return;
+    // Always restart: a timer still pending from the previous sentence may be aimed a quarter of
+    // a second out, long enough to miss a short first word ("The") entirely.
+    clearTimeout(this.wordTimer);
+    this.wordTimer = 0;
     const tick = (): void => {
       this.wordTimer = 0;
       const words = this.words;
       if (!words || this.disposed) return;
-      let wait = 0.25;
+      // Until the audio clock reaches this sentence (it is announced a little early, and output
+      // latency delays it further), look again soon rather than at the usual resync interval.
+      let wait = 0.03;
       const position = this.scheduler.playbackPosition();
       if (position && position.playId === words.playId) {
         // A few milliseconds early reads as in time; late reads as lagging.
@@ -1051,7 +1056,7 @@ export class ReaderSession {
           this.highlighter?.showWord(index >= 0 ? words.spans[index]!.range : null);
         }
         const next = words.spans[index + 1];
-        if (next) wait = next.start - t;
+        wait = next ? next.start - t : 0.25;
       }
       if (this.scheduler.isPlaying()) {
         this.wordTimer = window.setTimeout(tick, Math.round(Math.min(0.25, Math.max(0.012, wait)) * 1000));

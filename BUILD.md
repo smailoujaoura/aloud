@@ -19,7 +19,20 @@ pnpm dev:chrome         # live-reload dev build + launches Chrome
 pnpm compile            # tsc --noEmit
 pnpm test               # vitest (pure logic + happy-dom DOM tests)
 pnpm lint:ext           # web-ext lint on the Firefox output
+pnpm test:e2e:firefox   # the Firefox build in a real headless Firefox (see below)
 ```
+
+### The Firefox end-to-end check
+
+`scripts/e2e-firefox.mjs` installs `.output/firefox-mv3` into Playwright's Firefox as a temporary
+add-on, reads an article aloud and checks each stage: the voice loads and returns audio, playback
+starts, the word highlight moves through every word in order, and "Save as MP3" downloads a real
+MP3. On failure it exits non-zero and leaves a screenshot in `.output/e2e-firefox/`.
+
+It needs `npx playwright install firefox`, and an audio output: Firefox never starts an
+AudioContext without one. On a headless Linux machine, run a PulseAudio null sink
+(`load-module module-null-sink`) and point `PULSE_SERVER` at it. `E2E_LD_LIBRARY_PATH` adds
+library folders for Firefox (GTK 3, libpulse) when they are not installed system-wide.
 
 ## The two outputs are not interchangeable
 
