@@ -25,6 +25,11 @@ export interface SchedulerCallbacks {
   onUnderrun(playId: number): void;
   /** All sentences have finished playing. */
   onFinished(): void;
+  /**
+   * Playback reached the sentence set with `stopAfter()` and has stopped there — the sleep timer's
+   * "finish this paragraph" moment. Optional: only sessions that set a stop point care.
+   */
+  onStopReached?(playId: number): void;
 }
 
 const PRIME_GAP = 0.12; // seconds of head-room before the first sentence
@@ -58,6 +63,12 @@ export class GaplessScheduler {
   /** Absolute time by which we begin regardless — set once some audio is ready. */
   private primeDeadline = 0;
   private primeTimer = 0;
+  /** Last sentence allowed to play before stopping, or null to play on (see `stopAfter`). */
+  private stopAfterId: number | null = null;
+  /** Set while resuming from a stop point, so the deliberate gap is not reported as an underrun. */
+  private resumingFromStop = false;
+  /** The `<audio>` element audio is routed through, when that works (see `connectOutput`). */
+  private mediaElement: HTMLAudioElement | null = null;
 
   constructor(private readonly cb: SchedulerCallbacks) {}
 
@@ -83,7 +94,7 @@ export class GaplessScheduler {
       this.ctx = new AudioContext({ latencyHint: 'playback' });
       this.gain = this.ctx.createGain();
       this.gain.gain.value = 1;
-      this.gain.connect(this.ctx.destination);
+      this.connectOutput(this.ctx, this.gain);
     }
     if (this.ctx.state === 'suspended') {
       // resume() can hang forever when autoplay is blocked (no user gesture yet) — don't await it
@@ -94,6 +105,7 @@ export class GaplessScheduler {
       ]);
     }
     this.running = true;
+    this.playMediaElement();
 
     // Honour a pre-play seek that happened before there was an AudioContext to aim.
     if (firstTime && startFrom > this.nextToSchedule) {
@@ -196,6 +208,7 @@ export class GaplessScheduler {
 
     while (
       this.nextToSchedule < this.count &&
+      (this.stopAfterId === null || this.nextToSchedule <= this.stopAfterId) &&
       this.ready.has(this.nextToSchedule) &&
       this.scheduledAheadSeconds() < MAX_SCHEDULE_AHEAD_SECONDS
     ) {
@@ -211,8 +224,9 @@ export class GaplessScheduler {
       let startAt = this.nextStartTime;
       if (startAt < now + 0.02) {
         startAt = now + 0.02;
-        if (id > 0) this.cb.onUnderrun(id);
+        if (id > 0 && !this.resumingFromStop) this.cb.onUnderrun(id);
       }
+      this.resumingFromStop = false;
       src.start(startAt);
       const endAt = startAt + buf.duration;
 
@@ -241,6 +255,11 @@ export class GaplessScheduler {
     }
     this.lastEnded = Math.max(this.lastEnded, id);
     this.cb.onChunkEnd(id);
+    if (this.stopAfterId !== null && id >= this.stopAfterId && this.sources.size === 0) {
+      const stoppedAt = this.stopAfterId;
+      this.cb.onStopReached?.(stoppedAt);
+      return;
+    }
     if (id + 1 >= this.count && this.sources.size === 0) {
       this.running = false;
       this.stopTicker();
@@ -292,11 +311,13 @@ export class GaplessScheduler {
     this.gain.gain.linearRampToValueAtTime(0.0001, now + 0.02);
     await new Promise((r) => setTimeout(r, 25));
     await this.ctx.suspend();
+    this.mediaElement?.pause();
   }
 
   async unpause(): Promise<void> {
     if (!this.ctx || !this.gain) return;
     await this.ctx.resume();
+    this.playMediaElement();
     const now = this.ctx.currentTime;
     this.gain.gain.cancelScheduledValues(now);
     this.gain.gain.setValueAtTime(0.0001, now);
@@ -325,6 +346,7 @@ export class GaplessScheduler {
     this.nextToSchedule = playId;
     this.lastEnded = playId - 1;
     this.primeDeadline = 0;
+    this.stopAfterId = null;
     if (this.ctx) {
       this.nextStartTime = this.ctx.currentTime + PRIME_GAP;
       this.running = true;
@@ -367,7 +389,109 @@ export class GaplessScheduler {
         /* noop */
       }
     }
+    if (this.mediaElement) {
+      this.mediaElement.pause();
+      this.mediaElement.srcObject = null;
+      this.mediaElement = null;
+    }
     this.ctx = null;
     this.gain = null;
+  }
+
+  // ---- stop points (sleep timer) -------------------------------------------
+
+  /**
+   * Stop cleanly once sentence `playId` has finished, instead of cutting a word in half.
+   *
+   * Sentences past the stop point may already be on the audio graph — the scheduler runs a long
+   * way ahead to stay gapless — so they are taken back off it, with their audio kept so that
+   * pressing play again carries straight on. `onStopReached` fires when the last one ends.
+   */
+  stopAfter(playId: number): void {
+    this.stopAfterId = playId;
+    let lastKeptEnd: number | null = null;
+    for (const [id, src] of [...this.sources]) {
+      if (id <= playId) continue;
+      src.onended = null;
+      try {
+        src.stop();
+        src.disconnect();
+      } catch {
+        /* already stopped */
+      }
+      this.sources.delete(id);
+      if (src.buffer) this.ready.set(id, src.buffer);
+    }
+    for (let i = this.timeline.length - 1; i >= 0; i--) {
+      const entry = this.timeline[i]!;
+      if (entry.playId > playId) this.timeline.splice(i, 1);
+      else if (entry.playId === playId) lastKeptEnd = entry.end;
+    }
+    if (this.nextToSchedule > playId + 1) {
+      this.nextToSchedule = playId + 1;
+      this.nextStartTime = lastKeptEnd ?? (this.ctx ? this.ctx.currentTime + PRIME_GAP : 0);
+    }
+    // Already past it, with nothing left sounding: stop now rather than waiting for an `ended`
+    // event that has already happened.
+    if (this.lastEnded >= playId && ![...this.sources.keys()].some((id) => id <= playId)) {
+      this.cb.onStopReached?.(playId);
+    }
+  }
+
+  /** Forget the stop point and carry on scheduling from where it left off. */
+  clearStopAfter(): void {
+    if (this.stopAfterId === null) return;
+    this.stopAfterId = null;
+    this.resumingFromStop = true;
+    if (this.ctx) this.nextStartTime = Math.max(this.nextStartTime, this.ctx.currentTime + PRIME_GAP);
+    this.pump();
+  }
+
+  // ---- output --------------------------------------------------------------
+
+  /**
+   * Route audio through an `<audio>` element rather than straight to the speakers.
+   *
+   * Browsers hand media keys, headphone buttons, the OS media overlay and the Android lock-screen
+   * controls to a page's *media element*. Web Audio on its own does not count as media playback,
+   * so without an element those controls never reach Aloud at all. The audio is identical: the
+   * graph feeds a MediaStream, and the element plays that stream.
+   *
+   * If the browser refuses any step, audio goes directly to the destination as before — being
+   * heard matters more than being controllable from a keyboard.
+   */
+  private connectOutput(ctx: AudioContext, gain: GainNode): void {
+    try {
+      const destination = ctx.createMediaStreamDestination();
+      const element = new Audio();
+      element.srcObject = destination.stream;
+      gain.connect(destination);
+      this.mediaElement = element;
+    } catch {
+      gain.connect(ctx.destination);
+    }
+  }
+
+  private playMediaElement(): void {
+    const element = this.mediaElement;
+    if (!element) return;
+    void element.play().catch(() => {
+      // Refused (an autoplay policy that treats elements more strictly than Web Audio). If the
+      // graph itself is running, send it to the speakers directly so nothing goes silent.
+      if (this.ctx?.state !== 'running' || !this.gain || this.mediaElement !== element) return;
+      try {
+        this.gain.disconnect();
+      } catch {
+        /* not connected */
+      }
+      this.gain.connect(this.ctx.destination);
+      element.srcObject = null;
+      this.mediaElement = null;
+    });
+  }
+
+  /** True when audio is going through a media element, so OS media controls can reach us. */
+  get routesThroughMediaElement(): boolean {
+    return this.mediaElement !== null;
   }
 }

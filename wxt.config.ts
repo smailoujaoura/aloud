@@ -92,6 +92,8 @@ export default defineConfig({
           'vendor/rt/*',
           'vendor/ort/*',
           'models.json',
+          // Artwork for the OS media overlay; loaded from the page, so it must be web-accessible.
+          'icon/128.png',
         ],
         matches: ['<all_urls>'],
       },

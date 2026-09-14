@@ -24,6 +24,7 @@ import type { ThemeChoice } from '@/shared/settings';
 import { CONTROL_BAR_CSS } from './control-bar-styles';
 import { ICON_PATHS } from './icons';
 import { resolveTheme, watchSystemTheme } from './theme';
+import type { SleepChoice, SleepState } from '@/content/sleep-timer';
 
 export interface ControlBarCallbacks {
   onPlay(): void;
@@ -37,6 +38,8 @@ export interface ControlBarCallbacks {
   onToggleTapToSeek(enabled: boolean): void;
   /** Scroll the page back to the sentence being read. */
   onSnapToCurrent(): void;
+  /** A sleep-timer option was picked from the moon button's menu. */
+  onSleep(choice: SleepChoice): void;
   onOpenSettings(): void;
   /** The tips card's "How Aloud works" link — opens the walkthrough page. */
   onOpenWalkthrough(): void;
@@ -64,6 +67,17 @@ export interface FlashAction {
   run(): void;
 }
 
+/** The sleep timer's choices, in menu order. */
+const SLEEP_LABEL = new Map<SleepChoice, string>([
+  ['paragraph', 'At the end of this paragraph'],
+  ['section', 'At the end of this section'],
+  [15, 'In 15 minutes'],
+  [30, 'In 30 minutes'],
+  [45, 'In 45 minutes'],
+  [60, 'In an hour'],
+  ['off', 'Off'],
+]);
+
 /** Shadow host id. `content/tap-to-seek` uses it to ignore clicks landing on our own UI. */
 export const CONTROL_HOST_ID = 'aloud-control-host';
 
@@ -78,6 +92,12 @@ export class ControlBar {
   private bar!: HTMLDivElement;
   private toast!: HTMLElement;
   private tips: HTMLElement | null = null;
+  private sleepBtn!: HTMLButtonElement;
+  private sleepBadge!: HTMLElement;
+  private sleepMenu: HTMLElement | null = null;
+  private sleepState: SleepState = { choice: 'off', badge: '', stopAfter: null };
+  /** Closes the sleep menu on a press anywhere outside it; removed with the menu. */
+  private sleepDismiss: { page: (e: Event) => void; bar: (e: Event) => void } | null = null;
   private playBtn!: HTMLButtonElement;
   private prevBtn!: HTMLButtonElement;
   private nextBtn!: HTMLButtonElement;
@@ -176,6 +196,12 @@ export class ControlBar {
     );
     this.tapBtn = this.iconButton('tap', 'Click a sentence to jump there', ICON_PATHS.target);
     const gearBtn = this.iconButton('gear', 'Settings', ICON_PATHS.gear, 'Voices, speed and theme');
+    this.sleepBtn = this.iconButton('sleep', 'Sleep timer', ICON_PATHS.moon, 'Sleep timer');
+    this.sleepBtn.setAttribute('aria-haspopup', 'menu');
+    this.sleepBtn.setAttribute('aria-expanded', 'false');
+    this.sleepBadge = this.make('span', { class: 'badge', hidden: '' });
+    this.sleepBtn.appendChild(this.sleepBadge);
+    this.sleepBtn.addEventListener('click', () => this.toggleSleepMenu());
     const closeBtn = this.iconButton('close', 'Close', ICON_PATHS.close, 'Stop reading and close');
 
     this.progressEl = this.make('div', {
@@ -209,7 +235,7 @@ export class ControlBar {
     // every control, and a group is what stops the wrap from stranding a lone ✕ on a line of
     // its own: either they all fit beside the transport controls, or they all move down.
     const side = this.make('div', { class: 'side' });
-    side.append(this.snapBtn, this.tapBtn, gearBtn, closeBtn);
+    side.append(this.snapBtn, this.tapBtn, this.sleepBtn, gearBtn, closeBtn);
 
     this.bar.append(
       this.playBtn,
@@ -506,8 +532,85 @@ export class ControlBar {
 
   dispose(): void {
     clearTimeout(this.flashTimer);
+    this.closeSleepMenu();
     this.unwatchTheme();
     this.host.remove();
+  }
+
+  // ---- sleep timer ---------------------------------------------------------
+
+  /** Reflect the session's sleep timer on the moon button: lit, with "12m", "¶" or "§". */
+  setSleep(state: SleepState): void {
+    this.sleepState = state;
+    const on = state.choice !== 'off';
+    this.sleepBtn.classList.toggle('on', on);
+    this.sleepBadge.hidden = !on;
+    this.sleepBadge.textContent = state.badge;
+    this.sleepBtn.title = on ? `Sleep timer: ${SLEEP_LABEL.get(state.choice) ?? 'on'}` : 'Sleep timer';
+  }
+
+  private toggleSleepMenu(): void {
+    if (this.sleepMenu) {
+      this.closeSleepMenu();
+      return;
+    }
+    const menu = this.make('div', { class: 'sleep-menu', role: 'menu', 'aria-label': 'Sleep timer' });
+    menu.appendChild(this.make('div', { class: 'menu-title' }, 'Stop reading'));
+    for (const [choice, label] of SLEEP_LABEL) {
+      const checked = this.sleepState.choice === choice;
+      const option = this.make(
+        'button',
+        { type: 'button', role: 'menuitemradio', 'aria-checked': String(checked), class: checked ? 'is-checked' : '' },
+        label,
+      );
+      option.addEventListener('click', () => {
+        this.closeSleepMenu();
+        this.cb.onSleep(choice);
+      });
+      menu.appendChild(option);
+    }
+    menu.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        this.closeSleepMenu();
+        this.sleepBtn.focus({ preventScroll: true });
+      }
+    });
+
+    // Directly above the bar, below any status pill.
+    this.dock.insertBefore(menu, this.bar);
+    this.sleepMenu = menu;
+    this.sleepBtn.setAttribute('aria-expanded', 'true');
+    menu.querySelector<HTMLButtonElement>('button[aria-checked="true"], button')?.focus({ preventScroll: true });
+
+    // A press anywhere else closes it. Two listeners, because neither can see everything: our
+    // shadow root is closed, so a document listener sees a press on the menu only as a press on
+    // the host element — it must leave those to the root listener, which can see *where* inside
+    // the bar the press landed. (Treating "host" as "outside" closed the menu on pointerdown,
+    // before the click on an option could ever fire.)
+    const dismissFromPage = (e: Event): void => {
+      if (e.composedPath().includes(this.host)) return;
+      this.closeSleepMenu();
+    };
+    const dismissFromBar = (e: Event): void => {
+      const path = e.composedPath();
+      if (path.includes(menu) || path.includes(this.sleepBtn)) return;
+      this.closeSleepMenu();
+    };
+    this.sleepDismiss = { page: dismissFromPage, bar: dismissFromBar };
+    this.doc.addEventListener('pointerdown', dismissFromPage, true);
+    this.root.addEventListener('pointerdown', dismissFromBar, true);
+  }
+
+  private closeSleepMenu(): void {
+    if (this.sleepDismiss) {
+      this.doc.removeEventListener('pointerdown', this.sleepDismiss.page, true);
+      this.root.removeEventListener('pointerdown', this.sleepDismiss.bar, true);
+      this.sleepDismiss = null;
+    }
+    this.sleepMenu?.remove();
+    this.sleepMenu = null;
+    this.sleepBtn?.setAttribute('aria-expanded', 'false');
   }
 
   // ---- first-run tips ------------------------------------------------------

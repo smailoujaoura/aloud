@@ -50,6 +50,8 @@ import {
 } from './playlist';
 import { firstSentenceInViewport, indexAtPoint, indexNearElement } from './playlist-navigation';
 import { TapToSeek } from './tap-to-seek';
+import { MediaControls } from './media-session';
+import { SleepTimer, type SleepChoice } from './sleep-timer';
 
 interface BeginOptions {
   /** For "Read from here": the element that was right-clicked, when the browser can tell us. */
@@ -110,6 +112,8 @@ export class ReaderSession {
   private highlighter: Highlighter | null = null;
   private bar: ControlBar | null = null;
   private tapToSeek: TapToSeek | null = null;
+  private media: MediaControls | null = null;
+  private sleepTimer: SleepTimer | null = null;
   private port: ReturnType<typeof browser.runtime.connect> | null = null;
   private manifest: ModelManifest | null = null;
 
@@ -148,6 +152,7 @@ export class ReaderSession {
   /** Throttles position saves while reading; the last one is always forced on teardown. */
   private lastPositionSave = 0;
   private lastSavedIndex = -1;
+  private outputLogged = false;
 
   private state: SessionState = {
     status: 'idle',
@@ -247,6 +252,25 @@ export class ReaderSession {
       scrollMode: this.settings.scrollMode,
     });
 
+    this.media = new MediaControls(
+      {
+        play: () => void this.play(),
+        pause: () => void this.pause(),
+        previous: () => this.seekBy(-1),
+        next: () => this.seekBy(1),
+      },
+      browser.runtime.getURL('/icon/128.png'),
+    );
+
+    this.sleepTimer = new SleepTimer({
+      currentIndex: () => this.currentPlayId,
+      playlist: () => this.playlist,
+      isPlaying: () => this.scheduler.isPlaying(),
+      stopAfter: (id) => this.scheduler.stopAfter(id),
+      clearStop: () => this.scheduler.clearStopAfter(),
+      onChange: (state) => this.bar?.setSleep(state),
+    });
+
     this.tapToSeek = new TapToSeek(document, {
       hitTest: (x, y) => indexAtPoint(this.playlist, x, y),
       canSeek: () =>
@@ -271,6 +295,7 @@ export class ReaderSession {
       onNeedMore: (id) => this.ensureSynth(id),
       onUnderrun: (id) => this.onUnderrun(id),
       onFinished: () => this.onFinished(),
+      onStopReached: () => void this.onSleepStop(),
     });
   }
 
@@ -364,6 +389,7 @@ export class ReaderSession {
     this.state.totalChunks = this.playlist.length;
     if (this.mode === 'from-cursor') this.startFromCursor();
     this.logPlan();
+    this.refreshMediaMetadata();
   }
 
   /** "Read from here": start at the clicked element, or at the first sentence on screen. */
@@ -400,6 +426,7 @@ export class ReaderSession {
       onVoice: (v: string) => void this.changeVoice(v),
       onToggleTapToSeek: (on: boolean) => void this.setTapToSeek(on),
       onSnapToCurrent: () => this.snapToCurrent(),
+      onSleep: (choice: SleepChoice) => this.setSleep(choice),
       onOpenSettings: () => this.port?.postMessage({ type: 'open-options' }),
       onOpenWalkthrough: () => this.port?.postMessage({ type: 'open-walkthrough' }),
       onTipsDismissed: () => void setSettings({ tipsSeen: true }),
@@ -408,6 +435,8 @@ export class ReaderSession {
   }
 
   async play(): Promise<void> {
+    // Pressing play after the sleep timer stopped the reader carries on past where it stopped.
+    if (!this.sleepTimer?.isArmed()) this.scheduler?.clearStopAfter();
     this.wantsPlayback = true;
     this.state.hint = undefined;
     // Reflect the intent immediately — the button shouldn't wait for the AudioContext.
@@ -483,6 +512,8 @@ export class ReaderSession {
     this.requested.clear();
     this.worker.cancelFrom(target, this.tuning.lookahead + 1);
     this.scheduler.seek(target);
+    // A "stop at the end of this paragraph" timer now means the paragraph just jumped to.
+    this.sleepTimer?.onSeek();
     if (this.engineReady) this.ensureSynth(target);
     // Playback has to wait for the new sentence to synthesise; show that.
     this.state.busy = this.engineReady && this.scheduler.isPlaying();
@@ -598,7 +629,39 @@ export class ReaderSession {
     this.state.modelProgress = 0;
     await this.scheduler.dispose();
     this.scheduler = this.createScheduler();
+    this.sleepTimer?.onSeek();
+    this.refreshMediaMetadata();
     await this.loadEngine();
+  }
+
+  // ---- sleep timer & media controls ----------------------------------------
+
+  private setSleep(choice: SleepChoice): void {
+    this.sleepTimer?.set(choice);
+    const said: Record<string, string> = {
+      off: 'Sleep timer off',
+      paragraph: 'Stopping at the end of this paragraph',
+      section: 'Stopping at the end of this section',
+    };
+    this.bar?.flash(typeof choice === 'number' ? `Stopping in ${choice} minutes` : said[choice]!, 'ok');
+  }
+
+  /** The sleep timer's stop point has finished playing. */
+  private async onSleepStop(): Promise<void> {
+    this.sleepTimer?.onStopReached();
+    await this.pause();
+    this.bar?.flash('Sleep timer — stopped here. Press play to carry on.', 'ok');
+  }
+
+  /** Title, voice and site for the OS media overlay and the lock screen. */
+  private refreshMediaMetadata(): void {
+    let site = '';
+    try {
+      site = location.protocol.startsWith('http') ? location.hostname : '';
+    } catch {
+      /* no location worth showing */
+    }
+    this.media?.setMetadata(this.state.title, this.voiceLabel(activeVoice(this.settings)), site);
   }
 
   // ---- pipeline glue -------------------------------------------------------
@@ -617,6 +680,11 @@ export class ReaderSession {
   }
 
   private onChunkStart(playId: number): void {
+    if (!this.outputLogged) {
+      // Which path the audio took decides whether media keys and the OS overlay can reach us.
+      this.outputLogged = true;
+      log.info(`audio output: ${this.scheduler.routesThroughMediaElement ? 'media element (media keys enabled)' : 'direct'}`);
+    }
     this.currentPlayId = playId;
     this.state.currentIndex = playId;
     // Audio is actually flowing — reconcile the UI with reality.
@@ -898,6 +966,7 @@ export class ReaderSession {
   private pushState(): void {
     if (this.disposed) return;
     this.bar?.update(this.state);
+    this.media?.setPlaying(this.state.status === 'playing' ? 'playing' : 'paused');
     try {
       this.port?.postMessage({ type: 'state', state: this.state });
     } catch {
@@ -926,6 +995,8 @@ export class ReaderSession {
     this.disposed = true;
 
     this.tapToSeek?.dispose();
+    this.sleepTimer?.dispose();
+    this.media?.dispose();
     this.stopViewportWatch?.();
     try {
       this.port?.postMessage({ type: 'session-ended' });

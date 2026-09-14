@@ -156,6 +156,38 @@ button[disabled]:hover { background: none; }
 /* The secondary controls, kept together — see the note in control-bar.ts. */
 .side { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; }
 
+/* ---- sleep timer ---------------------------------------------------------- */
+
+.sleep.on { background: var(--accent-soft); }
+.sleep .badge {
+  position: absolute; top: -4px; right: -5px;
+  min-width: 15px; height: 15px; padding: 0 4px; box-sizing: border-box;
+  border-radius: 8px; background: var(--accent); color: var(--accent-on);
+  font: var(--font); font-size: 9.5px; line-height: 15px; font-weight: 700; text-align: center;
+  pointer-events: none;
+}
+.sleep .badge[hidden] { display: none; }
+.sleep-menu {
+  box-sizing: border-box; align-self: flex-end;
+  width: min(250px, 100%); padding: 6px;
+  display: flex; flex-direction: column;
+  border-radius: 12px;
+  background: var(--bar-solid); color: var(--bar-fg);
+  border: 1px solid var(--bar-border); box-shadow: var(--bar-shadow);
+  font: var(--font);
+  animation: aloud-rise 140ms ease-out;
+}
+.sleep-menu .menu-title {
+  padding: 5px 10px 4px; font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .05em; color: var(--bar-muted);
+}
+.sleep-menu button {
+  width: 100%; height: auto; justify-content: flex-start;
+  padding: 7px 10px; border-radius: 8px; font: var(--font); font-size: 13px;
+}
+.sleep-menu button.is-checked { font-weight: 650; }
+.sleep-menu button.is-checked::after { content: '✓'; margin-left: auto; padding-left: 12px; }
+
 .progress {
   flex: 1 1 auto; min-width: 40px; height: 20px; position: relative;
   cursor: pointer; touch-action: none;
@@ -359,7 +391,7 @@ select optgroup { color: var(--bar-muted); font-weight: 600; }
 @media (prefers-reduced-motion: reduce) {
   .spinner, .play .btn-spin { animation-duration: 2.4s; }
   .play.attn { animation: none; box-shadow: 0 0 0 3px rgba(255,214,10,.5); }
-  .tips { animation: none; }
+  .tips, .sleep-menu { animation: none; }
   button, select, .progress > .track, .progress > .knob { transition: none; }
 }
 `;
