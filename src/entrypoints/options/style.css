@@ -368,6 +368,10 @@ code {
 .skip-grid .row { margin: 6px 0; }
 @media (max-width: 560px) { .skip-grid { grid-template-columns: 1fr; } }
 
+.queue-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.queue-row .sub-label { margin: 0; }
+.queue-row p { margin: 0; }
+
 /* ---- Pronunciation ----------------------------------------------------------- */
 
 .pron-list { display: flex; flex-direction: column; gap: 6px; }

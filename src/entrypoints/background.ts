@@ -21,6 +21,7 @@ import { defineBackground } from 'wxt/utils/define-background';
 import { PORT_NAME, type ActivateMode, type ToBackgroundMessage } from '@/shared/messages';
 import { putPdf, sweepPdfHandoffs } from '@/pdf/handoff';
 import { readCacheSizes, usableVoices } from '@/engine/installed-voices';
+import { addToQueue, type NewQueueItem } from '@/shared/reading-queue';
 import type { EngineId } from '@/shared/settings';
 import type { VoiceOption } from '@/shared/voice-catalog';
 import type { ModelManifest } from '@/engine/engines/types';
@@ -28,9 +29,13 @@ import { watchSettings } from '@/shared/settings';
 
 const CONTENT_FILE = '/reader-inject.js';
 const WALKTHROUGH_PAGE = '/welcome.html';
+const QUEUE_PAGE = '/queue.html';
 
 const MENU_READ_SELECTION = 'aloud-read-selection';
 const MENU_READ_FROM_HERE = 'aloud-read-from-here';
+const MENU_QUEUE_PAGE = 'aloud-queue-page';
+const MENU_QUEUE_LINK = 'aloud-queue-link';
+const MENU_OPEN_QUEUE = 'aloud-open-queue';
 
 type Port = Parameters<Parameters<typeof browser.runtime.onConnect.addListener>[0]>[0];
 
@@ -106,17 +111,40 @@ export default defineBackground({
             title: 'Read from here',
             contexts: ['page'],
           });
+          browser.contextMenus.create({
+            id: MENU_QUEUE_PAGE,
+            title: 'Add page to reading queue',
+            contexts: ['page'],
+          });
+          browser.contextMenus.create({
+            id: MENU_QUEUE_LINK,
+            title: 'Add link to reading queue',
+            contexts: ['link'],
+          });
+          // On the toolbar button's own right-click menu, where "where is my queue" is looked for.
+          browser.contextMenus.create({
+            id: MENU_OPEN_QUEUE,
+            title: 'Open reading queue',
+            contexts: ['action'],
+          });
         });
       });
 
       browser.contextMenus.onClicked.addListener((info, tab) => {
+        // The toolbar button's own menu is not about a page, and may arrive without a tab.
+        if (info.menuItemId === MENU_OPEN_QUEUE) {
+          void openQueue();
+          return;
+        }
         if (tab?.id == null) return;
         // `targetElementId` (Firefox only) lets the content script resolve the exact element
         // that was right-clicked via `browser.menus.getTargetElement()`, so "Read from here"
         // starts there. Elsewhere it is undefined and the content script falls back to the
         // first sentence in the viewport.
         const targetElementId = (info as { targetElementId?: number }).targetElementId;
-        if (info.menuItemId === MENU_READ_SELECTION) void activate(tab.id, 'selection');
+        if (info.menuItemId === MENU_QUEUE_PAGE) void queuePage(tab.id);
+        else if (info.menuItemId === MENU_QUEUE_LINK && info.linkUrl) void queueLink(tab.id, info);
+        else if (info.menuItemId === MENU_READ_SELECTION) void activate(tab.id, 'selection');
         else if (info.menuItemId === MENU_READ_FROM_HERE) {
           void activate(tab.id, 'from-cursor', targetElementId);
         }
@@ -133,6 +161,8 @@ export default defineBackground({
         if (tab?.url) void openPdfReader(tab.url, tab.id ?? null, tab.index);
       } else if (m?.type === 'open-walkthrough') {
         void openWalkthrough();
+      } else if (m?.type === 'open-queue') {
+        void openQueue();
       } else if (m?.type === 'installed-voices') {
         // Answered here because only an extension-origin context can read the model cache: the
         // reading bar lives in the page, whose IndexedDB is a different origin entirely.
@@ -377,4 +407,92 @@ async function installedVoices(engine: EngineId): Promise<VoiceOption[]> {
     console.warn('[aloud] could not list installed voices:', err);
     return [];
   }
+}
+
+// ---- reading queue ---------------------------------------------------------
+
+/** Extract the tab's article and queue it. */
+async function queuePage(tabId: number): Promise<void> {
+  let reply: NewQueueItem | { error: string } | undefined;
+  try {
+    await browser.scripting.executeScript({ target: { tabId }, files: [CONTENT_FILE] });
+    reply = await sendWithRetry(tabId, { type: 'extract-for-queue' }, 2);
+  } catch (err) {
+    console.warn('[aloud] cannot queue this page:', err);
+  }
+  if (!reply || 'error' in reply) {
+    tellTab(tabId, reply && 'error' in reply ? reply.error : 'This page cannot be queued', '!');
+    return;
+  }
+  await reportQueued(tabId, await addToQueue(reply), reply.title);
+}
+
+/** Queue a link without opening it: the queue page downloads the article when its turn comes. */
+async function queueLink(tabId: number, info: { linkUrl?: string; selectionText?: string }): Promise<void> {
+  const url = info.linkUrl!;
+  let site = '';
+  try {
+    site = new URL(url).hostname;
+  } catch {
+    tellTab(tabId, 'That link cannot be queued', '!');
+    return;
+  }
+  // Firefox passes the link's own text; Chromium only has the selection, if any.
+  const text = (info as { linkText?: string }).linkText ?? info.selectionText ?? '';
+  const title = text.trim() || url.replace(/^https?:\/\/(www\.)?/, '').slice(0, 80);
+  await reportQueued(tabId, await addToQueue({ url, title, site }), title);
+}
+
+async function reportQueued(
+  tabId: number,
+  result: { added: boolean; full: boolean; size: number },
+  title: string,
+): Promise<void> {
+  const short = title.length > 48 ? `${title.slice(0, 47)}…` : title;
+  if (result.full) tellTab(tabId, 'Your reading queue is full — play or clear some of it first', '!');
+  else if (!result.added) tellTab(tabId, `“${short}” is already in your reading queue`, '✓');
+  else tellTab(tabId, `Added “${short}” to your reading queue (${result.size})`, `+${Math.min(result.size, 99)}`);
+}
+
+/**
+ * Confirm something to the user on `tabId`: in the reading bar when a session is running there,
+ * else as a brief badge on the toolbar button.
+ */
+function tellTab(tabId: number, text: string, badge: string): void {
+  if (active?.tabId === tabId) {
+    try {
+      active.port.postMessage({ type: 'flash', text });
+      return;
+    } catch {
+      /* fall back to the badge */
+    }
+  }
+  setBadge(tabId, badge);
+  setTimeout(() => {
+    if (active?.tabId !== tabId) clearBadge(tabId);
+  }, 2200);
+}
+
+async function sendWithRetry<T>(tabId: number, message: unknown, retries: number): Promise<T | undefined> {
+  try {
+    return (await browser.tabs.sendMessage(tabId, message)) as T;
+  } catch (err) {
+    if (retries <= 0) throw err;
+    await new Promise((r) => setTimeout(r, 120));
+    return sendWithRetry<T>(tabId, message, retries - 1);
+  }
+}
+
+async function openQueue(): Promise<void> {
+  const url = browser.runtime.getURL(QUEUE_PAGE);
+  try {
+    const [existing] = await browser.tabs.query({ url });
+    if (existing?.id != null) {
+      await browser.tabs.update(existing.id, { active: true });
+      return;
+    }
+  } catch {
+    /* fall through to a new tab */
+  }
+  await browser.tabs.create({ url });
 }

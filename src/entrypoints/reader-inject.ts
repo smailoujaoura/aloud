@@ -9,6 +9,8 @@ import { defineUnlistedScript } from 'wxt/utils/define-unlisted-script';
 import { ReaderSession } from '@/content/session';
 import type { ActivateMode } from '@/shared/messages';
 import { log } from '@/shared/log';
+import { extractArticle } from '@/extract/readability';
+import type { NewQueueItem } from '@/shared/reading-queue';
 
 interface AloudGlobal {
   __aloudLoaded?: boolean;
@@ -52,6 +54,9 @@ export default defineUnlistedScript(() => {
 
   browser.runtime.onMessage.addListener((msg: unknown) => {
     const m = msg as { type?: string; mode?: ActivateMode; targetElementId?: number };
+    // "Add page to reading queue": extract now, while the page is open and readable. Replying with
+    // a promise is how both browsers answer a message asynchronously.
+    if (m?.type === 'extract-for-queue') return Promise.resolve(extractForQueue());
     if (m?.type !== 'activate') return false;
     let target: Element | null = null;
     if (m.targetElementId != null) {
@@ -75,3 +80,16 @@ export default defineUnlistedScript(() => {
     { once: true },
   );
 });
+
+/** This page as a queue entry, or why it cannot be one. */
+function extractForQueue(): NewQueueItem | { error: string } {
+  if (document.contentType === 'application/pdf') return { error: 'PDFs cannot be queued yet' };
+  const article = extractArticle(document);
+  if (!article.html && article.text.length < 200) return { error: "This page doesn't look like an article" };
+  return {
+    url: location.href,
+    title: article.title || document.title || location.hostname,
+    site: location.hostname,
+    article: { html: article.html, text: article.text, lang: article.lang, byline: article.byline },
+  };
+}

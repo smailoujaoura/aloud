@@ -36,7 +36,9 @@ export type ToContentMessage =
   | { type: 'toggle' }
   | { type: 'stop'; reason: 'user' | 'superseded' | 'navigation' }
   | { type: 'settings-changed' }
-  | { type: 'query-state' };
+  | { type: 'query-state' }
+  /** A short confirmation for the bar, e.g. "Added to your reading queue". */
+  | { type: 'flash'; text: string };
 
 /** Content -> Background */
 export type ToBackgroundMessage =

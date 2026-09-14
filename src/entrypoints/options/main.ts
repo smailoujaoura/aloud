@@ -28,6 +28,7 @@ import {
 } from '@/shared/settings';
 import { disposePreview, playSynthesized, stopPreview } from '@/ui/voice-preview';
 import { clearAllPositions, countPositions } from '@/shared/reading-positions';
+import { loadQueue } from '@/shared/reading-queue';
 
 /** Say how many pages have a remembered position, so the "forget" button has a visible effect. */
 async function refreshPositionsHint(): Promise<void> {
@@ -348,6 +349,9 @@ async function render(): Promise<void> {
 
   void refreshUsage();
   void refreshPositionsHint();
+  void loadQueue().then((q) => {
+    $('openQueue').textContent = q.length ? `Open queue (${q.length})` : 'Open queue';
+  });
 
   renderPronunciationEditor($('pronunciations'), {
     rules: settings.pronunciations,
@@ -481,6 +485,9 @@ function wire(): void {
       },
       'Every cached model file has been deleted',
     );
+  });
+  $('openQueue').addEventListener('click', () => {
+    void browser.runtime.sendMessage({ type: 'open-queue' }).catch(() => undefined);
   });
   $('clearPositions').addEventListener('click', (e) => {
     void withBusy(

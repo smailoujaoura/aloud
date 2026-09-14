@@ -81,6 +81,10 @@ interface BeginOptions {
    * real article someone reads gets no explanation at all.
    */
   showTips?: boolean;
+  /** Start reading as soon as the voice is ready — the queue page, after its own Play click. */
+  autoplay?: boolean;
+  /** Called once the whole document has been read, so the queue page can move on. */
+  onFinished?: () => void;
 }
 
 export interface KnownArticle {
@@ -162,6 +166,7 @@ export class ReaderSession {
   private lastPositionSave = 0;
   private lastSavedIndex = -1;
   private outputLogged = false;
+  private finishedHook: (() => void) | null = null;
   /**
    * A downloaded voice in the page's language, chosen for this page only (never saved), or null
    * when the saved voice is reading. See `matchVoiceToPage`.
@@ -210,10 +215,11 @@ export class ReaderSession {
     this.startTarget = opts.targetElement ?? null;
     this.knownArticle = opts.knownArticle ?? null;
     this.tipsAllowed = opts.showTips ?? true;
+    this.finishedHook = opts.onFinished ?? null;
     // Snapshot the page selection *now*, before any await or DOM work can disturb it.
     if (mode === 'selection') this.selection = snapshotSelection();
     // "Read selection" / "Read from here" are explicit "start reading now" actions.
-    this.wantsPlayback = mode === 'selection' || mode === 'from-cursor';
+    this.wantsPlayback = mode === 'selection' || mode === 'from-cursor' || opts.autoplay === true;
 
     this.settings = await getSettings();
     // Chunk sizes are fixed at planning time, before any engine exists, so start from what
@@ -865,7 +871,9 @@ export class ReaderSession {
    */
   private skipSentence(playId: number): void {
     log.warn(`sentence ${playId} could not be synthesised — skipping it`);
-    this.requested.delete(playId);
+    // Left in `requested` on purpose: removing it made the very next top-up ask for the same
+    // sentence again, which failed the same way — two or three doomed requests per sentence.
+    // A seek clears `requested`, so jumping back to it still gives it a fresh try.
     this.scheduler.provide(playId, new Float32Array(0), this.sampleRate, 0);
   }
 
@@ -895,6 +903,7 @@ export class ReaderSession {
     // Read to the end: next time it opens at the top, not at the last sentence.
     this.lastSavedIndex = -1;
     if (this.docKey) void clearPosition(this.docKey);
+    this.finishedHook?.();
   }
 
   // ---- remembering where we stopped ----------------------------------------
@@ -1119,6 +1128,9 @@ export class ReaderSession {
         else if (m.type === 'toggle') void this.externalToggle();
         else if (m.type === 'settings-changed') void this.onSettingsChanged();
         else if (m.type === 'query-state') this.pushState();
+        else if (m.type === 'flash' && typeof (m as { text?: unknown }).text === 'string') {
+          this.bar?.flash((m as { text: string }).text, 'ok');
+        }
       });
       this.port.onDisconnect.addListener(() => (this.port = null));
     } catch (err) {
