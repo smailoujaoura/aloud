@@ -91,6 +91,8 @@ export default defineConfig({
           'tts-worker.js',
           'vendor/rt/*',
           'vendor/ort/*',
+          // piper_phonemize's WASM and eSpeak data, loaded by the synthesis worker.
+          'vendor/piper/*',
           'models.json',
           // Artwork for the OS media overlay; loaded from the page, so it must be web-accessible.
           'icon/128.png',

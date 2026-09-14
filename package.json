@@ -20,6 +20,7 @@
     "lint:ext": "web-ext lint --source-dir .output/firefox-mv3"
   },
   "dependencies": {
+    "@diffusionstudio/piper-wasm": "1.0.0",
     "@huggingface/transformers": "3.7.5",
     "@mozilla/readability": "0.6.0",
     "kokoro-js": "1.2.1",

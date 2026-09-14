@@ -8,7 +8,9 @@
 //    library is imported by URL at run time so its 1.3 MB worker is never inlined into a page
 //    bundle, and pdf.js can resolve its own worker from the extension origin under our CSP.
 //
-// eSpeak-NG is not here: the `phonemizer` package inlines its WASM + data as base64.
+//  - public/vendor/piper/  piper_phonemize (eSpeak-NG with every language's data) for Piper voices.
+//    Loaded by URL from the synthesis worker; see src/engine/g2p/piper-phonemize.ts. (Kokoro still
+//    uses the English-only `phonemizer` package that kokoro-js bundles, which is all it needs.)
 import { existsSync, mkdirSync, copyFileSync, statSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,6 +27,8 @@ const ORT_FILES = [
 
 const PDFJS_FILES = ['pdf.min.mjs', 'pdf.worker.min.mjs'];
 
+const PIPER_PHONEMIZE_FILES = ['piper_phonemize.wasm', 'piper_phonemize.data'];
+
 /**
  * Whole directories pdf.js loads by URL at run time when it *renders* a page.
  *
@@ -37,6 +41,20 @@ const PDFJS_FILES = ['pdf.min.mjs', 'pdf.worker.min.mjs'];
 const PDFJS_DIRS = ['standard_fonts', 'cmaps'];
 
 export function syncAssets() {
+  const piperSrc = join(root, 'node_modules/@diffusionstudio/piper-wasm/build');
+  const piperDest = join(root, 'public/vendor/piper');
+  mkdirSync(piperDest, { recursive: true });
+  let piperCopied = 0;
+  for (const f of PIPER_PHONEMIZE_FILES) {
+    const s = join(piperSrc, f);
+    const d = join(piperDest, f);
+    if (!existsSync(s)) throw new Error(`missing ${s} — reinstall @diffusionstudio/piper-wasm`);
+    if (existsSync(d) && statSync(d).size === statSync(s).size) continue;
+    copyFileSync(s, d);
+    piperCopied++;
+  }
+  console.log(`[sync-assets] ${piperCopied} piper_phonemize file(s) refreshed into public/vendor/piper/`);
+
   const src = join(root, 'node_modules/onnxruntime-web/dist');
   const dest = join(root, 'public/vendor/ort');
   mkdirSync(dest, { recursive: true });

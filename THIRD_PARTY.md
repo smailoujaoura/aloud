@@ -1,15 +1,17 @@
 # Third-party components
 
 Aloud is distributed under **GPL-3.0-or-later** (see `LICENSE`). The determining factor is
-eSpeak-NG, which is GPLv3 and is bundled (via the `phonemizer` package) as the grapheme-to-phoneme
-engine.
+eSpeak-NG, which is GPLv3 and is bundled twice as the grapheme-to-phoneme engine: rhasspy's
+eSpeak-NG fork inside `piper_phonemize` for Piper voices (every language), and the English-only
+build inside the `phonemizer` package that kokoro-js uses.
 
 ## Bundled libraries
 
 | Component | Version | License | How it is used | Where it ends up |
 |---|---|---|---|---|
-| [eSpeak-NG](https://github.com/espeak-ng/espeak-ng) (compiled to WASM, inlined in `phonemizer`) | as shipped in `phonemizer` 1.2.1 | **GPL-3.0-or-later** | Text → IPA phonemes for both engines | `tts-worker.js` (base64-inlined WASM + data) |
-| [`phonemizer`](https://github.com/xenova/phonemizer.js) | 1.2.1 | Apache-2.0 (wrapper) | eSpeak-NG JS wrapper | `tts-worker.js` |
+| [eSpeak-NG, rhasspy fork](https://github.com/rhasspy/espeak-ng) in [`piper-phonemize`](https://github.com/rhasspy/piper-phonemize), compiled to WASM | as shipped in [`@diffusionstudio/piper-wasm`](https://github.com/diffusion-studio/piper-wasm) 1.0.0 | **GPL-3.0-or-later** (eSpeak-NG); MIT (piper-phonemize, build wrapper) | Text → IPA phonemes for Piper, in every language eSpeak supports — the phonemiser Piper voices were trained with | `vendor/piper/piper_phonemize.{wasm,data}` (loaded at runtime), glue in `vendor/rt/piper-*.js` |
+| [eSpeak-NG](https://github.com/espeak-ng/espeak-ng) (compiled to WASM, inlined in `phonemizer`) | as shipped in `phonemizer` 1.2.1 | **GPL-3.0-or-later** | Text → IPA phonemes for Kokoro (English data only) | `vendor/rt/kokoro-*.js` (base64-inlined WASM + data) |
+| [`phonemizer`](https://github.com/xenova/phonemizer.js) | 1.2.1 | Apache-2.0 (wrapper) | eSpeak-NG JS wrapper used by kokoro-js | `vendor/rt/kokoro-*.js` |
 | [ONNX Runtime Web](https://github.com/microsoft/onnxruntime) | 1.22.0 | MIT | Neural network inference (WASM, optionally WebGPU) | `vendor/ort/*` (loaded at runtime) |
 | [`kokoro-js`](https://github.com/hexgrad/kokoro) | 1.2.1 | Apache-2.0 | Kokoro engine wrapper | `tts-worker.js` |
 | [`@huggingface/transformers`](https://github.com/huggingface/transformers.js) | 3.7.5 (`transformers.web.js`) | Apache-2.0 | Model loading / tokenisation for Kokoro | `tts-worker.js` |

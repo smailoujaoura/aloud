@@ -2,13 +2,13 @@
  * Piper (VITS) engine — hand-rolled ONNX Runtime Web session so we fully control the execution
  * provider, threading (single-threaded: no SharedArrayBuffer in extension contexts) and caching.
  *
- * Pipeline: text -> eSpeak-NG IPA -> phoneme ids (interleaved with the pad symbol, wrapped in
- * BOS/EOS) -> VITS -> mono float PCM.
+ * Pipeline: text -> piper_phonemize (eSpeak-NG, every language) -> IPA per sentence -> phoneme ids
+ * (interleaved with the pad symbol, wrapped in BOS/EOS) -> VITS -> mono float PCM.
  */
 import type * as Ort from 'onnxruntime-web';
 
 import { fetchModelFile } from '@/engine/model-cache';
-import { phonemize } from '@/engine/g2p/espeak';
+import { phonemizeForPiper } from '@/engine/g2p/piper-phonemize';
 import { loadOrt } from '@/engine/ort-loader';
 import { chooseExecutionProviders } from '@/engine/runtime-env';
 import type { ModelManifest, SynthEngine, SynthResult, InitContext } from './types';
@@ -130,10 +130,16 @@ export class PiperEngine implements SynthEngine {
   async synthesize(text: string, speed: number): Promise<SynthResult> {
     if (!this.session) throw new Error('Piper engine not initialised');
 
-    const ipa = await phonemize(text, this.config.espeak?.voice ?? 'en-us');
-    const ids = this.phonemesToIds(ipa);
-    if (ids.length <= 2) return { pcm: new Float32Array(0), sampleRate: this.sampleRate };
+    const sentences = await phonemizeForPiper(text, this.config.espeak?.voice ?? 'en-us');
+    const parts: Float32Array[] = [];
+    for (const ipa of sentences) {
+      const ids = this.phonemesToIds(ipa);
+      if (ids.length > 2) parts.push(await this.runVits(ids, speed));
+    }
+    return { pcm: joinWithPauses(parts, this.sampleRate), sampleRate: this.sampleRate };
+  }
 
+  private async runVits(ids: number[], speed: number): Promise<Float32Array> {
     const inf = this.config.inference ?? { noise_scale: 0.667, length_scale: 1, noise_w: 0.8 };
     const lengthScale = inf.length_scale / Math.max(0.1, speed);
 
@@ -146,16 +152,30 @@ export class PiperEngine implements SynthEngine {
       feeds.sid = new this.ort.Tensor('int64', BigInt64Array.from([this.speakerId]), [1]);
     }
 
-    const results = await this.session.run(feeds);
-    const outName = this.session.outputNames[0] ?? 'output';
+    const results = await this.session!.run(feeds);
+    const outName = this.session!.outputNames[0] ?? 'output';
     const raw = results[outName]!.data as Float32Array;
     // VITS output shape is [1, 1, samples]; the flat data is already what we want.
-    const pcm = raw instanceof Float32Array ? raw : Float32Array.from(raw as ArrayLike<number>);
-    return { pcm, sampleRate: this.sampleRate };
+    return raw instanceof Float32Array ? raw : Float32Array.from(raw as ArrayLike<number>);
   }
 
   async dispose(): Promise<void> {
     await this.session?.release();
     this.session = null;
   }
+}
+
+/** Piper's own runtime leaves this much silence between sentences it was handed together. */
+const SENTENCE_GAP_SECONDS = 0.15;
+
+function joinWithPauses(parts: Float32Array[], sampleRate: number): Float32Array {
+  if (parts.length <= 1) return parts[0] ?? new Float32Array(0);
+  const gap = Math.round(sampleRate * SENTENCE_GAP_SECONDS);
+  const out = new Float32Array(parts.reduce((n, p) => n + p.length, 0) + gap * (parts.length - 1));
+  let at = 0;
+  parts.forEach((part, i) => {
+    out.set(part, at);
+    at += part.length + (i < parts.length - 1 ? gap : 0);
+  });
+  return out;
 }
