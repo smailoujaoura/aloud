@@ -26,6 +26,13 @@ import { ICON_PATHS } from './icons';
 import { resolveTheme, watchSystemTheme } from './theme';
 import type { SleepChoice, SleepState } from '@/content/sleep-timer';
 
+/** Where "Save as MP3" is, as the bar shows it. */
+export type ExportState =
+  | { phase: 'idle' }
+  | { phase: 'running'; done: number; total: number }
+  | { phase: 'done'; seconds: number; bytes: number }
+  | { phase: 'error'; message: string };
+
 export interface ControlBarCallbacks {
   onPlay(): void;
   onPause(): void;
@@ -40,6 +47,11 @@ export interface ControlBarCallbacks {
   onSnapToCurrent(): void;
   /** A sleep-timer option was picked from the moon button's menu. */
   onSleep(choice: SleepChoice): void;
+  /** Start turning the whole document into an MP3. */
+  onExportStart(): void;
+  onExportCancel(): void;
+  /** Hand the finished MP3 to the browser's downloads. Called from the click, so it may. */
+  onExportSave(): void;
   onOpenSettings(): void;
   /** The tips card's "How Aloud works" link — opens the walkthrough page. */
   onOpenWalkthrough(): void;
@@ -94,10 +106,17 @@ export class ControlBar {
   private tips: HTMLElement | null = null;
   private sleepBtn!: HTMLButtonElement;
   private sleepBadge!: HTMLElement;
-  private sleepMenu: HTMLElement | null = null;
   private sleepState: SleepState = { choice: 'off', badge: '', stopAfter: null };
-  /** Closes the sleep menu on a press anywhere outside it; removed with the menu. */
-  private sleepDismiss: { page: (e: Event) => void; bar: (e: Event) => void } | null = null;
+  private saveBtn!: HTMLButtonElement;
+  private saveBadge!: HTMLElement;
+  private exportState: ExportState = { phase: 'idle' };
+  /** The open menu (sleep timer or export), the button that opened it, and its dismiss listeners. */
+  private popover: {
+    menu: HTMLElement;
+    button: HTMLButtonElement;
+    page: (e: Event) => void;
+    bar: (e: Event) => void;
+  } | null = null;
   private playBtn!: HTMLButtonElement;
   private prevBtn!: HTMLButtonElement;
   private nextBtn!: HTMLButtonElement;
@@ -202,6 +221,12 @@ export class ControlBar {
     this.sleepBadge = this.make('span', { class: 'badge', hidden: '' });
     this.sleepBtn.appendChild(this.sleepBadge);
     this.sleepBtn.addEventListener('click', () => this.toggleSleepMenu());
+    this.saveBtn = this.iconButton('save', 'Save as MP3', ICON_PATHS.download, 'Save as MP3');
+    this.saveBtn.setAttribute('aria-haspopup', 'dialog');
+    this.saveBtn.setAttribute('aria-expanded', 'false');
+    this.saveBadge = this.make('span', { class: 'badge', hidden: '' });
+    this.saveBtn.appendChild(this.saveBadge);
+    this.saveBtn.addEventListener('click', () => this.toggleExportMenu());
     const closeBtn = this.iconButton('close', 'Close', ICON_PATHS.close, 'Stop reading and close');
 
     this.progressEl = this.make('div', {
@@ -235,7 +260,7 @@ export class ControlBar {
     // every control, and a group is what stops the wrap from stranding a lone ✕ on a line of
     // its own: either they all fit beside the transport controls, or they all move down.
     const side = this.make('div', { class: 'side' });
-    side.append(this.snapBtn, this.tapBtn, this.sleepBtn, gearBtn, closeBtn);
+    side.append(this.snapBtn, this.tapBtn, this.sleepBtn, this.saveBtn, gearBtn, closeBtn);
 
     this.bar.append(
       this.playBtn,
@@ -532,7 +557,7 @@ export class ControlBar {
 
   dispose(): void {
     clearTimeout(this.flashTimer);
-    this.closeSleepMenu();
+    this.closePopover();
     this.unwatchTheme();
     this.host.remove();
   }
@@ -550,11 +575,11 @@ export class ControlBar {
   }
 
   private toggleSleepMenu(): void {
-    if (this.sleepMenu) {
-      this.closeSleepMenu();
+    if (this.popover?.button === this.sleepBtn) {
+      this.closePopover();
       return;
     }
-    const menu = this.make('div', { class: 'sleep-menu', role: 'menu', 'aria-label': 'Sleep timer' });
+    const menu = this.make('div', { class: 'pop-menu', role: 'menu', 'aria-label': 'Sleep timer' });
     menu.appendChild(this.make('div', { class: 'menu-title' }, 'Stop reading'));
     for (const [choice, label] of SLEEP_LABEL) {
       const checked = this.sleepState.choice === choice;
@@ -564,53 +589,133 @@ export class ControlBar {
         label,
       );
       option.addEventListener('click', () => {
-        this.closeSleepMenu();
+        this.closePopover();
         this.cb.onSleep(choice);
       });
       menu.appendChild(option);
     }
+    this.openPopover(this.sleepBtn, menu);
+    menu.querySelector<HTMLButtonElement>('button[aria-checked="true"], button')?.focus({ preventScroll: true });
+  }
+
+  // ---- save as MP3 ---------------------------------------------------------
+
+  /** Reflect the export on the save button, and in its menu if that is open. */
+  setExport(state: ExportState): void {
+    this.exportState = state;
+    this.saveBtn.classList.toggle('on', state.phase === 'running' || state.phase === 'done');
+    // Progress stays in sight with the menu closed: a percentage while it runs, a tick when ready.
+    const running = state.phase === 'running';
+    this.saveBadge.hidden = !running && state.phase !== 'done';
+    this.saveBadge.textContent = running ? `${percent(state.done, state.total)}%` : '✓';
+    this.saveBtn.title = running ? 'Making the MP3…' : state.phase === 'done' ? 'MP3 ready to save' : 'Save as MP3';
+    const body = this.popover?.button === this.saveBtn ? this.popover.menu : null;
+    if (body) this.renderExportMenu(body);
+  }
+
+  private toggleExportMenu(): void {
+    if (this.popover?.button === this.saveBtn) {
+      this.closePopover();
+      return;
+    }
+    const menu = this.make('div', { class: 'pop-menu export-menu', role: 'dialog', 'aria-label': 'Save as MP3' });
+    this.renderExportMenu(menu);
+    this.openPopover(this.saveBtn, menu);
+    menu.querySelector<HTMLButtonElement>('button.primary, button')?.focus({ preventScroll: true });
+  }
+
+  private renderExportMenu(menu: HTMLElement): void {
+    const state = this.exportState;
+    const hadFocus = this.root.activeElement instanceof HTMLElement && menu.contains(this.root.activeElement);
+    menu.replaceChildren(this.make('div', { class: 'menu-title' }, 'Save as MP3'));
+    const text = (t: string, cls = 'menu-text'): void => void menu.appendChild(this.make('p', { class: cls }, t));
+    const action = (label: string, run: () => void, primary = false): HTMLButtonElement => {
+      const b = this.make('button', { type: 'button', class: primary ? 'primary' : '' }, label);
+      b.addEventListener('click', run);
+      menu.appendChild(b);
+      return b;
+    };
+
+    switch (state.phase) {
+      case 'idle':
+        text('The whole document, in this voice and at this speed, as one audio file. Reading pauses while it is made.');
+        action('Make the MP3', () => this.cb.onExportStart(), true);
+        break;
+      case 'running': {
+        const pct = percent(state.done, state.total);
+        text(`${state.done} of ${state.total} sentences`);
+        const meter = this.make('div', {
+          class: 'meter',
+          role: 'progressbar',
+          'aria-valuemin': '0',
+          'aria-valuemax': '100',
+          'aria-valuenow': String(pct),
+        });
+        const fill = this.make('i');
+        fill.style.width = `${pct}%`;
+        meter.appendChild(fill);
+        menu.appendChild(meter);
+        action('Cancel', () => this.cb.onExportCancel());
+        break;
+      }
+      case 'done':
+        text(`${formatDuration(state.seconds)} of audio · ${formatBytes(state.bytes)}`);
+        action('Save file', () => {
+          this.cb.onExportSave();
+          this.closePopover();
+        }, true);
+        action('Discard', () => this.cb.onExportCancel());
+        break;
+      case 'error':
+        text(state.message, 'menu-text error');
+        action('Try again', () => this.cb.onExportStart(), true);
+        break;
+    }
+    if (hadFocus) menu.querySelector<HTMLButtonElement>('button.primary, button')?.focus({ preventScroll: true });
+  }
+
+  // ---- popovers ------------------------------------------------------------
+
+  /** Show `menu` directly above the bar, below any status pill, until dismissed. */
+  private openPopover(button: HTMLButtonElement, menu: HTMLElement): void {
+    this.closePopover();
     menu.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
-        this.closeSleepMenu();
-        this.sleepBtn.focus({ preventScroll: true });
+        this.closePopover();
+        button.focus({ preventScroll: true });
       }
     });
-
-    // Directly above the bar, below any status pill.
     this.dock.insertBefore(menu, this.bar);
-    this.sleepMenu = menu;
-    this.sleepBtn.setAttribute('aria-expanded', 'true');
-    menu.querySelector<HTMLButtonElement>('button[aria-checked="true"], button')?.focus({ preventScroll: true });
+    button.setAttribute('aria-expanded', 'true');
 
     // A press anywhere else closes it. Two listeners, because neither can see everything: our
     // shadow root is closed, so a document listener sees a press on the menu only as a press on
     // the host element — it must leave those to the root listener, which can see *where* inside
     // the bar the press landed. (Treating "host" as "outside" closed the menu on pointerdown,
     // before the click on an option could ever fire.)
-    const dismissFromPage = (e: Event): void => {
+    const page = (e: Event): void => {
       if (e.composedPath().includes(this.host)) return;
-      this.closeSleepMenu();
+      this.closePopover();
     };
-    const dismissFromBar = (e: Event): void => {
+    const bar = (e: Event): void => {
       const path = e.composedPath();
-      if (path.includes(menu) || path.includes(this.sleepBtn)) return;
-      this.closeSleepMenu();
+      if (path.includes(menu) || path.includes(button)) return;
+      this.closePopover();
     };
-    this.sleepDismiss = { page: dismissFromPage, bar: dismissFromBar };
-    this.doc.addEventListener('pointerdown', dismissFromPage, true);
-    this.root.addEventListener('pointerdown', dismissFromBar, true);
+    this.popover = { menu, button, page, bar };
+    this.doc.addEventListener('pointerdown', page, true);
+    this.root.addEventListener('pointerdown', bar, true);
   }
 
-  private closeSleepMenu(): void {
-    if (this.sleepDismiss) {
-      this.doc.removeEventListener('pointerdown', this.sleepDismiss.page, true);
-      this.root.removeEventListener('pointerdown', this.sleepDismiss.bar, true);
-      this.sleepDismiss = null;
-    }
-    this.sleepMenu?.remove();
-    this.sleepMenu = null;
-    this.sleepBtn?.setAttribute('aria-expanded', 'false');
+  private closePopover(): void {
+    const open = this.popover;
+    if (!open) return;
+    this.popover = null;
+    this.doc.removeEventListener('pointerdown', open.page, true);
+    this.root.removeEventListener('pointerdown', open.bar, true);
+    open.menu.remove();
+    open.button.setAttribute('aria-expanded', 'false');
   }
 
   // ---- first-run tips ------------------------------------------------------
@@ -786,4 +891,21 @@ export class ControlBar {
       ? 'Click-to-jump is ON — click a sentence in the page to jump there'
       : 'Click-to-jump is OFF';
   }
+}
+
+function percent(done: number, total: number): number {
+  return total ? Math.floor((100 * done) / total) : 0;
+}
+
+function formatDuration(seconds: number): string {
+  const total = Math.round(seconds);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const sec = total % 60;
+  if (h) return `${h} h ${m} min`;
+  return m ? `${m} min ${sec} s` : `${sec} s`;
+}
+
+function formatBytes(bytes: number): string {
+  return bytes >= 1e6 ? `${(bytes / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1e3))} kB`;
 }

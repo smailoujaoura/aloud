@@ -24,7 +24,7 @@ import { normalizeForSpeech } from '@/segment/normalize';
 import { applyPronunciations } from '@/segment/pronunciations';
 import { GaplessScheduler } from '@/audio/scheduler';
 import { Highlighter } from '@/highlight/highlighter';
-import { ControlBar } from '@/ui/control-bar';
+import { ControlBar, type ExportState } from '@/ui/control-bar';
 import { WorkerClient } from '@/engine/worker-client';
 import type { EngineConfig } from '@/engine/protocol';
 import type { ModelManifest } from '@/engine/engines/types';
@@ -61,6 +61,7 @@ import { firstSentenceInViewport, indexAtPoint, indexNearElement } from './playl
 import { TapToSeek } from './tap-to-seek';
 import { MediaControls } from './media-session';
 import { SleepTimer, type SleepChoice } from './sleep-timer';
+import { Mp3Export, audioFileName } from './audio-export';
 
 interface BeginOptions {
   /** For "Read from here": the element that was right-clicked, when the browser can tell us. */
@@ -127,6 +128,10 @@ export class ReaderSession {
   private tapToSeek: TapToSeek | null = null;
   private media: MediaControls | null = null;
   private sleepTimer: SleepTimer | null = null;
+  /** "Save as MP3" while it runs: it has the synthesis workers to itself until it ends. */
+  private exporter: Mp3Export | null = null;
+  /** The finished MP3, kept until it is saved or discarded. */
+  private exportFile: Blob | null = null;
   private port: ReturnType<typeof browser.runtime.connect> | null = null;
   private manifest: ModelManifest | null = null;
 
@@ -257,8 +262,10 @@ export class ReaderSession {
         this.state.modelProgress = progress;
         if (this.state.status === 'loading-model') this.pushState();
       },
-      onAudio: (playId, pcm, sr) =>
-        this.scheduler.provide(playId, pcm, sr, leadSilenceSec(this.playlist[playId], this.settings)),
+      onAudio: (playId, pcm, sr) => {
+        if (this.exporter) this.exporter.accept(playId, pcm, sr);
+        else this.scheduler.provide(playId, pcm, sr, leadSilenceSec(this.playlist[playId], this.settings));
+      },
       onNotice: (message) => {
         // The engine has something to say that is not a failure — most often that it is running
         // on the CPU, and why. Worth a line in the bar: otherwise "slow" is all the user sees.
@@ -395,6 +402,7 @@ export class ReaderSession {
    */
   private respeak(): void {
     for (const item of this.playlist) item.spokenText = this.normalize(item.sourceText);
+    this.cancelExport('How words are spoken changed, so the MP3 was stopped');
     if (!this.engineReady) return;
     const keepFrom = this.currentPlayId + 1;
     this.requested.clear();
@@ -488,6 +496,9 @@ export class ReaderSession {
       onToggleTapToSeek: (on: boolean) => void this.setTapToSeek(on),
       onSnapToCurrent: () => this.snapToCurrent(),
       onSleep: (choice: SleepChoice) => this.setSleep(choice),
+      onExportStart: () => void this.startExport(),
+      onExportCancel: () => this.cancelExport(),
+      onExportSave: () => this.saveExport(),
       onOpenSettings: () => this.port?.postMessage({ type: 'open-options' }),
       onOpenWalkthrough: () => this.port?.postMessage({ type: 'open-walkthrough' }),
       onTipsDismissed: () => void setSettings({ tipsSeen: true }),
@@ -496,6 +507,10 @@ export class ReaderSession {
   }
 
   async play(): Promise<void> {
+    if (this.exporter) {
+      this.bar?.flash('Reading carries on once the MP3 is made', 'info');
+      return;
+    }
     // Pressing play after the sleep timer stopped the reader carries on past where it stopped.
     if (!this.sleepTimer?.isArmed()) this.scheduler?.clearStopAfter();
     this.wantsPlayback = true;
@@ -561,6 +576,10 @@ export class ReaderSession {
   }
 
   seekTo(playId: number): void {
+    if (this.exporter) {
+      this.bar?.flash('Reading carries on once the MP3 is made', 'info');
+      return;
+    }
     const target = Math.max(0, Math.min(playId, this.playlist.length - 1));
     this.currentPlayId = target;
     this.state.currentIndex = target;
@@ -585,6 +604,7 @@ export class ReaderSession {
 
   async setSpeed(speed: number): Promise<void> {
     this.settings = await setSettings({ speed });
+    this.cancelExport('The speed changed, so the MP3 was stopped');
     this.bar?.setSpeed(speed);
     this.bar?.flash(`Speed ${speed}×`);
     if (!this.engineReady) return;
@@ -692,6 +712,7 @@ export class ReaderSession {
   /** Re-initialise the worker for a new engine/voice, keeping the plan and position. */
   async reloadEngine(): Promise<void> {
     this.settings = await getSettings();
+    this.cancelExport('The voice changed, so the MP3 was stopped');
     await this.refreshBarVoices();
     this.engineReady = false;
     this.requested.clear();
@@ -731,6 +752,98 @@ export class ReaderSession {
       /* no location worth showing */
     }
     this.media?.setMetadata(this.state.title, this.voiceLabel(this.voice), site);
+  }
+
+  // ---- save as MP3 ---------------------------------------------------------
+
+  /**
+   * Make the whole document into one MP3 with the loaded voice.
+   *
+   * Reading pauses and the export takes the synthesis workers over, so the file is made as fast
+   * as this machine can synthesise; playback's own queue is dropped and rebuilt afterwards.
+   */
+  private async startExport(): Promise<void> {
+    if (this.exporter || this.playlist.length === 0) return;
+    if (!this.engineReady) {
+      this.setExport({ phase: 'error', message: 'The voice is still loading — try again in a moment.' });
+      return;
+    }
+    this.exportFile = null;
+    await this.pause();
+    this.requested.clear();
+    this.worker.cancelFrom(0, 0);
+    const started = performance.now();
+    const exporter = new Mp3Export({
+      count: this.playlist.length,
+      // Deep enough to keep every worker in the pool busy, which is all that decides the pace.
+      lookahead: Math.max(4, this.tuning.lookahead),
+      request: (id) => this.worker.request(id, this.playlist[id]!.spokenText, this.settings.speed),
+      leadSilenceSec: (id) => (id === 0 ? 0 : leadSilenceSec(this.playlist[id], this.settings)),
+      onProgress: (done, total) => {
+        if (this.exporter === exporter) this.setExport({ phase: 'running', done, total });
+      },
+      onDone: (file, seconds) => {
+        if (this.exporter !== exporter) return;
+        log.info(
+          `mp3 export: ${this.playlist.length} sentences → ${seconds.toFixed(1)}s audio, ` +
+            `${(file.size / 1e6).toFixed(2)} MB in ${((performance.now() - started) / 1000).toFixed(1)}s`,
+        );
+        this.exportFile = file;
+        this.endExport();
+        this.setExport({ phase: 'done', seconds, bytes: file.size });
+        this.bar?.flash('MP3 ready — press the save button to keep it', 'ok');
+      },
+      onError: (message) => {
+        if (this.exporter !== exporter) return;
+        log.warn('mp3 export failed:', message);
+        this.endExport();
+        this.setExport({ phase: 'error', message });
+      },
+    });
+    this.exporter = exporter;
+    log.info(`mp3 export: ${this.playlist.length} sentences`);
+    exporter.start();
+  }
+
+  /** Stop an export in progress (or drop a finished file). `why` is said when one was running. */
+  private cancelExport(why?: string): void {
+    const running = this.exporter;
+    this.exportFile = null;
+    if (running) {
+      running.cancel();
+      this.endExport();
+      if (why) this.bar?.flash(why);
+    }
+    this.setExport({ phase: 'idle' });
+  }
+
+  /** Give the workers back to playback, queued from where reading had got to. */
+  private endExport(): void {
+    this.exporter = null;
+    this.requested.clear();
+    this.worker.cancelFrom(this.currentPlayId, 0);
+    this.scheduler.seek(this.currentPlayId);
+    this.ensureSynth(this.currentPlayId);
+  }
+
+  private setExport(state: ExportState): void {
+    this.bar?.setExport(state);
+  }
+
+  /** Download the finished MP3. Runs inside the click on "Save file". */
+  private saveExport(): void {
+    const file = this.exportFile;
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = audioFileName(this.state.title);
+    a.style.display = 'none';
+    (document.body ?? document.documentElement).appendChild(a);
+    a.click();
+    a.remove();
+    // The download has taken its own reference by now; a minute is generous for slow disks.
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
 
   // ---- the page's language -------------------------------------------------
@@ -822,7 +935,7 @@ export class ReaderSession {
 
   /** Keep the worker queue topped up from `fromPlayId` for the current engine's lookahead. */
   private ensureSynth(fromPlayId: number): void {
-    if (!this.engineReady) return;
+    if (!this.engineReady || this.exporter) return;
     const end = Math.min(fromPlayId + this.tuning.lookahead + 1, this.playlist.length);
     for (let i = fromPlayId; i < end; i++) {
       if (this.requested.has(i)) continue;
@@ -874,7 +987,8 @@ export class ReaderSession {
     // Left in `requested` on purpose: removing it made the very next top-up ask for the same
     // sentence again, which failed the same way — two or three doomed requests per sentence.
     // A seek clears `requested`, so jumping back to it still gives it a fresh try.
-    this.scheduler.provide(playId, new Float32Array(0), this.sampleRate, 0);
+    if (this.exporter) this.exporter.accept(playId, new Float32Array(0), this.sampleRate);
+    else this.scheduler.provide(playId, new Float32Array(0), this.sampleRate, 0);
   }
 
   private onChunkEnd(playId: number): void {
@@ -1176,6 +1290,8 @@ export class ReaderSession {
 
     this.tapToSeek?.dispose();
     this.sleepTimer?.dispose();
+    this.exporter?.cancel();
+    this.exporter = null;
     this.media?.dispose();
     this.stopViewportWatch?.();
     try {

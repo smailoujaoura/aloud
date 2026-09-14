@@ -159,15 +159,15 @@ button[disabled]:hover { background: none; }
 /* ---- sleep timer ---------------------------------------------------------- */
 
 .sleep.on { background: var(--accent-soft); }
-.sleep .badge {
+.sleep .badge, .save .badge {
   position: absolute; top: -4px; right: -5px;
   min-width: 15px; height: 15px; padding: 0 4px; box-sizing: border-box;
   border-radius: 8px; background: var(--accent); color: var(--accent-on);
   font: var(--font); font-size: 9.5px; line-height: 15px; font-weight: 700; text-align: center;
   pointer-events: none;
 }
-.sleep .badge[hidden] { display: none; }
-.sleep-menu {
+.sleep .badge[hidden], .save .badge[hidden] { display: none; }
+.pop-menu {
   box-sizing: border-box; align-self: flex-end;
   width: min(250px, 100%); padding: 6px;
   display: flex; flex-direction: column;
@@ -177,16 +177,24 @@ button[disabled]:hover { background: none; }
   font: var(--font);
   animation: aloud-rise 140ms ease-out;
 }
-.sleep-menu .menu-title {
+.pop-menu .menu-title {
   padding: 5px 10px 4px; font-size: 11px; font-weight: 600;
   text-transform: uppercase; letter-spacing: .05em; color: var(--bar-muted);
 }
-.sleep-menu button {
+.pop-menu button {
   width: 100%; height: auto; justify-content: flex-start;
   padding: 7px 10px; border-radius: 8px; font: var(--font); font-size: 13px;
 }
-.sleep-menu button.is-checked { font-weight: 650; }
-.sleep-menu button.is-checked::after { content: '✓'; margin-left: auto; padding-left: 12px; }
+.pop-menu button.is-checked { font-weight: 650; }
+.pop-menu button.is-checked::after { content: '✓'; margin-left: auto; padding-left: 12px; }
+.export-menu { width: min(280px, 100%); gap: 4px; }
+.export-menu .menu-text { margin: 0; padding: 2px 10px 6px; font-size: 12.5px; line-height: 1.45; color: var(--bar-fg); }
+.export-menu .menu-text.error { color: var(--bar-muted); }
+.export-menu button { justify-content: center; }
+.export-menu button.primary { background: var(--accent); color: var(--accent-on); font-weight: 650; }
+.export-menu .meter { margin: 0 10px 8px; height: 6px; border-radius: 3px; background: var(--bar-track); overflow: hidden; }
+.export-menu .meter > i { display: block; height: 100%; background: var(--accent); transition: width 200ms ease; }
+.save.on { background: var(--accent-soft); }
 
 .progress {
   flex: 1 1 auto; min-width: 40px; height: 20px; position: relative;
@@ -391,7 +399,7 @@ select optgroup { color: var(--bar-muted); font-weight: 600; }
 @media (prefers-reduced-motion: reduce) {
   .spinner, .play .btn-spin { animation-duration: 2.4s; }
   .play.attn { animation: none; box-shadow: 0 0 0 3px rgba(255,214,10,.5); }
-  .tips, .sleep-menu { animation: none; }
+  .tips, .pop-menu { animation: none; }
   button, select, .progress > .track, .progress > .knob { transition: none; }
 }
 `;
