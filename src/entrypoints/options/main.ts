@@ -318,6 +318,7 @@ async function render(): Promise<void> {
   $<HTMLInputElement>('sentencePauseMs').value = String(settings.sentencePauseMs);
   $('sentencePauseOut').textContent = `${(settings.sentencePauseMs / 1000).toFixed(2)}s`;
   $<HTMLInputElement>('tapToSeek').checked = settings.tapToSeek;
+  $<HTMLInputElement>('matchPageLanguage').checked = settings.matchPageLanguage;
   $<HTMLInputElement>('skipUrls').checked = settings.skipUrls;
   $<HTMLInputElement>('expandAbbreviations').checked = settings.expandAbbreviations;
   for (const [id, key] of SKIP_SWITCHES) $<HTMLInputElement>(id).checked = settings.skip[key];
@@ -435,6 +436,7 @@ function wire(): void {
 
   wireCheckbox('highlight', 'highlight');
   wireCheckbox('tapToSeek', 'tapToSeek');
+  wireCheckbox('matchPageLanguage', 'matchPageLanguage');
   wireCheckbox('skipUrls', 'skipUrls');
   wireCheckbox('expandAbbreviations', 'expandAbbreviations');
   for (const [id, key] of SKIP_SWITCHES) {

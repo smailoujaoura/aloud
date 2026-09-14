@@ -28,7 +28,15 @@ import { ControlBar } from '@/ui/control-bar';
 import { WorkerClient } from '@/engine/worker-client';
 import type { EngineConfig } from '@/engine/protocol';
 import type { ModelManifest } from '@/engine/engines/types';
-import { getSettings, setSettings, activeVoice, voiceKeyFor, type Settings } from '@/shared/settings';
+import { getSettings, setSettings, activeVoice, voiceKeyFor, type EngineId, type Settings } from '@/shared/settings';
+import { ENGINE_IDS } from '@/shared/engine-catalog';
+import {
+  languageName,
+  pickVoiceForLanguage,
+  primaryLanguage,
+  voiceLanguage,
+  type CandidateVoice,
+} from '@/shared/language-voice';
 import { listVoices, type VoiceOption } from '@/shared/voice-catalog';
 import {
   clearPosition,
@@ -154,6 +162,13 @@ export class ReaderSession {
   private lastPositionSave = 0;
   private lastSavedIndex = -1;
   private outputLogged = false;
+  /**
+   * A downloaded voice in the page's language, chosen for this page only (never saved), or null
+   * when the saved voice is reading. See `matchVoiceToPage`.
+   */
+  private languageVoice: CandidateVoice | null = null;
+  /** The language the page declares (`<html lang>`), as a hint for detection. */
+  private declaredLanguage = '';
 
   private state: SessionState = {
     status: 'idle',
@@ -175,7 +190,17 @@ export class ReaderSession {
   private backend: SynthBackend = 'cpu';
 
   private get tuning() {
-    return tuningFor(this.settings.engine, this.backend);
+    return tuningFor(this.engine, this.backend);
+  }
+
+  /** The engine actually reading: a page-language voice's, else the saved one. */
+  private get engine(): EngineId {
+    return this.languageVoice?.engine ?? this.settings.engine;
+  }
+
+  /** The voice actually reading: a page-language voice, else the saved one. */
+  private get voice(): string {
+    return this.languageVoice?.id ?? activeVoice(this.settings);
   }
 
   // ---- startup -------------------------------------------------------------
@@ -212,6 +237,7 @@ export class ReaderSession {
 
     this.docKey = this.knownArticle?.key ?? documentKey(location.href);
     await this.maybeResume();
+    await this.matchVoiceToPage();
     this.tapToSeek?.setEnabled(this.settings.tapToSeek);
     await this.loadEngine();
   }
@@ -380,6 +406,9 @@ export class ReaderSession {
       ? { title: known.title, text: known.text, lang: known.lang ?? 'en', byline: null, html: '', readerable: true }
       : extractArticle(document);
     this.state.title = article.title || document.title;
+    // A known article (the PDF reader) inherits the *reader page's* lang, which says nothing about
+    // the document, so only a real page's declaration is kept as a hint.
+    this.declaredLanguage = known ? '' : article.lang;
 
     const useSelection = this.mode === 'selection' && this.selection.text.length > MIN_SELECTION_CHARS;
     if (useSelection) {
@@ -568,8 +597,8 @@ export class ReaderSession {
 
   private engineConfig(): EngineConfig {
     return {
-      engine: this.settings.engine,
-      voice: activeVoice(this.settings),
+      engine: this.engine,
+      voice: this.voice,
       dtype: this.settings.kokoroDtype,
       steps: this.settings.supertonicSteps,
       preferWebGPU: this.settings.preferWebGPU,
@@ -591,14 +620,14 @@ export class ReaderSession {
   /** Fill the control bar's voice picker for the active engine. */
   private async refreshBarVoices(): Promise<void> {
     if (!this.bar || !this.manifest) return;
-    const current = activeVoice(this.settings);
+    const current = this.voice;
     const installed = await this.installedVoices();
 
     const shown = [...installed];
     if (!shown.some((v) => v.id === current)) {
       // A <select> must be able to show its own value, so the active voice is always listed —
       // labelled, when it is not on the device yet, so picking anything else is the obvious move.
-      const known = listVoices(this.settings.engine, this.manifest).find((v) => v.id === current);
+      const known = listVoices(this.engine, this.manifest).find((v) => v.id === current);
       shown.unshift({
         id: current,
         label: `${known?.label ?? current} · not downloaded yet`,
@@ -616,12 +645,9 @@ export class ReaderSession {
    * could silently start a 60 MB download and stall the reader. Only the background can answer
    * this: the model cache is IndexedDB at the *extension* origin, and this code runs in the page.
    */
-  private async installedVoices(): Promise<VoiceOption[]> {
+  private async installedVoices(engine: EngineId = this.engine): Promise<VoiceOption[]> {
     try {
-      const reply = await browser.runtime.sendMessage({
-        type: 'installed-voices',
-        engine: this.settings.engine,
-      });
+      const reply = await browser.runtime.sendMessage({ type: 'installed-voices', engine });
       return Array.isArray(reply) ? (reply as VoiceOption[]) : [];
     } catch (err) {
       log.warn('could not list installed voices:', err);
@@ -631,19 +657,30 @@ export class ReaderSession {
 
   /** Switch voice from the in-page bar, keeping the plan and position. */
   private async changeVoice(voice: string): Promise<void> {
-    if (activeVoice(this.settings) === voice) return;
+    if (this.voice === voice) return;
     // Named, not just "switching": the picker collapses the moment it is used, so the
     // confirmation is the only thing left saying which voice was chosen.
     this.pendingVoiceLabel = this.voiceLabel(voice);
     this.bar?.flash(`Switching to ${this.pendingVoiceLabel}…`);
-    this.settings = await setSettings({ [voiceKeyFor(this.settings.engine)]: voice });
+    if (this.languageVoice) {
+      // Picked while a page-language voice is reading: another voice for *this page*, not a new
+      // default — reading one French article must not make every page French.
+      this.languageVoice = {
+        ...this.languageVoice,
+        id: voice,
+        label: this.pendingVoiceLabel,
+        language: this.manifest ? voiceLanguage(this.languageVoice.engine, voice, this.manifest) : this.languageVoice.language,
+      };
+    } else {
+      this.settings = await setSettings({ [voiceKeyFor(this.settings.engine)]: voice });
+    }
     await this.reloadEngine();
   }
 
   /** The human name of a voice id for the active engine, falling back to the id itself. */
   private voiceLabel(voice: string): string {
     if (!this.manifest) return voice;
-    return listVoices(this.settings.engine, this.manifest).find((v) => v.id === voice)?.label ?? voice;
+    return listVoices(this.engine, this.manifest).find((v) => v.id === voice)?.label ?? voice;
   }
 
   /** Re-initialise the worker for a new engine/voice, keeping the plan and position. */
@@ -687,7 +724,92 @@ export class ReaderSession {
     } catch {
       /* no location worth showing */
     }
-    this.media?.setMetadata(this.state.title, this.voiceLabel(activeVoice(this.settings)), site);
+    this.media?.setMetadata(this.state.title, this.voiceLabel(this.voice), site);
+  }
+
+  // ---- the page's language -------------------------------------------------
+
+  /**
+   * Read this page with a downloaded voice in its language, if the current voice speaks another.
+   *
+   * Only for this page, never saved. When no downloaded voice fits, say so once and offer the way
+   * to get one, rather than reading French with English pronunciation in silence.
+   */
+  private async matchVoiceToPage(): Promise<void> {
+    this.languageVoice = null;
+    const manifest = this.manifest;
+    if (!this.settings.matchPageLanguage || !manifest || this.playlist.length === 0) return;
+
+    const language = await this.detectPageLanguage();
+    if (!language) return;
+
+    const savedEngine = this.settings.engine;
+    const savedId = activeVoice(this.settings);
+    const saved: CandidateVoice = {
+      engine: savedEngine,
+      id: savedId,
+      label: this.voiceLabel(savedId),
+      language: voiceLanguage(savedEngine, savedId, manifest),
+    };
+    if (primaryLanguage(saved.language) === primaryLanguage(language)) return;
+
+    const installed = (
+      await Promise.all(
+        ENGINE_IDS.map(async (engine) =>
+          (await this.installedVoices(engine)).map((v) => ({
+            engine,
+            id: v.id,
+            label: v.label,
+            language: voiceLanguage(engine, v.id, manifest),
+          })),
+        ),
+      )
+    ).flat();
+
+    const pick = pickVoiceForLanguage(language, saved, installed);
+    const name = languageName(primaryLanguage(language));
+    if (pick) {
+      this.languageVoice = pick;
+      log.info(`page language ${language}: reading with ${pick.engine}/${pick.id} instead of ${saved.id}`);
+      this.bar?.flash(`This page is in ${name} — reading it with ${pick.label}`, 'ok');
+      void this.refreshBarVoices();
+      this.refreshMediaMetadata();
+    } else {
+      log.info(`page language ${language}: no downloaded voice for it`);
+      this.bar?.flash(`This page is in ${name}, and no ${name} voice is downloaded`, 'info', {
+        label: 'Get one',
+        run: () => this.port?.postMessage({ type: 'open-options' }),
+      });
+    }
+  }
+
+  /**
+   * The page's language: the browser's own detector when it is sure, else the page's declared
+   * language when the detector does not contradict it. `<html lang>` alone is not trusted — CMS
+   * templates ship `lang="en"` on pages in every language.
+   */
+  private async detectPageLanguage(): Promise<string> {
+    const sample = this.playlist
+      .slice(0, 60)
+      .map((p) => p.sourceText)
+      .join(' ')
+      .slice(0, 2500);
+    let detected = '';
+    let reliable = false;
+    try {
+      const result = await browser.i18n.detectLanguage(sample);
+      const top = result.languages?.[0];
+      if (top && top.language && top.language !== 'und') {
+        detected = top.language;
+        reliable = Boolean(result.isReliable) && top.percentage >= 60;
+      }
+    } catch {
+      /* no detector in this browser or context */
+    }
+    if (reliable) return detected;
+    const declared = this.declaredLanguage;
+    if (declared && (!detected || primaryLanguage(detected) === primaryLanguage(declared))) return declared;
+    return '';
   }
 
   // ---- pipeline glue -------------------------------------------------------
@@ -832,7 +954,13 @@ export class ReaderSession {
 
   private async onSettingsChanged(): Promise<void> {
     const prev = this.settings;
+    const prevEngine = engineIdentity(this.engineConfig());
     this.settings = await getSettings();
+
+    if (prev.matchPageLanguage !== this.settings.matchPageLanguage) {
+      if (this.settings.matchPageLanguage) await this.matchVoiceToPage();
+      else this.languageVoice = null;
+    }
 
     this.highlighter?.setOptions({
       color: this.settings.highlightColor,
@@ -851,17 +979,19 @@ export class ReaderSession {
       this.bar?.flash('Skip settings apply the next time you start reading', 'ok');
     }
 
-    if (changesSpokenText(prev, this.settings)) {
+    const respoken = changesSpokenText(prev, this.settings);
+    if (respoken) {
       this.respeak();
       this.bar?.flash('Pronunciation updated — from the next sentence', 'ok');
-      if (!needsEngineReload(prev, this.settings)) return;
     }
 
-    if (needsEngineReload(prev, this.settings)) {
-      this.pendingVoiceLabel = this.voiceLabel(activeVoice(this.settings));
+    // Compare what the engine would *load*, not which settings moved: a saved voice change does
+    // not touch a page read with a page-language voice, while a precision or worker change does.
+    if (engineIdentity(this.engineConfig()) !== prevEngine) {
+      this.pendingVoiceLabel = this.voiceLabel(this.voice);
       this.bar?.flash(`Loading ${this.pendingVoiceLabel}…`);
       await this.reloadEngine();
-    } else if (changedVisibly(prev, this.settings)) {
+    } else if (!respoken && changedVisibly(prev, this.settings)) {
       // Only for changes that came from somewhere else — the bar's own controls confirm
       // themselves as they are used, and `this.settings` is already up to date by the time the
       // relayed change arrives, so those produce no second message.
@@ -1107,16 +1237,8 @@ function changesSpokenText(prev: Settings, next: Settings): boolean {
   );
 }
 
-/** Settings that require tearing the engine down and loading a different model. */
-function needsEngineReload(prev: Settings, next: Settings): boolean {
-  return (
-    prev.engine !== next.engine ||
-    prev.piperVoice !== next.piperVoice ||
-    prev.kokoroVoice !== next.kokoroVoice ||
-    prev.supertonicVoice !== next.supertonicVoice ||
-    prev.kokoroDtype !== next.kokoroDtype ||
-    prev.supertonicSteps !== next.supertonicSteps ||
-    prev.preferWebGPU !== next.preferWebGPU ||
-    prev.synthWorkers !== next.synthWorkers
-  );
+/** Everything that decides which model the engine loads. Speed is applied per sentence, so not here. */
+function engineIdentity(config: EngineConfig): string {
+  const { speed: _speed, ...identity } = config;
+  return JSON.stringify(identity);
 }

@@ -102,6 +102,8 @@ export interface Settings {
   pronunciations: PronunciationRule[];
   /** Parts of an article to pass over when reading the whole page. */
   skip: SkipSettings;
+  /** Read a page with a downloaded voice in its language, when the current voice speaks another. */
+  matchPageLanguage: boolean;
   /** Colour theme for every surface Aloud draws. */
   theme: ThemeChoice;
   /**
@@ -134,6 +136,7 @@ export const DEFAULT_SETTINGS: Settings = {
   tapToSeek: true,
   pronunciations: [],
   skip: DEFAULT_SKIP,
+  matchPageLanguage: true,
   theme: 'system',
   tipsSeen: false,
   debug: false,
