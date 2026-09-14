@@ -26,7 +26,7 @@ import {
   type Settings,
   type ThemeChoice,
 } from '@/shared/settings';
-import { disposePreview, stopPreview } from '@/ui/voice-preview';
+import { disposePreview, playSynthesized, stopPreview } from '@/ui/voice-preview';
 import { clearAllPositions, countPositions } from '@/shared/reading-positions';
 
 /** Say how many pages have a remembered position, so the "forget" button has a visible effect. */
@@ -40,7 +40,10 @@ import { applyTheme, watchSystemTheme, THEME_LABEL } from '@/ui/theme';
 import { createThemeSwitch, type ThemeSwitch } from '@/ui/theme-switch';
 import type { ModelManifest } from '@/engine/engines/types';
 
-import { readCacheSizes } from '@/engine/installed-voices';
+import { piperDownloaded, readCacheSizes, sharedModelBytes, type CacheSizes } from '@/engine/installed-voices';
+import { engineInfo } from '@/shared/engine-catalog';
+import { engineConfigFor } from './engine-config';
+import { renderPronunciationEditor } from './pronunciation-editor';
 import { renderVoiceSection, type PanelContext } from './voice-panels';
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -343,6 +346,19 @@ async function render(): Promise<void> {
 
   void refreshUsage();
   void refreshPositionsHint();
+
+  renderPronunciationEditor($('pronunciations'), {
+    rules: settings.pronunciations,
+    save: async (rules) => {
+      settings = await setSettings({ pronunciations: rules.map((r) => ({ ...r })) });
+      flashSaved('Pronunciation saved');
+    },
+    speak: (text, onStatus) =>
+      playSynthesized(engineConfigFor(settings, { purpose: 'preview' }), onStatus, text),
+    speakDisabledReason: currentVoiceInstalled(manifest, sizes)
+      ? undefined
+      : 'Download your current voice first to hear fixes in it',
+  });
 }
 
 // ---- theme -----------------------------------------------------------------
@@ -388,6 +404,15 @@ function wireSlider(
 
 function wireCheckbox(id: string, key: keyof Settings): void {
   $(id).addEventListener('change', (e) => save({ [key]: (e.target as HTMLInputElement).checked }));
+}
+
+/** Is the voice that reads to you actually on this device? */
+function currentVoiceInstalled(manifest: ModelManifest, sizes: CacheSizes): boolean {
+  if (settings.engine === 'piper') {
+    const entry = manifest.piper[settings.piperVoice];
+    return entry ? piperDownloaded(entry, sizes) : false;
+  }
+  return sharedModelBytes(sizes, engineInfo(settings.engine).cacheHint ?? '') > 0;
 }
 
 function wire(): void {

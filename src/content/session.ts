@@ -21,6 +21,7 @@ import { extractArticle, type ExtractedArticle } from '@/extract/readability';
 import { resolveLiveRoot } from '@/extract/live-container';
 import { buildTextIndex, type TextIndex } from '@/extract/text-index';
 import { normalizeForSpeech } from '@/segment/normalize';
+import { applyPronunciations } from '@/segment/pronunciations';
 import { GaplessScheduler } from '@/audio/scheduler';
 import { Highlighter } from '@/highlight/highlighter';
 import { ControlBar } from '@/ui/control-bar';
@@ -343,11 +344,33 @@ export class ReaderSession {
 
   // ---- extraction & planning ----------------------------------------------
 
-  private normalize = (text: string): string =>
-    normalizeForSpeech(text, {
-      urlReplacement: this.settings.skipUrls ? 'link' : text,
+  /**
+   * Page text → spoken text. The reader's own pronunciation rules run first, on the text as
+   * written, so "e.g." or "GPU" can be given a reading before the built-in expansions see them.
+   */
+  private normalize = (text: string): string => {
+    const fixed = applyPronunciations(text, this.settings.pronunciations);
+    return normalizeForSpeech(fixed, {
+      urlReplacement: this.settings.skipUrls ? 'link' : fixed,
       expandAbbreviations: this.settings.expandAbbreviations,
     });
+  };
+
+  /**
+   * Rebuild every sentence's spoken text after a change to how text is spoken, and re-synthesise
+   * from the next sentence on — the same seam a speed change uses, so the sentence playing now
+   * finishes as it was and the change is heard straight after it.
+   */
+  private respeak(): void {
+    for (const item of this.playlist) item.spokenText = this.normalize(item.sourceText);
+    if (!this.engineReady) return;
+    const keepFrom = this.currentPlayId + 1;
+    this.requested.clear();
+    this.worker.cancelFrom(keepFrom, 0);
+    this.scheduler.reprimeForSpeed();
+    this.ensureSynth(keepFrom);
+    this.pushState();
+  }
 
   private knownArticle: KnownArticle | null = null;
 
@@ -819,6 +842,12 @@ export class ReaderSession {
     if (prev.speed !== this.settings.speed) this.bar?.setSpeed(this.settings.speed);
     if (prev.theme !== this.settings.theme) this.bar?.setTheme(this.settings.theme);
 
+    if (changesSpokenText(prev, this.settings)) {
+      this.respeak();
+      this.bar?.flash('Pronunciation updated — from the next sentence', 'ok');
+      if (!needsEngineReload(prev, this.settings)) return;
+    }
+
     if (needsEngineReload(prev, this.settings)) {
       this.pendingVoiceLabel = this.voiceLabel(activeVoice(this.settings));
       this.bar?.flash(`Loading ${this.pendingVoiceLabel}…`);
@@ -1051,7 +1080,21 @@ function selectionRoot(selection: SelectionSnapshot): Element {
  */
 function changedVisibly(prev: Settings, next: Settings): boolean {
   return (Object.keys(next) as Array<keyof Settings>).some(
-    (key) => key !== 'tipsSeen' && prev[key] !== next[key],
+    (key) => key !== 'tipsSeen' && !sameValue(prev[key], next[key]),
+  );
+}
+
+/** Settings are re-read from storage, so lists arrive as new arrays: compare them by content. */
+function sameValue(a: unknown, b: unknown): boolean {
+  return a === b || (typeof a === 'object' && JSON.stringify(a) === JSON.stringify(b));
+}
+
+/** Settings that change what is *said* without changing the voice saying it. */
+function changesSpokenText(prev: Settings, next: Settings): boolean {
+  return (
+    !sameValue(prev.pronunciations, next.pronunciations) ||
+    prev.skipUrls !== next.skipUrls ||
+    prev.expandAbbreviations !== next.expandAbbreviations
   );
 }
 

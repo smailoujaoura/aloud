@@ -5,6 +5,7 @@
  * want to accidentally sync large values. Model *files* live in IndexedDB, not here.
  */
 import { storage } from 'wxt/utils/storage';
+import type { PronunciationRule } from '@/segment/pronunciations';
 
 export type EngineId = 'piper' | 'kokoro' | 'supertonic';
 
@@ -79,6 +80,8 @@ export interface Settings {
   expandAbbreviations: boolean;
   /** Click a sentence in the page while reading to jump playback there. */
   tapToSeek: boolean;
+  /** Your own "say this when you see that" fixes, applied to spoken text only. */
+  pronunciations: PronunciationRule[];
   /** Colour theme for every surface Aloud draws. */
   theme: ThemeChoice;
   /**
@@ -109,6 +112,7 @@ export const DEFAULT_SETTINGS: Settings = {
   skipUrls: true,
   expandAbbreviations: true,
   tapToSeek: true,
+  pronunciations: [],
   theme: 'system',
   tipsSeen: false,
   debug: false,

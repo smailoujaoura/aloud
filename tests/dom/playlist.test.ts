@@ -125,7 +125,7 @@ describe('buildSelectionPlaylist (happy-dom)', () => {
 });
 
 describe('leadSilenceSec', () => {
-  const base = { playId: 1, spokenText: 'x', range: null, blockRange: null, role: 'paragraph' as const };
+  const base = { playId: 1, spokenText: 'x', sourceText: 'x', range: null, blockRange: null, role: 'paragraph' as const };
 
   it('is zero when both pause settings are off', () => {
     const item: PlaylistItem = { ...base, startsBlock: true, isHeading: false };

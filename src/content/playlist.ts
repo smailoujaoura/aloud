@@ -23,6 +23,11 @@ export interface PlaylistItem {
   playId: number;
   /** The normalised text handed to the synthesis engine. */
   spokenText: string;
+  /**
+   * The text as it appears on the page, before normalising. Kept so the spoken text can be
+   * rebuilt mid-read when a pronunciation rule or a speech setting changes.
+   */
+  sourceText: string;
   /** Highlight range for this exact sentence, or null if it could not be located. */
   range: Range | null;
   /** Highlight range for the whole enclosing block — the fallback when `range` is null. */
@@ -77,6 +82,7 @@ export function buildArticlePlaylist(
       if (isSpeakable(spoken)) {
         push({
           spokenText: spoken,
+          sourceText: title,
           range: null,
           blockRange: null,
           role: block.role,
@@ -98,6 +104,7 @@ export function buildArticlePlaylist(
       const range = rangeForSpan(index, block.start + chunk.start, block.start + chunk.end);
       push({
         spokenText: spoken,
+        sourceText: chunk.text,
         range: range ?? blockRange,
         blockRange,
         role: block.role,
@@ -126,6 +133,7 @@ export function buildSelectionPlaylist(opts: PlanOptions & { sourceText: string 
     playlist.push({
       playId: playlist.length,
       spokenText: spoken,
+      sourceText: chunk.text,
       range: found ? rangeForSpan(index, found.start, found.end) : null,
       blockRange: null,
       role: 'paragraph',

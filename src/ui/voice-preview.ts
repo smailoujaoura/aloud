@@ -222,7 +222,12 @@ export function playClip(url: string, onStatus: StatusFn = NOOP): Promise<void> 
 }
 
 /** Synthesise the preview sentence on device and play it (Kokoro / Supertonic). Never rejects. */
-export function playSynthesized(config: EngineConfig, onStatus: StatusFn = NOOP): Promise<void> {
+export function playSynthesized(
+  config: EngineConfig,
+  onStatus: StatusFn = NOOP,
+  /** What to say — the sample sentence unless a caller (the pronunciation editor) has its own. */
+  text: string = PREVIEW_SENTENCE,
+): Promise<void> {
   const my = supersede();
   currentListener = onStatus;
 
@@ -271,7 +276,7 @@ export function playSynthesized(config: EngineConfig, onStatus: StatusFn = NOOP)
             kind: 'synthesize',
             id: synthId,
             chunkIndex: 0,
-            text: PREVIEW_SENTENCE,
+            text,
             speed: config.speed,
             // Only Kokoro acts on this; it lets every Kokoro voice preview without a re-init.
             voice: config.engine === 'kokoro' ? config.voice : undefined,

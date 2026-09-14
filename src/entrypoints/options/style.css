@@ -361,6 +361,29 @@ code {
 
 .option-unsuitable { color: var(--fg-muted); }
 
+/* ---- Pronunciation ----------------------------------------------------------- */
+
+.pron-list { display: flex; flex-direction: column; gap: 6px; }
+.pron-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 8px;
+}
+.pron-row input { width: 100%; min-width: 0; }
+.pron-arrow { color: var(--fg-muted); }
+.pron-case { padding: 5px 9px; font-size: 12px; font-weight: 650; color: var(--fg-muted); border-radius: 7px; }
+.pron-case.is-on { background: var(--accent-soft); color: var(--fg); border-color: color-mix(in srgb, var(--accent-solid) 55%, var(--border)); }
+.pron-row .preview-btn { min-width: 98px; }
+.pron-remove { color: var(--fg-muted); }
+.pron-remove:hover:not(:disabled) { color: var(--danger); }
+.pron-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.pron-examples { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+@media (max-width: 560px) {
+  .pron-row { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+  .pron-row > :nth-child(n + 4) { grid-row: 2; }
+}
+
 @media (max-width: 560px) {
   .now-card { flex-wrap: wrap; }
   .now-side { flex: 1 1 100%; flex-direction: row; align-items: center; justify-content: flex-start; }
