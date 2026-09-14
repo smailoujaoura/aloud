@@ -19,6 +19,7 @@
  * Keeping the renderer open holds the pdf.js worker and the parsed document in memory, so the
  * caller must `destroy()` it. `readPdf` without `keepOpen` tears everything down as before.
  */
+import type { PdfJsAnnotation } from './annotations/model';
 import { layoutPdfText, type PdfOutline, type PdfPageInput, type PdfTextItem } from './text-layout';
 
 /** Where the bytes come from. `url` is fetched by whoever can reach it; `data` is already read. */
@@ -34,6 +35,11 @@ export interface LoadedPdf extends PdfOutline {
   pageCount: number;
   /** Present only when `keepOpen` was asked for. The caller owns it and must `destroy()` it. */
   renderer: PdfRenderer | null;
+  /**
+   * Highlights, underlines, strike-throughs and sticky notes already in the file, by page.
+   * Collected only with `keepOpen`: the page view is where they can be shown and edited.
+   */
+  annotations: Array<{ page: number; annotations: PdfJsAnnotation[] }>;
 }
 
 export interface ReadPdfOptions {
@@ -49,6 +55,8 @@ export interface PdfPageView {
   height: number;
   /** PDF user space -> CSS pixels within this page, rotation included. */
   toViewport(x: number, y: number): [number, number];
+  /** CSS pixels within this page -> PDF user space. */
+  toPdf(x: number, y: number): [number, number];
   /** Draw the page into `canvas`, sizing it for `devicePixelRatio`. */
   render(canvas: HTMLCanvasElement): Promise<void>;
   /** Abort an in-flight render (the page scrolled away, or the scale changed). */
@@ -82,6 +90,7 @@ interface PdfViewportLike {
   width: number;
   height: number;
   convertToViewportPoint(x: number, y: number): [number, number];
+  convertToPdfPoint(x: number, y: number): [number, number];
 }
 
 interface RenderTaskLike {
@@ -92,6 +101,7 @@ interface RenderTaskLike {
 interface PdfPageLike {
   getViewport(o: { scale: number }): PdfViewportLike;
   getTextContent(): Promise<{ items: Array<Record<string, unknown>> }>;
+  getAnnotations(): Promise<PdfJsAnnotation[]>;
   render(o: Record<string, unknown>): RenderTaskLike;
   cleanup(): void;
 }
@@ -131,16 +141,7 @@ export async function readPdf(source: PdfSource, opts: ReadPdfOptions = {}): Pro
 
   const task = pdfjs.getDocument({
     ...(source.kind === 'url' ? { url: source.url } : { data: new Uint8Array(source.data) }),
-    // No scripting, ever. Fonts are drawn from glyph outlines rather than injected @font-face
-    // rules, which renders the same and keeps the CSP surface small.
-    isEvalSupported: false,
-    disableFontFace: true,
-    enableXfa: false,
-    // Base-14 fonts and the predefined CJK encodings, vendored alongside pdf.js. Without these a
-    // page that references Helvetica or a CJK encoding is drawn with substituted glyphs.
-    standardFontDataUrl: vendorUrl('standard_fonts/'),
-    cMapUrl: vendorUrl('cmaps/'),
-    cMapPacked: true,
+    ...documentOptions(),
   });
   const doc = await task.promise;
 
@@ -148,6 +149,7 @@ export async function readPdf(source: PdfSource, opts: ReadPdfOptions = {}): Pro
   try {
     const metadata = await doc.getMetadata().catch(() => null);
     const pages: PdfPageInput[] = [];
+    const annotations: LoadedPdf['annotations'] = [];
     for (let n = 1; n <= doc.numPages; n++) {
       const page = await doc.getPage(n);
       const viewport = page.getViewport({ scale: 1 });
@@ -158,6 +160,10 @@ export async function readPdf(source: PdfSource, opts: ReadPdfOptions = {}): Pro
         height: viewport.height,
         items: content.items.map(toItem).filter((it): it is PdfTextItem => it !== null),
       });
+      if (keepOpen) {
+        const found = await page.getAnnotations().catch(() => [] as PdfJsAnnotation[]);
+        if (found.length) annotations.push({ page: n, annotations: found });
+      }
       page.cleanup();
       onProgress?.({ page: n, pageCount: doc.numPages });
     }
@@ -168,12 +174,43 @@ export async function readPdf(source: PdfSource, opts: ReadPdfOptions = {}): Pro
       ...outline,
       pageCount: doc.numPages,
       renderer: keepOpen ? makeRenderer(doc, task) : null,
+      annotations,
     };
   } finally {
     // Tears down the worker and frees the parsed document. Skipped when the caller asked to keep
     // rendering — it owns the renderer from here, and destroys it when the view changes or the
     // page goes away.
     if (!keepOpen || !ok) void task.destroy().catch(() => undefined);
+  }
+}
+
+function documentOptions(): Record<string, unknown> {
+  return {
+    // No scripting, ever. Fonts are drawn from glyph outlines rather than injected @font-face
+    // rules, which renders the same and keeps the CSP surface small.
+    isEvalSupported: false,
+    disableFontFace: true,
+    enableXfa: false,
+    // Base-14 fonts and the predefined CJK encodings, vendored alongside pdf.js. Without these a
+    // page that references Helvetica or a CJK encoding is drawn with substituted glyphs.
+    standardFontDataUrl: vendorUrl('standard_fonts/'),
+    cMapUrl: vendorUrl('cmaps/'),
+    cMapPacked: true,
+  };
+}
+
+/**
+ * Open `data` for drawing only — no text extraction. Used to draw the pages from a copy of the
+ * file with its highlights taken out, once they have become editable marks.
+ */
+export async function openRenderer(data: Uint8Array): Promise<PdfRenderer> {
+  const pdfjs = await loadPdfJs();
+  const task = pdfjs.getDocument({ data, ...documentOptions() });
+  try {
+    return makeRenderer(await task.promise, task);
+  } catch (err) {
+    void task.destroy().catch(() => undefined);
+    throw err;
   }
 }
 
@@ -200,6 +237,7 @@ function makeRenderer(doc: PdfDocumentLike, task: PdfLoadingTaskLike): PdfRender
         width: viewport.width,
         height: viewport.height,
         toViewport: (x, y) => viewport.convertToViewportPoint(x, y),
+        toPdf: (x, y) => viewport.convertToPdfPoint(x, y),
         cancel() {
           try {
             task?.cancel();

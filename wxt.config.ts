@@ -74,6 +74,13 @@ export default defineConfig({
      */
     optional_host_permissions: ['*://*/*'],
 
+    /**
+     * Firefox only, asked for on the first "Save" of an annotated PDF. Firefox has no File System
+     * Access API, so the downloads API's "Save as" dialog is the only way to let the user put the
+     * annotated file back over the original. Chromium saves through its own file dialog instead.
+     */
+    ...(browser === 'firefox' ? { optional_permissions: ['downloads'] } : {}),
+
     content_security_policy: {
       extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'",
     },

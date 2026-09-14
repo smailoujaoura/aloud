@@ -21,7 +21,12 @@
  *      on Firefox, where add-ons cannot read local files at all.
  */
 import { ReaderSession, type KnownArticle } from '@/content/session';
-import { readPdf, type LoadedPdf, type PdfPageView, type PdfRenderer } from '@/pdf/load-pdf';
+import { openRenderer, readPdf, type LoadedPdf, type PdfPageView, type PdfRenderer } from '@/pdf/load-pdf';
+import { MarkEditor, type EditorPage } from '@/pdf/annotations/editor';
+import { importAnnotations, type Mark } from '@/pdf/annotations/model';
+import { withMarks, withoutMarks } from '@/pdf/annotations/pdf-writer';
+import { hashBytes, loadMarks, saveMarks } from '@/pdf/annotations/store';
+import { canOpenWithHandle, pickPdfWithHandle, saveFile, saveMode } from '@/pdf/annotations/save-file';
 import { takePdf } from '@/pdf/handoff';
 import { buildTextLayer } from '@/pdf/page-view';
 import { titleIsInBody, type PdfBlock, type PdfLineBox } from '@/pdf/text-layout';
@@ -170,7 +175,7 @@ interface PageSlot {
  * they are well away from it. A 500-page book at device resolution is gigabytes of canvas if
  * every page is kept, and the reader is expected to run for an hour.
  */
-function renderPages(doc: LoadedPdf, renderer: PdfRenderer, scale: number): Promise<void> {
+function renderPages(doc: LoadedPdf, renderer: PdfRenderer, scale: number): Promise<EditorPage[]> {
   const article = $('article');
   article.replaceChildren(...titleNodes(doc));
 
@@ -208,7 +213,7 @@ function renderPages(doc: LoadedPdf, renderer: PdfRenderer, scale: number): Prom
     holder.append(layer.el);
 
     slots.set(holder, { holder, canvas, view, drawn: false });
-    return { holder, finish: layer.finish, pageNumber };
+    return { holder, finish: layer.finish, pageNumber, view };
   });
 
   function draw(slot: PageSlot): void {
@@ -236,6 +241,7 @@ function renderPages(doc: LoadedPdf, renderer: PdfRenderer, scale: number): Prom
     for (const { finish } of pages) finish();
     // Observed last, so the first callback sees pages that are laid out and can be drawn.
     for (const { holder } of pages) observer.observe(holder);
+    return pages.map(({ holder, view, pageNumber }) => ({ holder, view, pageNumber }));
   });
 }
 
@@ -276,14 +282,23 @@ async function fitScale(renderer: PdfRenderer): Promise<number> {
 let session: ReaderSession | null = null;
 let renderer: PdfRenderer | null = null;
 let pageObserver: IntersectionObserver | null = null;
+let editor: MarkEditor | null = null;
 
-async function present(source: Parameters<typeof readPdf>[0], name: string): Promise<void> {
+/**
+ * Show and read a PDF.
+ *
+ * `handle` is the file itself when the browser gave us one (Chromium's file picker or a drop):
+ * it is what lets Save write the marks back into that same file.
+ */
+async function present(data: ArrayBuffer, name: string, handle: FileSystemFileHandle | null = null): Promise<void> {
   showStatus('Reading the PDF…', 0.02);
   const view: PdfView = (await getSettings().catch(() => null))?.pdfView ?? 'pages';
 
   let doc: LoadedPdf;
   try {
-    doc = await readPdf(source, {
+    // pdf.js takes ownership of the buffer it is given, so it gets a copy: the original bytes are
+    // what marks are written into when the file is saved.
+    doc = await readPdf({ kind: 'data', data: data.slice(0) }, {
       keepOpen: view === 'pages',
       onProgress: ({ page, pageCount }) => {
         showStatus(`Reading the PDF… page ${page} of ${pageCount}`, page / Math.max(1, pageCount));
@@ -311,8 +326,12 @@ async function present(source: Parameters<typeof readPdf>[0], name: string): Pro
   }
 
   document.title = `${doc.title} — Aloud`;
+  editor?.dispose();
+  editor = null;
   renderer?.destroy();
   renderer = doc.renderer;
+  const bytes = new Uint8Array(data);
+  const fileMarks = renderer ? await marksFromFile(doc, bytes) : null;
 
   // Revealed *before* the pages are laid out: positioning the text layer needs real
   // measurements, and a `hidden` ancestor measures every box as zero.
@@ -322,7 +341,8 @@ async function present(source: Parameters<typeof readPdf>[0], name: string): Pro
   if (renderer) {
     showStatus('Drawing the pages…', 0.98);
     document.body.classList.add('pages-view');
-    await renderPages(doc, renderer, await fitScale(renderer));
+    const pages = await renderPages(doc, renderer, await fitScale(renderer));
+    await startEditor(pages, bytes, name, handle, fileMarks ?? []);
   } else {
     document.body.classList.remove('pages-view');
     renderReflow(doc);
@@ -339,6 +359,77 @@ async function present(source: Parameters<typeof readPdf>[0], name: string): Pro
   await session.begin('article', { knownArticle: knownArticle(doc, name) }).catch((err) =>
     log.error('[pdf] reader failed to start:', err),
   );
+}
+
+/**
+ * The highlights and notes already in the file, as editable marks.
+ *
+ * The pages are then drawn from a copy without them, or each would show twice — once baked into
+ * the page image and once as the mark on top. If that copy cannot be made (an encrypted file,
+ * say) the file's own marks simply stay part of the page, as they were before Aloud had marks.
+ */
+async function marksFromFile(doc: LoadedPdf, bytes: Uint8Array): Promise<Mark[] | null> {
+  const marks = doc.annotations.flatMap(({ page, annotations }) => importAnnotations(page, annotations));
+  if (marks.length === 0) return [];
+  try {
+    const stripped = await withoutMarks(bytes);
+    if (stripped) {
+      renderer?.destroy();
+      renderer = await openRenderer(stripped);
+    }
+    log.info(`[pdf] ${marks.length} mark(s) in the file, now editable`);
+    return marks;
+  } catch (err) {
+    log.warn('[pdf] could not separate the file\'s own marks; leaving them on the page:', err);
+    return null;
+  }
+}
+
+async function startEditor(
+  pages: EditorPage[],
+  original: Uint8Array,
+  name: string,
+  handle: FileSystemFileHandle | null,
+  fileMarks: Mark[],
+): Promise<void> {
+  let hash = await hashBytes(original);
+  const stored = await loadMarks(hash).catch(() => null);
+  const marks = stored ? stored.marks : fileMarks;
+  if (!stored && fileMarks.length) void saveMarks(hash, name, fileMarks);
+
+  let pending = 0;
+  editor = new MarkEditor({
+    pages,
+    marks,
+    savedMarks: fileMarks,
+    saveMode: saveMode(handle),
+    fileName: name,
+    onChange(next) {
+      clearTimeout(pending);
+      pending = window.setTimeout(() => void saveMarks(hash, name, next), 250);
+    },
+    async onSave(next) {
+      let written: Uint8Array | null = null;
+      const result = await saveFile(handle?.name ?? name, handle, async () => {
+        written = await withMarks(original, next);
+        return written;
+      });
+      if (result.kind === 'cancelled' || !written) return null;
+      // The file now has these bytes, so that is the document to find the marks under next time.
+      clearTimeout(pending);
+      hash = await hashBytes(written);
+      await saveMarks(hash, name, next);
+      if (result.kind === 'written') {
+        handle = result.handle;
+        log.info(`[pdf] wrote ${next.length} mark(s) into ${result.name}`);
+        return { message: `Saved into ${result.name}`, saveMode: saveMode(handle) };
+      }
+      return {
+        message: result.askedWhere ? `Saved ${result.name}` : `Downloaded ${result.name} with its marks`,
+        saveMode: saveMode(handle),
+      };
+    },
+  });
 }
 
 /**
@@ -375,7 +466,7 @@ async function loadJob(id: string): Promise<boolean> {
       log.warn('[pdf] no hand-off record for job', id);
       return false;
     }
-    await present({ kind: 'data', data: record.data }, record.name || record.url);
+    await present(record.data, record.name || record.url);
     return true;
   } catch (err) {
     log.warn('[pdf] job hand-off failed:', err);
@@ -389,7 +480,7 @@ async function loadUrl(url: string): Promise<boolean> {
     showStatus('Fetching the PDF…', 0.01);
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    await present({ kind: 'data', data: await res.arrayBuffer() }, fileNameOf(url));
+    await present(await res.arrayBuffer(), fileNameOf(url));
     return true;
   } catch (err) {
     log.warn('[pdf] direct fetch failed:', err);
@@ -506,10 +597,20 @@ $<HTMLInputElement>('file').addEventListener('change', (e) => {
   if (file) void openFile(file);
 });
 
-async function openFile(file: File): Promise<void> {
+async function openFile(file: File, handle: FileSystemFileHandle | null = null): Promise<void> {
   showStatus(`Reading ${file.name}…`, 0.02);
-  await present({ kind: 'data', data: await file.arrayBuffer() }, file.name);
+  await present(await file.arrayBuffer(), file.name, handle);
 }
+
+// Where the browser can hand over the file itself rather than a copy of its bytes, use that
+// picker instead: it is what lets Save write marks back into the same file.
+document.querySelector('.file-button')?.addEventListener('click', (e) => {
+  if (!canOpenWithHandle()) return;
+  e.preventDefault();
+  void pickPdfWithHandle()
+    .then((picked) => picked && openFile(picked.file, picked.handle))
+    .catch((err) => log.warn('[pdf] file picker failed:', err));
+});
 
 document.addEventListener('dragover', (e) => {
   if (!e.dataTransfer?.types.includes('Files')) return;
@@ -522,10 +623,16 @@ document.addEventListener('drop', (e) => {
   const file = e.dataTransfer?.files?.[0];
   if (!file) return;
   e.preventDefault();
-  void openFile(file);
+  // Must be asked for during the drop event itself; the data transfer is emptied afterwards.
+  const item = [...(e.dataTransfer?.items ?? [])].find((i) => i.kind === 'file') as
+    | (DataTransferItem & { getAsFileSystemHandle?(): Promise<FileSystemHandle | null> })
+    | undefined;
+  const handle = item?.getAsFileSystemHandle?.().catch(() => null) ?? Promise.resolve(null);
+  void handle.then((h) => openFile(file, h?.kind === 'file' ? (h as FileSystemFileHandle) : null));
 });
 
 window.addEventListener('pagehide', () => {
+  editor?.dispose();
   void session?.dispose();
   pageObserver?.disconnect();
   renderer?.destroy();

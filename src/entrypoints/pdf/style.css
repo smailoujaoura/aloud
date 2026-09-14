@@ -138,3 +138,118 @@ body.pages-view #article > h1 {
 }
 /* The highlight is painted behind the invisible glyphs, so it lands on the words in the image. */
 .text-layer ::selection { background: rgba(255, 214, 10, 0.4); }
+
+/* ---- marks: highlights, underlines, strike-throughs and notes ------------------------------
+ *
+ * Drawn between the page image and the invisible text layer. A highlight multiplies with the
+ * page like a highlighter pen, so the words underneath stay black rather than being tinted over.
+ */
+.mark-layer, .pin-layer { position: absolute; inset: 0; pointer-events: none; }
+.mark { position: absolute; box-sizing: border-box; }
+.mark.highlight { background: var(--mark); mix-blend-mode: multiply; border-radius: 2px; }
+.mark.underline { background: linear-gradient(var(--mark), var(--mark)) left bottom / 100% max(1.5px, 8%) no-repeat; }
+.mark.strike { background: linear-gradient(var(--mark), var(--mark)) left 58% / 100% max(1.5px, 8%) no-repeat; }
+.mark.selected { outline: 2px solid color-mix(in srgb, var(--mark) 70%, #000); outline-offset: 1px; }
+.pin-layer .pin {
+  position: absolute; pointer-events: auto;
+  width: 22px; height: 22px; padding: 0; display: grid; place-items: center;
+  border-radius: 6px; border: 1px solid rgba(0, 0, 0, 0.35);
+  background: var(--mark); color: #222; cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+.pin-layer .pin svg { width: 13px; height: 13px; }
+
+/* Floating panels share one look: the app's surface, not the page's paper. */
+.doc-tools, .sel-bar, .mark-pop, .notes-panel {
+  font: 13px/1.4 var(--sans);
+  color: var(--fg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-2);
+}
+.doc-tools button, .sel-bar button, .mark-pop button, .notes-panel button {
+  font: inherit; color: inherit; background: transparent; border: 0; border-radius: 8px;
+  padding: 6px 10px; cursor: pointer;
+}
+.doc-tools button:hover:not(:disabled), .sel-bar button:hover, .mark-pop button:hover, .notes-panel button:hover {
+  background: var(--surface-2);
+}
+.doc-tools button:disabled { opacity: 0.4; cursor: default; }
+.icon-btn { display: inline-grid; place-items: center; padding: 6px !important; }
+.tools-sep { width: 1px; align-self: stretch; margin: 4px 2px; background: var(--border); }
+
+.doc-tools {
+  position: fixed; top: 12px; right: 12px; z-index: 30;
+  display: flex; align-items: center; gap: 2px; padding: 4px;
+  max-width: calc(100vw - 24px);
+}
+.doc-tools .primary {
+  background: var(--accent-solid); color: var(--accent-on); font-weight: 600; padding: 6px 14px;
+}
+.doc-tools .primary:hover:not(:disabled) { background: var(--accent-solid); filter: brightness(1.05); }
+.doc-tools .primary.unsaved::after {
+  content: ''; display: inline-block; width: 7px; height: 7px; margin-left: 7px;
+  border-radius: 50%; background: currentColor; vertical-align: 1px;
+}
+.doc-status { color: var(--fg-muted); padding: 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40vw; }
+.doc-status.flash { color: var(--fg); }
+@media (max-width: 560px) { .doc-status:not(.flash) { display: none; } }
+
+.sel-bar {
+  position: absolute; z-index: 40; display: flex; align-items: center; gap: 2px; padding: 4px;
+  animation: mark-pop-in 120ms ease-out;
+}
+.swatch {
+  width: 26px; height: 26px; padding: 0 !important; display: grid; place-items: center;
+}
+.swatch::before {
+  content: ''; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--mark); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+.swatch.current::before, .swatch[aria-pressed='true']::before {
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2), 0 0 0 2px var(--surface), 0 0 0 4px var(--fg-muted);
+}
+[aria-pressed='true'].icon-btn { background: var(--accent-soft) !important; }
+
+.mark-pop {
+  position: absolute; z-index: 40; width: min(320px, calc(100vw - 16px)); padding: 6px;
+  animation: mark-pop-in 120ms ease-out;
+}
+.pop-row { display: flex; align-items: center; gap: 2px; }
+.pop-row .grow { flex: 1; }
+.pop-row .danger:hover { color: var(--danger); }
+.pop-quote {
+  margin: 6px 6px 4px; padding-left: 8px; border-left: 3px solid var(--border-strong);
+  color: var(--fg-muted); font-size: 12.5px;
+}
+.mark-pop textarea {
+  display: block; box-sizing: border-box; width: 100%; margin: 6px 0 0; padding: 8px;
+  font: 13px/1.45 var(--sans); color: var(--fg); background: var(--bg);
+  border: 1px solid var(--border); border-radius: 8px; resize: vertical; min-height: 64px;
+}
+.mark-pop textarea:focus { outline: 2px solid var(--accent-solid); outline-offset: -1px; }
+.pop-hint { margin: 6px 4px 2px; font-size: 11px; color: var(--fg-faint); }
+@media (pointer: coarse) { .pop-hint { display: none; } }
+
+.notes-panel {
+  position: fixed; top: 60px; right: 12px; z-index: 35;
+  width: min(360px, calc(100vw - 24px)); max-height: calc(100vh - 180px);
+  display: flex; flex-direction: column; overflow: hidden;
+  animation: mark-pop-in 120ms ease-out;
+}
+.panel-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 8px 8px 8px 14px; border-bottom: 1px solid var(--border);
+}
+.panel-empty { margin: 0; padding: 14px; color: var(--fg-muted); }
+.panel-list { list-style: none; margin: 0; padding: 4px; overflow-y: auto; }
+.panel-item { display: flex !important; gap: 10px; width: 100%; text-align: left; padding: 8px !important; }
+.panel-item .kind { flex: 0 0 4px; border-radius: 2px; background: var(--mark); }
+.panel-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.panel-meta { font-size: 11.5px; color: var(--fg-muted); }
+.panel-text { color: var(--fg); }
+.panel-note { color: var(--fg-muted); font-style: italic; white-space: pre-wrap; }
+
+@keyframes mark-pop-in { from { opacity: 0; transform: translateY(3px); } }
+@media (prefers-reduced-motion: reduce) { .sel-bar, .mark-pop, .notes-panel { animation: none; } }

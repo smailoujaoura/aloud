@@ -22,9 +22,17 @@ type Action = 'play' | 'pause' | 'previoustrack' | 'nexttrack' | 'seekbackward' 
 export class MediaControls {
   private readonly session: MediaSession | null;
   private readonly actions: Action[] = [];
+  /**
+   * The icon as a `blob:` URL. Chromium refuses artwork from any scheme but http(s), data and
+   * blob — an extension URL is dropped with a console warning — so the packaged icon is read once
+   * and handed over as a blob, which every browser accepts.
+   */
+  private artwork: string | null = null;
+  private lastMetadata: [string, string, string] | null = null;
 
-  constructor(handlers: MediaHandlers, private readonly artworkUrl?: string) {
+  constructor(handlers: MediaHandlers, artworkUrl?: string) {
     this.session = typeof navigator !== 'undefined' && 'mediaSession' in navigator ? navigator.mediaSession : null;
+    if (artworkUrl && this.session) void this.loadArtwork(artworkUrl);
     // "Seek" on a headset is a double or triple tap, and to a listener that means "back a bit" or
     // "on a bit" — a sentence, the same step as the bar's own buttons. "Stop" pauses rather than
     // closing the reader: an OS overlay is too easy to hit by accident to throw away a session.
@@ -48,13 +56,14 @@ export class MediaControls {
 
   /** What the OS overlay shows: the article, the voice, and the site it came from. */
   setMetadata(title: string, voice: string, site: string): void {
+    this.lastMetadata = [title, voice, site];
     if (!this.session || typeof MediaMetadata === 'undefined') return;
     try {
       this.session.metadata = new MediaMetadata({
         title: title || 'Aloud',
         artist: voice,
         album: site,
-        artwork: this.artworkUrl ? [{ src: this.artworkUrl, sizes: '128x128', type: 'image/png' }] : [],
+        artwork: this.artwork ? [{ src: this.artwork, sizes: '128x128', type: 'image/png' }] : [],
       });
     } catch {
       /* metadata is decorative */
@@ -70,7 +79,19 @@ export class MediaControls {
   }
 
   /** Hand the media session back to the page. */
+  private async loadArtwork(url: string): Promise<void> {
+    try {
+      const blob = await (await fetch(url)).blob();
+      this.artwork = URL.createObjectURL(blob);
+      if (this.lastMetadata) this.setMetadata(...this.lastMetadata);
+    } catch {
+      /* no artwork, then */
+    }
+  }
+
   dispose(): void {
+    if (this.artwork) URL.revokeObjectURL(this.artwork);
+    this.artwork = null;
     if (!this.session) return;
     for (const action of this.actions) {
       try {
