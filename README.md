@@ -41,6 +41,20 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
   sentence you stopped at, with a one-click "Start over". The position is checked against the
   sentence's text, so an edited page never resumes in the wrong place; it is stored on this
   device only and can be cleared from the settings page.
+- **Word by word** — with Piper voices the word being spoken is marked inside the sentence, timed
+  from the voice model's own phoneme durations rather than estimated.
+- **Notes in one keystroke** — <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> (or the bookmark on
+  the bar) keeps the sentence you just heard, or the text you selected, with where it came from.
+  Add your thoughts, search, copy or download everything as Markdown, and **listen from here**
+  to go straight back to that sentence.
+- **Drifted off?** <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>,</kbd> (or <kbd>B</kbd> on the bar)
+  goes back about ten seconds and shows you where that is.
+- **A Library to come back to** — *Continue* lists what you stopped part-way through with how
+  much is left, *Up next* is the reading queue with listening times, and *History* keeps how far
+  you got in everything, all on this device.
+- **Save as MP3** — the whole page or PDF as one audio file, in the voice and speed you chose.
+- **Mark up PDFs** — highlight, underline, strike through and comment on the page itself, and
+  save the marks into the PDF file.
 - **Offline & private** — models download once from Hugging Face and are cached on the device.
 
 ## Which voice to use

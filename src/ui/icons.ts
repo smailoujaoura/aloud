@@ -32,6 +32,10 @@ export const ICON_PATHS = {
     'M8 4.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7zm0 1.6a1.9 1.9 0 110 3.8 1.9 1.9 0 010-3.8z',
     'M7.2 0h1.6v2.4H7.2zm0 13.6h1.6V16H7.2zM0 7.2h2.4v1.6H0zm13.6 0H16v1.6h-2.4zM2.2 3.3l1.1-1.1 1.7 1.7-1.1 1.1zm9.8 9.8l1.1-1.1 1.7 1.7-1.1 1.1zm1.7-9.8l-1.1-1.1-1.7 1.7 1.1 1.1zM3.3 13.1l-1.1-1.1 1.7-1.7 1.1 1.1z',
   ],
+  /** A turning-back arrow — "back a little". */
+  replay: ['M8 2.2a5.8 5.8 0 11-5.6 7.3l1.6-.4A4.1 4.1 0 108 3.9a4 4 0 00-2.9 1.2l1.7 1.7H2.2V2.2l1.7 1.7A5.8 5.8 0 018 2.2z'],
+  /** A bookmark ribbon with a plus — "save to notes". */
+  bookmark: ['M4 1.5h8a1 1 0 011 1v12.3l-5-3.2-5 3.2V2.5a1 1 0 011-1zm.7 1.7v8.9L8 10l3.3 2.1V3.2z', 'M7.2 4.4h1.6v1.8h1.8v1.6H8.8v1.8H7.2V7.8H5.4V6.2h1.8z'],
   /** Arrow into a tray — save the document as an audio file. */
   download: ['M7 1.5h2v6l2.2-2.2 1.4 1.4L8 11.4 3.4 6.7l1.4-1.4L7 7.5z', 'M3 13h10v1.8H3z'],
   moon: ['M6.6 1.4a6.6 6.6 0 108 8 5.2 5.2 0 01-8-8z'],

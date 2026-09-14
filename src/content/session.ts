@@ -48,6 +48,9 @@ import {
   savePosition,
 } from '@/shared/reading-positions';
 import { PORT_NAME, type ActivateMode, type SessionState } from '@/shared/messages';
+import { siteOf, type DocSource } from '@/shared/doc-source';
+import { addNote } from '@/shared/notes';
+import { recordListening } from '@/shared/reading-history';
 import { log } from '@/shared/log';
 
 import { backendOf, tuningFor, type SynthBackend } from './engine-tuning';
@@ -87,6 +90,13 @@ interface BeginOptions {
   autoplay?: boolean;
   /** Called once the whole document has been read, so the queue page can move on. */
   onFinished?: () => void;
+  /**
+   * How to find this document again from the Library. A web page defaults to its own address;
+   * the PDF reader and the queue page say what they are showing.
+   */
+  source?: Omit<DocSource, 'key' | 'title'> & { title?: string };
+  /** False for the walkthrough's demo, which is not something anyone "read". */
+  keepHistory?: boolean;
 }
 
 export interface KnownArticle {
@@ -115,6 +125,12 @@ const MIN_SELECTION_CHARS = 15;
 
 /** How often, at most, the reading position is written while playing. */
 const POSITION_SAVE_INTERVAL_MS = 4000;
+/** Reading history is written this often while playing (and always on pause, close and finish). */
+const HISTORY_WRITE_INTERVAL_MS = 15_000;
+/** A sentence heard for less than this when "save to notes" is pressed gives way to the previous one. */
+const JUST_STARTED_SECONDS = 1.2;
+/** How much speech "back a little" replays. */
+const BACK_A_LITTLE_SECONDS = 10;
 
 /** How far either side of the current sentence to look for one that exists in the DOM. */
 const NEARBY_RANGE_SEARCH = 20;
@@ -174,6 +190,13 @@ export class ReaderSession {
   private outputLogged = false;
   /** When each word of a synthesised sentence is spoken, as the engine reported it (Piper). */
   private readonly wordTimings = new Map<number, WordTiming[]>();
+  /** Seconds of speech in each synthesised sentence, lead silence excluded. */
+  private readonly audioSeconds = new Map<number, number>();
+  private sourceHint: BeginOptions['source'] | null = null;
+  private keepHistory = true;
+  /** Listening not yet written to history, and what this session has measured of the voice's pace. */
+  private listening = { pendingSeconds: 0, spokenChars: 0, spokenSeconds: 0, lastWrite: 0 };
+  private charsBefore: number[] | null = null;
   /** The sentence playing now, as page ranges for its words, and the word last marked. */
   private words: { playId: number; spans: Array<{ start: number; range: Range }>; shown: number } | null = null;
   private wordTimer = 0;
@@ -227,6 +250,8 @@ export class ReaderSession {
     this.knownArticle = opts.knownArticle ?? null;
     this.tipsAllowed = opts.showTips ?? true;
     this.finishedHook = opts.onFinished ?? null;
+    this.sourceHint = opts.source ?? null;
+    this.keepHistory = opts.keepHistory ?? true;
     // Snapshot the page selection *now*, before any await or DOM work can disturb it.
     if (mode === 'selection') this.selection = snapshotSelection();
     // "Read selection" / "Read from here" are explicit "start reading now" actions.
@@ -273,6 +298,7 @@ export class ReaderSession {
           this.exporter.accept(playId, pcm, sr);
           return;
         }
+        if (sr > 0) this.audioSeconds.set(playId, pcm.length / sr);
         if (words?.length) this.wordTimings.set(playId, words);
         else this.wordTimings.delete(playId);
         this.scheduler.provide(playId, pcm, sr, leadSilenceSec(this.playlist[playId], this.settings));
@@ -506,6 +532,8 @@ export class ReaderSession {
       onVoice: (v: string) => void this.changeVoice(v),
       onToggleTapToSeek: (on: boolean) => void this.setTapToSeek(on),
       onSnapToCurrent: () => this.snapToCurrent(),
+      onSaveNote: () => void this.saveNote(),
+      onBackALittle: () => this.backALittle(),
       onSleep: (choice: SleepChoice) => this.setSleep(choice),
       onExportStart: () => void this.startExport(),
       onExportCancel: () => this.cancelExport(),
@@ -574,6 +602,7 @@ export class ReaderSession {
     this.state.hint = undefined;
     await this.scheduler.pause();
     this.stopFollowingWords(false);
+    this.recordHistory(this.currentPlayId);
     this.setStatus('paused');
   }
 
@@ -988,6 +1017,7 @@ export class ReaderSession {
     this.refreshOffScreen();
     this.maybeShowTips();
     this.rememberPosition(playId);
+    if (Date.now() - this.listening.lastWrite > HISTORY_WRITE_INTERVAL_MS) this.recordHistory(playId);
   }
 
   // ---- word highlighting ----------------------------------------------------
@@ -1091,6 +1121,12 @@ export class ReaderSession {
   }
 
   private onChunkEnd(playId: number): void {
+    const seconds = this.audioSeconds.get(playId) ?? 0;
+    this.listening.pendingSeconds += seconds;
+    if (seconds > 0) {
+      this.listening.spokenSeconds += seconds;
+      this.listening.spokenChars += this.playlist[playId]?.spokenText.length ?? 0;
+    }
     if (playId >= this.playlist.length - 1) return;
     this.ensureSynth(playId + 1);
   }
@@ -1117,7 +1153,116 @@ export class ReaderSession {
     // Read to the end: next time it opens at the top, not at the last sentence.
     this.lastSavedIndex = -1;
     if (this.docKey) void clearPosition(this.docKey);
+    this.recordHistory(this.playlist.length, true);
     this.finishedHook?.();
+  }
+
+  // ---- the Library: history, notes, finding your place ------------------------
+
+  /** This document, as the Library will know it. */
+  private docSource(): DocSource {
+    const hint = this.sourceHint;
+    return {
+      key: this.docKey,
+      title: hint?.title ?? this.state.title ?? document.title,
+      site: hint?.site ?? siteOf(location.href),
+      reopen: hint?.reopen ?? { kind: 'web', url: location.href },
+    };
+  }
+
+  /**
+   * Write this session's listening to history: where it has got to, what is left, and time heard
+   * since the last write. Nothing is recorded for a document nobody has listened to yet.
+   */
+  private recordHistory(index: number, finished = false): void {
+    const { listening } = this;
+    if (!this.keepHistory || !this.docKey || this.playlist.length === 0 || this.mode === 'selection') return;
+    if (listening.pendingSeconds <= 0 && !finished) return;
+    if (!this.charsBefore) {
+      let sum = 0;
+      this.charsBefore = this.playlist.map((item) => {
+        const before = sum;
+        sum += item.spokenText.length;
+        return before;
+      });
+      this.charsBefore.push(sum);
+    }
+    const at = Math.max(0, Math.min(index, this.playlist.length));
+    listening.lastWrite = Date.now();
+    void recordListening({
+      source: this.docSource(),
+      index: at,
+      total: this.playlist.length,
+      charsRead: this.charsBefore[at]!,
+      charsTotal: this.charsBefore[this.playlist.length]!,
+      addSeconds: listening.pendingSeconds,
+      secondsPerChar: listening.spokenChars > 200 ? listening.spokenSeconds / listening.spokenChars : null,
+      finished,
+      now: listening.lastWrite,
+    });
+    listening.pendingSeconds = 0;
+  }
+
+  /**
+   * Keep a passage in Notes: the selected text if there is any, else the sentence being heard.
+   *
+   * Someone presses the key *after* hearing what they want to keep, so a sentence that has only
+   * just begun gives way to the one before it — the one they were reacting to.
+   */
+  async saveNote(): Promise<void> {
+    if (this.playlist.length === 0 || !this.docKey) return;
+    const selected = document.getSelection();
+    const selectedText = selected && !selected.isCollapsed ? selected.toString().replace(/\s+/g, ' ').trim() : '';
+
+    let index = this.currentPlayId;
+    let text = '';
+    if (selectedText.length > 1) {
+      text = selectedText;
+      const anchor = selected!.getRangeAt(0).startContainer;
+      const element = anchor.nodeType === Node.ELEMENT_NODE ? (anchor as Element) : anchor.parentElement;
+      if (element) index = indexNearElement(this.playlist, element);
+    } else {
+      const position = this.scheduler?.playbackPosition();
+      if (position && position.playId === index && position.seconds < JUST_STARTED_SECONDS && index > 0) index--;
+      text = this.playlist[index]?.sourceText.replace(/\s+/g, ' ').trim() ?? '';
+    }
+    if (!text) return;
+
+    try {
+      const { duplicate } = await addNote({
+        text,
+        source: this.docSource(),
+        at: { index, total: this.playlist.length, excerpt: excerptOf(this.playlist[index]?.spokenText ?? '') },
+      });
+      this.bar?.flash(duplicate ? 'Already in your notes' : 'Saved to Notes', 'ok', {
+        label: 'Open',
+        run: () => this.port?.postMessage({ type: 'open-library', tab: 'notes' }),
+      });
+    } catch (err) {
+      log.warn('could not save the note:', err);
+      this.bar?.flash('Could not save that note');
+    }
+  }
+
+  /**
+   * "I drifted off": go back about ten seconds of speech, to the start of a sentence, and show it.
+   * Pressing it again goes back further.
+   */
+  backALittle(): void {
+    if (this.playlist.length === 0) return;
+    const from = this.currentPlayId;
+    let target = from;
+    let seconds = this.scheduler?.playbackPosition()?.seconds ?? 0;
+    while (target > 0 && seconds < BACK_A_LITTLE_SECONDS) {
+      target--;
+      seconds += this.audioSeconds.get(target) ?? (this.playlist[target]?.spokenText.length ?? 0) / 14;
+    }
+    const wasPlaying = this.scheduler?.isPlaying() ?? false;
+    this.seekTo(target);
+    this.snapToCurrent();
+    const excerpt = (this.playlist[target]?.sourceText ?? '').replace(/\s+/g, ' ').trim();
+    this.bar?.flash(`Back to “${excerpt.length > 60 ? `${excerpt.slice(0, 57).trimEnd()}…` : excerpt}”`, 'ok');
+    if (wasPlaying && !this.scheduler.isPlaying()) void this.play();
   }
 
   // ---- remembering where we stopped ----------------------------------------
@@ -1344,6 +1489,8 @@ export class ReaderSession {
         else if (m.type === 'toggle') void this.externalToggle();
         else if (m.type === 'settings-changed') void this.onSettingsChanged();
         else if (m.type === 'query-state') this.pushState();
+        else if (m.type === 'save-note') void this.saveNote();
+        else if (m.type === 'back-a-little') this.backALittle();
         else if (m.type === 'flash' && typeof (m as { text?: unknown }).text === 'string') {
           this.bar?.flash((m as { text: string }).text, 'ok');
         }
@@ -1388,6 +1535,7 @@ export class ReaderSession {
     // Before `disposed` is set: the final position is the one that matters most — it is where
     // the tab was closed or the reader was stopped.
     if (this.engineReady || this.currentPlayId > 0) this.rememberPosition(this.currentPlayId, true);
+    this.recordHistory(this.currentPlayId);
     this.disposed = true;
 
     this.stopFollowingWords(false);

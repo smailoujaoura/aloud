@@ -196,6 +196,7 @@ async function toggleDemo(): Promise<void> {
   demo = new ReaderSession();
   try {
     await demo.begin('from-cursor', {
+      keepHistory: false,
       targetElement: root,
       showTips: false,
       knownArticle: {

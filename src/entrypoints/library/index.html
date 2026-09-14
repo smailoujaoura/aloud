@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Aloud — Library</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <header class="lib-head">
+        <div class="brand">
+          <img src="/icon/48.png" alt="" width="30" height="30" />
+          <div>
+            <h1>Library</h1>
+            <p class="muted small" id="summary">Your reading, kept on this device.</p>
+          </div>
+        </div>
+      </header>
+
+      <!-- One address per section (library.html#notes, …) so the bar and the menus can open the
+           right one. Built in main.ts. -->
+      <nav class="lib-tabs" role="tablist" aria-label="Library sections">
+        <button role="tab" id="tab-continue" data-tab="continue" aria-controls="panel-continue" type="button">Continue <span class="count" id="count-continue"></span></button>
+        <button role="tab" id="tab-queue" data-tab="queue" aria-controls="panel-queue" type="button">Up next <span class="count" id="count-queue"></span></button>
+        <button role="tab" id="tab-notes" data-tab="notes" aria-controls="panel-notes" type="button">Notes <span class="count" id="count-notes"></span></button>
+        <button role="tab" id="tab-history" data-tab="history" aria-controls="panel-history" type="button">History</button>
+      </nav>
+
+      <section id="panel-continue" role="tabpanel" aria-labelledby="tab-continue" hidden>
+        <ol id="continueList" class="cards"></ol>
+        <div id="continueEmpty" class="empty" hidden>
+          <h2>Nothing half-finished</h2>
+          <p>Anything you stop listening to part-way through shows up here, with how much is left,
+            so you can pick it up again in one click.</p>
+        </div>
+      </section>
+
+      <section id="panel-queue" role="tabpanel" aria-labelledby="tab-queue" hidden>
+        <div class="panel-bar">
+          <p class="muted small" id="count">Loading…</p>
+          <div class="panel-actions">
+            <button id="clear" class="ghost danger btn-sm" type="button" hidden>Clear queue</button>
+            <button id="playAll" class="primary" type="button" hidden>▶ Play queue</button>
+          </div>
+        </div>
+        <div id="empty" class="empty" hidden>
+          <h2>Nothing queued yet</h2>
+          <p>Right-click any article and choose <b>Add page to reading queue</b>, or right-click a link
+            and choose <b>Add link to reading queue</b>. Articles play here one after another — and
+            pages you add are saved as they are, so they play even offline.</p>
+        </div>
+        <ol id="list" class="q-list"></ol>
+      </section>
+
+      <section id="panel-notes" role="tabpanel" aria-labelledby="tab-notes" hidden>
+        <div class="panel-bar">
+          <input type="search" id="noteSearch" placeholder="Search your notes…" aria-label="Search notes" />
+          <div class="panel-actions">
+            <button id="copyNotes" class="ghost btn-sm" type="button">Copy as Markdown</button>
+            <button id="downloadNotes" class="ghost btn-sm" type="button">Download .md</button>
+          </div>
+        </div>
+        <div id="notesList"></div>
+        <div id="notesEmpty" class="empty" hidden>
+          <h2>No notes yet</h2>
+          <p>While Aloud is reading, press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> — or the
+            bookmark button on the reading bar — to keep the sentence you just heard. With text
+            selected, the selection is kept instead, even when Aloud isn't reading. Each note
+            remembers where it came from, so you can listen from that sentence again.</p>
+        </div>
+      </section>
+
+      <section id="panel-history" role="tabpanel" aria-labelledby="tab-history" hidden>
+        <div class="panel-bar">
+          <p class="muted small" id="historySummary"></p>
+          <div class="panel-actions">
+            <button id="clearHistory" class="ghost danger btn-sm" type="button" hidden>Clear history</button>
+          </div>
+        </div>
+        <ol id="historyList" class="cards compact"></ol>
+        <div id="historyEmpty" class="empty" hidden>
+          <h2>Nothing listened to yet</h2>
+          <p>Pages and PDFs you listen to are listed here, with how far you got. It stays on this
+            device.</p>
+        </div>
+      </section>
+
+      <!-- The queued article being read. The reader session runs on this like on any page. -->
+      <section id="now" class="q-now" hidden>
+        <p class="q-now-label" id="nowLabel">Now reading</p>
+        <div id="prompt" class="q-prompt" hidden></div>
+        <article id="article"></article>
+      </section>
+    </main>
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

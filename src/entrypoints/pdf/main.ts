@@ -290,7 +290,13 @@ let editor: MarkEditor | null = null;
  * `handle` is the file itself when the browser gave us one (Chromium's file picker or a drop):
  * it is what lets Save write the marks back into that same file.
  */
-async function present(data: ArrayBuffer, name: string, handle: FileSystemFileHandle | null = null): Promise<void> {
+async function present(
+  data: ArrayBuffer,
+  name: string,
+  handle: FileSystemFileHandle | null = null,
+  /** Where the file came from, when it has an address the Library can open again. */
+  origin: string | null = null,
+): Promise<void> {
   showStatus('Reading the PDF…', 0.02);
   const view: PdfView = (await getSettings().catch(() => null))?.pdfView ?? 'pages';
 
@@ -356,7 +362,11 @@ async function present(data: ArrayBuffer, name: string, handle: FileSystemFileHa
   // From here on it is an ordinary article, and the ordinary reader handles it.
   await session?.dispose();
   session = new ReaderSession();
-  await session.begin('article', { knownArticle: knownArticle(doc, name) }).catch((err) =>
+  const reopen = origin && /^(https?|file):/.test(origin) ? ({ kind: 'pdf', url: origin } as const) : ({ kind: 'file', name } as const);
+  // A title lifted from the first page of a PDF with no real title can be a whole paragraph;
+  // in the Library the file name says more.
+  const libraryTitle = doc.title.length > 90 ? name.replace(/\.pdf$/i, '') : doc.title;
+  await session.begin('article', { knownArticle: knownArticle(doc, name), source: { title: libraryTitle, site: name, reopen } }).catch((err) =>
     log.error('[pdf] reader failed to start:', err),
   );
 }
@@ -466,7 +476,7 @@ async function loadJob(id: string): Promise<boolean> {
       log.warn('[pdf] no hand-off record for job', id);
       return false;
     }
-    await present(record.data, record.name || record.url);
+    await present(record.data, record.name || record.url, null, record.url);
     return true;
   } catch (err) {
     log.warn('[pdf] job hand-off failed:', err);
@@ -480,7 +490,7 @@ async function loadUrl(url: string): Promise<boolean> {
     showStatus('Fetching the PDF…', 0.01);
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    await present(await res.arrayBuffer(), fileNameOf(url));
+    await present(await res.arrayBuffer(), fileNameOf(url), null, url);
     return true;
   } catch (err) {
     log.warn('[pdf] direct fetch failed:', err);

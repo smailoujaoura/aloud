@@ -1,5 +1,5 @@
 /**
- * The reading queue page: plays saved articles one after another.
+ * "Up next": the reading queue, played article after article on this page.
  *
  * Articles are played *here*, not by opening each one in a tab. After a navigation a browser will
  * not start audio until that new page has been clicked, so a queue that opened tabs would stop at
@@ -14,6 +14,7 @@ import { ReaderSession } from '@/content/session';
 import { elementToText, extractArticle } from '@/extract/readability';
 import { el } from '@/shared/dom';
 import { documentKey } from '@/shared/position-match';
+import { formatListeningTime } from '@/shared/reading-history';
 import {
   clearQueue,
   loadQueue,
@@ -24,21 +25,37 @@ import {
   type QueueItem,
   type QueuedArticle,
 } from '@/shared/reading-queue';
-import { getSettings, watchSettings } from '@/shared/settings';
-import { applyTheme, watchSystemTheme } from '@/ui/theme';
+import { getSettings } from '@/shared/settings';
 import { log } from '@/shared/log';
-
-const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
+import { $, toast } from './feedback';
 
 let queue: QueueItem[] = [];
 let playingId: string | null = null;
 let session: ReaderSession | null = null;
+let speed = 1;
+let onCountChange: (count: number) => void = () => {};
+
+/** Speech runs at about this many characters a second at 1×; enough for "about 6 min". */
+const CHARS_PER_SECOND = 14;
+
+function listeningSeconds(item: QueueItem): number | null {
+  return item.article ? item.article.text.length / CHARS_PER_SECOND / speed : null;
+}
+
+
 
 // ---- list ------------------------------------------------------------------
 
 function renderList(): void {
   const n = queue.length;
-  $('count').textContent = n === 0 ? 'Empty' : `${n} article${n === 1 ? '' : 's'} · plays top to bottom`;
+  const known = queue.map(listeningSeconds);
+  const total = known.reduce<number>((sum, s) => sum + (s ?? 0), 0);
+  const unknown = known.filter((s) => s == null).length;
+  onCountChange(n);
+  $('count').textContent =
+    n === 0
+      ? 'Empty'
+      : `${n} article${n === 1 ? '' : 's'} · about ${formatListeningTime(total)}${unknown ? ` plus ${unknown} not yet downloaded` : ''} · plays top to bottom`;
   $('empty').hidden = n > 0 || playingId !== null;
   $('playAll').hidden = n === 0 || playingId !== null;
   $('clear').hidden = n === 0;
@@ -50,7 +67,8 @@ function renderList(): void {
 
       const text = el(document, 'div', { class: 'q-text' });
       const title = el(document, 'a', { href: item.url, target: '_blank', rel: 'noopener noreferrer', class: 'q-title' }, item.title);
-      const meta = [item.site, item.article ? 'saved for offline' : 'downloads when played'];
+      const seconds = listeningSeconds(item);
+      const meta = [item.site, seconds != null ? `about ${formatListeningTime(seconds)}` : 'downloads when played'];
       text.append(title, el(document, 'span', { class: 'q-meta' }, meta.join(' · ')));
 
       const actions = el(document, 'div', { class: 'q-actions' });
@@ -87,7 +105,7 @@ async function removeItem(id: string): Promise<void> {
 
 // ---- playing ---------------------------------------------------------------
 
-async function play(id: string): Promise<void> {
+export async function play(id: string): Promise<void> {
   const item = queue.find((q) => q.id === id);
   if (!item) return;
   await stopPlaying();
@@ -118,6 +136,7 @@ async function play(id: string): Promise<void> {
         lang: article.lang,
         key: documentKey(item.url),
       },
+      source: { title: item.title, site: item.site, reopen: { kind: 'queue', id: item.id, url: item.url } },
       autoplay: true,
       showTips: false,
       onFinished: () => void next(id),
@@ -260,24 +279,14 @@ function askPermission(item: QueueItem, origin: string): Promise<boolean> {
   });
 }
 
-// ---- feedback & wiring -----------------------------------------------------
-
-let toastTimer = 0;
-function toast(text: string, kind: 'info' | 'error' = 'info'): void {
-  const box = $('toast');
-  box.className = kind === 'error' ? 'toast error' : 'toast';
-  box.textContent = text;
-  box.hidden = false;
-  clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => (box.hidden = true), 3500);
+/** Whether `id` is still in the queue (a note or history entry may outlive its queue item). */
+export function inQueue(id: string): boolean {
+  return queue.some((q) => q.id === id);
 }
 
-async function init(): Promise<void> {
-  const settings = await getSettings();
-  applyTheme(document, settings.theme);
-  watchSystemTheme(() => void getSettings().then((s) => applyTheme(document, s.theme)));
-  watchSettings((s) => applyTheme(document, s.theme));
-
+export async function initQueue(opts: { onCount: (count: number) => void }): Promise<void> {
+  onCountChange = opts.onCount;
+  speed = (await getSettings()).speed;
   queue = await loadQueue();
   renderList();
   // Articles added from other tabs while this page is open appear straight away.
@@ -300,5 +309,3 @@ async function init(): Promise<void> {
   });
   window.addEventListener('pagehide', () => void session?.dispose());
 }
-
-void init();

@@ -136,6 +136,14 @@ export default defineConfig({
         suggested_key: { default: 'Alt+Shift+R' },
         description: 'Start / stop reading the current page aloud',
       },
+      'save-note': {
+        suggested_key: { default: 'Alt+Shift+S' },
+        description: 'Save what you just heard (or the selected text) to Notes',
+      },
+      'back-a-little': {
+        suggested_key: { default: 'Alt+Shift+Comma' },
+        description: 'Back a little: replay the last few seconds',
+      },
     },
 
     // Gecko-only. Chromium logs unknown top-level keys as warnings on load, so keep it out of

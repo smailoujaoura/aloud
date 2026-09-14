@@ -38,7 +38,11 @@ export type ToContentMessage =
   | { type: 'settings-changed' }
   | { type: 'query-state' }
   /** A short confirmation for the bar, e.g. "Added to your reading queue". */
-  | { type: 'flash'; text: string };
+  | { type: 'flash'; text: string }
+  /** The "save to notes" shortcut. */
+  | { type: 'save-note' }
+  /** The "back a little" shortcut. */
+  | { type: 'back-a-little' };
 
 /** Content -> Background */
 export type ToBackgroundMessage =
@@ -46,7 +50,11 @@ export type ToBackgroundMessage =
   | { type: 'session-started' }
   | { type: 'session-ended' }
   | { type: 'open-options' }
-  | { type: 'open-walkthrough' };
+  | { type: 'open-walkthrough' }
+  | { type: 'open-library'; tab?: LibraryTab };
+
+/** The Library page's sections, addressable as `library.html#notes` and so on. */
+export type LibraryTab = 'continue' | 'queue' | 'notes' | 'history';
 
 export const PORT_NAME = 'aloud-session';
 

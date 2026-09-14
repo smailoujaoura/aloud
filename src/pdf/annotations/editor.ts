@@ -98,10 +98,10 @@ export class MarkEditor {
 
     // ---- document toolbar ----
     this.tools = el('div', { class: 'doc-tools', role: 'toolbar', 'aria-label': 'Annotations' });
-    this.undoBtn = button('Undo', () => this.undo(), 'Undo (Ctrl+Z)', 'icon-btn');
+    this.undoBtn = button('', () => this.undo(), 'Undo (Ctrl+Z)', 'icon-btn');
     this.undoBtn.append(svgIcon(document, UNDO_SVG));
     this.undoBtn.setAttribute('aria-label', 'Undo');
-    this.redoBtn = button('Redo', () => this.redo(), 'Redo (Ctrl+Shift+Z)', 'icon-btn');
+    this.redoBtn = button('', () => this.redo(), 'Redo (Ctrl+Shift+Z)', 'icon-btn');
     this.redoBtn.append(svgIcon(document, REDO_SVG));
     this.redoBtn.setAttribute('aria-label', 'Redo');
     this.notesBtn = button('Notes', () => this.togglePanel(), 'Every highlight and note in this PDF');

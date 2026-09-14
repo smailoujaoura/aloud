@@ -490,7 +490,7 @@ function wire(): void {
     );
   });
   $('openQueue').addEventListener('click', () => {
-    void browser.runtime.sendMessage({ type: 'open-queue' }).catch(() => undefined);
+    void browser.runtime.sendMessage({ type: 'open-library' }).catch(() => undefined);
   });
   $('clearPositions').addEventListener('click', (e) => {
     void withBusy(

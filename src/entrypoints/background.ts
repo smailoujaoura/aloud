@@ -18,7 +18,10 @@
  */
 import { browser } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
-import { PORT_NAME, type ActivateMode, type ToBackgroundMessage } from '@/shared/messages';
+import { PORT_NAME, type ActivateMode, type LibraryTab, type ToBackgroundMessage } from '@/shared/messages';
+import { addNote } from '@/shared/notes';
+import { siteOf } from '@/shared/doc-source';
+import { documentKey } from '@/shared/position-match';
 import { putPdf, sweepPdfHandoffs } from '@/pdf/handoff';
 import { readCacheSizes, usableVoices } from '@/engine/installed-voices';
 import { addToQueue, type NewQueueItem } from '@/shared/reading-queue';
@@ -29,7 +32,7 @@ import { watchSettings } from '@/shared/settings';
 
 const CONTENT_FILE = '/reader-inject.js';
 const WALKTHROUGH_PAGE = '/welcome.html';
-const QUEUE_PAGE = '/queue.html';
+const LIBRARY_PAGE = '/library.html';
 
 const MENU_READ_SELECTION = 'aloud-read-selection';
 const MENU_READ_FROM_HERE = 'aloud-read-from-here';
@@ -85,9 +88,15 @@ export default defineBackground({
     // Keyboard shortcut. Absent on Firefox for Android.
     optional('commands', () => {
       browser.commands.onCommand.addListener(async (command) => {
-        if (command !== 'toggle-read') return;
         const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-        if (tab?.id != null) void activate(tab.id, 'article');
+        if (command === 'toggle-read') {
+          if (tab?.id != null) void activate(tab.id, 'article');
+        } else if (command === 'save-note') {
+          void saveNoteCommand(tab?.id ?? null, tab?.url ?? '', tab?.title ?? '');
+        } else if (command === 'back-a-little') {
+          if (active) postToActive({ type: 'back-a-little' });
+          else if (tab?.id != null) tellTab(tab.id, 'Start reading first', '…');
+        }
       });
     });
 
@@ -124,7 +133,7 @@ export default defineBackground({
           // On the toolbar button's own right-click menu, where "where is my queue" is looked for.
           browser.contextMenus.create({
             id: MENU_OPEN_QUEUE,
-            title: 'Open reading queue',
+            title: 'Open Library (queue, notes, continue listening)',
             contexts: ['action'],
           });
         });
@@ -133,7 +142,7 @@ export default defineBackground({
       browser.contextMenus.onClicked.addListener((info, tab) => {
         // The toolbar button's own menu is not about a page, and may arrive without a tab.
         if (info.menuItemId === MENU_OPEN_QUEUE) {
-          void openQueue();
+          void openLibrary('queue');
           return;
         }
         if (tab?.id == null) return;
@@ -162,7 +171,12 @@ export default defineBackground({
       } else if (m?.type === 'open-walkthrough') {
         void openWalkthrough();
       } else if (m?.type === 'open-queue') {
-        void openQueue();
+        void openLibrary('queue');
+      } else if (m?.type === 'open-and-read') {
+        const url = (m as { url?: string }).url;
+        if (url) void openAndRead(url).catch((err) => console.warn('[aloud] could not reopen', url, err));
+      } else if (m?.type === 'open-library') {
+        void openLibrary((m as { tab?: LibraryTab }).tab);
       } else if (m?.type === 'installed-voices') {
         // Answered here because only an extension-origin context can read the model cache: the
         // reading bar lives in the page, whose IndexedDB is a different origin entirely.
@@ -196,6 +210,8 @@ export default defineBackground({
           void browser.runtime.openOptionsPage();
         } else if (msg.type === 'open-walkthrough') {
           void openWalkthrough();
+        } else if (msg.type === 'open-library') {
+          void openLibrary(msg.tab);
         } else if (msg.type === 'session-ended') {
           // Compare the port, not just the tab: a replacement session ("Read from here" /
           // "Read selection" on a running reader) may already hold the slot for this tab.
@@ -483,16 +499,88 @@ async function sendWithRetry<T>(tabId: number, message: unknown, retries: number
   }
 }
 
-async function openQueue(): Promise<void> {
-  const url = browser.runtime.getURL(QUEUE_PAGE);
+/**
+ * "Continue" / "Listen from here" in the Library: open the document and start the reader, which
+ * resumes at the saved position. The Library has already asked for permission for the site.
+ */
+async function openAndRead(url: string): Promise<void> {
+  if (looksLikePdf(url)) {
+    await openPdfReader(url, null);
+    return;
+  }
+  const tab = await browser.tabs.create({ url });
+  if (tab.id == null) return;
+  const tabId = tab.id;
+  await new Promise<void>((resolve) => {
+    const done = (): void => {
+      browser.tabs.onUpdated.removeListener(listener);
+      clearTimeout(timer);
+      resolve();
+    };
+    const listener = (id: number, info: { status?: string }): void => {
+      if (id === tabId && info.status === 'complete') done();
+    };
+    const timer = setTimeout(done, 20_000);
+    browser.tabs.onUpdated.addListener(listener);
+  });
+  await activate(tabId, 'article');
+}
+
+/** Show the Library at `tab`, reusing its tab if one is open. */
+async function openLibrary(tab: LibraryTab = 'continue'): Promise<void> {
+  const base = browser.runtime.getURL(LIBRARY_PAGE);
+  const url = `${base}#${tab}`;
   try {
-    const [existing] = await browser.tabs.query({ url });
+    const [existing] = await browser.tabs.query({ url: `${base}*` });
     if (existing?.id != null) {
-      await browser.tabs.update(existing.id, { active: true });
+      await browser.tabs.update(existing.id, { active: true, url });
       return;
     }
   } catch {
     /* fall through to a new tab */
   }
   await browser.tabs.create({ url });
+}
+
+function postToActive(message: unknown): boolean {
+  if (!active) return false;
+  try {
+    active.port.postMessage(message);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The "save to notes" shortcut. With the reader running, the reader saves what is being heard
+ * (it knows the sentence and its place). Without it, the page's selection is saved straight away
+ * — reading does not have to be started just to keep a quotation.
+ */
+async function saveNoteCommand(tabId: number | null, url: string, title: string): Promise<void> {
+  if (active && (active.tabId === tabId || active.tabId === null)) {
+    postToActive({ type: 'save-note' });
+    return;
+  }
+  if (tabId == null) return;
+  let text = '';
+  try {
+    const [result] = await browser.scripting.executeScript({
+      target: { tabId },
+      func: () => getSelection()?.toString() ?? '',
+    });
+    text = String(result?.result ?? '').replace(/\s+/g, ' ').trim();
+  } catch {
+    /* a page scripts may not run on (the store, browser pages) */
+  }
+  if (!text) {
+    tellTab(tabId, 'Select some text, or start reading, to save a note', '…');
+    return;
+  }
+  const { duplicate } = await addNote({
+    text,
+    source: { key: documentKey(url), title: title || url, site: siteOf(url), reopen: { kind: 'web', url } },
+    at: null,
+  });
+  tellTab(tabId, duplicate ? 'Already in your notes' : 'Saved to Notes', '✓');
 }

@@ -45,6 +45,10 @@ export interface ControlBarCallbacks {
   onToggleTapToSeek(enabled: boolean): void;
   /** Scroll the page back to the sentence being read. */
   onSnapToCurrent(): void;
+  /** Keep the sentence being heard (or the selection) in Notes. */
+  onSaveNote(): void;
+  /** Replay the last few seconds and show where that is. */
+  onBackALittle(): void;
   /** A sleep-timer option was picked from the moon button's menu. */
   onSleep(choice: SleepChoice): void;
   /** Start turning the whole document into an MP3. */
@@ -207,6 +211,10 @@ export class ControlBar {
     this.playBtn = this.iconButton('play', 'Play', ICON_PATHS.play, 'Play / pause (Space)');
     this.prevBtn = this.iconButton('prev', 'Previous sentence', ICON_PATHS.prev, 'Previous sentence (←)');
     this.nextBtn = this.iconButton('next', 'Next sentence', ICON_PATHS.next, 'Next sentence (→)');
+    const backBtn = this.iconButton('back', 'Back a little', ICON_PATHS.replay, 'Back a little — replay the last few seconds (B)');
+    backBtn.addEventListener('click', () => this.cb.onBackALittle());
+    const noteBtn = this.iconButton('note', 'Save to Notes', ICON_PATHS.bookmark, 'Save what you just heard to Notes (N)');
+    noteBtn.addEventListener('click', () => this.cb.onSaveNote());
     this.snapBtn = this.iconButton(
       'snap',
       'Scroll to the sentence being read',
@@ -260,10 +268,11 @@ export class ControlBar {
     // every control, and a group is what stops the wrap from stranding a lone ✕ on a line of
     // its own: either they all fit beside the transport controls, or they all move down.
     const side = this.make('div', { class: 'side' });
-    side.append(this.snapBtn, this.tapBtn, this.sleepBtn, this.saveBtn, gearBtn, closeBtn);
+    side.append(noteBtn, this.snapBtn, this.tapBtn, this.sleepBtn, this.saveBtn, gearBtn, closeBtn);
 
     this.bar.append(
       this.playBtn,
+      backBtn,
       this.prevBtn,
       this.nextBtn,
       this.make('span', { class: 'sep' }),
@@ -396,6 +405,14 @@ export class ControlBar {
         return;
       case 'Enter':
         return; // focused button handles it
+      case 'b':
+        e.preventDefault();
+        this.cb.onBackALittle();
+        return;
+      case 'n':
+        e.preventDefault();
+        this.cb.onSaveNote();
+        return;
       case 'ArrowLeft':
       case 'j':
         e.preventDefault();
@@ -511,11 +528,14 @@ export class ControlBar {
   flash(text: string, kind: 'info' | 'ok' = 'info', action?: FlashAction): void {
     if (this.lastState?.status === 'error') return;
     this.flashing = true;
-    this.setToast(text, false, kind === 'ok' ? 'ok' : null);
+    // Shown even while the tips card is up: status can wait, but "Saved to Notes" is the answer
+    // to something the reader just did, and silence would read as the button not working.
+    this.setToast(text, false, kind === 'ok' ? 'ok' : null, true);
     const dismiss = (): void => {
       clearTimeout(this.flashTimer);
       this.flashing = false;
-      if (this.lastState) this.renderToast(this.lastState);
+      if (this.tips) this.clearToast();
+      else if (this.lastState) this.renderToast(this.lastState);
       else this.clearToast();
     };
     if (action) {
@@ -869,8 +889,8 @@ export class ControlBar {
     }
   }
 
-  private setToast(text: string, spinner: boolean, kind: 'err' | 'ok' | null = null): void {
-    if (this.tips) return;
+  private setToast(text: string, spinner: boolean, kind: 'err' | 'ok' | null = null, overTips = false): void {
+    if (this.tips && !overTips) return;
     this.toast.className = kind ? `toast ${kind}` : 'toast';
     const children: Node[] = [];
     if (spinner) children.push(this.make('span', { class: 'spinner' }));
