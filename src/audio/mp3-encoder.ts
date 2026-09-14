@@ -23,18 +23,26 @@ export class Mp3Writer {
     this.encoder = new Mp3Encoder(1, sampleRate, MP3_KBPS);
   }
 
-  /** Append `pcm` (-1..1). */
+  /**
+   * Append `pcm` (-1..1).
+   *
+   * Reads the samples by index only. In a Firefox content script the audio arrives as a typed
+   * array belonging to the page's compartment (it came through a MessagePort), and methods such
+   * as `subarray` look up `this.constructor` through the security wrapper — which Firefox denies,
+   * failing the whole export with "Permission denied to access property 'constructor'".
+   */
   write(pcm: Float32Array): void {
-    for (let start = 0; start < pcm.length; start += SLICE) {
-      const slice = pcm.subarray(start, Math.min(pcm.length, start + SLICE));
-      const int16 = new Int16Array(slice.length);
-      for (let i = 0; i < slice.length; i++) {
-        const s = Math.max(-1, Math.min(1, slice[i]!));
+    const length = pcm.length;
+    for (let start = 0; start < length; start += SLICE) {
+      const count = Math.min(SLICE, length - start);
+      const int16 = new Int16Array(count);
+      for (let i = 0; i < count; i++) {
+        const s = Math.max(-1, Math.min(1, pcm[start + i]!));
         int16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
       }
       this.push(this.encoder.encodeBuffer(int16));
     }
-    this.samples += pcm.length;
+    this.samples += length;
   }
 
   /** Append `seconds` of silence. */

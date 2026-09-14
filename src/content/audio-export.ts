@@ -7,6 +7,7 @@
  * before it are in, then encoded straight away, in order, with the same pauses reading would use.
  */
 import { Mp3Writer } from '@/audio/mp3-encoder';
+import { log } from '@/shared/log';
 
 export interface ExportHost {
   /** Sentences in the document. */
@@ -50,6 +51,7 @@ export class Mp3Export {
     try {
       this.drain();
     } catch (err) {
+      log.error('mp3 encoding failed:', err instanceof Error && err.stack ? err.stack : err);
       this.fail(`Could not encode the audio: ${err instanceof Error ? err.message : String(err)}`);
       return;
     }
