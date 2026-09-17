@@ -144,6 +144,10 @@ export default defineConfig({
         suggested_key: { default: 'Alt+Shift+Comma' },
         description: 'Back a little: replay the last few seconds',
       },
+      'media-speed': {
+        suggested_key: { default: 'Alt+Shift+V' },
+        description: 'Control this page’s video / audio speed from the keyboard',
+      },
     },
 
     // Gecko-only. Chromium logs unknown top-level keys as warnings on load, so keep it out of

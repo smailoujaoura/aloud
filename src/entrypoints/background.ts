@@ -28,9 +28,12 @@ import { addToQueue, type NewQueueItem } from '@/shared/reading-queue';
 import type { EngineId } from '@/shared/settings';
 import type { VoiceOption } from '@/shared/voice-catalog';
 import type { ModelManifest } from '@/engine/engines/types';
-import { watchSettings } from '@/shared/settings';
+import { getSettings, watchSettings } from '@/shared/settings';
 
 const CONTENT_FILE = '/reader-inject.js';
+/** The media speed control (src/entrypoints/speed-inject.ts). */
+const SPEED_FILE = '/speed-inject.js';
+const SPEED_SCRIPT_ID = 'aloud-media-speed';
 const WALKTHROUGH_PAGE = '/welcome.html';
 const LIBRARY_PAGE = '/library.html';
 
@@ -93,6 +96,8 @@ export default defineBackground({
           if (tab?.id != null) void activate(tab.id, 'article');
         } else if (command === 'save-note') {
           void saveNoteCommand(tab?.id ?? null, tab?.url ?? '', tab?.title ?? '');
+        } else if (command === 'media-speed') {
+          if (tab?.id != null) void startSpeedControl(tab.id);
         } else if (command === 'back-a-little') {
           if (active) postToActive({ type: 'back-a-little' });
           else if (tab?.id != null) tellTab(tab.id, 'Start reading first', '…');
@@ -234,8 +239,11 @@ export default defineBackground({
       if (active?.tabId === tabId) active = null;
     });
 
+    void syncSpeedSites();
+
     // Relay settings changes to the running session.
     watchSettings(() => {
+      void syncSpeedSites();
       if (!active) return;
       try {
         active.port.postMessage({ type: 'settings-changed' });
@@ -524,6 +532,63 @@ async function openAndRead(url: string): Promise<void> {
     browser.tabs.onUpdated.addListener(listener);
   });
   await activate(tabId, 'article');
+}
+
+/**
+ * Put the media speed control into a tab, in every frame — embedded players (YouTube in an
+ * article, a lecture in a course site) are frames of their own.
+ */
+async function startSpeedControl(tabId: number): Promise<void> {
+  const { mediaSpeed } = await getSettings();
+  if (!mediaSpeed.enabled) {
+    tellTab(tabId, 'Video speed control is switched off in Aloud\u2019s settings', '…');
+    return;
+  }
+  try {
+    await browser.scripting.executeScript({ target: { tabId, allFrames: true }, files: [SPEED_FILE] });
+  } catch (err) {
+    // about:, the web stores, a PDF viewer: nothing of ours may run there.
+    console.warn('[aloud] cannot control media speed on this page:', err);
+    setBadge(tabId, 'n/a');
+    setTimeout(() => clearBadge(tabId), 2500);
+  }
+}
+
+/**
+ * Keep the always-on registration in step with the setting.
+ *
+ * Only sites whose permission has actually been granted are registered — the settings page asks
+ * for each one from the user's click, and a permission revoked in the browser's own UI simply
+ * drops the site from the registration on the next change.
+ */
+async function syncSpeedSites(): Promise<void> {
+  if (!browser.scripting?.registerContentScripts) return;
+  try {
+    const { mediaSpeed } = await getSettings();
+    const wanted: string[] = [];
+    if (mediaSpeed.enabled) {
+      for (const host of mediaSpeed.alwaysOn) {
+        const matches = host === '*' ? ['*://*/*'] : [`*://${host}/*`, `*://*.${host}/*`];
+        if (await browser.permissions.contains({ origins: matches }).catch(() => false)) wanted.push(...matches);
+      }
+    }
+    const existing = await browser.scripting.getRegisteredContentScripts({ ids: [SPEED_SCRIPT_ID] }).catch(() => []);
+    if (existing.length > 0) await browser.scripting.unregisterContentScripts({ ids: [SPEED_SCRIPT_ID] });
+    if (wanted.length === 0) return;
+    await browser.scripting.registerContentScripts([
+      {
+        id: SPEED_SCRIPT_ID,
+        js: [SPEED_FILE.slice(1)],
+        matches: [...new Set(wanted)],
+        allFrames: true,
+        runAt: 'document_idle',
+        persistAcrossSessions: true,
+      },
+    ]);
+    console.info(`[aloud] media speed control runs by itself on ${wanted.length / 2} site(s)`);
+  } catch (err) {
+    console.warn('[aloud] could not register the media speed control:', err);
+  }
 }
 
 /** Show the Library at `tab`, reusing its tab if one is open. */

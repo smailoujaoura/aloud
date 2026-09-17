@@ -152,3 +152,9 @@ toolbar click ──► background   (event page on Firefox, service worker on C
 
 See `docs/DESIGN.md` for the full rationale (event pages vs. service workers vs. offscreen
 documents, the SharedArrayBuffer ceiling, CSP, CORS).
+
+`speed-inject.js` is the second content script: the video/audio speed control
+(`src/media-speed/`). Like the reader it is never declared in the manifest — the `media-speed`
+command injects it with `activeTab`, and `background.ts` registers it (via
+`scripting.registerContentScripts`) only for the sites in `mediaSpeed.alwaysOn`, each of which
+the settings page has had granted from a click.

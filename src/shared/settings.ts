@@ -49,7 +49,69 @@ export interface SkipSettings {
  */
 export const DEFAULT_SKIP: SkipSettings = { code: true, tables: false, captions: false, references: true };
 
+/**
+ * The media speed control: Aloud's second job, setting the playback rate of any `<video>` or
+ * `<audio>` on a page from the keyboard.
+ *
+ * Off-page by default in the sense that matters: Aloud declares no content script for all sites,
+ * so the control is injected into a tab by its own shortcut, or — for sites listed in
+ * `alwaysOn` — by a script registered only after you grant that site.
+ */
+export interface MediaSpeedSettings {
+  /** The whole feature, including the shortcut. */
+  enabled: boolean;
+  /** How much one press of faster / slower moves the rate. */
+  step: number;
+  /** The rates the preset keys cycle through, and the buttons offer. */
+  presets: number[];
+  /** The rate the "preferred speed" key toggles to, and back from. */
+  preferred: number;
+  /** Start every video at this rate (0 = whatever the site set). */
+  startAt: number;
+  /** Remember the rate per site, and use it next time you are there. */
+  rememberPerSite: boolean;
+  /** Show the speed briefly over the video when it changes. */
+  showBadge: boolean;
+  /** Hosts the control starts on by itself, once that site's permission has been granted. */
+  alwaysOn: string[];
+  /** Key bindings, as text — see media-speed/keys.ts. */
+  keys: {
+    faster: string;
+    slower: string;
+    reset: string;
+    preferred: string;
+    nextPreset: string;
+    previousPreset: string;
+  };
+}
+
+/**
+ * Defaults chosen to sit beside a video site's own shortcuts rather than on top of them: D and S
+ * are free on YouTube, Netflix and the BBC, and the rest are deliberately unbound until someone
+ * asks for them.
+ */
+export const DEFAULT_MEDIA_SPEED: MediaSpeedSettings = {
+  enabled: true,
+  step: 0.1,
+  presets: [1, 1.25, 1.5, 1.75, 2, 2.5, 3],
+  preferred: 1.75,
+  startAt: 0,
+  rememberPerSite: true,
+  showBadge: true,
+  alwaysOn: [],
+  keys: {
+    faster: 'd',
+    slower: 's',
+    reset: 'r',
+    preferred: 'g',
+    nextPreset: 'shift+d',
+    previousPreset: 'shift+s',
+  },
+};
+
 export interface Settings {
+  /** Video and audio speed control (see `MediaSpeedSettings`). */
+  mediaSpeed: MediaSpeedSettings;
   /** Active synthesis engine. */
   engine: EngineId;
   /** Piper voice key, e.g. `en_US-hfc_female-medium`. Must exist in models.json. */
@@ -129,6 +191,7 @@ export const DEFAULT_SETTINGS: Settings = {
   supertonicSteps: 4,
   synthWorkers: 0,
   speed: 1,
+  mediaSpeed: DEFAULT_MEDIA_SPEED,
   preferWebGPU: true,
   highlight: true,
   highlightColor: 'rgba(255, 214, 10, 0.45)',
@@ -185,7 +248,16 @@ export async function getSettings(): Promise<Settings> {
   const stored = await item.getValue();
   // Merge so new keys added in an update get their defaults — one level deep for grouped settings,
   // so a new skip option also gets its default in a profile that saved the group before it existed.
-  return { ...DEFAULT_SETTINGS, ...stored, skip: { ...DEFAULT_SKIP, ...stored?.skip } };
+  return {
+    ...DEFAULT_SETTINGS,
+    ...stored,
+    skip: { ...DEFAULT_SKIP, ...stored?.skip },
+    mediaSpeed: {
+      ...DEFAULT_MEDIA_SPEED,
+      ...stored?.mediaSpeed,
+      keys: { ...DEFAULT_MEDIA_SPEED.keys, ...stored?.mediaSpeed?.keys },
+    },
+  };
 }
 
 export async function setSettings(patch: Partial<Settings>): Promise<Settings> {
@@ -195,7 +267,17 @@ export async function setSettings(patch: Partial<Settings>): Promise<Settings> {
 }
 
 export function watchSettings(cb: (s: Settings) => void): () => void {
-  return item.watch((newValue) => cb({ ...DEFAULT_SETTINGS, ...newValue }));
+  return item.watch((newValue) =>
+    cb({
+      ...DEFAULT_SETTINGS,
+      ...newValue,
+      mediaSpeed: {
+        ...DEFAULT_MEDIA_SPEED,
+        ...newValue?.mediaSpeed,
+        keys: { ...DEFAULT_MEDIA_SPEED.keys, ...newValue?.mediaSpeed?.keys },
+      },
+    }),
+  );
 }
 
 /** The voice key the given settings select for their active engine. */

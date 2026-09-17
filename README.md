@@ -55,6 +55,13 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
 - **Save as MP3** — the whole page or PDF as one audio file, in the voice and speed you chose.
 - **Mark up PDFs** — highlight, underline, strike through and comment on the page itself, and
   save the marks into the PDF file.
+- **Speed control for every player** — the same keyboard control for any `<video>` or `<audio>` on
+  the web, not just Aloud's own reading: <kbd>D</kbd> / <kbd>S</kbd> step the speed, <kbd>G</kbd>
+  jumps to your preferred speed, <kbd>R</kbd> goes back to 1×, and <kbd>Shift</kbd> with D or S
+  steps through your presets — all rebindable. The speed is remembered per site, re-applied when a
+  player resets it between videos, and shown briefly on the video. It starts with
+  <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> and asks for no permissions; sites you list in
+  settings start it by themselves, one granted site at a time.
 - **Offline & private** — models download once from Hugging Face and are cached on the device.
 
 ## Which voice to use

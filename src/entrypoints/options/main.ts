@@ -44,6 +44,7 @@ import type { ModelManifest } from '@/engine/engines/types';
 import { piperDownloaded, readCacheSizes, sharedModelBytes, type CacheSizes } from '@/engine/installed-voices';
 import { engineInfo } from '@/shared/engine-catalog';
 import { engineConfigFor } from './engine-config';
+import { renderMediaSpeedPanel } from './media-speed-panel';
 import { renderPronunciationEditor } from './pronunciation-editor';
 import { renderVoiceSection, type PanelContext } from './voice-panels';
 
@@ -301,6 +302,19 @@ async function checkWorkerGpu(): Promise<string> {
   return summary;
 }
 
+/** The speed panel's options, rebuilt after each save so its chips and keys show the new state. */
+function mediaSpeedOptions(): Parameters<typeof renderMediaSpeedPanel>[1] {
+  return {
+    settings: settings.mediaSpeed,
+    save: async (patch) => {
+      settings = await setSettings({ mediaSpeed: { ...settings.mediaSpeed, ...patch } });
+      flashSaved();
+      renderMediaSpeedPanel($('mediaSpeed'), mediaSpeedOptions());
+    },
+    toast: (message: string) => flashSaved(message),
+  };
+}
+
 async function render(): Promise<void> {
   settings = await getSettings();
   applyTheme(document, settings.theme);
@@ -354,6 +368,9 @@ async function render(): Promise<void> {
   void loadQueue().then((q) => {
     $('openQueue').textContent = q.length ? `Open queue (${q.length})` : 'Open queue';
   });
+
+  $<HTMLInputElement>('mediaSpeedEnabled').checked = settings.mediaSpeed.enabled;
+  renderMediaSpeedPanel($('mediaSpeed'), mediaSpeedOptions());
 
   renderPronunciationEditor($('pronunciations'), {
     rules: settings.pronunciations,
@@ -439,6 +456,14 @@ function wire(): void {
   wireSlider('sentencePauseMs', 'sentencePauseOut', 'sentencePauseMs', (v) => `${(v / 1000).toFixed(2)}s`);
   wireSlider('supertonicSteps', 'supertonicStepsOut', 'supertonicSteps', String);
   wireSlider('synthWorkers', 'synthWorkersOut', 'synthWorkers', (v) => (v === 0 ? 'auto' : String(v)));
+
+  $('mediaSpeedEnabled').addEventListener('change', async (e) => {
+    const enabled = (e.target as HTMLInputElement).checked;
+    settings = await setSettings({ mediaSpeed: { ...settings.mediaSpeed, enabled } });
+    flashSaved(enabled ? 'Speed control on' : 'Speed control off');
+    renderMediaSpeedPanel($('mediaSpeed'), mediaSpeedOptions());
+    $('mediaSpeed').classList.toggle('is-off', !enabled);
+  });
 
   wireCheckbox('highlight', 'highlight');
   wireCheckbox('wordHighlight', 'wordHighlight');

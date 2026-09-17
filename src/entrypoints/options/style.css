@@ -405,3 +405,43 @@ code {
   .vi-actions { grid-column: 2; justify-self: start; justify-content: flex-start; }
   .lang-picker select { min-width: 0; }
 }
+
+/* ---- video & audio speed --------------------------------------------------------------- */
+
+#mediaSpeed.is-off { opacity: 0.5; pointer-events: none; }
+#mediaSpeed .row-label { display: flex; flex-direction: column; gap: 2px; }
+#mediaSpeed .speed-row { align-items: center; }
+.presets-input, .site-input { font: inherit; }
+.presets-input { width: 15rem; }
+
+.speed-sites { margin: 6px 0 18px; }
+.site-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.site-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 6px 4px 11px; border-radius: 999px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  font-size: 13px; font-weight: 600;
+}
+.site-chip .chip-x {
+  all: unset; cursor: pointer; width: 18px; height: 18px; border-radius: 50%;
+  display: grid; place-items: center; color: var(--fg-muted); font-size: 11px;
+}
+.site-chip .chip-x:hover { background: var(--surface-3); color: var(--fg); }
+.site-add { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.site-add .site-input { flex: 1 1 14rem; min-width: 0; }
+
+.speed-keys { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 14px; }
+.key-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 8px 12px; border-radius: 10px;
+  background: var(--surface); border: 1px solid var(--border);
+}
+.key-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.key-button {
+  flex: 0 0 auto; min-width: 7.5rem; text-align: center;
+  font: 600 13px/1 var(--mono); padding: 8px 12px; border-radius: 8px;
+  border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--fg);
+}
+.key-button:hover { border-color: var(--accent-solid); }
+.key-button.listening { border-color: var(--accent-solid); background: var(--accent-soft); color: var(--fg); }
+.speed-forget { margin: 0 0 16px; }
