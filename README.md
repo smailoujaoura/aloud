@@ -41,8 +41,8 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
   sentence you stopped at, with a one-click "Start over". The position is checked against the
   sentence's text, so an edited page never resumes in the wrong place; it is stored on this
   device only and can be cleared from the settings page.
-- **Word by word** — with Piper voices the word being spoken is marked inside the sentence, timed
-  from the voice model's own phoneme durations rather than estimated.
+- **Word by word** — with Piper and Kokoro voices the word being spoken is marked inside the
+  sentence, timed from the voice model's own phoneme durations rather than estimated.
 - **Highlights and notes on any page** — select text and press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>
   (or use the colour toolbar, or right-click → *Highlight and keep in Notes*). The passage is
   highlighted, kept with your note and tags, and highlighted again whenever you come back —

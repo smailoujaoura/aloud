@@ -13,7 +13,11 @@
 import { KokoroTTS } from 'kokoro-js';
 import { env as hfEnv } from '@huggingface/transformers';
 
-import { TransformersCache } from '@/engine/model-cache';
+import { TransformersCache, cacheHas, fetchModelFile, setCachedFileTransform } from '@/engine/model-cache';
+import { exposeNodeOutput } from '@/engine/onnx-outputs';
+import { soundsOf, splitWords, wordTimes, type TextWord, type TimedSound } from '@/engine/g2p/word-timing';
+import type { WordTiming } from '@/engine/protocol';
+import { phonemize } from 'phonemizer';
 import { loadOrt } from '@/engine/ort-loader';
 import { chooseExecutionProviders } from '@/engine/runtime-env';
 import { log } from '@/shared/log';
@@ -23,6 +27,33 @@ const MODEL_ID = 'onnx-community/Kokoro-82M-v1.0-ONNX';
 
 type KokoroDtype = 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16';
 type KokoroDevice = 'wasm' | 'webgpu';
+
+/** The model file transformers.js loads for each precision (onnx-community's repo layout). */
+const MODEL_FILES: Partial<Record<KokoroDtype, string>> = {
+  fp32: 'model.onnx',
+  fp16: 'model_fp16.onnx',
+  q8: 'model_quantized.onnx',
+};
+const modelUrl = (dtype: KokoroDtype): string | null =>
+  MODEL_FILES[dtype] ? `https://huggingface.co/${MODEL_ID}/resolve/main/onnx/${MODEL_FILES[dtype]}` : null;
+
+/**
+ * Kokoro, like Piper, decides how many audio frames each phoneme gets before it makes a sound —
+ * StyleTTS2's `pred_dur`, the model's only `Clip` (a Round clamped to at least one frame) — and
+ * throws it away. Exposing it as an output gives exact word timing: one duration per input token,
+ * 600 samples a frame at 24 kHz, summing to the length of the audio at any speed.
+ *
+ * The file is rewritten as transformers.js reads it from Aloud's cache; the name of the exposed
+ * output is kept here for `synthesize` to read.
+ */
+let durationsOutput: string | null = null;
+setCachedFileTransform((key, bytes) => {
+  if (!key.includes(MODEL_ID) || !/\/onnx\/model[^/]*\.onnx$/.test(key)) return null;
+  const exposed = exposeNodeOutput(bytes, 'Clip');
+  if (!exposed) return null;
+  durationsOutput = exposed.name;
+  return exposed.model;
+});
 
 let envConfigured = false;
 async function configureTransformersEnv(): Promise<void> {
@@ -61,7 +92,19 @@ export class KokoroEngine implements SynthEngine {
     // worker and where the extra precision is close to free.
     const wasmDtype: KokoroDtype = ctx.dtype === 'fp32' ? 'fp32' : 'q8';
 
-    const load = (device: KokoroDevice, dtype: KokoroDtype) =>
+    const load = async (device: KokoroDevice, dtype: KokoroDtype) => {
+      // Into Aloud's cache first, so transformers.js reads it from there — through the transform
+      // above — even on the very first run, instead of straight from the network.
+      const url = modelUrl(dtype);
+      if (url && !(await cacheHas(url))) {
+        await fetchModelFile(url, {
+          label: `Kokoro ${dtype} model`,
+          onProgress: (p) => ctx.onProgress({ ...p, phase: 'download' }),
+        });
+      }
+      return loadModel(device, dtype);
+    };
+    const loadModel = (device: KokoroDevice, dtype: KokoroDtype) =>
       KokoroTTS.from_pretrained(MODEL_ID, {
         dtype,
         device,
@@ -136,7 +179,92 @@ export class KokoroEngine implements SynthEngine {
     // No warm-up pass: on the WASM path there is no shader compilation to hide, and a throwaway
     // synth just delays `ready` (and, across a worker pool, N of them pile up). The first real
     // sentence per worker absorbs the one-time eSpeak-NG init instead.
-    log.info(`[kokoro] ready on ${this.executionProvider} after ${ms(t0)} ms total`);
+    this.captureModelRuns();
+    log.info(
+      `[kokoro] ready on ${this.executionProvider} after ${ms(t0)} ms total` +
+        (durationsOutput ? ' · word timing on' : ' · word timing unavailable'),
+    );
+  }
+
+  /** The last model run's input tokens and per-token durations (see `captureModelRuns`). */
+  private lastRun: { ids: number[]; durations: number[] | null } | null = null;
+
+  /**
+   * kokoro-js calls its model and keeps only the waveform. Wrapping that call keeps the input
+   * tokens and the durations output too — without changing what kokoro-js gets back.
+   */
+  private captureModelRuns(): void {
+    const tts = this.tts as unknown as { model: ((inputs: Record<string, unknown>) => Promise<Record<string, unknown>>) & Record<string, unknown> };
+    const model = tts?.model;
+    if (!model || (model as { __aloudWrapped?: boolean }).__aloudWrapped) return;
+    const wrapped = Object.assign(
+      async (inputs: Record<string, unknown>) => {
+        const out = await model(inputs);
+        const ids = Array.from((inputs.input_ids as { data?: ArrayLike<bigint | number> })?.data ?? [], Number);
+        const durations = durationsOutput ? (out[durationsOutput] as { data?: ArrayLike<number> } | undefined)?.data : undefined;
+        this.lastRun = { ids, durations: durations && durations.length === ids.length ? Array.from(durations, Number) : null };
+        return out;
+      },
+      { __aloudWrapped: true, dispose: () => (model as { dispose?: () => Promise<void> }).dispose?.(), config: model.config },
+    );
+    (this.tts as unknown as { model: unknown }).model = wrapped;
+  }
+
+  /**
+   * When each word of `text` is spoken, from the last run's durations.
+   *
+   * Tokens are Kokoro's phoneme symbols; each word is phonemised on its own with the same eSpeak
+   * kokoro-js uses, and the two are aligned sound by sound (engine/g2p/word-timing.ts) — the same
+   * way as for Piper. The words are phonemised in one call, separated by commas, which eSpeak keeps
+   * apart: one call per word costs ~15 ms each, far too much per sentence.
+   */
+  private async wordTimings(text: string, seconds: number, voice: string): Promise<WordTiming[] | undefined> {
+    const run = this.lastRun;
+    const words = splitWords(text);
+    if (!run?.durations || words.length === 0 || seconds <= 0) return undefined;
+    const vocab = this.vocab();
+    if (!vocab) return undefined;
+
+    const total = run.durations.reduce((a, b) => a + b, 0);
+    if (total <= 0) return undefined;
+    const perFrame = seconds / total;
+    const sounds: TimedSound[] = [];
+    let at = 0;
+    run.ids.forEach((id, i) => {
+      const start = at * perFrame;
+      at += run.durations![i]!;
+      const sym = soundsOf(vocab(id) ?? '').join('');
+      if (sym) sounds.push({ sym, start, end: at * perFrame });
+    });
+
+    const language = voice.startsWith('b') ? 'en' : 'en-us';
+    const perWord = await phonemizeWords(words, language);
+    if (!perWord) return undefined;
+    const times = wordTimes(sounds, perWord.map(soundsOf));
+    const timed: WordTiming[] = [];
+    words.forEach((word, i) => {
+      const t = times[i];
+      if (t && word.to > word.from) timed.push({ from: word.from, to: word.to, start: t.start, end: t.end });
+    });
+    return timed;
+  }
+
+  /** Token id -> the phoneme symbol it stands for, from kokoro-js's tokenizer. */
+  private vocab(): ((id: number) => string | undefined) | null {
+    const model = (this.tts as unknown as { tokenizer?: { model?: { vocab?: unknown } } })?.tokenizer?.model;
+    const vocab = model?.vocab;
+    if (Array.isArray(vocab)) return (id) => vocab[id] as string | undefined;
+    if (vocab instanceof Map) {
+      const reverse = new Map<number, string>();
+      for (const [token, id] of vocab as Map<string, number>) reverse.set(id, token);
+      return (id) => reverse.get(id);
+    }
+    if (vocab && typeof vocab === 'object') {
+      const reverse = new Map<number, string>();
+      for (const [token, id] of Object.entries(vocab as Record<string, number>)) reverse.set(id, token);
+      return (id) => reverse.get(id);
+    }
+    return null;
   }
 
   /**
@@ -180,10 +308,17 @@ export class KokoroEngine implements SynthEngine {
     // generation time, so an override needs no re-init — this is what makes previewing every
     // voice on the options page fast.
     if (voice) this.voice = voice;
-    const audio = await this.tts.generate(text, { voice: this.usableVoice() as never, speed });
+    this.lastRun = null;
+    const usable = this.usableVoice();
+    const audio = await this.tts.generate(text, { voice: usable as never, speed });
     const anyAudio = audio as unknown as { audio?: Float32Array; sampling_rate?: number };
     const pcm = anyAudio.audio ?? new Float32Array(0);
     const sampleRate = anyAudio.sampling_rate ?? this.sampleRate;
+    const words = await this.wordTimings(text, pcm.length / sampleRate, usable).catch((err) => {
+      log.warn('[kokoro] word timing failed:', err);
+      return undefined;
+    });
+    if (words?.length) return { pcm, sampleRate, words };
     // Timing is not logged here: the synth-host reports both ends of every sentence from one
     // clock, with the worker it ran on and the state of the queue around it, which is the only
     // view in which a slow sentence can be told apart from a starved pool.
@@ -236,4 +371,25 @@ function now(): number {
 }
 function ms(since: number): number {
   return Math.round(now() - since);
+}
+
+/**
+ * Each word's phonemes, in one eSpeak call: words joined by commas come back one part each.
+ * Punctuation inside a word would split it further, so it is left out of what is phonemised
+ * (alignment only needs the sounds); if the parts still do not line up one-to-one, each word is
+ * phonemised on its own instead.
+ */
+export async function phonemizeWords(words: readonly TextWord[], language: string): Promise<string[] | null> {
+  const cleaned = words.map((w) => w.token.replace(/[^\p{L}\p{N}'’]+/gu, ' ').trim());
+  const sent = cleaned.map((c, i) => ({ c, i })).filter((w) => w.c);
+  const out = cleaned.map(() => '');
+  if (sent.length === 0) return out;
+  const parts = await phonemize(sent.map((w) => w.c).join(', '), language);
+  if (parts.length === sent.length) {
+    sent.forEach((w, k) => (out[w.i] = parts[k] ?? ''));
+    return out;
+  }
+  if (sent.length > 40) return null;
+  for (const w of sent) out[w.i] = (await phonemize(w.c, language)).join(' ');
+  return out;
 }

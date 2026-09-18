@@ -278,15 +278,39 @@ export async function fetchModelFile(
  * A Web Cache API-compatible object (`match`/`put`) backed by our IndexedDB store, for
  * `@huggingface/transformers`'s `env.customCache`.
  */
+/** Whether `key` is in the cache, without reading its bytes. */
+export async function cacheHas(key: string): Promise<boolean> {
+  try {
+    return (await tx<number>('readonly', (s) => s.count(key))) > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A chance to rewrite a file as transformers.js reads it from the cache — used to expose the
+ * Kokoro model's phoneme durations as an extra output (see engines/kokoro.ts). Returns the bytes
+ * to serve, or null to serve the file as stored.
+ */
+export type CachedFileTransform = (key: string, bytes: Uint8Array) => Uint8Array | null;
+let transform: CachedFileTransform | null = null;
+
+export function setCachedFileTransform(fn: CachedFileTransform | null): void {
+  transform = fn;
+}
+
 export const TransformersCache = {
   async match(request: RequestInfo | URL): Promise<Response | undefined> {
     const key = typeof request === 'string' ? request : request.toString();
     const rec = await cacheGet(key);
     if (!rec) return undefined;
-    return new Response(rec.buf, {
+    const rewritten = transform?.(key, new Uint8Array(rec.buf)) ?? null;
+    const body = rewritten ?? rec.buf;
+    const size = rewritten ? rewritten.byteLength : rec.size;
+    return new Response(body as BodyInit, {
       headers: {
         'Content-Type': rec.contentType,
-        'Content-Length': String(rec.size),
+        'Content-Length': String(size),
       },
     });
   },

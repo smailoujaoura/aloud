@@ -157,7 +157,7 @@ export interface Settings {
   highlightColor: string;
   /**
    * Also mark the word being spoken, inside the sentence highlight. Only voices whose model
-   * reports when each sound plays can do it (Piper); others keep the sentence highlight alone.
+   * reports when each sound plays can do it (Piper, Kokoro); Supertonic keeps the sentence highlight alone.
    */
   wordHighlight: boolean;
   /** How the page follows the current sentence. */
