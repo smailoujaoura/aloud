@@ -45,6 +45,7 @@ import { piperDownloaded, readCacheSizes, sharedModelBytes, type CacheSizes } fr
 import { engineInfo } from '@/shared/engine-catalog';
 import { engineConfigFor } from './engine-config';
 import { renderMediaSpeedPanel } from './media-speed-panel';
+import { renderSiteList } from './site-list';
 import { renderPronunciationEditor } from './pronunciation-editor';
 import { renderVoiceSection, type PanelContext } from './voice-panels';
 
@@ -310,9 +311,27 @@ function mediaSpeedOptions(): Parameters<typeof renderMediaSpeedPanel>[1] {
       settings = await setSettings({ mediaSpeed: { ...settings.mediaSpeed, ...patch } });
       flashSaved();
       renderMediaSpeedPanel($('mediaSpeed'), mediaSpeedOptions());
+  $<HTMLInputElement>('annotateToolbar').checked = settings.annotate.toolbar;
+  renderAnnotateSites();
     },
     toast: (message: string) => flashSaved(message),
   };
+}
+
+/** "Show my highlights by themselves on" — the sites list for page highlights. */
+function renderAnnotateSites(): void {
+  renderSiteList($('annotateSites'), {
+    heading: 'Show my highlights by themselves on',
+    empty: 'No sites yet — highlights appear when you use Aloud on a page or open a note.',
+    what: 'your highlights',
+    sites: settings.annotate.alwaysOn,
+    save: async (alwaysOn) => {
+      settings = await setSettings({ annotate: { ...settings.annotate, alwaysOn } });
+      flashSaved();
+      renderAnnotateSites();
+    },
+    toast: (message) => flashSaved(message),
+  });
 }
 
 async function render(): Promise<void> {
@@ -456,6 +475,12 @@ function wire(): void {
   wireSlider('sentencePauseMs', 'sentencePauseOut', 'sentencePauseMs', (v) => `${(v / 1000).toFixed(2)}s`);
   wireSlider('supertonicSteps', 'supertonicStepsOut', 'supertonicSteps', String);
   wireSlider('synthWorkers', 'synthWorkersOut', 'synthWorkers', (v) => (v === 0 ? 'auto' : String(v)));
+
+  $('annotateToolbar').addEventListener('change', async (e) => {
+    const toolbar = (e.target as HTMLInputElement).checked;
+    settings = await setSettings({ annotate: { ...settings.annotate, toolbar } });
+    flashSaved();
+  });
 
   $('mediaSpeedEnabled').addEventListener('change', async (e) => {
     const enabled = (e.target as HTMLInputElement).checked;

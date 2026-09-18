@@ -109,9 +109,21 @@ export const DEFAULT_MEDIA_SPEED: MediaSpeedSettings = {
   },
 };
 
+/** Highlights and notes on web pages (see src/annotate/). */
+export interface AnnotateSettings {
+  /** Offer the colour toolbar when text is selected on a page Aloud is running on. */
+  toolbar: boolean;
+  /** Hosts where highlights appear by themselves, once each site has been granted. */
+  alwaysOn: string[];
+}
+
+export const DEFAULT_ANNOTATE: AnnotateSettings = { toolbar: true, alwaysOn: [] };
+
 export interface Settings {
   /** Video and audio speed control (see `MediaSpeedSettings`). */
   mediaSpeed: MediaSpeedSettings;
+  /** Highlights and notes on web pages (see `AnnotateSettings`). */
+  annotate: AnnotateSettings;
   /** Active synthesis engine. */
   engine: EngineId;
   /** Piper voice key, e.g. `en_US-hfc_female-medium`. Must exist in models.json. */
@@ -192,6 +204,7 @@ export const DEFAULT_SETTINGS: Settings = {
   synthWorkers: 0,
   speed: 1,
   mediaSpeed: DEFAULT_MEDIA_SPEED,
+  annotate: DEFAULT_ANNOTATE,
   preferWebGPU: true,
   highlight: true,
   highlightColor: 'rgba(255, 214, 10, 0.45)',
@@ -252,6 +265,7 @@ export async function getSettings(): Promise<Settings> {
     ...DEFAULT_SETTINGS,
     ...stored,
     skip: { ...DEFAULT_SKIP, ...stored?.skip },
+    annotate: { ...DEFAULT_ANNOTATE, ...stored?.annotate },
     mediaSpeed: {
       ...DEFAULT_MEDIA_SPEED,
       ...stored?.mediaSpeed,
@@ -271,6 +285,7 @@ export function watchSettings(cb: (s: Settings) => void): () => void {
     cb({
       ...DEFAULT_SETTINGS,
       ...newValue,
+      annotate: { ...DEFAULT_ANNOTATE, ...newValue?.annotate },
       mediaSpeed: {
         ...DEFAULT_MEDIA_SPEED,
         ...newValue?.mediaSpeed,

@@ -34,6 +34,10 @@ const CONTENT_FILE = '/reader-inject.js';
 /** The media speed control (src/entrypoints/speed-inject.ts). */
 const SPEED_FILE = '/speed-inject.js';
 const SPEED_SCRIPT_ID = 'aloud-media-speed';
+/** Highlights and notes on web pages (src/entrypoints/annotate-inject.ts). */
+const ANNOTATE_FILE = '/annotate-inject.js';
+const ANNOTATE_SCRIPT_ID = 'aloud-annotate';
+const MENU_HIGHLIGHT = 'aloud-highlight';
 const WALKTHROUGH_PAGE = '/welcome.html';
 const LIBRARY_PAGE = '/library.html';
 
@@ -116,6 +120,11 @@ export default defineBackground({
         // exist; Chromium rejects a duplicate id outright, so start from a clean slate.
         void Promise.resolve(browser.contextMenus.removeAll()).then(() => {
           browser.contextMenus.create({
+            id: MENU_HIGHLIGHT,
+            title: 'Highlight and keep in Notes',
+            contexts: ['selection'],
+          });
+          browser.contextMenus.create({
             id: MENU_READ_SELECTION,
             title: 'Read selection aloud',
             contexts: ['selection'],
@@ -159,6 +168,7 @@ export default defineBackground({
         if (info.menuItemId === MENU_QUEUE_PAGE) void queuePage(tab.id);
         else if (info.menuItemId === MENU_QUEUE_LINK && info.linkUrl) void queueLink(tab.id, info);
         else if (info.menuItemId === MENU_READ_SELECTION) void activate(tab.id, 'selection');
+        else if (info.menuItemId === MENU_HIGHLIGHT) void highlightSelection(tab.id, tab.url ?? '', tab.title ?? '');
         else if (info.menuItemId === MENU_READ_FROM_HERE) {
           void activate(tab.id, 'from-cursor', targetElementId);
         }
@@ -180,6 +190,9 @@ export default defineBackground({
       } else if (m?.type === 'open-and-read') {
         const url = (m as { url?: string }).url;
         if (url) void openAndRead(url).catch((err) => console.warn('[aloud] could not reopen', url, err));
+      } else if (m?.type === 'open-note') {
+        const note = m as { id?: string; url?: string; fragmentUrl?: string; canInject?: boolean };
+        if (note.id && note.url) void openNote(note.id, note.url, note.fragmentUrl ?? note.url, note.canInject === true);
       } else if (m?.type === 'open-library') {
         void openLibrary((m as { tab?: LibraryTab }).tab);
       } else if (m?.type === 'installed-voices') {
@@ -291,6 +304,7 @@ async function activate(tabId: number, mode: ActivateMode, targetElementId?: num
 
   try {
     await browser.scripting.executeScript({ target: { tabId }, files: [CONTENT_FILE] });
+    void browser.scripting.executeScript({ target: { tabId }, files: [ANNOTATE_FILE] }).catch(() => undefined);
   } catch (err) {
     // about:, chrome://, view-source:, the PDF viewer, the extension galleries, reader mode, …
     setBadge(tabId, 'n/a');
@@ -562,33 +576,90 @@ async function startSpeedControl(tabId: number): Promise<void> {
  * drops the site from the registration on the next change.
  */
 async function syncSpeedSites(): Promise<void> {
+  const { mediaSpeed, annotate } = await getSettings();
+  await syncRegistration(SPEED_SCRIPT_ID, SPEED_FILE, mediaSpeed.enabled ? mediaSpeed.alwaysOn : [], true);
+  await syncRegistration(ANNOTATE_SCRIPT_ID, ANNOTATE_FILE, annotate.alwaysOn, false);
+}
+
+/** Register `file` for the granted ones among `hosts` (`*` = every site), replacing any earlier registration. */
+async function syncRegistration(id: string, file: string, hosts: readonly string[], allFrames: boolean): Promise<void> {
   if (!browser.scripting?.registerContentScripts) return;
   try {
-    const { mediaSpeed } = await getSettings();
     const wanted: string[] = [];
-    if (mediaSpeed.enabled) {
-      for (const host of mediaSpeed.alwaysOn) {
-        const matches = host === '*' ? ['*://*/*'] : [`*://${host}/*`, `*://*.${host}/*`];
-        if (await browser.permissions.contains({ origins: matches }).catch(() => false)) wanted.push(...matches);
-      }
+    for (const host of hosts) {
+      const matches = host === '*' ? ['*://*/*'] : [`*://${host}/*`, `*://*.${host}/*`];
+      if (await browser.permissions.contains({ origins: matches }).catch(() => false)) wanted.push(...matches);
     }
-    const existing = await browser.scripting.getRegisteredContentScripts({ ids: [SPEED_SCRIPT_ID] }).catch(() => []);
-    if (existing.length > 0) await browser.scripting.unregisterContentScripts({ ids: [SPEED_SCRIPT_ID] });
+    const existing = await browser.scripting.getRegisteredContentScripts({ ids: [id] }).catch(() => []);
+    if (existing.length > 0) await browser.scripting.unregisterContentScripts({ ids: [id] });
     if (wanted.length === 0) return;
     await browser.scripting.registerContentScripts([
-      {
-        id: SPEED_SCRIPT_ID,
-        js: [SPEED_FILE.slice(1)],
-        matches: [...new Set(wanted)],
-        allFrames: true,
-        runAt: 'document_idle',
-        persistAcrossSessions: true,
-      },
+      { id, js: [file.slice(1)], matches: [...new Set(wanted)], allFrames, runAt: 'document_idle', persistAcrossSessions: true },
     ]);
-    console.info(`[aloud] media speed control runs by itself on ${wanted.length / 2} site(s)`);
+    console.info(`[aloud] ${id} runs by itself on ${new Set(wanted).size} pattern(s)`);
   } catch (err) {
-    console.warn('[aloud] could not register the media speed control:', err);
+    console.warn(`[aloud] could not register ${id}:`, err);
   }
+}
+
+/**
+ * Keep the selected text as a highlight: the annotator anchors it so it is highlighted again on
+ * every later visit. Resolves false when that could not happen (no access to the page, nothing
+ * selected), so the caller can fall back.
+ */
+async function highlightSelection(tabId: number, _url: string, _title: string): Promise<boolean> {
+  try {
+    await browser.scripting.executeScript({ target: { tabId }, files: [ANNOTATE_FILE] });
+    const reply = (await sendWithRetry<{ saved?: boolean }>(tabId, { type: 'annotate-save-selection' }, 3)) ?? {};
+    return reply.saved === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Open a note's page at the note. With the site granted (the Library asks from the click), the
+ * annotator is injected, draws every highlight and scrolls to this one. Without it, the browser's
+ * own text fragment link still scrolls to the passage and marks it — no permission needed.
+ */
+async function openNote(id: string, url: string, fragmentUrl: string, canInject: boolean): Promise<void> {
+  const target = documentKey(url);
+  let tab = (await browser.tabs.query({}).catch(() => [])).find((t) => t.url && documentKey(t.url) === target);
+  if (!canInject) {
+    if (tab?.id != null) await browser.tabs.update(tab.id, { active: true, url: fragmentUrl });
+    else await browser.tabs.create({ url: fragmentUrl });
+    return;
+  }
+  if (tab?.id != null) {
+    await browser.tabs.update(tab.id, { active: true });
+    if (tab.windowId != null) await browser.windows.update(tab.windowId, { focused: true }).catch(() => undefined);
+  } else {
+    tab = await browser.tabs.create({ url });
+    await waitForLoad(tab.id!);
+  }
+  const tabId = tab.id!;
+  try {
+    await browser.scripting.executeScript({ target: { tabId }, files: [ANNOTATE_FILE] });
+    await sendWithRetry(tabId, { type: 'annotate-reveal', id }, 3);
+  } catch (err) {
+    console.warn('[aloud] could not show the note on the page; using a text link instead:', err);
+    await browser.tabs.update(tabId, { url: fragmentUrl });
+  }
+}
+
+function waitForLoad(tabId: number): Promise<void> {
+  return new Promise((resolve) => {
+    const done = (): void => {
+      browser.tabs.onUpdated.removeListener(listener);
+      clearTimeout(timer);
+      resolve();
+    };
+    const listener = (id: number, info: { status?: string }): void => {
+      if (id === tabId && info.status === 'complete') done();
+    };
+    const timer = setTimeout(done, 20_000);
+    browser.tabs.onUpdated.addListener(listener);
+  });
 }
 
 /** Show the Library at `tab`, reusing its tab if one is open. */
@@ -628,6 +699,7 @@ async function saveNoteCommand(tabId: number | null, url: string, title: string)
     return;
   }
   if (tabId == null) return;
+  if (await highlightSelection(tabId, url, title)) return;
   let text = '';
   try {
     const [result] = await browser.scripting.executeScript({

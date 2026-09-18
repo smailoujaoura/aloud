@@ -2,7 +2,20 @@ import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('wxt/utils/storage', () => ({ storage: { defineItem: () => ({}) } }));
 
-import { groupBySource, notesToMarkdown, searchNotes, withNoteAdded, withNoteRemoved, withNoteUpdated, type Note } from '@/shared/notes';
+import {
+  filterNotes,
+  groupBySource,
+  noteFacets,
+  notesForPage,
+  notesToJson,
+  notesToMarkdown,
+  parseTags,
+  searchNotes,
+  withNoteAdded,
+  withNoteRemoved,
+  withNoteUpdated,
+  type Note,
+} from '@/shared/notes';
 import {
   MAX_HISTORY,
   continueList,
@@ -111,5 +124,46 @@ describe('reading history', () => {
     expect(formatListeningTime(20)).toBe('under a minute');
     expect(formatListeningTime(12 * 60)).toBe('12 min');
     expect(formatListeningTime(65 * 60)).toBe('1 h 5 min');
+  });
+});
+
+describe('note filters and tags', () => {
+  const rust = web('https://doc.rust-lang.org/book/ch03.html', 'Functions');
+  rust.site = 'doc.rust-lang.org';
+  const mdn = web('https://developer.mozilla.org/x', 'MDN');
+  mdn.site = 'developer.mozilla.org';
+  const notes = [
+    note({ id: '1', source: rust, text: 'snake case', tags: ['rust-book'] }),
+    note({ id: '2', source: rust, text: 'expressions return', tags: ['rust-book', 'exam'] }),
+    note({ id: '3', source: mdn, text: 'fetch api' }),
+  ];
+
+  it('narrows by site and tag, and finds tags by search', () => {
+    expect(filterNotes(notes, { site: 'doc.rust-lang.org' }).map((n) => n.id)).toEqual(['1', '2']);
+    expect(filterNotes(notes, { tag: 'exam' }).map((n) => n.id)).toEqual(['2']);
+    expect(filterNotes(notes, { query: 'rust-book', site: 'developer.mozilla.org' })).toEqual([]);
+    expect(searchNotes(notes, 'exam').map((n) => n.id)).toEqual(['2']);
+  });
+
+  it('counts sites and tags for the filter menus', () => {
+    expect(noteFacets(notes)).toEqual({
+      sites: [['doc.rust-lang.org', 2], ['developer.mozilla.org', 1]],
+      tags: [['rust-book', 2], ['exam', 1]],
+    });
+  });
+
+  it('cleans up typed tags', () => {
+    expect(parseTags('Rust Book, exam ,, rust-book')).toEqual(['rust-book', 'exam']);
+    expect(parseTags('')).toEqual([]);
+  });
+
+  it('exports tags in Markdown and JSON', () => {
+    expect(notesToMarkdown([notes[1]!])).toContain('#rust-book #exam');
+    const json = JSON.parse(notesToJson([notes[0]!]));
+    expect(json[0]).toMatchObject({ text: 'snake case', tags: ['rust-book'], site: 'doc.rust-lang.org', url: 'https://doc.rust-lang.org/book/ch03.html' });
+  });
+
+  it('finds the notes for one page', () => {
+    expect(notesForPage(notes, 'https://developer.mozilla.org/x').map((n) => n.id)).toEqual(['3']);
   });
 });

@@ -43,10 +43,13 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
   device only and can be cleared from the settings page.
 - **Word by word** — with Piper voices the word being spoken is marked inside the sentence, timed
   from the voice model's own phoneme durations rather than estimated.
-- **Notes in one keystroke** — <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> (or the bookmark on
-  the bar) keeps the sentence you just heard, or the text you selected, with where it came from.
-  Add your thoughts, search, copy or download everything as Markdown, and **listen from here**
-  to go straight back to that sentence.
+- **Highlights and notes on any page** — select text and press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>
+  (or use the colour toolbar, or right-click → *Highlight and keep in Notes*). The passage is
+  highlighted, kept with your note and tags, and highlighted again whenever you come back —
+  anchored by its text, so it survives the page being edited around it. While Aloud reads, the
+  same key (or the bookmark on the bar) keeps the sentence you just heard. The Library lists every
+  note, filters by site and tag, opens each one scrolled to its place on the page, and exports
+  what you filtered as Markdown or JSON.
 - **Drifted off?** <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>,</kbd> (or <kbd>B</kbd> on the bar)
   goes back about ten seconds and shows you where that is.
 - **A Library to come back to** — *Continue* lists what you stopped part-way through with how

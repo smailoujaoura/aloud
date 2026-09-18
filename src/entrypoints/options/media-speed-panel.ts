@@ -7,11 +7,11 @@
  * a keyboard that is not the author's.
  */
 import { el } from '@/shared/dom';
-import { browser } from 'wxt/browser';
 import { clampRate, formatRate } from '@/media-speed/rate';
 import { comboFromEvent, formatBinding } from '@/media-speed/keys';
 import { clearSiteSpeeds, loadSiteSpeeds } from '@/media-speed/site-speeds';
 import { DEFAULT_MEDIA_SPEED, type MediaSpeedSettings } from '@/shared/settings';
+import { renderSiteList } from './site-list';
 
 export interface MediaSpeedPanelOptions {
   settings: MediaSpeedSettings;
@@ -34,7 +34,14 @@ export function renderMediaSpeedPanel(host: HTMLElement, opts: MediaSpeedPanelOp
 
   // ---- where it runs ----
   const sites = el(document, 'div', { class: 'speed-sites' });
-  renderSites(sites, opts);
+  renderSiteList(sites, {
+    heading: 'Starts by itself on',
+    empty: 'No sites yet — the shortcut works everywhere without asking for anything.',
+    what: 'the speed control',
+    sites: s.alwaysOn,
+    save: (alwaysOn) => opts.save({ alwaysOn }),
+    toast: opts.toast,
+  });
   rows.push(sites);
 
   // ---- how it behaves ----
@@ -82,67 +89,6 @@ export function renderMediaSpeedPanel(host: HTMLElement, opts: MediaSpeedPanelOp
 
   host.replaceChildren(...rows);
   host.classList.toggle('is-off', !s.enabled);
-}
-
-/** The sites the control starts on by itself, each needing that site's permission. */
-function renderSites(host: HTMLElement, opts: MediaSpeedPanelOptions): void {
-  const { alwaysOn } = opts.settings;
-  const head = el(document, 'p', { class: 'sub-label' }, 'Starts by itself on');
-  const list = el(document, 'div', { class: 'site-chips' });
-
-  if (alwaysOn.length === 0) {
-    list.append(el(document, 'span', { class: 'muted small' }, 'No sites yet — the shortcut works everywhere without asking for anything.'));
-  }
-  for (const site of alwaysOn) {
-    const chip = el(document, 'span', { class: 'site-chip' }, site === '*' ? 'Every site' : site);
-    const remove = el(document, 'button', { type: 'button', class: 'chip-x', title: `Stop starting on ${site}`, 'aria-label': `Stop starting on ${site}` }, '✕');
-    remove.addEventListener('click', async () => {
-      await opts.save({ alwaysOn: alwaysOn.filter((a) => a !== site) });
-      opts.toast(`Aloud no longer starts the speed control on ${site === '*' ? 'every site' : site}`);
-    });
-    chip.append(remove);
-    list.append(chip);
-  }
-
-  const input = el(document, 'input', { type: 'text', placeholder: 'youtube.com', 'aria-label': 'Site to always control', class: 'site-input' }) as HTMLInputElement;
-  const add = el(document, 'button', { type: 'button', class: 'btn-sm' }, 'Add site');
-  const addAll = el(document, 'button', { type: 'button', class: 'ghost btn-sm' }, 'Every site…');
-
-  const grant = (host_: string): void => {
-    const origins = host_ === '*' ? ['*://*/*'] : [`*://${host_}/*`, `*://*.${host_}/*`];
-    // permissions.request must be called from the click itself, before anything is awaited.
-    void browser.permissions
-      .request({ origins })
-      .catch(() => false)
-      .then(async (granted) => {
-        if (!granted) {
-          opts.toast('Without permission for that site, use the shortcut instead');
-          return;
-        }
-        if (!opts.settings.alwaysOn.includes(host_)) {
-          await opts.save({ alwaysOn: [...opts.settings.alwaysOn, host_] });
-        }
-        opts.toast(host_ === '*' ? 'Speed control starts on every site' : `Speed control starts on ${host_}`);
-      });
-  };
-
-  add.addEventListener('click', () => {
-    const value = hostFrom(input.value);
-    if (!value) {
-      opts.toast('Type a site like youtube.com');
-      return;
-    }
-    input.value = '';
-    grant(value);
-  });
-  input.addEventListener('keydown', (e) => {
-    if ((e as KeyboardEvent).key === 'Enter') add.click();
-  });
-  addAll.addEventListener('click', () => grant('*'));
-
-  const adder = el(document, 'div', { class: 'site-add' });
-  adder.append(input, add, addAll);
-  host.replaceChildren(head, list, adder);
 }
 
 function keyRow(
@@ -236,19 +182,6 @@ function select(options: Array<{ value: string; label: string }>, current: strin
   }
   picker.addEventListener('change', () => onChange(picker.value));
   return picker;
-}
-
-/** "https://www.youtube.com/watch?v=1" or "YouTube.com " -> "youtube.com". */
-export function hostFrom(input: string): string {
-  const text = input.trim().toLowerCase();
-  if (!text) return '';
-  try {
-    if (/^[a-z]+:\/\//.test(text)) return new URL(text).hostname.replace(/^www\./, '');
-  } catch {
-    return '';
-  }
-  const host = text.split('/')[0]!.replace(/^www\./, '');
-  return /^[a-z0-9.-]+\.[a-z]{2,}$/.test(host) ? host : '';
 }
 
 /** How many sites have a remembered speed, for the settings page's hint. */

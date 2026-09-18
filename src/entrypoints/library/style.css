@@ -149,3 +149,14 @@ a.card-title:hover { text-decoration: underline; }
   .card { flex-wrap: wrap; }
   .card-actions { margin-left: auto; }
 }
+
+/* Notes filters and tags. */
+#noteSite, #noteTag { flex: 0 1 auto; max-width: 14rem; }
+.export-bar { margin-top: -4px; }
+.note-tags {
+  display: block; width: 100%; box-sizing: border-box; margin: 2px 0 0; padding: 5px 8px;
+  border-radius: 8px; border: 1px solid transparent; background: transparent;
+  color: var(--fg-muted); font: 12.5px/1.4 var(--sans);
+}
+.note-tags:hover { background: var(--surface-2); }
+.note-tags:focus { background: var(--bg); border-color: var(--border-strong); outline: none; color: var(--fg); }

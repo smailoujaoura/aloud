@@ -56,18 +56,25 @@
       <section id="panel-notes" role="tabpanel" aria-labelledby="tab-notes" hidden>
         <div class="panel-bar">
           <input type="search" id="noteSearch" placeholder="Search your notes…" aria-label="Search notes" />
+          <select id="noteSite" aria-label="Show notes from one site"></select>
+          <select id="noteTag" aria-label="Show notes with one tag"></select>
+        </div>
+        <div class="panel-bar export-bar">
+          <p class="muted small" id="notesShown"></p>
           <div class="panel-actions">
             <button id="copyNotes" class="ghost btn-sm" type="button">Copy as Markdown</button>
             <button id="downloadNotes" class="ghost btn-sm" type="button">Download .md</button>
+            <button id="downloadJson" class="ghost btn-sm" type="button">Download .json</button>
           </div>
         </div>
         <div id="notesList"></div>
         <div id="notesEmpty" class="empty" hidden>
           <h2>No notes yet</h2>
-          <p>While Aloud is reading, press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> — or the
-            bookmark button on the reading bar — to keep the sentence you just heard. With text
-            selected, the selection is kept instead, even when Aloud isn't reading. Each note
-            remembers where it came from, so you can listen from that sentence again.</p>
+          <p>Select text on any page and press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> (or
+            right-click → <b>Highlight and keep in Notes</b>): the passage is highlighted on the page,
+            and highlighted again whenever you come back. While Aloud is reading, the same key keeps
+            the sentence you just heard. Every note is here — filter by site or tag, open it at its
+            place on the page, and export them as Markdown or JSON.</p>
         </div>
       </section>
 

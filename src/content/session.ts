@@ -50,6 +50,8 @@ import {
 import { PORT_NAME, type ActivateMode, type SessionState } from '@/shared/messages';
 import { siteOf, type DocSource } from '@/shared/doc-source';
 import { addNote } from '@/shared/notes';
+import { createAnchor, type TextAnchor } from '@/annotate/anchor';
+import { anchorForRange } from '@/annotate/page-anchoring';
 import { recordListening } from '@/shared/reading-history';
 import { log } from '@/shared/log';
 
@@ -1216,23 +1218,34 @@ export class ReaderSession {
 
     let index = this.currentPlayId;
     let text = '';
+    let anchor: TextAnchor | null = null;
     if (selectedText.length > 1) {
       text = selectedText;
-      const anchor = selected!.getRangeAt(0).startContainer;
-      const element = anchor.nodeType === Node.ELEMENT_NODE ? (anchor as Element) : anchor.parentElement;
+      const range = selected!.getRangeAt(0);
+      const node = range.startContainer;
+      const element = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
       if (element) index = indexNearElement(this.playlist, element);
+      if (this.textIndex) anchor = anchorForRange(this.textIndex, range)?.anchor ?? null;
     } else {
       const position = this.scheduler?.playbackPosition();
       if (position && position.playId === index && position.seconds < JUST_STARTED_SECONDS && index > 0) index--;
-      text = this.playlist[index]?.sourceText.replace(/\s+/g, ' ').trim() ?? '';
+      const item = this.playlist[index];
+      text = item?.sourceText.replace(/\s+/g, ' ').trim() ?? '';
+      if (item && item.sourceAt != null && this.textIndex) {
+        anchor = createAnchor(this.textIndex.fullText, item.sourceAt, item.sourceAt + item.sourceText.length);
+      }
     }
     if (!text) return;
+    // Anchors are for highlighting web pages again; Aloud's own pages (the PDF reader, the
+    // Library's queue) keep their notes by position instead.
+    const onWebPage = location.protocol === 'http:' || location.protocol === 'https:';
 
     try {
       const { duplicate } = await addNote({
         text,
         source: this.docSource(),
         at: { index, total: this.playlist.length, excerpt: excerptOf(this.playlist[index]?.spokenText ?? '') },
+        ...(onWebPage && anchor ? { anchor, color: 'yellow', tags: [] } : {}),
       });
       this.bar?.flash(duplicate ? 'Already in your notes' : 'Saved to Notes', 'ok', {
         label: 'Open',
