@@ -39,13 +39,15 @@ const ANNOTATE_FILE = '/annotate-inject.js';
 const ANNOTATE_SCRIPT_ID = 'aloud-annotate';
 const MENU_HIGHLIGHT = 'aloud-highlight';
 const WALKTHROUGH_PAGE = '/welcome.html';
-const LIBRARY_PAGE = '/library.html';
+/** Aloud's page; the Library is its first views (`#continue`, `#notes`, …). */
+const LIBRARY_PAGE = '/options.html';
 
 const MENU_READ_SELECTION = 'aloud-read-selection';
 const MENU_READ_FROM_HERE = 'aloud-read-from-here';
 const MENU_QUEUE_PAGE = 'aloud-queue-page';
 const MENU_QUEUE_LINK = 'aloud-queue-link';
 const MENU_OPEN_QUEUE = 'aloud-open-queue';
+const MENU_NOTES_PANEL = 'aloud-notes-panel';
 
 type Port = Parameters<Parameters<typeof browser.runtime.onConnect.addListener>[0]>[0];
 
@@ -100,6 +102,9 @@ export default defineBackground({
           if (tab?.id != null) void activate(tab.id, 'article');
         } else if (command === 'save-note') {
           void saveNoteCommand(tab?.id ?? null, tab?.url ?? '', tab?.title ?? '');
+        } else if (command === 'notes-panel') {
+          if (tab?.id != null) void showNotesPanel(tab.id);
+          else void openLibrary('notes');
         } else if (command === 'media-speed') {
           if (tab?.id != null) void startSpeedControl(tab.id);
         } else if (command === 'back-a-little') {
@@ -128,6 +133,11 @@ export default defineBackground({
             id: MENU_READ_SELECTION,
             title: 'Read selection aloud',
             contexts: ['selection'],
+          });
+          browser.contextMenus.create({
+            id: MENU_NOTES_PANEL,
+            title: 'Show my notes',
+            contexts: ['page', 'selection'],
           });
           browser.contextMenus.create({
             id: MENU_READ_FROM_HERE,
@@ -169,6 +179,7 @@ export default defineBackground({
         else if (info.menuItemId === MENU_QUEUE_LINK && info.linkUrl) void queueLink(tab.id, info);
         else if (info.menuItemId === MENU_READ_SELECTION) void activate(tab.id, 'selection');
         else if (info.menuItemId === MENU_HIGHLIGHT) void highlightSelection(tab.id, tab.url ?? '', tab.title ?? '');
+        else if (info.menuItemId === MENU_NOTES_PANEL) void showNotesPanel(tab.id);
         else if (info.menuItemId === MENU_READ_FROM_HERE) {
           void activate(tab.id, 'from-cursor', targetElementId);
         }
@@ -191,8 +202,14 @@ export default defineBackground({
         const url = (m as { url?: string }).url;
         if (url) void openAndRead(url).catch((err) => console.warn('[aloud] could not reopen', url, err));
       } else if (m?.type === 'open-note') {
-        const note = m as { id?: string; url?: string; fragmentUrl?: string; canInject?: boolean };
-        if (note.id && note.url) void openNote(note.id, note.url, note.fragmentUrl ?? note.url, note.canInject === true);
+        const note = m as { id?: string; url?: string; fragmentUrl?: string; canInject?: boolean; checkAccess?: boolean };
+        if (note.id && note.url) {
+          const { id, url } = note;
+          // From the page's notes panel, which cannot ask for permissions: draw the highlights
+          // only where the site is already granted, and use the text link elsewhere.
+          const access = note.checkAccess ? siteGranted(url) : Promise.resolve(note.canInject === true);
+          void access.then((canInject) => openNote(id, url, note.fragmentUrl ?? url, canInject));
+        }
       } else if (m?.type === 'open-library') {
         void openLibrary((m as { tab?: LibraryTab }).tab);
       } else if (m?.type === 'installed-voices') {
@@ -639,10 +656,10 @@ async function syncRegistration(id: string, file: string, hosts: readonly string
  * every later visit. Resolves false when that could not happen (no access to the page, nothing
  * selected), so the caller can fall back.
  */
-async function highlightSelection(tabId: number, _url: string, _title: string): Promise<boolean> {
+async function highlightSelection(tabId: number, _url: string, _title: string, quiet = false): Promise<boolean> {
   try {
     await browser.scripting.executeScript({ target: { tabId }, files: [ANNOTATE_FILE] });
-    const reply = (await sendWithRetry<{ saved?: boolean }>(tabId, { type: 'annotate-save-selection' }, 3)) ?? {};
+    const reply = (await sendWithRetry<{ saved?: boolean }>(tabId, { type: 'annotate-save-selection', quiet }, 3)) ?? {};
     return reply.saved === true;
   } catch {
     return false;
@@ -726,6 +743,34 @@ function postToActive(message: unknown): boolean {
 }
 
 /**
+ * The notes panel on the page (annotate/notes-panel.ts). On a page Aloud cannot run on (the
+ * browser's own pages, the store), the notes open in Aloud's page instead, unless `fallback` is
+ * false. Resolves whether the panel was shown.
+ */
+async function showNotesPanel(tabId: number, fallback = true): Promise<boolean> {
+  try {
+    await browser.scripting.executeScript({ target: { tabId }, files: [ANNOTATE_FILE] });
+    const reply = await sendWithRetry<{ shown?: boolean }>(tabId, { type: 'annotate-panel' }, 3);
+    if (reply?.shown) return true;
+  } catch {
+    /* not a page scripts may run on */
+  }
+  if (fallback) await openLibrary('notes');
+  return false;
+}
+
+/** Whether Aloud may already run on `url`'s site, without asking. */
+async function siteGranted(url: string): Promise<boolean> {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+    return await browser.permissions.contains({ origins: [`${u.protocol}//${u.hostname}/*`] });
+  } catch {
+    return false;
+  }
+}
+
+/**
  * The "save to notes" shortcut. With the reader running, the reader saves what is being heard
  * (it knows the sentence and its place). Without it, the page's selection is saved straight away
  * — reading does not have to be started just to keep a quotation.
@@ -736,7 +781,7 @@ async function saveNoteCommand(tabId: number | null, url: string, title: string)
     return;
   }
   if (tabId == null) return;
-  if (await highlightSelection(tabId, url, title)) return;
+  if (await highlightSelection(tabId, url, title, true)) return;
   let text = '';
   try {
     const [result] = await browser.scripting.executeScript({
@@ -748,7 +793,9 @@ async function saveNoteCommand(tabId: number | null, url: string, title: string)
     /* a page scripts may not run on (the store, browser pages) */
   }
   if (!text) {
-    tellTab(tabId, 'Select some text, or start reading, to save a note', '…');
+    // Nothing to keep: show the notes instead, which is what reaching for the notes key with
+    // nothing selected is usually after.
+    if (!(await showNotesPanel(tabId, false))) tellTab(tabId, 'Select some text, or start reading, to save a note', '…');
     return;
   }
   const { duplicate } = await addNote({

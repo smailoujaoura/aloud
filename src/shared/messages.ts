@@ -53,7 +53,7 @@ export type ToBackgroundMessage =
   | { type: 'open-walkthrough' }
   | { type: 'open-library'; tab?: LibraryTab };
 
-/** The Library page's sections, addressable as `library.html#notes` and so on. */
+/** The Library's views on Aloud's page, addressable as `options.html#notes` and so on. */
 export type LibraryTab = 'continue' | 'queue' | 'notes' | 'history';
 
 export const PORT_NAME = 'aloud-session';

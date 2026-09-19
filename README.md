@@ -45,17 +45,27 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
   sentence, timed from the voice model's own phoneme durations rather than estimated. It is shown
   as a darker shade by default; Settings switches it to an underline, or off.
 - **Highlights and notes on any page** — select text and press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>
-  (or use the colour toolbar, or right-click → *Highlight and keep in Notes*). The passage is
-  highlighted, kept with your note and tags, and highlighted again whenever you come back —
-  anchored by its text, so it survives the page being edited around it. While Aloud reads, the
-  same key (or the bookmark on the bar) keeps the sentence you just heard. The Library lists every
-  note, filters by site and tag, opens each one scrolled to its place on the page, and exports
-  what you filtered as Markdown or JSON.
+  (or right-click → *Highlight and keep in Notes*): kept at once, in your default colour and
+  style — highlight or underline — with nothing to answer. Click a mark to recolour it, switch
+  its style, or write its note by just typing; <kbd>Delete</kbd> removes it. The colours are
+  yours to rename and change, and passages kept with a note get their own colour. The passage is
+  marked again whenever you come back — anchored by its text, so it survives the page being
+  edited around it. While Aloud reads, the same key (or the bookmark on the bar) keeps the
+  sentence you just heard.
+- **Your notes, on the page** — <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd> on Firefox (set it
+  at `chrome://extensions/shortcuts` on Chromium), <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>
+  with nothing selected, or right-click → *Show my notes*: a panel listing this page's notes or
+  all of them, searchable, each one a click from its place.
 - **Drifted off?** <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>,</kbd> (or <kbd>B</kbd> on the bar)
   goes back about ten seconds and shows you where that is.
-- **A Library to come back to** — *Continue* lists what you stopped part-way through with how
-  much is left, *Up next* is the reading queue with listening times, and *History* keeps how far
-  you got in everything, all on this device.
+- **One page for everything** — the Library (*Continue*, *Up next*, *Notes*, *History*) and every
+  setting sit side by side in Aloud's page, one click apart. *Continue* lists what you stopped
+  part-way through with how much is left, *Up next* is the reading queue with listening times,
+  *Notes* filters by site and tag and exports as Markdown or JSON, and *History* keeps how far you
+  got in everything, all on this device.
+- **Backup & restore** — one file with every setting, voice choice, key, colour, note, the queue,
+  history, video speeds and PDF marks. Restoring merges rather than overwrites, then offers to
+  download the voices the backup had and to allow the sites that were allowed.
 - **Save as MP3** — the whole page or PDF as one audio file, in the voice and speed you chose.
 - **Mark up PDFs** — highlight, underline, strike through and comment on the page itself, and
   save the marks into the PDF file.

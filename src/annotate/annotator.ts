@@ -1,29 +1,31 @@
 /**
  * Highlights and notes on ordinary web pages.
  *
- *  - **Select text** and a small toolbar offers four colours and "Add note". The passage is kept
- *    in Notes (shared/notes.ts) with a text anchor, so it is highlighted again whenever you come
- *    back — and shows in the Library with everything else you kept.
- *  - **Click a highlight** to change its colour, write or edit its note, tag it, copy or delete it.
+ *  - **Select text** and press the shortcut: kept at once, in your default colour and style, with
+ *    nothing to answer. (A small toolbar can also offer your colours and "Add note" on selecting;
+ *    it can be switched off.) The passage is kept in Notes (shared/notes.ts) with a text anchor,
+ *    so it is marked again whenever you come back.
+ *  - **Click a mark** to change its colour or style (highlight / underline), write its note, tag,
+ *    copy — or press Delete to remove it.
+ *  - **The notes panel** lists this page's notes (or all of them) on the page itself.
  *  - **Opened from the Library**, the page scrolls to the note and flashes it.
  *
  * Highlights are painted with the CSS Custom Highlight API, as the reader's sentence highlight is:
  * the page's DOM is never modified, so nothing about its layout or scripts can break. The toolbar
  * and popover live in one closed shadow root; no page style reaches them and none of theirs leaks.
  */
-import { MARK_COLORS } from '@/pdf/annotations/model';
 import { siteOf } from '@/shared/doc-source';
 import { documentKey } from '@/shared/position-match';
 import { addNote, loadNotes, notesForPage, parseTags, removeNote, restoreNote, updateNote, watchNotes, type Note } from '@/shared/notes';
 import type { TextIndex } from '@/extract/text-index';
-import { getSettings, watchSettings } from '@/shared/settings';
+import { DEFAULT_ANNOTATE, getSettings, watchSettings, type AnnotateSettings, type NoteStyle } from '@/shared/settings';
 import { anchorForRange, pageIndex, rangeForAnchor } from './page-anchoring';
+import { NOTE_STYLES, colorFor, markCss, markName } from './palette';
+import { PANEL_CSS, PageNotesPanel } from './notes-panel';
 
 const HOST_ID = 'aloud-annotate-host';
 const READER_HOST_ID = 'aloud-control-host';
 const FLASH = 'aloud-note-flash';
-const highlightName = (color: string): string => `aloud-note-${color}`;
-const DEFAULT_COLOR = 'yellow';
 
 interface Painted {
   note: Note;
@@ -47,20 +49,35 @@ export class PageAnnotator {
   private observer: MutationObserver | null = null;
   private readonly cleanups: Array<() => void> = [];
   private readonly supported = typeof CSS !== 'undefined' && 'highlights' in CSS && typeof Highlight !== 'undefined';
-  /** The colour toolbar on selecting text (settings: annotate.toolbar). */
-  private toolbarOn = true;
+  /** Colours, default colour and style, toolbar on/off (settings: annotate). */
+  private prefs: AnnotateSettings = DEFAULT_ANNOTATE;
+  /** Highlight names currently registered, so a removed colour's marks are cleared too. */
+  private names = new Set<string>();
+  private styleEl: HTMLStyleElement | null = null;
+  private panel: PageNotesPanel | null = null;
+  private allNotes: Note[] = [];
 
   async start(): Promise<void> {
-    this.toolbarOn = (await getSettings().catch(() => null))?.annotate.toolbar ?? true;
-    this.cleanups.push(watchSettings((s) => (this.toolbarOn = s.annotate.toolbar)));
+    this.prefs = (await getSettings().catch(() => null))?.annotate ?? DEFAULT_ANNOTATE;
+    this.cleanups.push(
+      watchSettings((s) => {
+        this.prefs = s.annotate;
+        this.injectStyle();
+        this.paint();
+        this.panel?.update(this.allNotes, this.prefs.colors);
+      }),
+    );
     this.injectStyle();
-    this.notes = notesForPage(await loadNotes(), this.key);
+    this.allNotes = await loadNotes();
+    this.notes = notesForPage(this.allNotes, this.key);
     this.paint();
     this.cleanups.push(
       watchNotes((all) => {
+        this.allNotes = all;
         this.notes = notesForPage(all, this.key);
         this.paint();
         if (this.popover && !this.notes.some((n) => n.id === this.popover!.id)) this.closePopover();
+        this.panel?.update(all, this.prefs.colors);
       }),
     );
     this.listen(document, 'mouseup', () => window.setTimeout(() => this.onSelection(), 10));
@@ -73,6 +90,7 @@ export class PageAnnotator {
       if ((e as KeyboardEvent).key === 'Escape') {
         this.closeToolbar();
         this.closePopover();
+        this.panel?.close();
       }
     });
     this.listen(window, 'scroll', () => this.closeToolbar(), true);
@@ -94,7 +112,7 @@ export class PageAnnotator {
     this.cleanups.length = 0;
     this.observer?.disconnect();
     clearTimeout(this.repaintTimer);
-    if (this.supported) for (const c of MARK_COLORS) CSS.highlights.delete(highlightName(c.id));
+    if (this.supported) for (const name of this.names) CSS.highlights.delete(name);
     this.host?.remove();
   }
 
@@ -117,22 +135,26 @@ export class PageAnnotator {
       else this.missing++;
     }
     if (!this.supported) return;
-    for (const color of MARK_COLORS) {
-      const ranges = this.painted.filter((p) => (p.note.color ?? DEFAULT_COLOR) === color.id).map((p) => p.range);
-      if (ranges.length) CSS.highlights.set(highlightName(color.id), new Highlight(...ranges));
-      else CSS.highlights.delete(highlightName(color.id));
+    const groups = new Map<string, Range[]>();
+    for (const { note, range } of this.painted) {
+      const name = markName(colorFor(this.prefs.colors, note.color ?? this.prefs.defaultColor).id, note.style ?? 'highlight');
+      groups.set(name, [...(groups.get(name) ?? []), range]);
     }
+    for (const name of this.names) if (!groups.has(name)) CSS.highlights.delete(name);
+    for (const [name, ranges] of groups) CSS.highlights.set(name, new Highlight(...ranges));
+    this.names = new Set(groups.keys());
   }
 
+  /** The marks' colours, redrawn whenever the palette changes. */
   private injectStyle(): void {
-    if (document.getElementById('aloud-annotate-style')) return;
-    const style = document.createElement('style');
-    style.id = 'aloud-annotate-style';
-    style.textContent =
-      MARK_COLORS.map((c) => `::highlight(${highlightName(c.id)}) { background-color: ${c.fill}99; color: inherit; }`).join('\n') +
-      `\n::highlight(${FLASH}) { background-color: #ff8c00aa; color: inherit; }`;
-    (document.head ?? document.documentElement).append(style);
-    this.cleanups.push(() => style.remove());
+    if (!this.styleEl) {
+      this.styleEl = document.createElement('style');
+      this.styleEl.id = 'aloud-annotate-style';
+      (document.head ?? document.documentElement).append(this.styleEl);
+      const el = this.styleEl;
+      this.cleanups.push(() => el.remove());
+    }
+    this.styleEl.textContent = `${markCss(this.prefs.colors)}\n::highlight(${FLASH}) { background-color: #ff8c00aa; color: inherit; }`;
   }
 
   // ---- making highlights ------------------------------------------------------------------
@@ -148,7 +170,7 @@ export class PageAnnotator {
   }
 
   private onSelection(): void {
-    if (!this.toolbarOn) return;
+    if (!this.prefs.toolbar) return;
     const range = this.selectedRange();
     if (!range) {
       this.closeToolbar();
@@ -157,12 +179,16 @@ export class PageAnnotator {
     this.showToolbar(range.getBoundingClientRect());
   }
 
-  /** Keep the selection as a highlight (and a note). Returns the note, or null if nothing was selected. */
-  async saveSelection(color = DEFAULT_COLOR, openNote = false): Promise<Note | null> {
+  /**
+   * Keep the selection as a highlight (and a note), in the default colour and style unless told
+   * otherwise — "Add note" uses the note colour, so notes stand out. Returns the note, or null if
+   * nothing was selected.
+   */
+  async saveSelection(color?: string, openNote = false, style?: NoteStyle, quiet = false): Promise<Note | null> {
     const range = this.selectedRange();
     const index = pageIndex();
     if (!range || !index) {
-      this.toast('Select some text on the page first');
+      if (!quiet) this.toast('Select some text on the page first');
       return null;
     }
     const found = anchorForRange(index, range);
@@ -177,12 +203,13 @@ export class PageAnnotator {
       },
       at: null,
       anchor: found.anchor,
-      color,
+      color: color ?? (openNote ? this.prefs.noteColor : this.prefs.defaultColor),
+      style: style ?? this.prefs.defaultStyle,
       tags: [],
     });
     document.getSelection()?.removeAllRanges();
     this.closeToolbar();
-    this.toast(duplicate ? 'Already highlighted' : 'Highlighted · kept in your Notes');
+    this.toast(duplicate ? 'Already kept' : 'Kept in your Notes', duplicate ? undefined : { label: 'Undo', run: () => void removeNote(note.id) });
     if (openNote) window.setTimeout(() => this.openPopover(note.id, true), 60);
     return note;
   }
@@ -254,7 +281,7 @@ export class PageAnnotator {
     host.style.cssText = 'position:fixed;inset:0 auto auto 0;width:0;height:0;z-index:2147483645;';
     const root = host.attachShadow({ mode: 'closed' });
     const style = document.createElement('style');
-    style.textContent = UI_CSS;
+    style.textContent = UI_CSS + PANEL_CSS;
     root.append(style);
     (document.body ?? document.documentElement).append(host);
     this.host = host;
@@ -270,15 +297,20 @@ export class PageAnnotator {
       bar.className = 'toolbar';
       bar.setAttribute('role', 'toolbar');
       bar.setAttribute('aria-label', 'Highlight the selection');
-      for (const color of MARK_COLORS) {
-        const swatch = button('', `Highlight ${color.label.toLowerCase()}`, () => void this.saveSelection(color.id));
+      for (const color of this.prefs.colors) {
+        const swatch = button('', `Mark ${color.label}`, () => void this.saveSelection(color.id));
         swatch.className = 'swatch';
         swatch.style.setProperty('--c', color.fill);
         bar.append(swatch);
       }
-      const noteBtn = button('Add note', 'Highlight and write a note', () => void this.saveSelection(DEFAULT_COLOR, true));
+      const other: NoteStyle = this.prefs.defaultStyle === 'underline' ? 'highlight' : 'underline';
+      const styleBtn = button(other === 'underline' ? 'U' : 'H', other === 'underline' ? 'Underline instead' : 'Highlight instead', () =>
+        void this.saveSelection(undefined, false, other),
+      );
+      styleBtn.className = `text-btn style-${other}`;
+      const noteBtn = button('Add note', 'Keep it and write a note', () => void this.saveSelection(undefined, true));
       noteBtn.className = 'text-btn';
-      bar.append(noteBtn);
+      bar.append(styleBtn, noteBtn);
       // Pressing a button must not clear the selection it acts on.
       bar.addEventListener('pointerdown', (e) => e.preventDefault());
       root.append(bar);
@@ -305,12 +337,26 @@ export class PageAnnotator {
 
     const colors = document.createElement('div');
     colors.className = 'row';
-    for (const color of MARK_COLORS) {
-      const swatch = button('', color.label, () => void updateNote(note.id, { color: color.id }));
+    const current = colorFor(this.prefs.colors, note.color ?? this.prefs.defaultColor).id;
+    for (const color of this.prefs.colors) {
+      const swatch = button('', color.label, () => {
+        void updateNote(note.id, { color: color.id });
+        for (const s of colors.querySelectorAll('.swatch')) s.setAttribute('aria-pressed', String(s === swatch));
+      });
       swatch.className = 'swatch';
       swatch.style.setProperty('--c', color.fill);
-      swatch.setAttribute('aria-pressed', String((note.color ?? DEFAULT_COLOR) === color.id));
+      swatch.setAttribute('aria-pressed', String(current === color.id));
       colors.append(swatch);
+    }
+    const styles = document.createElement('div');
+    styles.className = 'seg';
+    for (const style of NOTE_STYLES) {
+      const b = button(style === 'highlight' ? 'Highlight' : 'Underline', `Mark it with ${style === 'highlight' ? 'a highlight' : 'an underline'}`, () => {
+        void updateNote(note.id, { style });
+        for (const s of styles.children) s.setAttribute('aria-pressed', String(s === b));
+      });
+      b.setAttribute('aria-pressed', String((note.style ?? 'highlight') === style));
+      styles.append(b);
     }
     const spacer = document.createElement('span');
     spacer.className = 'grow';
@@ -319,11 +365,12 @@ export class PageAnnotator {
       void navigator.clipboard.writeText(text).then(() => this.toast('Copied'), () => this.toast('Could not reach the clipboard'));
     });
     copy.className = 'text-btn';
-    const del = button('Delete', 'Delete this highlight and its note', async () => {
+    const remove = async (): Promise<void> => {
       this.closePopover();
       await removeNote(note.id);
-      this.toast('Highlight deleted', { label: 'Undo', run: () => void restoreNote(note) });
-    });
+      this.toast('Deleted', { label: 'Undo', run: () => void restoreNote(note) });
+    };
+    const del = button('Delete', 'Delete this mark and its note (Delete key)', () => void remove());
     del.className = 'text-btn danger';
     colors.append(spacer, copy, del);
 
@@ -359,17 +406,52 @@ export class PageAnnotator {
     tags.addEventListener('change', saveTags);
     tags.addEventListener('blur', saveTags);
 
-    // Keys typed here belong to the note, not to the page's own shortcuts.
+    const hint = document.createElement('div');
+    hint.className = 'hint';
+    hint.textContent = 'Delete removes it · type to write a note · Esc closes';
+
+    // Keys typed here belong to the note, not to the page's own shortcuts. The popover itself
+    // takes focus, so Delete (or Backspace) removes the mark at once, and the first letter typed
+    // moves into the note and carries on there.
+    pop.tabIndex = -1;
     pop.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') e.stopPropagation();
+      if (e.target !== pop || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        void remove();
+      } else if (e.key.length === 1) {
+        comment.focus({ preventScroll: true });
+        comment.setSelectionRange(comment.value.length, comment.value.length);
+      }
     });
-    pop.append(colors, comment, tags);
+    pop.append(colors, styles, comment, tags, hint);
     root.append(pop);
     this.popover = { el: pop, id };
     place(pop, painted.range.getBoundingClientRect(), 'below');
-    // Straight into the note: clicking a highlight is almost always about what it says.
-    comment.focus({ preventScroll: true });
-    if (!focusNote) comment.setSelectionRange(comment.value.length, comment.value.length);
+    if (focusNote) comment.focus({ preventScroll: true });
+    else pop.focus({ preventScroll: true });
+  }
+
+  // ---- notes panel ------------------------------------------------------------------------
+
+  /** Show (or hide) the list of notes on the page itself. */
+  togglePanel(): void {
+    if (this.panel?.isOpen) {
+      this.panel.close();
+      return;
+    }
+    this.closePopover();
+    this.closeToolbar();
+    this.panel ??= new PageNotesPanel(this.ui(), {
+      pageKey: this.key,
+      reveal: (id) => this.reveal(id),
+      remove: async (note) => {
+        await removeNote(note.id);
+        this.toast('Deleted', { label: 'Undo', run: () => void restoreNote(note) });
+      },
+    });
+    this.panel.open(this.allNotes, this.prefs.colors);
   }
 
   private closePopover(): void {
@@ -437,7 +519,7 @@ function place(float: HTMLElement, box: DOMRect, side: 'above' | 'below'): void 
   float.style.visibility = '';
 }
 
-const UI_CSS = `
+export const UI_CSS = `
   :host { all: initial; }
   .toolbar, .popover, .toast {
     position: fixed; box-sizing: border-box;
@@ -457,7 +539,14 @@ const UI_CSS = `
   .swatch:hover, .text-btn:hover { background: rgba(127,127,127,.15); }
   .text-btn { padding: 5px 9px; font-weight: 600; }
   .danger { color: #c62828; }
-  .popover { width: min(340px, calc(100vw - 16px)); padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+  .popover { width: min(340px, calc(100vw - 16px)); padding: 8px; display: flex; flex-direction: column; gap: 6px; outline: none; }
+  .popover:focus-visible { box-shadow: 0 0 0 2px #6b8afd, 0 6px 24px rgba(0,0,0,.18); }
+  .seg { display: inline-flex; align-self: flex-start; gap: 2px; padding: 2px; border-radius: 9px; background: rgba(127,127,127,.14); }
+  .seg button { padding: 3px 10px; font-size: 12px; }
+  .seg button[aria-pressed='true'] { background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.2); font-weight: 600; }
+  @media (prefers-color-scheme: dark) { .seg button[aria-pressed='true'] { background: #3a3a44; } }
+  .style-underline { text-decoration: underline 2px; text-underline-offset: 3px; }
+  .hint { font-size: 11.5px; opacity: .6; }
   .row { display: flex; align-items: center; gap: 2px; }
   .grow { flex: 1; }
   textarea, input {

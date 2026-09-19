@@ -9,6 +9,7 @@ import { storage } from 'wxt/utils/storage';
 import type { DocSource } from './doc-source';
 import { sourceUrl } from './doc-source';
 import type { TextAnchor } from '@/annotate/anchor';
+import type { NoteStyle } from './settings';
 
 export interface NotePosition {
   /** Playlist index of the sentence, and the playlist length then (see `position-match.ts`). */
@@ -32,8 +33,10 @@ export interface Note {
    * marks live in the PDF reader.
    */
   anchor?: TextAnchor;
-  /** Highlight colour id (see annotate/colors.ts); absent means the default. */
+  /** Colour id from the palette (see annotate/palette.ts); absent means the default. */
   color?: string;
+  /** How it is marked on the page; absent means a highlight. */
+  style?: NoteStyle;
   /** Your own labels ("rust-book", "exam"), lower-case. Absent in notes from before tags. */
   tags?: string[];
   createdAt: number;
@@ -56,7 +59,7 @@ export function withNoteAdded(notes: readonly Note[], note: Note): { notes: Note
   return { notes: [note, ...notes].slice(0, MAX_NOTES), added: note, duplicate: false };
 }
 
-export type NotePatch = Partial<Pick<Note, 'text' | 'comment' | 'color' | 'tags'>>;
+export type NotePatch = Partial<Pick<Note, 'text' | 'comment' | 'color' | 'style' | 'tags'>>;
 
 export function withNoteUpdated(notes: readonly Note[], id: string, patch: NotePatch, now = Date.now()): Note[] {
   return notes.map((n) => (n.id === id ? { ...n, ...patch, updatedAt: now } : n));
@@ -128,6 +131,7 @@ export function notesToJson(notes: readonly Note[]): string {
       comment: n.comment,
       tags: n.tags ?? [],
       color: n.color ?? null,
+      style: n.style ?? 'highlight',
       title: n.source.title,
       site: n.source.site,
       url: sourceUrl(n.source),

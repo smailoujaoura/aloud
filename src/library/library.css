@@ -1,37 +1,9 @@
-/* The Library page. Shared tokens and primitives come from theme.css; the article styles match
-   the PDF reader's reflowed view, so a queued article reads like the rest of Aloud. */
-@import '../../ui/theme.css';
+/* The Library's views on Aloud's page (options.html). Tokens and primitives come from
+   theme.css, imported by the page's stylesheet; the article styles match the PDF reader's
+   reflowed view, so a queued article reads like the rest of Aloud. */
 
-main { max-width: 46rem; margin: 0 auto; padding: 32px 24px 180px; }
-
-.btn-sm { padding: 5px 11px; font-size: 12.5px; border-radius: 7px; }
-.pill.in-use { color: var(--accent-on); background: var(--accent-solid); border-color: transparent; font-weight: 600; }
-
-.lib-head { margin-bottom: 18px; }
-.lib-head .brand { display: flex; align-items: center; gap: 12px; }
-.lib-head h1 { font-size: 24px; margin: 0; line-height: 1.2; }
-.lib-head p { margin: 0; }
-
-/* Section tabs: a segmented row that stays in reach while a long list scrolls. */
-.lib-tabs {
-  position: sticky; top: 0; z-index: 5;
-  display: flex; gap: 4px; padding: 6px 0 10px; margin-bottom: 14px;
-  background: var(--bg); border-bottom: 1px solid var(--border);
-  overflow-x: auto;
-}
-.lib-tabs [role='tab'] {
-  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
-  padding: 7px 14px; border-radius: 999px; border: 1px solid transparent;
-  background: transparent; color: var(--fg-muted); font-weight: 600;
-}
-.lib-tabs [role='tab']:hover { color: var(--fg); background: var(--surface-2); }
-.lib-tabs [role='tab'][aria-selected='true'] { color: var(--fg); background: var(--surface); border-color: var(--border); box-shadow: var(--shadow-1); }
-.lib-tabs .count:empty { display: none; }
-.lib-tabs .count {
-  min-width: 18px; padding: 0 6px; border-radius: 9px; font-size: 11.5px; line-height: 18px;
-  text-align: center; background: var(--surface-3); color: var(--fg);
-}
-.lib-tabs [aria-selected='true'] .count { background: var(--accent-solid); color: var(--accent-on); }
+.lib-view .btn-sm { padding: 5px 11px; font-size: 12.5px; border-radius: 7px; }
+.lib-view .pill.in-use { color: var(--accent-on); background: var(--accent-solid); border-color: transparent; font-weight: 600; }
 
 .panel-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
 .panel-bar p { margin: 0; }

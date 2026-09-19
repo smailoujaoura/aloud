@@ -148,6 +148,12 @@ export default defineConfig({
         suggested_key: { default: 'Alt+Shift+V' },
         description: 'Control this page’s video / audio speed from the keyboard',
       },
+      // Chromium allows four suggested shortcuts, all taken; there it is set at
+      // chrome://extensions/shortcuts (and Alt+Shift+S with nothing selected shows the panel too).
+      'notes-panel': {
+        ...(browser === 'firefox' ? { suggested_key: { default: 'Alt+Shift+N' } } : {}),
+        description: 'Show your notes on this page',
+      },
     },
 
     // Gecko-only. Chromium logs unknown top-level keys as warnings on load, so keep it out of

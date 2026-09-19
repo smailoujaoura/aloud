@@ -1303,7 +1303,9 @@ export class ReaderSession {
         text,
         source: this.docSource(),
         at: { index, total: this.playlist.length, excerpt: excerptOf(this.playlist[index]?.spokenText ?? '') },
-        ...(onWebPage && anchor ? { anchor, color: 'yellow', tags: [] } : {}),
+        ...(onWebPage && anchor
+          ? { anchor, color: this.settings.annotate.defaultColor, style: this.settings.annotate.defaultStyle, tags: [] }
+          : {}),
       });
       this.bar?.flash(duplicate ? 'Already in your notes' : 'Saved to Notes', 'ok', {
         label: 'Open',

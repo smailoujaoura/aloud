@@ -6,7 +6,8 @@ import { browser } from 'wxt/browser';
 import { el } from '@/shared/dom';
 import { sourceUrl } from '@/shared/doc-source';
 import { textFragmentUrl } from '@/annotate/anchor';
-import { MARK_COLORS } from '@/pdf/annotations/model';
+import { colorFor, inkFor } from '@/annotate/palette';
+import { DEFAULT_NOTE_COLORS, getSettings, watchSettings, type NoteColor } from '@/shared/settings';
 import {
   filterNotes,
   groupBySource,
@@ -24,6 +25,8 @@ import {
 import { $, ago, toast } from './feedback';
 
 let notes: Note[] = [];
+/** The reader's colours (settings: annotate.colors), so a note's stripe matches its mark. */
+let palette: NoteColor[] = DEFAULT_NOTE_COLORS;
 const filter = { query: '', site: '', tag: '' };
 /** A comment being typed is not redrawn under the cursor when storage echoes the change back. */
 let editing: string | null = null;
@@ -35,7 +38,13 @@ export async function initNotes(opts: { onCount: (n: number) => void; onListen: 
     renderNotes(opts.onListen);
   };
   notes = await loadNotes();
+  palette = (await getSettings()).annotate.colors;
   render();
+  watchSettings((s) => {
+    if (JSON.stringify(s.annotate.colors) === JSON.stringify(palette)) return;
+    palette = s.annotate.colors;
+    render();
+  });
   watchNotes((next) => {
     notes = next;
     if (!editing) render();
@@ -132,7 +141,8 @@ function renderNotes(onListen: (note: Note) => void): void {
 
 function noteCard(note: Note, onListen: (note: Note) => void): HTMLElement {
   const card = el(document, 'article', { class: 'note' });
-  const color = MARK_COLORS.find((c) => c.id === (note.color ?? 'yellow'))?.fill ?? MARK_COLORS[0]!.fill;
+  const fill = colorFor(palette, note.color).fill;
+  const color = note.style === 'underline' ? inkFor(fill) : fill;
   const quote = el(document, 'blockquote', {}, note.text);
   quote.style.borderLeftColor = color;
   card.append(quote);

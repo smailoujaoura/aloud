@@ -5,24 +5,43 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <!-- WXT reads options-page flags from here, not from wxt.config's manifest.options_ui. -->
     <meta name="manifest.open_in_tab" content="true" />
-    <title>Aloud — Settings</title>
+    <title>Aloud</title>
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
-    <main>
-      <header class="page-head">
+    <!-- Aloud's one page: the Library (what to continue, the queue, notes, history) and every
+         setting, each a view picked from the navigation (options.html#notes, #voice, …). The
+         views are shown and hidden by app-nav.ts. -->
+    <div class="app">
+      <nav class="app-nav" aria-label="Aloud">
         <div class="brand">
-          <img src="/icon/48.png" alt="" width="34" height="34" />
+          <img src="/icon/48.png" alt="" width="30" height="30" />
           <span>
             <b>Aloud</b>
-            <small class="muted">Offline neural reader — everything runs on this device</small>
+            <small class="muted">Everything on this device</small>
           </span>
         </div>
-        <div class="head-actions">
-          <button id="walkthrough" class="ghost" type="button">How it works</button>
+        <div class="nav-items">
+          <p class="nav-group">Library</p>
+          <a href="#continue" data-view="continue" class="nav-item"><span class="nav-icon" aria-hidden="true">▶</span><span class="nav-label">Continue</span><span class="count" id="count-continue"></span></a>
+          <a href="#queue" data-view="queue" class="nav-item"><span class="nav-icon" aria-hidden="true">☰</span><span class="nav-label">Up next</span><span class="count" id="count-queue"></span></a>
+          <a href="#notes" data-view="notes" class="nav-item"><span class="nav-icon" aria-hidden="true">✎</span><span class="nav-label">Notes</span><span class="count" id="count-notes"></span></a>
+          <a href="#history" data-view="history" class="nav-item"><span class="nav-icon" aria-hidden="true">⟲</span><span class="nav-label">History</span></a>
+          <p class="nav-group">Settings</p>
+          <a href="#voice" data-view="voice" class="nav-item"><span class="nav-icon" aria-hidden="true">♪</span><span class="nav-label">Voice</span></a>
+          <a href="#reading" data-view="reading" class="nav-item"><span class="nav-icon" aria-hidden="true">¶</span><span class="nav-label">Reading</span></a>
+          <a href="#appearance" data-view="appearance" class="nav-item"><span class="nav-icon" aria-hidden="true">◐</span><span class="nav-label">Appearance</span></a>
+          <a href="#highlights" data-view="highlights" class="nav-item"><span class="nav-icon" aria-hidden="true">▍</span><span class="nav-label">Highlights &amp; notes</span></a>
+          <a href="#speed" data-view="speed" class="nav-item"><span class="nav-icon" aria-hidden="true">»</span><span class="nav-label">Video speed</span></a>
+          <a href="#pdfs" data-view="pdfs" class="nav-item"><span class="nav-icon" aria-hidden="true">▤</span><span class="nav-label">PDFs</span></a>
+          <a href="#pronunciation" data-view="pronunciation" class="nav-item"><span class="nav-icon" aria-hidden="true">Aa</span><span class="nav-label">Pronunciation</span></a>
+          <a href="#advanced" data-view="advanced" class="nav-item"><span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-label">Advanced</span></a>
+          <a href="#backup" data-view="backup" class="nav-item"><span class="nav-icon" aria-hidden="true">⇅</span><span class="nav-label">Backup &amp; restore</span></a>
         </div>
-      </header>
+        <button id="walkthrough" class="ghost nav-help" type="button">How it works</button>
+      </nav>
 
+      <main>
       <!-- Shown when the toolbar button was pressed on a page Aloud cannot read (main.ts). -->
       <div id="cantRead" class="cant-read" role="status" hidden>
         <div>
@@ -36,9 +55,93 @@
         </div>
       </div>
 
-      <!-- One section for the voice: who reads now, how fast, and every voice to switch to.
-           Built in main.ts + voice-panels.ts. -->
-      <section class="voice-section" aria-labelledby="voiceHeading">
+
+      <div class="view lib-view" id="view-continue" data-view="continue" role="region" aria-label="Continue" hidden>
+        <header class="view-head"><h1>Continue listening</h1><p class="muted small">Anything you stopped part-way through, with how much is left.</p></header>
+
+        <ol id="continueList" class="cards"></ol>
+        <div id="continueEmpty" class="empty" hidden>
+          <h2>Nothing half-finished</h2>
+          <p>Anything you stop listening to part-way through shows up here, with how much is left,
+            so you can pick it up again in one click.</p>
+        </div>
+      
+      </div>
+
+      <div class="view lib-view" id="view-queue" data-view="queue" role="region" aria-label="Up next" hidden>
+        <header class="view-head"><h1>Up next</h1><p class="muted small">Articles you queued, played one after another on this page.</p></header>
+
+        <div class="panel-bar">
+          <p class="muted small" id="count">Loading…</p>
+          <div class="panel-actions">
+            <button id="clear" class="ghost danger btn-sm" type="button" hidden>Clear queue</button>
+            <button id="playAll" class="primary" type="button" hidden>▶ Play queue</button>
+          </div>
+        </div>
+        <div id="empty" class="empty" hidden>
+          <h2>Nothing queued yet</h2>
+          <p>Right-click any article and choose <b>Add page to reading queue</b>, or right-click a link
+            and choose <b>Add link to reading queue</b>. Articles play here one after another — and
+            pages you add are saved as they are, so they play even offline.</p>
+        </div>
+        <ol id="list" class="q-list"></ol>
+            <!-- The queued article being read. The reader session runs on this like on any page. -->
+      <div id="now" class="q-now" hidden>
+        <p class="q-now-label" id="nowLabel">Now reading</p>
+        <div id="prompt" class="q-prompt" hidden></div>
+        <article id="article"></article>
+      </div>
+
+      </div>
+
+      <div class="view lib-view" id="view-notes" data-view="notes" role="region" aria-label="Notes" hidden>
+        <header class="view-head"><h1>Notes</h1><p class="muted small">Every passage you kept, marked again whenever you go back to its page.</p></header>
+
+        <div class="panel-bar">
+          <input type="search" id="noteSearch" placeholder="Search your notes…" aria-label="Search notes" />
+          <select id="noteSite" aria-label="Show notes from one site"></select>
+          <select id="noteTag" aria-label="Show notes with one tag"></select>
+        </div>
+        <div class="panel-bar export-bar">
+          <p class="muted small" id="notesShown"></p>
+          <div class="panel-actions">
+            <button id="copyNotes" class="ghost btn-sm" type="button">Copy as Markdown</button>
+            <button id="downloadNotes" class="ghost btn-sm" type="button">Download .md</button>
+            <button id="downloadJson" class="ghost btn-sm" type="button">Download .json</button>
+          </div>
+        </div>
+        <div id="notesList"></div>
+        <div id="notesEmpty" class="empty" hidden>
+          <h2>No notes yet</h2>
+          <p>Select text on any page and press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> (or
+            right-click → <b>Highlight and keep in Notes</b>): the passage is highlighted on the page,
+            and highlighted again whenever you come back. While Aloud is reading, the same key keeps
+            the sentence you just heard. Every note is here — filter by site or tag, open it at its
+            place on the page, and export them as Markdown or JSON.</p>
+        </div>
+      
+      </div>
+
+      <div class="view lib-view" id="view-history" data-view="history" role="region" aria-label="History" hidden>
+        <header class="view-head"><h1>History</h1><p class="muted small">What you listened to, and how far you got.</p></header>
+
+        <div class="panel-bar">
+          <p class="muted small" id="historySummary"></p>
+          <div class="panel-actions">
+            <button id="clearHistory" class="ghost danger btn-sm" type="button" hidden>Clear history</button>
+          </div>
+        </div>
+        <ol id="historyList" class="cards compact"></ol>
+        <div id="historyEmpty" class="empty" hidden>
+          <h2>Nothing listened to yet</h2>
+          <p>Pages and PDFs you listen to are listed here, with how far you got. It stays on this
+            device.</p>
+        </div>
+      
+      </div>
+
+      <div class="view" id="view-voice" data-view="voice" role="region" aria-label="Voice" hidden>
+<section class="voice-section" aria-labelledby="voiceHeading">
         <div class="section-head">
           <h2 id="voiceHeading">Voice</h2>
           <p class="muted small">Downloaded once, then everything runs on this device.</p>
@@ -65,8 +168,51 @@
           <button id="clearModels" class="ghost danger btn-sm" type="button">Delete all downloads</button>
         </div>
       </section>
+      </div>
 
-      <section>
+      <div class="view" id="view-reading" data-view="reading" role="region" aria-label="Reading" hidden>
+<section>
+        <h2>Reading</h2>
+        <label class="row">
+          <span>Pause between sections</span>
+          <input type="range" id="sectionPauseMs" min="0" max="2000" step="50" />
+          <output id="sectionPauseOut"></output>
+        </label>
+        <label class="row">
+          <span>Pause between sentences</span>
+          <input type="range" id="sentencePauseMs" min="0" max="1000" step="25" />
+          <output id="sentencePauseOut"></output>
+        </label>
+        <label class="row check">
+          <input type="checkbox" id="tapToSeek" />
+          <span>Click a sentence in the page to jump there</span>
+        </label>
+        <label class="row check">
+          <input type="checkbox" id="matchPageLanguage" />
+          <span>Read pages in another language with a voice for that language, when one is downloaded</span>
+        </label>
+        <label class="row check">
+          <input type="checkbox" id="skipUrls" />
+          <span>Say “link” instead of reading URLs aloud</span>
+        </label>
+        <label class="row check">
+          <input type="checkbox" id="expandAbbreviations" />
+          <span>Expand abbreviations (“e.g.” → “for example”)</span>
+        </label>
+
+        <p class="sub-label">When reading a whole page, skip</p>
+        <div class="skip-grid">
+          <label class="row check"><input type="checkbox" id="skipCode" /><span>Code listings</span></label>
+          <label class="row check"><input type="checkbox" id="skipTables" /><span>Tables</span></label>
+          <label class="row check"><input type="checkbox" id="skipCaptions" /><span>Image and table captions</span></label>
+          <label class="row check"><input type="checkbox" id="skipReferences" /><span>References, notes and “See also”</span></label>
+        </div>
+        <p class="muted small">Skipped parts stay on the page — only the voice passes over them. A selection is always read as selected.</p>
+      </section>
+      </div>
+
+      <div class="view" id="view-appearance" data-view="appearance" role="region" aria-label="Appearance" hidden>
+<section>
         <h2>Appearance</h2>
         <label class="row">
           <span>Theme</span>
@@ -109,63 +255,57 @@
           you back to it on request.
         </p>
       </section>
+      </div>
 
-      <section>
-        <h2>Reading</h2>
-        <label class="row">
-          <span>Pause between sections</span>
-          <input type="range" id="sectionPauseMs" min="0" max="2000" step="50" />
-          <output id="sectionPauseOut"></output>
-        </label>
-        <label class="row">
-          <span>Pause between sentences</span>
-          <input type="range" id="sentencePauseMs" min="0" max="1000" step="25" />
-          <output id="sentencePauseOut"></output>
-        </label>
-        <label class="row check">
-          <input type="checkbox" id="tapToSeek" />
-          <span>Click a sentence in the page to jump there</span>
-        </label>
-        <label class="row check">
-          <input type="checkbox" id="matchPageLanguage" />
-          <span>Read pages in another language with a voice for that language, when one is downloaded</span>
-        </label>
-        <label class="row check">
-          <input type="checkbox" id="skipUrls" />
-          <span>Say “link” instead of reading URLs aloud</span>
-        </label>
-        <label class="row check">
-          <input type="checkbox" id="expandAbbreviations" />
-          <span>Expand abbreviations (“e.g.” → “for example”)</span>
-        </label>
-
-        <p class="sub-label">When reading a whole page, skip</p>
-        <div class="skip-grid">
-          <label class="row check"><input type="checkbox" id="skipCode" /><span>Code listings</span></label>
-          <label class="row check"><input type="checkbox" id="skipTables" /><span>Tables</span></label>
-          <label class="row check"><input type="checkbox" id="skipCaptions" /><span>Image and table captions</span></label>
-          <label class="row check"><input type="checkbox" id="skipReferences" /><span>References, notes and “See also”</span></label>
-        </div>
-        <p class="muted small">Skipped parts stay on the page — only the voice passes over them. A selection is always read as selected.</p>
-
-        <div class="queue-row">
-          <div>
-            <p class="sub-label">Library</p>
-            <p class="muted small" id="queueHint">What to continue, your reading queue, and notes — press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> while listening to keep a sentence, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>,</kbd> to go back a little.</p>
-          </div>
-          <button id="openQueue" type="button">Open Library</button>
-        </div>
-      </section>
-
-      <section>
+      <div class="view" id="view-highlights" data-view="highlights" role="region" aria-label="Highlights & notes" hidden>
+<section>
         <div class="section-head">
-          <h2>Pronunciation</h2>
-          <p class="muted small">Fix words the voice says wrong. Only what is spoken changes.</p>
+          <h2>Highlights &amp; notes</h2>
+          <p class="muted small">
+            Keep passages from any page — with your note and tags — and see them marked again
+            whenever you come back.
+          </p>
         </div>
-        <div id="pronunciations"></div>
+        <ul class="key-help">
+          <li>Select text and press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> (or right-click →
+            <b>Highlight and keep in Notes</b>): kept at once, in your default colour and style.</li>
+          <li>Click a mark, then <kbd>Delete</kbd> to remove it — or just start typing to write its note.</li>
+          <li id="notesPanelKey">Your notes, on the page you are reading: <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>
+            with nothing selected, or right-click → <b>Show my notes</b>.</li>
+        </ul>
+        <label class="row check">
+          <input type="checkbox" id="annotateToolbar" />
+          <span>Also show a colour toolbar when I select text on a page Aloud is running on</span>
+        </label>
+        <div id="noteStyle"></div>
+        <div id="annotateSites" class="speed-sites"></div>
       </section>
+      </div>
 
-      <section>
+      <div class="view" id="view-speed" data-view="speed" role="region" aria-label="Video speed" hidden>
+<section>
+        <div class="section-head">
+          <h2>Video &amp; audio speed</h2>
+          <p class="muted small">
+            Aloud’s other job: set the speed of any video or audio on a page — from the keyboard,
+            without the site’s own menu.
+          </p>
+        </div>
+        <label class="row check">
+          <input type="checkbox" id="mediaSpeedEnabled" />
+          <span>Control the speed of videos and audio on websites</span>
+        </label>
+        <p class="row-hint">
+          Press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> on a page to start it there; Aloud
+          asks for nothing in advance. Sites you add below start it by themselves, and each one
+          asks for that site only.
+        </p>
+        <div id="mediaSpeed"></div>
+      </section>
+      </div>
+
+      <div class="view" id="view-pdfs" data-view="pdfs" role="region" aria-label="PDFs" hidden>
+<section>
         <h2>PDFs</h2>
         <p class="muted">
           A PDF in a tab has no text an extension can reach — Chrome renders it in a plugin and
@@ -197,49 +337,20 @@
         </p>
         <button id="openPdf">Open a PDF…</button>
       </section>
+      </div>
 
-      <section>
+      <div class="view" id="view-pronunciation" data-view="pronunciation" role="region" aria-label="Pronunciation" hidden>
+<section>
         <div class="section-head">
-          <h2>Highlights &amp; notes</h2>
-          <p class="muted small">
-            Highlight text on any page to keep it — with your note and tags — in the Library, and
-            see it highlighted again whenever you come back.
-          </p>
+          <h2>Pronunciation</h2>
+          <p class="muted small">Fix words the voice says wrong. Only what is spoken changes.</p>
         </div>
-        <label class="row check">
-          <input type="checkbox" id="annotateToolbar" />
-          <span>Show the colour toolbar when I select text on a page Aloud is running on</span>
-        </label>
-        <p class="row-hint">
-          Select text and press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>, or right-click →
-          <b>Highlight and keep in Notes</b>, on any page. Your highlights show on a page when you
-          use Aloud there, when you open a note from the Library, or by themselves on the sites
-          below.
-        </p>
-        <div id="annotateSites" class="speed-sites"></div>
+        <div id="pronunciations"></div>
       </section>
+      </div>
 
-      <section>
-        <div class="section-head">
-          <h2>Video &amp; audio speed</h2>
-          <p class="muted small">
-            Aloud’s other job: set the speed of any video or audio on a page — from the keyboard,
-            without the site’s own menu.
-          </p>
-        </div>
-        <label class="row check">
-          <input type="checkbox" id="mediaSpeedEnabled" />
-          <span>Control the speed of videos and audio on websites</span>
-        </label>
-        <p class="row-hint">
-          Press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> on a page to start it there; Aloud
-          asks for nothing in advance. Sites you add below start it by themselves, and each one
-          asks for that site only.
-        </p>
-        <div id="mediaSpeed"></div>
-      </section>
-
-      <section>
+      <div class="view" id="view-advanced" data-view="advanced" role="region" aria-label="Advanced" hidden>
+<section>
         <h2>Advanced</h2>
         <label class="row" id="supertonic-steps-row">
           <span>Supertonic detail</span>
@@ -292,8 +403,19 @@
         <button id="clearPositions">Forget reading positions</button>
         <button id="reset">Reset all settings to defaults</button>
       </section>
+      </div>
 
-      <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+      <div class="view" id="view-backup" data-view="backup" role="region" aria-label="Backup & restore" hidden>
+      <section>
+        <div class="section-head">
+          <h2>Backup &amp; restore</h2>
+          <p class="muted small">Everything you set and kept in Aloud, in one file — to move to another browser or computer, or to keep safe.</p>
+        </div>
+        <div id="backup"></div>
+      </section>
+      </div>
+
+        <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
       <footer>
         <p>
           New here, or want a reminder of what the buttons do?
@@ -303,7 +425,8 @@
         under the use-restricted OpenRAIL-M licence. Model licences are listed in the repository’s
         <code>THIRD_PARTY.md</code>.
       </footer>
-    </main>
+      </main>
+    </div>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>

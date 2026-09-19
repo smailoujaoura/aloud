@@ -20,6 +20,7 @@ import { cacheClear, cacheEntries, cacheUsageBytes } from '@/engine/model-cache'
 import {
   DEFAULT_SETTINGS,
   getSettings,
+  watchSettings,
   setSettings,
   voiceKeyFor,
   type EngineId,
@@ -28,7 +29,6 @@ import {
 } from '@/shared/settings';
 import { disposePreview, playSynthesized, stopPreview } from '@/ui/voice-preview';
 import { clearAllPositions, countPositions } from '@/shared/reading-positions';
-import { loadQueue } from '@/shared/reading-queue';
 
 /** Say how many pages have a remembered position, so the "forget" button has a visible effect. */
 async function refreshPositionsHint(): Promise<void> {
@@ -45,9 +45,13 @@ import { piperDownloaded, readCacheSizes, sharedModelBytes, sharedModelInstalled
 import { engineInfo } from '@/shared/engine-catalog';
 import { engineConfigFor } from './engine-config';
 import { renderMediaSpeedPanel } from './media-speed-panel';
+import { renderNoteStylePanel } from './note-style-panel';
+import { renderBackupPanel } from './backup-panel';
 import { renderSiteList } from './site-list';
 import { renderPronunciationEditor } from './pronunciation-editor';
 import { renderVoiceSection, type PanelContext } from './voice-panels';
+import { initNav, setNavCount, showView } from './app-nav';
+import { initLibrary } from '@/library/app';
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -304,6 +308,23 @@ async function checkWorkerGpu(): Promise<string> {
 }
 
 /** The speed panel's options, rebuilt after each save so its chips and keys show the new state. */
+let backupRendered = false;
+
+function renderNoteStyle(): void {
+  renderNoteStylePanel($('noteStyle'), {
+    settings: settings.annotate,
+    save: async (patch) => {
+      settings = await setSettings({ annotate: { ...settings.annotate, ...patch } });
+      flashSaved();
+      renderNoteStyle();
+    },
+  });
+  if (capabilities().engine === 'gecko') {
+    $('notesPanelKey').innerHTML =
+      'Your notes, on the page you are reading: <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd> — or <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> with nothing selected, or right-click → <b>Show my notes</b>.';
+  }
+}
+
 function mediaSpeedOptions(): Parameters<typeof renderMediaSpeedPanel>[1] {
   return {
     settings: settings.mediaSpeed,
@@ -311,8 +332,6 @@ function mediaSpeedOptions(): Parameters<typeof renderMediaSpeedPanel>[1] {
       settings = await setSettings({ mediaSpeed: { ...settings.mediaSpeed, ...patch } });
       flashSaved();
       renderMediaSpeedPanel($('mediaSpeed'), mediaSpeedOptions());
-  $<HTMLInputElement>('annotateToolbar').checked = settings.annotate.toolbar;
-  renderAnnotateSites();
     },
     toast: (message: string) => flashSaved(message),
   };
@@ -382,12 +401,22 @@ async function render(): Promise<void> {
 
   void refreshUsage();
   void refreshPositionsHint();
-  void loadQueue().then((q) => {
-    $('openQueue').textContent = q.length ? `Open queue (${q.length})` : 'Open queue';
-  });
 
   $<HTMLInputElement>('mediaSpeedEnabled').checked = settings.mediaSpeed.enabled;
   renderMediaSpeedPanel($('mediaSpeed'), mediaSpeedOptions());
+  renderNoteStyle();
+  if (!backupRendered) {
+    // Drawn once: a restore in progress keeps its steps while the rest of the page redraws.
+    backupRendered = true;
+    renderBackupPanel($('backup'), {
+      manifest,
+      toast: (message, kind) => toast(message, kind ?? 'info'),
+      onRestored: async () => {
+        settings = await getSettings();
+        await render();
+      },
+    });
+  }
 
   renderPronunciationEditor($('pronunciations'), {
     rules: settings.pronunciations,
@@ -535,9 +564,6 @@ function wire(): void {
       'Every cached model file has been deleted',
     );
   });
-  $('openQueue').addEventListener('click', () => {
-    void browser.runtime.sendMessage({ type: 'open-library' }).catch(() => undefined);
-  });
   $('clearPositions').addEventListener('click', (e) => {
     void withBusy(
       e.currentTarget as HTMLButtonElement,
@@ -648,8 +674,19 @@ function explainUnreadablePage(): void {
       : 'Browsers keep extensions out of their own pages — new tabs, settings, add-on stores. Open an article or a PDF and press the Aloud button there. Meanwhile, here are your settings.';
   $('cantRead').hidden = false;
   $('cantReadClose').addEventListener('click', () => ($('cantRead').hidden = true));
-  $('cantReadLibrary').addEventListener('click', () => void browser.runtime.sendMessage({ type: 'open-library' }).catch(() => undefined));
+  $('cantReadLibrary').addEventListener('click', () => showView('continue', { push: true }));
   $('cantReadPdf').addEventListener('click', () => $<HTMLButtonElement>('openPdf').click());
 }
 
 explainUnreadablePage();
+
+// Settings changed somewhere else — another Aloud tab, the reading bar's voice menu, a restored
+// backup — are shown here too. Changes made on this page are already on it: only a page that is
+// not the one being used redraws, so nothing moves under the cursor.
+watchSettings((next) => {
+  if (document.hasFocus() || !settings) return;
+  settings = next;
+  void render();
+});
+initNav();
+void initLibrary({ show: (view) => showView(view, { push: true }), setCount: setNavCount });

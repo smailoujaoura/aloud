@@ -137,6 +137,8 @@ function presetsRow(s: MediaSpeedSettings, opts: MediaSpeedPanelOptions): HTMLEl
     'aria-label': 'Preset speeds',
     value: s.presets.map((p) => String(p)).join(', '),
   }) as HTMLInputElement;
+  // Enter fires "change" and leaving fires "blur": one edit, one save.
+  let saved = s.presets.join(',');
   const commit = (): void => {
     const presets = [...new Set(input.value.split(/[,\s]+/).map(Number).filter((n) => Number.isFinite(n) && n > 0).map(clampRate))].sort((a, b) => a - b);
     if (presets.length === 0) {
@@ -144,6 +146,8 @@ function presetsRow(s: MediaSpeedSettings, opts: MediaSpeedPanelOptions): HTMLEl
       return;
     }
     input.value = presets.join(', ');
+    if (presets.join(',') === saved) return;
+    saved = presets.join(',');
     void opts.save({ presets });
   };
   input.addEventListener('change', commit);

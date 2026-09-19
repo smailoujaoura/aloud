@@ -96,7 +96,7 @@ export interface MediaSpeedSettings {
 export const DEFAULT_MEDIA_SPEED: MediaSpeedSettings = {
   enabled: true,
   step: 0.1,
-  presets: [1, 1.25, 1.5, 1.75, 2, 2.5, 3],
+  presets: [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4],
   preferred: 1.75,
   startAt: 0,
   rememberPerSite: true,
@@ -118,9 +118,42 @@ export interface AnnotateSettings {
   toolbar: boolean;
   /** Hosts where highlights appear by themselves, once each site has been granted. */
   alwaysOn: string[];
+  /** The colours to mark with, editable (see annotate/palette.ts). */
+  colors: NoteColor[];
+  /** Colour id for passages kept with the shortcut, the reader, or a swatch-less save. */
+  defaultColor: string;
+  /** Colour id for passages kept with "Add note" — so notes stand out from plain highlights. */
+  noteColor: string;
+  /** How new passages are marked on the page. */
+  defaultStyle: NoteStyle;
 }
 
-export const DEFAULT_ANNOTATE: AnnotateSettings = { toolbar: true, alwaysOn: [] };
+/** A colour notes can be marked with. `id` is what notes store; label and fill are yours to change. */
+export interface NoteColor {
+  id: string;
+  label: string;
+  /** `#rrggbb`. */
+  fill: string;
+}
+
+export type NoteStyle = 'highlight' | 'underline';
+
+export const DEFAULT_NOTE_COLORS: NoteColor[] = [
+  { id: 'yellow', label: 'Yellow', fill: '#ffd83a' },
+  { id: 'green', label: 'Green', fill: '#7fe08a' },
+  { id: 'blue', label: 'Blue', fill: '#8cc8ff' },
+  { id: 'pink', label: 'Pink', fill: '#ff9fd0' },
+  { id: 'purple', label: 'Purple', fill: '#c3a6ff' },
+];
+
+export const DEFAULT_ANNOTATE: AnnotateSettings = {
+  toolbar: true,
+  alwaysOn: [],
+  colors: DEFAULT_NOTE_COLORS,
+  defaultColor: 'yellow',
+  noteColor: 'blue',
+  defaultStyle: 'highlight',
+};
 
 export interface Settings {
   /** Video and audio speed control (see `MediaSpeedSettings`). */
@@ -221,10 +254,19 @@ export const DEFAULT_SETTINGS: Settings = {
   debug: false,
 };
 
-const item = storage.defineItem<Settings>('local:settings', {
-  fallback: DEFAULT_SETTINGS,
-  version: 5,
-  migrations: {
+/** The stored settings' schema version; each step up has a migration below. */
+export const SETTINGS_VERSION = 6;
+
+type Migration = (prev: Record<string, unknown>) => Record<string, unknown>;
+
+const MIGRATIONS: Record<number, Migration> = {
+    // v5 -> v6: the preset speeds became 0.25× to 4×, the range people actually jump between.
+    // Only a profile still on the old default moves; presets someone typed are theirs.
+    6(prev: Record<string, unknown>): Record<string, unknown> {
+      const media = prev.mediaSpeed as { presets?: number[] } | undefined;
+      if (media?.presets?.join(',') !== '1,1.25,1.5,1.75,2,2.5,3') return prev;
+      return { ...prev, mediaSpeed: { ...media, presets: [...DEFAULT_MEDIA_SPEED.presets] } };
+    },
     // v4 -> v5: Kokoro has one model now, the quantised one (measured: full precision was no
     // faster for four times the download), so the precision choice is gone.
     // Also: the word mark became a choice of style, since an underline on every word can be a
@@ -261,13 +303,27 @@ const item = storage.defineItem<Settings>('local:settings', {
       delete next.autoScroll;
       return next;
     },
-  },
+};
+
+const item = storage.defineItem<Settings>('local:settings', {
+  fallback: DEFAULT_SETTINGS,
+  version: SETTINGS_VERSION,
+  migrations: MIGRATIONS,
 });
 
-export async function getSettings(): Promise<Settings> {
-  const stored = await item.getValue();
-  // Merge so new keys added in an update get their defaults — one level deep for grouped settings,
-  // so a new skip option also gets its default in a profile that saved the group before it existed.
+/** Settings saved at schema `version` (a backup from an older Aloud), brought up to date. */
+export function migrateSettings(raw: Record<string, unknown>, version: number): Record<string, unknown> {
+  let next = { ...raw };
+  for (let v = Math.max(1, Math.floor(version)) + 1; v <= SETTINGS_VERSION; v++) next = MIGRATIONS[v]?.(next) ?? next;
+  return next;
+}
+
+/**
+ * Stored settings with every missing key given its default — one level deep for grouped
+ * settings, so a new skip option also gets its default in a profile that saved the group before
+ * it existed.
+ */
+export function withDefaults(stored: Partial<Settings> | null | undefined): Settings {
   return {
     ...DEFAULT_SETTINGS,
     ...stored,
@@ -281,6 +337,11 @@ export async function getSettings(): Promise<Settings> {
   };
 }
 
+
+export async function getSettings(): Promise<Settings> {
+  return withDefaults(await item.getValue());
+}
+
 export async function setSettings(patch: Partial<Settings>): Promise<Settings> {
   const next = { ...(await getSettings()), ...patch };
   await item.setValue(next);
@@ -288,18 +349,7 @@ export async function setSettings(patch: Partial<Settings>): Promise<Settings> {
 }
 
 export function watchSettings(cb: (s: Settings) => void): () => void {
-  return item.watch((newValue) =>
-    cb({
-      ...DEFAULT_SETTINGS,
-      ...newValue,
-      annotate: { ...DEFAULT_ANNOTATE, ...newValue?.annotate },
-      mediaSpeed: {
-        ...DEFAULT_MEDIA_SPEED,
-        ...newValue?.mediaSpeed,
-        keys: { ...DEFAULT_MEDIA_SPEED.keys, ...newValue?.mediaSpeed?.keys },
-      },
-    }),
-  );
+  return item.watch((newValue) => cb(withDefaults(newValue)));
 }
 
 /** The voice key the given settings select for their active engine. */
