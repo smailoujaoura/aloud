@@ -132,15 +132,16 @@ export default defineConfig({
     },
 
     commands: {
-      // Alt+<letter>, not Alt+Shift+<letter>: on Firefox (Linux and Windows) Alt+Shift+key is the
-      // chord that fires a web page's own accesskeys, so those shortcuts were being eaten by
-      // whatever page was in front. All of them can be changed in Settings → Shortcuts.
+      // Alt+<letter>, avoiding the letters Firefox's own menus answer to (F, E, V, S, B, T, H)
+      // and its Alt+D / Alt+Shift+<letter> chords: a key the browser has already taken never
+      // reaches the extension. All of them can be changed in Settings → Shortcuts, which says
+      // what a key is already used for before it lets you set it.
       'toggle-read': {
         suggested_key: { default: 'Alt+R' },
         description: 'Start / stop reading the current page aloud',
       },
       'save-note': {
-        suggested_key: { default: 'Alt+S' },
+        suggested_key: { default: 'Alt+K' },
         description: 'Save what you just heard (or the selected text) to Notes',
       },
       'back-a-little': {

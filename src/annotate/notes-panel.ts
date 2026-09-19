@@ -175,7 +175,7 @@ export class PageNotesPanel {
       empty.textContent = this.query
         ? 'No notes match that search.'
         : this.scope === 'page'
-          ? 'No notes on this page yet. Select text and press Alt+S to keep it.'
+          ? 'No notes on this page yet. Select text and press Alt+K to keep it.'
           : 'No notes yet.';
       this.list.replaceChildren(empty);
       return;

@@ -318,13 +318,8 @@ function renderNoteStyle(): void {
       settings = await setSettings({ annotate: { ...settings.annotate, ...patch } });
       flashSaved();
       renderNoteStyle();
-  void renderShortcutsPanel($('shortcuts'), { toast: (message, kind) => toast(message, kind ?? 'info') });
     },
   });
-  if (capabilities().engine === 'gecko') {
-    $('notesPanelKey').innerHTML =
-      'Your notes, on the page you are reading: <kbd>Alt</kbd>+<kbd>N</kbd> — or <kbd>Alt</kbd>+<kbd>S</kbd> with nothing selected, or right-click → <b>Show my notes</b>.';
-  }
 }
 
 function mediaSpeedOptions(): Parameters<typeof renderMediaSpeedPanel>[1] {
@@ -407,6 +402,14 @@ async function render(): Promise<void> {
   $<HTMLInputElement>('mediaSpeedEnabled').checked = settings.mediaSpeed.enabled;
   renderMediaSpeedPanel($('mediaSpeed'), mediaSpeedOptions());
   renderNoteStyle();
+  void renderShortcutsPanel($('shortcuts'), {
+    toast: (message, kind) => toast(message, kind ?? 'info'),
+    pageKeys: settings.annotate.pageKeys,
+    savePageKeys: async (pageKeys) => {
+      settings = await setSettings({ annotate: { ...settings.annotate, pageKeys } });
+      flashSaved();
+    },
+  });
   if (!backupRendered) {
     // Drawn once: a restore in progress keeps its steps while the rest of the page redraws.
     backupRendered = true;

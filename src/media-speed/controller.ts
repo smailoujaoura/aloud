@@ -8,6 +8,11 @@
  *
  * A rate changed by the *site's own* speed menu is respected and becomes the current rate — the
  * alternative is two controls fighting over one video, which no one wins.
+ *
+ * Only a rate you actually asked for here is re-applied like that. A rate that merely came from
+ * memory ("this site was last watched at 1.75×") is offered once and then left alone: re-applying
+ * it on every `play`/`canplay` meant that dragging Facebook's progress bar — which fires those —
+ * silently sped the video up again after the player had reset it to 1×.
  */
 import { clampRate, formatRate, nextPreset, stepRate } from './rate';
 import { isTypingTarget, matchesBinding } from './keys';
@@ -30,6 +35,8 @@ type Media = HTMLMediaElement;
 
 export class MediaSpeedController {
   private rate: number | null = null;
+  /** True once the rate is a choice made here — by a key, or through the site's own speed menu. */
+  private chosen = false;
   /** The rate we set last, to tell our own `ratechange` from the site's. */
   private applied = new WeakMap<Media, number>();
   private readonly known = new Set<Media>();
@@ -77,8 +84,21 @@ export class MediaSpeedController {
     return this.rate;
   }
 
-  /** Set the rate for this frame and show it. `show: false` for the silent opening rate. */
+  /** Set the rate for this frame and show it: a choice, so it is kept through source changes. */
   setRate(rate: number, show = true): void {
+    this.chosen = true;
+    this.applyRate(rate, show);
+  }
+
+  /**
+   * The opening rate — remembered for this site, or `startAt`. Applied once to what is here now;
+   * the page is free to set its own rate afterwards without this putting it back.
+   */
+  setInitialRate(rate: number, show = false): void {
+    this.applyRate(rate, show);
+  }
+
+  private applyRate(rate: number, show: boolean): void {
     this.rate = clampRate(rate);
     for (const media of this.known) this.apply(media);
     if (show) this.showBadge(formatRate(this.rate));
@@ -111,7 +131,10 @@ export class MediaSpeedController {
 
     // A new source resets the rate to 1; put ours back. `ratechange` tells the site's own speed
     // menu from our own writes, and follows the site when it was not us.
-    const reapply = (): void => this.apply(media);
+    // Only a chosen rate survives a new source; see the note at the top of the file.
+    const reapply = (): void => {
+      if (this.chosen) this.apply(media);
+    };
     for (const event of ['loadstart', 'loadeddata', 'canplay', 'play', 'playing', 'durationchange']) {
       media.addEventListener(event, reapply);
       this.cleanups.push(() => media.removeEventListener(event, reapply));
@@ -121,10 +144,14 @@ export class MediaSpeedController {
       const ours = this.applied.get(media);
       if (media.playbackRate === ours) return;
       // The site (or the user, through the site's menu) changed it: follow, and match the rest.
+      // A change made on a playing video is taken as a choice and kept through the next source;
+      // one that arrives while it is still loading or seeking is the player restoring itself.
+      if (!media.seeking && media.readyState >= 2) this.chosen = true;
       this.rate = clampRate(media.playbackRate);
       for (const other of this.known) if (other !== media) this.apply(other);
       this.host.onRate(this.rate);
     };
+
     media.addEventListener('ratechange', onRateChange);
     this.cleanups.push(() => media.removeEventListener('ratechange', onRateChange));
 

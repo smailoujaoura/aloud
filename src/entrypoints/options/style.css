@@ -529,3 +529,6 @@ code {
 .backup-step p { margin: 2px 0 0; }
 
 .nav-item-inline { color: var(--accent-text, inherit); }
+.key-row-wrap .row-hint { margin: -4px 0 8px; }
+#shortcuts .row-hint { margin-left: 0; }
+#shortcuts .sub-label { margin-top: 18px; }

@@ -44,7 +44,8 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
 - **Word by word** — with Piper and Kokoro voices the word being spoken is marked inside the
   sentence, timed from the voice model's own phoneme durations rather than estimated. It is shown
   as a darker shade by default; Settings switches it to an underline, or off.
-- **Highlights and notes on any page** — select text and press <kbd>Alt</kbd>+<kbd>S</kbd>
+- **Highlights and notes on any page** — select text and press <kbd>K</kbd> (on a page Aloud is
+  running on) or <kbd>Alt</kbd>+<kbd>K</kbd>
   (or right-click → *Highlight and keep in Notes*): kept at once, in your default colour and
   style — highlight or underline — with nothing to answer. Click a mark to recolour it, switch
   its style, or write its note by just typing; <kbd>Delete</kbd> removes it. The colours are
@@ -52,7 +53,7 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
   marked again whenever you come back — anchored by its text, so it survives the page being
   edited around it. While Aloud reads, the same key (or the bookmark on the bar) keeps the
   sentence you just heard.
-- **Your notes, on the page** — <kbd>Alt</kbd>+<kbd>N</kbd>, <kbd>Alt</kbd>+<kbd>S</kbd> with
+- **Your notes, on the page** — <kbd>Alt</kbd>+<kbd>N</kbd>, <kbd>Alt</kbd>+<kbd>K</kbd> with
   nothing selected, or right-click → *Show my notes*: a panel listing this page's notes or all of
   them, searchable, each one a click from its place.
 - **Your keys** — the shortcuts deliberately avoid <kbd>Alt</kbd>+<kbd>Shift</kbd>+letter, which

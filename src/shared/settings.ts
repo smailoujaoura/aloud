@@ -126,6 +126,11 @@ export interface AnnotateSettings {
   noteColor: string;
   /** How new passages are marked on the page. */
   defaultStyle: NoteStyle;
+  /**
+   * Single keys, handled by Aloud on pages where it is already running — no browser shortcut, so
+   * nothing can be taken by a browser menu. `''` switches one off.
+   */
+  pageKeys: { keep: string; panel: string };
 }
 
 /** A colour notes can be marked with. `id` is what notes store; label and fill are yours to change. */
@@ -149,6 +154,7 @@ export const DEFAULT_NOTE_COLORS: NoteColor[] = [
 export const DEFAULT_ANNOTATE: AnnotateSettings = {
   toolbar: true,
   alwaysOn: [],
+  pageKeys: { keep: 'k', panel: 'n' },
   colors: DEFAULT_NOTE_COLORS,
   defaultColor: 'yellow',
   noteColor: 'blue',
@@ -328,7 +334,11 @@ export function withDefaults(stored: Partial<Settings> | null | undefined): Sett
     ...DEFAULT_SETTINGS,
     ...stored,
     skip: { ...DEFAULT_SKIP, ...stored?.skip },
-    annotate: { ...DEFAULT_ANNOTATE, ...stored?.annotate },
+    annotate: {
+      ...DEFAULT_ANNOTATE,
+      ...stored?.annotate,
+      pageKeys: { ...DEFAULT_ANNOTATE.pageKeys, ...stored?.annotate?.pageKeys },
+    },
     mediaSpeed: {
       ...DEFAULT_MEDIA_SPEED,
       ...stored?.mediaSpeed,

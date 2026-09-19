@@ -56,7 +56,7 @@ export default defineUnlistedScript(() => {
     });
     w.__aloudSpeed = controller;
     controller.start();
-    if (remembered != null || startAt != null) controller.setRate(remembered ?? startAt!, remembered != null);
+    if (remembered != null || startAt != null) controller.setInitialRate(remembered ?? startAt!, remembered != null);
     log.info(`[speed] controlling ${controller.mediaCount} media element(s) on ${host}`);
 
     watchSettings((next) => {

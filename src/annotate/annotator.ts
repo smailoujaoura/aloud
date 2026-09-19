@@ -8,6 +8,8 @@
  *  - **Click a mark** to change its colour or style (highlight / underline), write its note, tag,
  *    copy — or press Delete to remove it.
  *  - **The notes panel** lists this page's notes (or all of them) on the page itself.
+ *  - **Single keys** (K to keep the selection, N for the panel) work wherever Aloud is running,
+ *    since a browser shortcut can be taken by a browser menu and a page key cannot.
  *  - **Opened from the Library**, the page scrolls to the note and flashes it.
  *
  * Highlights are painted with the CSS Custom Highlight API, as the reader's sentence highlight is:
@@ -20,6 +22,7 @@ import { addNote, loadNotes, notesForPage, parseTags, removeNote, restoreNote, u
 import type { TextIndex } from '@/extract/text-index';
 import { DEFAULT_ANNOTATE, getSettings, watchSettings, type AnnotateSettings, type NoteStyle } from '@/shared/settings';
 import { anchorForRange, pageIndex, rangeForAnchor } from './page-anchoring';
+import { isTypingTarget } from '@/media-speed/keys';
 import { NOTE_STYLES, colorFor, markCss, markName } from './palette';
 import { PANEL_CSS, PageNotesPanel } from './notes-panel';
 
@@ -87,11 +90,14 @@ export class PageAnnotator {
     this.listen(document, 'click', (e) => this.onClick(e as MouseEvent), true);
     this.listen(document, 'pointerdown', (e) => this.onPointerDown(e as PointerEvent), true);
     this.listen(document, 'keydown', (e) => {
-      if ((e as KeyboardEvent).key === 'Escape') {
+      const key = e as KeyboardEvent;
+      if (key.key === 'Escape') {
         this.closeToolbar();
         this.closePopover();
         this.panel?.close();
+        return;
       }
+      this.onPageKey(key);
     });
     this.listen(window, 'scroll', () => this.closeToolbar(), true);
     // Pages that fill in their content late (documentation sites, single-page apps) get another
@@ -433,6 +439,21 @@ export class PageAnnotator {
     else pop.focus({ preventScroll: true });
   }
 
+  /**
+   * The single keys that work on pages Aloud is already running on (settings:
+   * annotate.pageKeys). A browser shortcut can be swallowed by a browser menu; these cannot, and
+   * they are as easy to hit as a key gets. Never while typing, never with a modifier, and "keep"
+   * only when something is selected — so an ordinary letter stays an ordinary letter.
+   */
+  private onPageKey(e: KeyboardEvent): void {
+    if (this.host && e.composedPath().includes(this.host)) return;
+    const action = pageKeyAction(e, this.prefs.pageKeys, this.selectedRange() != null);
+    if (!action) return;
+    e.preventDefault();
+    if (action === 'keep') void this.saveSelection();
+    else this.togglePanel();
+  }
+
   // ---- notes panel ------------------------------------------------------------------------
 
   /** Show (or hide) the list of notes on the page itself. */
@@ -489,6 +510,25 @@ export class PageAnnotator {
     target.addEventListener(type, fn, capture);
     this.cleanups.push(() => target.removeEventListener(type, fn, capture));
   }
+}
+
+/**
+ * What a key press on the page means: keep the selection, show the notes panel, or nothing.
+ *
+ * Nothing while typing, nothing with a modifier held (those are the browser's shortcuts), and
+ * each key only in the state it makes sense in — so an ordinary letter stays an ordinary letter.
+ */
+export function pageKeyAction(
+  e: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'altKey' | 'metaKey' | 'defaultPrevented'> & { target?: EventTarget | null },
+  keys: { keep: string; panel: string },
+  hasSelection: boolean,
+): 'keep' | 'panel' | null {
+  if (e.ctrlKey || e.altKey || e.metaKey || e.defaultPrevented) return null;
+  if (isTypingTarget(e.target ?? null)) return null;
+  const key = e.key.toLowerCase();
+  if (keys.keep && key === keys.keep.toLowerCase() && hasSelection) return 'keep';
+  if (keys.panel && key === keys.panel.toLowerCase() && !hasSelection) return 'panel';
+  return null;
 }
 
 function button(label: string, title: string, run: () => void): HTMLButtonElement {
