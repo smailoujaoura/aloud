@@ -14,7 +14,8 @@
  * Piper's catalogue is narrowed by language, and a voice published at several qualities is one
  * row with a quality picker rather than three near-identical rows.
  */
-import { voiceAvatar, voiceGender } from '@/ui/voice-avatar';
+import { genericAvatar } from '@/ui/voice-avatar';
+import { isBestVoice, voiceRank } from '@/ui/voice-quality';
 import { voicePortrait } from '@/ui/voice-portraits';
 import { el } from '@/shared/dom';
 import { humanBytes } from '@/shared/log';
@@ -61,8 +62,6 @@ const MAX_SEARCH_RESULTS = 40;
 /** Piper's quality tiers, smallest first. */
 const QUALITY_ORDER = ['x_low', 'low', 'medium', 'high'];
 
-/** Kokoro's published grades, best first — so its best voices lead the list. */
-const GRADE_ORDER = ['A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'D-', 'F+', 'F'];
 
 const ACCENT_NAME: Record<string, string> = {
   'en-US': 'American English',
@@ -234,7 +233,7 @@ function engineIntro(info: EngineInfo): HTMLElement {
 function avatar(engine: EngineId, id: string, ctx: PanelContext, className = 'vi-avatar'): HTMLElement {
   const node = el(document, 'span', { class: className, 'aria-hidden': 'true' });
   const size = className === 'now-avatar' ? 56 : 40;
-  const drawn = () => voiceAvatar(document, `${engine}:${id}`, voiceGender(engine, id, ctx.manifest), size);
+  const drawn = () => genericAvatar(document, size);
   const portrait = voicePortrait(engine, id);
   if (!portrait) {
     node.append(drawn());
@@ -330,9 +329,24 @@ function anyInstalled(group: PiperGroup, ctx: PanelContext): boolean {
   return group.variants.some(([, v]) => piperDownloaded(v, ctx.sizes));
 }
 
-function byInstalledThenName(ctx: PanelContext) {
-  return (a: PiperGroup, b: PiperGroup): number =>
-    Number(anyInstalled(b, ctx)) - Number(anyInstalled(a, ctx)) || a.name.localeCompare(b.name);
+/**
+ * Best first, then by recording quality, then by name — alphabetical order buried the handful of
+ * voices actually worth choosing among 175 of them (see ui/voice-quality.ts).
+ */
+function byQualityThenName(ctx: PanelContext) {
+  const rank = (g: PiperGroup): number =>
+    voiceRank('piper', g.variants[0]![0], ctx.manifest, g.variants.map(([, v]) => v));
+  return (a: PiperGroup, b: PiperGroup): number => rank(a) - rank(b) || a.name.localeCompare(b.name);
+}
+
+/** The "Best voices" / "Other voices" headings, inserted where the best ones end. */
+function withQualityHeadings<T>(list: HTMLElement, items: T[], isBest: (item: T) => boolean, render: (item: T) => HTMLElement): void {
+  const best = items.filter(isBest);
+  const rest = items.filter((i) => !isBest(i));
+  if (best.length && rest.length) list.append(el(document, 'p', { class: 'voice-group-title' }, 'Best voices'));
+  for (const item of best) list.append(render(item));
+  if (best.length && rest.length) list.append(el(document, 'p', { class: 'voice-group-title' }, 'Other voices'));
+  for (const item of rest) list.append(render(item));
 }
 
 function piperPanel(ctx: PanelContext, again: () => void): HTMLElement {
@@ -393,7 +407,7 @@ function piperPanel(ctx: PanelContext, again: () => void): HTMLElement {
     // A search means "find this name wherever it is", so it looks across every language.
     const matches = pool
       .filter((g) => `${g.key} ${g.language} ${g.variants.map(([id]) => id).join(' ')}`.toLowerCase().includes(ctx.filter))
-      .sort(byInstalledThenName(ctx));
+      .sort(byQualityThenName(ctx));
     if (matches.length === 0) {
       list.append(emptyState('No voices match that search.'));
       return panel;
@@ -415,14 +429,13 @@ function piperPanel(ctx: PanelContext, again: () => void): HTMLElement {
     for (const g of pool) byLanguage.set(g.language, [...(byLanguage.get(g.language) ?? []), g]);
     for (const [lang, items] of [...byLanguage.entries()].sort(([a], [b]) => a.localeCompare(b))) {
       if (byLanguage.size > 1) list.append(el(document, 'p', { class: 'voice-group-title' }, lang));
-      for (const g of items.sort(byInstalledThenName(ctx))) list.append(piperItem(g, ctx));
+      for (const g of items.sort(byQualityThenName(ctx))) list.append(piperItem(g, ctx));
     }
     return panel;
   }
 
-  for (const g of pool.filter((x) => x.language === language).sort(byInstalledThenName(ctx))) {
-    list.append(piperItem(g, ctx));
-  }
+  const shown = pool.filter((x) => x.language === language).sort(byQualityThenName(ctx));
+  withQualityHeadings(list, shown, (g) => isBestVoice('piper', g.variants[0]![0]), (g) => piperItem(g, ctx));
   return panel;
 }
 
@@ -521,27 +534,28 @@ interface SharedVoice {
   id: string;
   name: string;
   meta: string;
-  group: string;
   rank: number;
 }
 
 function sharedVoices(engine: 'kokoro' | 'supertonic', manifest: ModelManifest): SharedVoice[] {
   if (engine === 'kokoro') {
+    // Best first, then by Kokoro's own grades: the accent is in each row instead of being the
+    // thing the list is sorted by, so the voices worth hearing are the ones at the top.
     return Object.entries(manifest.kokoro.voices)
       .map(([id, v]) => ({
         id,
         name: v.label,
-        meta: v.grade ? `${v.gender} · grade ${v.grade}` : v.gender,
-        group: ACCENT_NAME[v.language] ?? v.language,
-        rank: v.grade ? GRADE_ORDER.indexOf(v.grade) : GRADE_ORDER.length,
+        meta: [ACCENT_NAME[v.language] ?? v.language, v.gender, v.grade ? `grade ${v.grade}` : '']
+          .filter(Boolean)
+          .join(' · '),
+        rank: voiceRank('kokoro', id, manifest),
       }))
-      .sort((a, b) => a.group.localeCompare(b.group) || a.rank - b.rank || a.name.localeCompare(b.name));
+      .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
   }
   return Object.entries(manifest.supertonic?.voices ?? {}).map(([id, v]) => ({
     id,
     name: v.label,
     meta: v.gender,
-    group: '',
     rank: 0,
   }));
 }
@@ -554,7 +568,7 @@ function sharedPanel(engine: 'kokoro' | 'supertonic', ctx: PanelContext): HTMLEl
   panel.append(engineIntro(info), modelCard(engine, { downloaded, bytes }, ctx));
 
   const voices = sharedVoices(engine, ctx.manifest).filter(
-    (v) => !ctx.filter || `${v.id} ${v.name} ${v.meta} ${v.group}`.toLowerCase().includes(ctx.filter),
+    (v) => !ctx.filter || `${v.id} ${v.name} ${v.meta}`.toLowerCase().includes(ctx.filter),
   );
   const list = el(document, 'div', { class: `voice-list${downloaded ? '' : ' is-locked'}` });
   panel.append(list);
@@ -567,14 +581,9 @@ function sharedPanel(engine: 'kokoro' | 'supertonic', ctx: PanelContext): HTMLEl
     list.append(el(document, 'p', { class: 'list-note' }, `Download the model above to use these ${voices.length} voices.`));
   }
 
-  let lastGroup: string | null = null;
-  for (const v of voices) {
-    if (v.group && v.group !== lastGroup) {
-      list.append(el(document, 'p', { class: 'voice-group-title' }, v.group));
-      lastGroup = v.group;
-    }
+  const item = (v: SharedVoice): HTMLElement => {
     const inUse = ctx.settings.engine === engine && activeVoice(ctx.settings) === v.id;
-    const item = el(document, 'div', { class: `voice-item${inUse ? ' is-current' : ''}` });
+    const row = el(document, 'div', { class: `voice-item${inUse ? ' is-current' : ''}` });
     const main = el(document, 'div', { class: 'vi-main' });
     main.append(el(document, 'b', { class: 'vi-name' }, v.name), el(document, 'span', { class: 'vi-meta' }, v.meta));
     const actions = el(document, 'div', { class: 'vi-actions' });
@@ -582,9 +591,10 @@ function sharedPanel(engine: 'kokoro' | 'supertonic', ctx: PanelContext): HTMLEl
       previewFor(engine, v.id, ctx),
       useControl(engine, v.id, v.name, ctx, downloaded ? undefined : `Download ${info.name} first`),
     );
-    item.append(avatar(engine, v.id, ctx), main, actions);
-    list.append(item);
-  }
+    row.append(avatar(engine, v.id, ctx), main, actions);
+    return row;
+  };
+  withQualityHeadings(list, voices, (v) => isBestVoice(engine, v.id), item);
   return panel;
 }
 

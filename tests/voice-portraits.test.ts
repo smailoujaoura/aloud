@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { allPortraitFiles, voicePortrait } from '@/ui/voice-portraits';
+import { voiceRank } from '@/ui/voice-quality';
 
 describe('voicePortrait', () => {
   it('gives every quality tier of a Piper voice the same face', () => {
@@ -20,3 +21,28 @@ describe('voicePortrait', () => {
     expect(missing).toEqual([]);
   });
 });
+
+describe('voiceRank', () => {
+  it('puts the voices with a portrait first, in their own order', () => {
+    const m = manifest();
+    expect(voiceRank('piper', 'en_GB-alba-medium', m)).toBeLessThan(voiceRank('piper', 'en_US-amy-medium', m));
+    expect(voiceRank('kokoro', 'af_heart', m)).toBeLessThan(voiceRank('kokoro', 'am_echo', m));
+    // Piper's best come before Kokoro's, so one order covers the whole catalogue.
+    expect(voiceRank('piper', 'en_GB-alba-medium', m)).toBeLessThan(voiceRank('kokoro', 'af_heart', m));
+  });
+
+  it('ranks the rest by recording quality, then by Kokoro grade', () => {
+    const m = manifest();
+    const high = [{ quality: 'high' }] as never;
+    const low = [{ quality: 'low' }] as never;
+    expect(voiceRank('piper', 'en_US-x-high', m, high)).toBeLessThan(voiceRank('piper', 'en_US-x-low', m, low));
+    expect(voiceRank('kokoro', 'bf_isabella', m)).toBeLessThan(voiceRank('kokoro', 'am_echo', m));
+  });
+});
+
+function manifest() {
+  return {
+    piper: { 'en_US-amy-medium': { quality: 'medium' } },
+    kokoro: { voices: { am_echo: { grade: 'D' }, bf_isabella: { grade: 'C' }, af_heart: { grade: 'A' } } },
+  } as never;
+}

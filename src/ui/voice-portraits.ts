@@ -3,8 +3,11 @@
  *
  * None of these people exist: every portrait was generated (SDXL with the SDXL-Lightning UNet,
  * both openrail++) from a description of how the voice sounds — who it sounds like, how old,
- * from where. Only the voices worth coming back to get one; every other voice keeps its drawn
- * avatar (see voice-avatar.ts). The files live in `public/portraits/`, 160 px WebP.
+ * from where. Only the voices worth coming back to get one; every other voice shows the one
+ * stand-in avatar (see voice-avatar.ts). The files live in `public/portraits/`, 160 px WebP.
+ *
+ * The order of these two tables is also the order the voice lists lead with (voice-quality.ts):
+ * best first.
  *
  * Piper voices are matched by speaker (`en_US-lessac-high` → `lessac`), so every quality tier of
  * a voice shows the same face.
@@ -53,6 +56,22 @@ export function voicePortrait(engine: EngineId, id: string): Portrait | null {
   if (engine === 'kokoro') {
     const sounds = KOKORO[id];
     return sounds ? { file: `/portraits/kokoro-${id}.webp`, sounds } : null;
+  }
+  return null;
+}
+
+/**
+ * Where a voice sits among the best, or null when it is not one of them — the order the lists
+ * lead with. Piper's speakers come before Kokoro's voices: it is the engine that runs anywhere.
+ */
+export function bestVoiceIndex(engine: EngineId, id: string): number | null {
+  if (engine === 'piper') {
+    const i = Object.keys(PIPER).indexOf(piperVoiceName(id));
+    return i < 0 ? null : i;
+  }
+  if (engine === 'kokoro') {
+    const i = Object.keys(KOKORO).indexOf(id);
+    return i < 0 ? null : Object.keys(PIPER).length + i;
   }
   return null;
 }
