@@ -226,11 +226,14 @@ let index = 0;
 
 function showStep(next: number): void {
   index = Math.max(0, Math.min(steps.length - 1, next));
+  $('skip').classList.toggle('away', index === steps.length - 1);
   steps.forEach((step, i) => (step.hidden = i !== index));
   $('railFill').style.width = `${((index + 1) / steps.length) * 100}%`;
-  $<HTMLButtonElement>('back').hidden = index === 0;
+  // Unavailable buttons keep their place (invisible, not removed), so nothing in the nav moves
+  // from one step to the next.
+  setAway($<HTMLButtonElement>('back'), index === 0);
   const nextBtn = $<HTMLButtonElement>('next');
-  nextBtn.hidden = index === steps.length - 1;
+  setAway(nextBtn, index === steps.length - 1);
   nextBtn.textContent = index === steps.length - 2 ? 'Last one' : 'Next';
 
   for (const [i, dot] of dots.entries()) {
@@ -243,6 +246,34 @@ function showStep(next: number): void {
   (heading as HTMLElement | null)?.focus({ preventScroll: true });
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
+/** Hide a nav button without taking it out of the layout. */
+function setAway(button: HTMLButtonElement, away: boolean): void {
+  button.classList.toggle('away', away);
+  button.disabled = away;
+  button.setAttribute('aria-hidden', String(away));
+  button.tabIndex = away ? -1 : 0;
+}
+
+/**
+ * The demo's reading bar sits at the bottom of the window, where the nav is pinned: lift the nav
+ * above it for as long as it is there — however it went away (Stop, its own ✕, the next step).
+ */
+function watchDemoBar(): void {
+  const sync = (): void => {
+    document.body.classList.toggle('demo-bar-on', !!document.getElementById('aloud-control-host'));
+  };
+  // The bar attaches itself to <html>, not <body> (see ui/control-bar.ts).
+  new MutationObserver(sync).observe(document.documentElement, { childList: true });
+  sync();
+}
+watchDemoBar();
+
+// "Step 3 of 6" is worked out, not written into each step, so adding one never leaves a stale count.
+steps.forEach((step, i) => {
+  const eyebrow = step.querySelector('.eyebrow');
+  if (eyebrow) eyebrow.textContent = `Step ${i + 1} of ${steps.length}`;
+});
 
 const dots: HTMLButtonElement[] = steps.map((step, i) => {
   const dot = el(document, 'button', {
@@ -270,13 +301,16 @@ function wire(): void {
     });
   }
 
-  $('done').addEventListener('click', () => {
+  const finish = (): void => {
     void demo?.dispose();
     // An extension page may close itself; if the browser refuses, say something rather than
     // leaving a button that appears to do nothing.
     window.close();
     setTimeout(() => toast('You can close this tab whenever you like — Aloud is ready.', 'ok'), 150);
-  });
+  };
+  $('done').addEventListener('click', finish);
+  // Skipping ends the tour the same way finishing it does. It can be reopened from the settings.
+  $('skip').addEventListener('click', finish);
 
   document.addEventListener('keydown', (e) => {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;

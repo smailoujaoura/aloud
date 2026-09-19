@@ -18,7 +18,10 @@
         </div>
         <!-- Built in main.ts so the segmented control, the settings page and the control bar all
              read their labels and icons from one place. -->
-        <div id="themeSwitch"></div>
+        <div class="top-actions">
+          <div id="themeSwitch"></div>
+          <button id="skip" class="ghost btn-sm" type="button" title="Close the walkthrough — it can be reopened from the settings page">Skip tour</button>
+        </div>
       </header>
 
       <div class="rail"><i id="railFill"></i></div>
@@ -98,8 +101,8 @@
           </ul>
 
           <p class="note">
-            A page Aloud cannot read — a browser settings page, a blank tab, an add-on gallery —
-            shows <b>n/a</b> on the toolbar icon for a moment instead of failing silently.
+            On a page Aloud cannot read — a new tab, the browser’s own settings, an add-on store —
+            the button opens Aloud’s settings instead, saying why, rather than doing nothing.
           </p>
         </section>
 
@@ -123,6 +126,8 @@
               <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Previous / next sentence</td></tr>
               <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Faster / slower</td></tr>
               <tr><td><kbd>Home</kbd> <kbd>End</kbd></td><td>Jump to the start or the end</td></tr>
+              <tr><td><kbd>B</kbd></td><td>Back a little — replay the last few seconds</td></tr>
+              <tr><td><kbd>N</kbd></td><td>Save what you just heard to Notes</td></tr>
               <tr><td><kbd>Alt</kbd><kbd>Shift</kbd><kbd>R</kbd></td><td>Start or stop from anywhere</td></tr>
             </tbody>
           </table>
@@ -149,6 +154,42 @@
         </section>
 
         <!-- 5 ------------------------------------------------------------ -->
+        <section class="step" data-title="What else it does" hidden>
+          <p class="eyebrow">Step 5</p>
+          <h1>Everything else Aloud can do.</h1>
+          <p class="lede">
+            Reading is the start. Here is the rest, with the keys that reach it — each is also in
+            the settings page, and none of it needs an account or the network.
+          </p>
+
+          <h2>While you listen</h2>
+          <div class="features">
+            <div class="feature"><b>Word by word</b><span>With Piper and Kokoro voices the word being spoken is marked inside the sentence.</span></div>
+            <div class="feature"><b>Back a little</b><span>Drifted off? Replay the last few seconds and see where that is.</span><span class="keys-inline"><kbd>Alt</kbd><kbd>Shift</kbd><kbd>,</kbd> or <kbd>B</kbd></span></div>
+            <div class="feature"><b>Any voice, from the bar</b><span>Switch voice — even to another engine — without leaving the page.</span></div>
+            <div class="feature"><b>Sleep timer</b><span>Stop at the end of the paragraph, the section, or after a set time. The moon on the bar.</span></div>
+            <div class="feature"><b>Media keys</b><span>Headphone buttons, keyboard media keys and the lock screen control Aloud.</span></div>
+            <div class="feature"><b>Picks up where you left off</b><span>Reopen a page and Aloud offers to carry on from the sentence you stopped at.</span></div>
+            <div class="feature"><b>The page’s own language</b><span>A French page is read with a French voice, if you have downloaded one.</span></div>
+            <div class="feature"><b>Skips the clutter</b><span>Code listings, tables, captions and reference lists can be passed over.</span></div>
+          </div>
+
+          <h2>Keep what matters</h2>
+          <div class="features">
+            <div class="feature"><b>Highlights and notes on any page</b><span>Select text to highlight it with a note and tags. It is highlighted again whenever you come back.</span><span class="keys-inline"><kbd>Alt</kbd><kbd>Shift</kbd><kbd>S</kbd></span></div>
+            <div class="feature"><b>The Library</b><span>Continue where you stopped, see what is left, filter your notes by site or tag, and export them as Markdown or JSON.</span></div>
+            <div class="feature"><b>A reading queue</b><span>Right-click an article or a link → <i>Add to reading queue</i>. Articles play one after another, even offline.</span></div>
+            <div class="feature"><b>PDFs, marked up</b><span>Highlight, underline, strike through and comment on the page itself — and save it into the PDF file.</span></div>
+          </div>
+
+          <h2>More tools</h2>
+          <div class="features">
+            <div class="feature"><b>Save as MP3</b><span>Any page or PDF as one audio file, in the voice and speed you chose. The download button on the bar.</span></div>
+            <div class="feature"><b>Pronunciation fixes</b><span>Teach it how to say names and acronyms — only what is spoken changes.</span></div>
+            <div class="feature"><b>Speed for every video</b><span>Faster or slower playback for any video or audio on the web, remembered per site.</span><span class="keys-inline"><kbd>Alt</kbd><kbd>Shift</kbd><kbd>V</kbd>, then <kbd>D</kbd> <kbd>S</kbd> <kbd>R</kbd> <kbd>G</kbd></span></div>
+          </div>
+        </section>
+        <!-- 6 ------------------------------------------------------------ -->
         <section class="step" data-title="Make it yours" hidden>
           <p class="eyebrow">Step 5 of 5</p>
           <h1>Then make it yours.</h1>
@@ -194,7 +235,7 @@
       </main>
 
       <footer class="nav">
-        <button id="back" class="ghost" hidden>Back</button>
+        <button id="back" class="ghost away" disabled aria-hidden="true" tabindex="-1">Back</button>
         <div id="dots" class="dots"></div>
         <button id="next" class="primary">Next</button>
       </footer>

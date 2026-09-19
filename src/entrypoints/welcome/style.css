@@ -1,16 +1,23 @@
 /* The walkthrough. Shares Aloud's tokens and primitives; everything below is layout. */
 @import '../../ui/theme.css';
 
-body {
-  /* Room for the real control bar, which appears at the bottom during the demo. */
-  padding-bottom: 140px;
-}
+/* Room for the real control bar while the demo shows it at the bottom of the window. */
+:root { --demo-bar-space: 110px; }
 
+/* The shell fills the window, so the nav — pinned to its foot — sits at the same height on every
+   step, short or long; a long step scrolls behind it. */
 .shell {
   max-width: 760px;
   margin: 0 auto;
-  padding: 24px 24px 40px;
+  padding: 24px 24px 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
+#steps { flex: 1 0 auto; }
+body.demo-bar-on .shell { padding-bottom: var(--demo-bar-space); }
 
 /* ---- header -------------------------------------------------------------- */
 
@@ -241,16 +248,25 @@ kbd {
 /* ---- footer nav ---------------------------------------------------------- */
 
 .nav {
-  display: flex;
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  /* Three fixed columns: Back, the dots, Next — each always in the same place. */
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   gap: 16px;
   margin-top: 34px;
-  padding-top: 18px;
+  padding: 14px 0 max(16px, env(safe-area-inset-bottom));
   border-top: 1px solid var(--border);
+  background: var(--bg);
 }
-.nav button[hidden] { display: none; }
-.dots { display: flex; gap: 8px; margin: 0 auto; }
+body.demo-bar-on .nav { bottom: var(--demo-bar-space); }
+#back { justify-self: start; }
+#next { justify-self: end; min-width: 7.5rem; }
+/* Not available on this step: invisible, but still holding its place. */
+.nav button.away { visibility: hidden; }
+.dots { display: flex; gap: 8px; }
 .dot {
   width: 9px;
   height: 9px;
@@ -261,3 +277,32 @@ kbd {
 }
 .dot.on { background: var(--accent-solid); border-color: transparent; }
 .dot:hover { border-color: var(--accent-solid); }
+
+/* ---- header actions and the "everything else" step -------------------------------------- */
+
+.top-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.top-actions .away { visibility: hidden; }
+.btn-sm { padding: 6px 12px; font-size: 13px; }
+
+.features {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 10px 0 24px;
+}
+.feature {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  line-height: 1.45;
+}
+.feature b { font-size: 14.5px; }
+.feature span { font-size: 13.5px; color: var(--fg-muted); }
+.feature .keys-inline { margin-top: 2px; color: var(--fg-faint); font-size: 12.5px; }
+@media (max-width: 600px) {
+  .features { grid-template-columns: 1fr; }
+}
