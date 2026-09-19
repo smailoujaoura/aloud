@@ -23,6 +23,19 @@
         </div>
       </header>
 
+      <!-- Shown when the toolbar button was pressed on a page Aloud cannot read (main.ts). -->
+      <div id="cantRead" class="cant-read" role="status" hidden>
+        <div>
+          <b id="cantReadTitle">Aloud can’t read that page</b>
+          <p class="small" id="cantReadText"></p>
+        </div>
+        <div class="cant-read-actions">
+          <button id="cantReadLibrary" type="button" class="btn-sm">Open the Library</button>
+          <button id="cantReadPdf" type="button" class="ghost btn-sm">Open a PDF…</button>
+          <button id="cantReadClose" type="button" class="ghost btn-sm" aria-label="Dismiss">✕</button>
+        </div>
+      </div>
+
       <!-- One section for the voice: who reads now, how fast, and every voice to switch to.
            Built in main.ts + voice-panels.ts. -->
       <section class="voice-section" aria-labelledby="voiceHeading">

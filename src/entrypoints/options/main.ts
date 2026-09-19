@@ -632,3 +632,28 @@ void (async () => {
   await render();
   await checkWorkerGpu();
 })();
+
+/**
+ * The toolbar button was pressed on a page no extension may read — the new tab page, the
+ * browser's own settings, an add-on store, a local file without access — and the background
+ * opened this page instead (`#cant-read-page` / `#cant-read-file`). Say so, once, and offer the
+ * places Aloud can read from.
+ */
+function explainUnreadablePage(): void {
+  const match = /^#cant-read-(page|file)$/.exec(location.hash);
+  if (!match) return;
+  history.replaceState(null, '', location.pathname);
+  const gecko = navigator.userAgent.includes('Firefox');
+  $('cantReadText').textContent =
+    match[1] === 'file'
+      ? gecko
+        ? 'Firefox doesn’t let add-ons read files on your disk. Open a PDF from here instead, or open the page from a website.'
+        : 'Aloud isn’t allowed to read local files yet. Turn on “Allow access to file URLs” for Aloud on chrome://extensions, or open a PDF from here.'
+      : 'Browsers keep extensions out of their own pages — new tabs, settings, add-on stores. Open an article or a PDF and press the Aloud button there. Meanwhile, here are your settings.';
+  $('cantRead').hidden = false;
+  $('cantReadClose').addEventListener('click', () => ($('cantRead').hidden = true));
+  $('cantReadLibrary').addEventListener('click', () => void browser.runtime.sendMessage({ type: 'open-library' }).catch(() => undefined));
+  $('cantReadPdf').addEventListener('click', () => $<HTMLButtonElement>('openPdf').click());
+}
+
+explainUnreadablePage();

@@ -302,17 +302,61 @@ async function activate(tabId: number, mode: ActivateMode, targetElementId?: num
     return;
   }
 
+  // One of Aloud's own pages (the PDF reader, the Library's queue): its reader is already there,
+  // so the button plays or pauses it, as it does on any page that is being read.
+  if (tab?.url?.startsWith(browser.runtime.getURL('/')) && active && (active.tabId === tabId || active.tabId === null)) {
+    postToActive({ type: 'toggle' });
+    return;
+  }
+
   try {
     await browser.scripting.executeScript({ target: { tabId }, files: [CONTENT_FILE] });
     void browser.scripting.executeScript({ target: { tabId }, files: [ANNOTATE_FILE] }).catch(() => undefined);
   } catch (err) {
-    // about:, chrome://, view-source:, the PDF viewer, the extension galleries, reader mode, …
-    setBadge(tabId, 'n/a');
-    setTimeout(() => clearBadge(tabId), 2500);
-    console.warn('[aloud] cannot inject into this page:', err);
+    // about:, chrome://, the new tab page, view-source:, the add-on stores, reader mode, Aloud's
+    // own pages, file:// without access: nothing of ours may run here. Answer with something
+    // visible — the settings page, saying why — rather than a badge nobody notices.
+    console.info('[aloud] cannot read this page, opening settings instead:', err);
+    await openSettingsInstead(tab);
     return;
   }
   await sendActivate(tabId, mode, targetElementId, 2);
+}
+
+/** Pages that are only somewhere to start from: opening settings over them loses nothing. */
+const EMPTY_PAGE =
+  /^(about:(newtab|home|blank|privatebrowsing)|chrome:\/\/(newtab|new-tab-page)\/?|edge:\/\/newtab\/?|chrome-search:\/\/local-ntp|chrome:\/\/vivaldi-webui\/startpage)/i;
+
+/**
+ * The toolbar button on a page Aloud cannot read: show its settings, with a line saying why.
+ *
+ * On a new tab page they open right there — there is nothing to lose. Anywhere else (the
+ * browser's own settings, an add-on store, a local file without access) they open beside it, so
+ * the page the reader was on is not thrown away; an Aloud settings tab already open is reused.
+ */
+async function openSettingsInstead(tab: { id?: number; index?: number; url?: string } | null): Promise<void> {
+  const reason = tab?.url?.startsWith('file:') ? 'file' : 'page';
+  const url = `${browser.runtime.getURL('/options.html')}#cant-read-${reason}`;
+  try {
+    if (tab?.id != null && (!tab.url || EMPTY_PAGE.test(tab.url))) {
+      await browser.tabs.update(tab.id, { url });
+      return;
+    }
+    const base = browser.runtime.getURL('/options.html');
+    const [existing] = await browser.tabs.query({ url: `${base}*` }).catch(() => []);
+    if (existing?.id != null) {
+      await browser.tabs.update(existing.id, { url, active: true });
+      if (existing.windowId != null) await browser.windows.update(existing.windowId, { focused: true }).catch(() => undefined);
+      return;
+    }
+    await browser.tabs.create({ url, index: tab?.index != null ? tab.index + 1 : undefined });
+  } catch (err) {
+    console.warn('[aloud] could not open the settings page:', err);
+    if (tab?.id != null) {
+      setBadge(tab.id, 'n/a');
+      setTimeout(() => clearBadge(tab.id!), 2500);
+    }
+  }
 }
 
 /**
@@ -532,20 +576,8 @@ async function openAndRead(url: string): Promise<void> {
   }
   const tab = await browser.tabs.create({ url });
   if (tab.id == null) return;
-  const tabId = tab.id;
-  await new Promise<void>((resolve) => {
-    const done = (): void => {
-      browser.tabs.onUpdated.removeListener(listener);
-      clearTimeout(timer);
-      resolve();
-    };
-    const listener = (id: number, info: { status?: string }): void => {
-      if (id === tabId && info.status === 'complete') done();
-    };
-    const timer = setTimeout(done, 20_000);
-    browser.tabs.onUpdated.addListener(listener);
-  });
-  await activate(tabId, 'article');
+  await waitForLoad(tab.id);
+  await activate(tab.id, 'article');
 }
 
 /**
@@ -659,6 +691,11 @@ function waitForLoad(tabId: number): Promise<void> {
     };
     const timer = setTimeout(done, 20_000);
     browser.tabs.onUpdated.addListener(listener);
+    // A page that finished loading before the listener was attached (about:blank, a cached
+    // page) sends no further update; without this it waited out the whole timeout.
+    void browser.tabs.get(tabId).then((t) => {
+      if (t.status === 'complete') done();
+    }, done);
   });
 }
 
