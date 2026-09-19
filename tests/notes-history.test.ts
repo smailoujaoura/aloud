@@ -7,7 +7,8 @@ import {
   groupBySource,
   noteFacets,
   notesForPage,
-  notesToJson,
+  notesToFile,
+  parseNotesFile,
   notesToMarkdown,
   parseTags,
   searchNotes,
@@ -157,10 +158,21 @@ describe('note filters and tags', () => {
     expect(parseTags('')).toEqual([]);
   });
 
-  it('exports tags in Markdown and JSON', () => {
+  it('exports tags in Markdown', () => {
     expect(notesToMarkdown([notes[1]!])).toContain('#rust-book #exam');
-    const json = JSON.parse(notesToJson([notes[0]!]));
-    expect(json[0]).toMatchObject({ text: 'snake case', tags: ['rust-book'], site: 'doc.rust-lang.org', url: 'https://doc.rust-lang.org/book/ch03.html' });
+  });
+
+  it('writes a notes file that reads back as the same notes', () => {
+    const back = parseNotesFile(notesToFile(notes));
+    expect(back.map((n) => n.id)).toEqual(notes.map((n) => n.id));
+    expect(back[1]!.tags).toEqual(notes[1]!.tags);
+  });
+
+  it('reads notes out of a whole backup, or a bare list, and says so when there are none', () => {
+    expect(parseNotesFile(JSON.stringify({ format: 'aloud-backup', notes }))).toHaveLength(notes.length);
+    expect(parseNotesFile(JSON.stringify(notes))).toHaveLength(notes.length);
+    expect(() => parseNotesFile('{"notes":[]}')).toThrow(/No notes/);
+    expect(() => parseNotesFile('nonsense')).toThrow(/not JSON/);
   });
 
   it('finds the notes for one page', () => {

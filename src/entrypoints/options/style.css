@@ -527,3 +527,5 @@ code {
   padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
 }
 .backup-step p { margin: 2px 0 0; }
+
+.nav-item-inline { color: var(--accent-text, inherit); }

@@ -44,7 +44,7 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
 - **Word by word** — with Piper and Kokoro voices the word being spoken is marked inside the
   sentence, timed from the voice model's own phoneme durations rather than estimated. It is shown
   as a darker shade by default; Settings switches it to an underline, or off.
-- **Highlights and notes on any page** — select text and press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>
+- **Highlights and notes on any page** — select text and press <kbd>Alt</kbd>+<kbd>S</kbd>
   (or right-click → *Highlight and keep in Notes*): kept at once, in your default colour and
   style — highlight or underline — with nothing to answer. Click a mark to recolour it, switch
   its style, or write its note by just typing; <kbd>Delete</kbd> removes it. The colours are
@@ -52,17 +52,19 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
   marked again whenever you come back — anchored by its text, so it survives the page being
   edited around it. While Aloud reads, the same key (or the bookmark on the bar) keeps the
   sentence you just heard.
-- **Your notes, on the page** — <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd> on Firefox (set it
-  at `chrome://extensions/shortcuts` on Chromium), <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>
-  with nothing selected, or right-click → *Show my notes*: a panel listing this page's notes or
-  all of them, searchable, each one a click from its place.
-- **Drifted off?** <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>,</kbd> (or <kbd>B</kbd> on the bar)
+- **Your notes, on the page** — <kbd>Alt</kbd>+<kbd>N</kbd>, <kbd>Alt</kbd>+<kbd>S</kbd> with
+  nothing selected, or right-click → *Show my notes*: a panel listing this page's notes or all of
+  them, searchable, each one a click from its place.
+- **Your keys** — the shortcuts deliberately avoid <kbd>Alt</kbd>+<kbd>Shift</kbd>+letter, which
+  is the chord Firefox gives web pages for their own access keys. Settings → *Shortcuts* shows
+  what each key is set to and, on Firefox, sets it to whatever you press.
+- **Drifted off?** <kbd>Alt</kbd>+<kbd>,</kbd> (or <kbd>B</kbd> on the bar)
   goes back about ten seconds and shows you where that is.
 - **One page for everything** — the Library (*Continue*, *Up next*, *Notes*, *History*) and every
   setting sit side by side in Aloud's page, one click apart. *Continue* lists what you stopped
   part-way through with how much is left, *Up next* is the reading queue with listening times,
-  *Notes* filters by site and tag and exports as Markdown or JSON, and *History* keeps how far you
-  got in everything, all on this device.
+  *Notes* filters by site and tag, exports as Markdown or JSON and imports a notes file back
+  (merging, never doubling), and *History* keeps how far you got in everything, all on this device.
 - **Backup & restore** — one file with every setting, voice choice, key, colour, note, the queue,
   history, video speeds and PDF marks. Restoring merges rather than overwrites, then offers to
   download the voices the backup had and to allow the sites that were allowed.
@@ -74,7 +76,7 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
   jumps to your preferred speed, <kbd>R</kbd> goes back to 1×, and <kbd>Shift</kbd> with D or S
   steps through your presets — all rebindable. The speed is remembered per site, re-applied when a
   player resets it between videos, and shown briefly on the video. It starts with
-  <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> and asks for no permissions; sites you list in
+  <kbd>Alt</kbd>+<kbd>M</kbd> and asks for no permissions; sites you list in
   settings start it by themselves, one granted site at a time.
 - **Offline & private** — models download once from Hugging Face and are cached on the device.
 
@@ -130,7 +132,7 @@ npm run build          # builds BOTH .output/firefox-mv3 and .output/chrome-mv3
 
 Installing opens the **walkthrough** — five steps, including a live demo that reads the page
 itself aloud. Then open an article and click the **Aloud** toolbar button (or press
-`Alt+Shift+R`). The first run downloads the voice; after that it works offline. Right-click gives
+`Alt+R`, which you can change). The first run downloads the voice; after that it works offline. Right-click gives
 **Read selection aloud** and **Read from here**. Settings — theme, engine, voice, speed,
 highlight colour, cached-model management — are on the extension's options page, which also
 reopens the walkthrough.

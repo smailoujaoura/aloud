@@ -47,6 +47,7 @@ import { engineConfigFor } from './engine-config';
 import { renderMediaSpeedPanel } from './media-speed-panel';
 import { renderNoteStylePanel } from './note-style-panel';
 import { renderBackupPanel } from './backup-panel';
+import { renderShortcutsPanel } from './shortcuts-panel';
 import { renderSiteList } from './site-list';
 import { renderPronunciationEditor } from './pronunciation-editor';
 import { renderVoiceSection, type PanelContext } from './voice-panels';
@@ -317,11 +318,12 @@ function renderNoteStyle(): void {
       settings = await setSettings({ annotate: { ...settings.annotate, ...patch } });
       flashSaved();
       renderNoteStyle();
+  void renderShortcutsPanel($('shortcuts'), { toast: (message, kind) => toast(message, kind ?? 'info') });
     },
   });
   if (capabilities().engine === 'gecko') {
     $('notesPanelKey').innerHTML =
-      'Your notes, on the page you are reading: <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd> — or <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> with nothing selected, or right-click → <b>Show my notes</b>.';
+      'Your notes, on the page you are reading: <kbd>Alt</kbd>+<kbd>N</kbd> — or <kbd>Alt</kbd>+<kbd>S</kbd> with nothing selected, or right-click → <b>Show my notes</b>.';
   }
 }
 

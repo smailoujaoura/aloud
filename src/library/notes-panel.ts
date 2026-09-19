@@ -13,7 +13,9 @@ import {
   groupBySource,
   loadNotes,
   noteFacets,
-  notesToJson,
+  mergeInNotes,
+  notesToFile,
+  parseNotesFile,
   notesToMarkdown,
   parseTags,
   removeNote,
@@ -74,7 +76,27 @@ export async function initNotes(opts: { onCount: (n: number) => void; onListen: 
     }
   });
   $('downloadNotes').addEventListener('click', () => download(notesToMarkdown(shown()), 'md', 'text/markdown'));
-  $('downloadJson').addEventListener('click', () => download(notesToJson(shown()), 'json', 'application/json'));
+  $('downloadJson').addEventListener('click', () => download(notesToFile(shown()), 'json', 'application/json'));
+
+  // Importing is the other half of exporting: a notes file (or a whole backup) from another
+  // browser or computer, merged into what is here — the same note is never doubled.
+  const file = $<HTMLInputElement>('importNotes');
+  $('importNotesButton').addEventListener('click', () => file.click());
+  file.addEventListener('change', async () => {
+    const chosen = file.files?.[0];
+    file.value = '';
+    if (!chosen) return;
+    try {
+      const { added, updated } = await mergeInNotes(parseNotesFile(await chosen.text()));
+      toast(
+        added || updated
+          ? `${added} note${added === 1 ? '' : 's'} added${updated ? `, ${updated} updated` : ''}`
+          : 'Those notes were already here',
+      );
+    } catch (err) {
+      toast(err instanceof Error ? err.message : String(err), 'error');
+    }
+  });
 }
 
 const shown = (): Note[] => filterNotes(notes, filter);

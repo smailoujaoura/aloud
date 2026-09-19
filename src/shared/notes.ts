@@ -123,25 +123,48 @@ export function notesForPage(notes: readonly Note[], key: string): Note[] {
   return notes.filter((n) => n.source.key === key);
 }
 
-/** The notes as JSON, for moving them elsewhere or backing them up. */
-export function notesToJson(notes: readonly Note[]): string {
-  return JSON.stringify(
-    notes.map((n) => ({
-      text: n.text,
-      comment: n.comment,
-      tags: n.tags ?? [],
-      color: n.color ?? null,
-      style: n.style ?? 'highlight',
-      title: n.source.title,
-      site: n.source.site,
-      url: sourceUrl(n.source),
-      createdAt: new Date(n.createdAt).toISOString(),
-      updatedAt: new Date(n.updatedAt).toISOString(),
-    })),
-    null,
-    2,
+export const NOTES_FILE_FORMAT = 'aloud-notes';
+
+/**
+ * The notes as a file that can be read back in (`parseNotesFile`): the whole records, so colours,
+ * tags, anchors and where each came from survive the trip, with a readable `text`/`comment` in
+ * every one for anything else that opens it.
+ */
+export function notesToFile(notes: readonly Note[], now = new Date()): string {
+  return JSON.stringify({ format: NOTES_FILE_FORMAT, version: 1, exportedAt: now.toISOString(), notes }, null, 2);
+}
+
+/**
+ * Notes from a file Aloud wrote: a notes file, a full backup, or a bare array of notes. Throws
+ * with a readable message when it is none of those.
+ */
+export function parseNotesFile(text: string): Note[] {
+  let data: unknown;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error('That file is not notes: it is not JSON.');
+  }
+  const holder = data as { notes?: unknown } | null;
+  const list = Array.isArray(data) ? data : Array.isArray(holder?.notes) ? holder.notes : null;
+  if (!list) throw new Error('No notes in that file.');
+  const notes = list.filter(isNote);
+  if (notes.length === 0) throw new Error('No notes in that file.');
+  return notes;
+}
+
+function isNote(n: unknown): n is Note {
+  const note = n as Note | null;
+  return (
+    !!note &&
+    typeof note === 'object' &&
+    typeof note.id === 'string' &&
+    typeof note.text === 'string' &&
+    !!note.source &&
+    typeof note.source.key === 'string'
   );
 }
+
 
 /** Notes grouped by document, most recently noted document first, each group in reading order. */
 export function groupBySource(notes: readonly Note[]): Array<{ source: DocSource; notes: Note[] }> {
@@ -192,6 +215,28 @@ export async function loadNotes(): Promise<Note[]> {
   } catch {
     return [];
   }
+}
+
+/** Add notes from a file, keeping the newer copy of anything already here. Returns how many are new. */
+export async function mergeInNotes(incoming: readonly Note[]): Promise<{ added: number; updated: number }> {
+  const here = await loadNotes();
+  const byId = new Map(here.map((n) => [n.id, n]));
+  let added = 0;
+  let updated = 0;
+  for (const note of incoming) {
+    const have = byId.get(note.id);
+    if (!have) {
+      added++;
+      byId.set(note.id, note);
+    } else if ((note.updatedAt ?? 0) > (have.updatedAt ?? 0)) {
+      updated++;
+      byId.set(note.id, note);
+    }
+  }
+  if (added || updated) {
+    await item.setValue([...byId.values()].sort((a, b) => b.createdAt - a.createdAt).slice(0, MAX_NOTES));
+  }
+  return { added, updated };
 }
 
 export async function addNote(entry: NewNote, now = Date.now()): Promise<{ note: Note; duplicate: boolean }> {

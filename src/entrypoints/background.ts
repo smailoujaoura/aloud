@@ -776,7 +776,11 @@ async function siteGranted(url: string): Promise<boolean> {
  * — reading does not have to be started just to keep a quotation.
  */
 async function saveNoteCommand(tabId: number | null, url: string, title: string): Promise<void> {
-  if (active && (active.tabId === tabId || active.tabId === null)) {
+  // Only the reader *in this tab* gets the key. A session with no tab id is one of Aloud's own
+  // pages (the PDF reader): it used to swallow the shortcut from every other tab, so pressing it
+  // on an article kept the PDF's sentence instead of the article's selection.
+  const ownPage = url.startsWith(browser.runtime.getURL('/'));
+  if (active && (active.tabId === tabId || (active.tabId === null && ownPage))) {
     postToActive({ type: 'save-note' });
     return;
   }

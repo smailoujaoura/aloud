@@ -36,6 +36,7 @@
           <a href="#pdfs" data-view="pdfs" class="nav-item"><span class="nav-icon" aria-hidden="true">▤</span><span class="nav-label">PDFs</span></a>
           <a href="#pronunciation" data-view="pronunciation" class="nav-item"><span class="nav-icon" aria-hidden="true">Aa</span><span class="nav-label">Pronunciation</span></a>
           <a href="#advanced" data-view="advanced" class="nav-item"><span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-label">Advanced</span></a>
+          <a href="#shortcuts" data-view="shortcuts" class="nav-item"><span class="nav-icon" aria-hidden="true">⌨</span><span class="nav-label">Shortcuts</span></a>
           <a href="#backup" data-view="backup" class="nav-item"><span class="nav-icon" aria-hidden="true">⇅</span><span class="nav-label">Backup &amp; restore</span></a>
         </div>
         <button id="walkthrough" class="ghost nav-help" type="button">How it works</button>
@@ -108,12 +109,14 @@
             <button id="copyNotes" class="ghost btn-sm" type="button">Copy as Markdown</button>
             <button id="downloadNotes" class="ghost btn-sm" type="button">Download .md</button>
             <button id="downloadJson" class="ghost btn-sm" type="button">Download .json</button>
+            <button id="importNotesButton" class="ghost btn-sm" type="button">Import notes…</button>
+            <input type="file" id="importNotes" accept=".json,application/json" hidden />
           </div>
         </div>
         <div id="notesList"></div>
         <div id="notesEmpty" class="empty" hidden>
           <h2>No notes yet</h2>
-          <p>Select text on any page and press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> (or
+          <p>Select text on any page and press <kbd>Alt</kbd>+<kbd>S</kbd> (or
             right-click → <b>Highlight and keep in Notes</b>): the passage is highlighted on the page,
             and highlighted again whenever you come back. While Aloud is reading, the same key keeps
             the sentence you just heard. Every note is here — filter by site or tag, open it at its
@@ -125,6 +128,10 @@
       <div class="view lib-view" id="view-history" data-view="history" role="region" aria-label="History" hidden>
         <header class="view-head"><h1>History</h1><p class="muted small">What you listened to, and how far you got.</p></header>
 
+        <p class="row-hint">
+          History travels in the backup file, with your notes and everything else —
+          <a href="#backup" data-view="backup" class="nav-item-inline">Backup &amp; restore</a>.
+        </p>
         <div class="panel-bar">
           <p class="muted small" id="historySummary"></p>
           <div class="panel-actions">
@@ -267,10 +274,10 @@
           </p>
         </div>
         <ul class="key-help">
-          <li>Select text and press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> (or right-click →
+          <li>Select text and press <kbd>Alt</kbd>+<kbd>S</kbd> (or right-click →
             <b>Highlight and keep in Notes</b>): kept at once, in your default colour and style.</li>
           <li>Click a mark, then <kbd>Delete</kbd> to remove it — or just start typing to write its note.</li>
-          <li id="notesPanelKey">Your notes, on the page you are reading: <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>
+          <li id="notesPanelKey">Your notes, on the page you are reading: <kbd>Alt</kbd>+<kbd>S</kbd>
             with nothing selected, or right-click → <b>Show my notes</b>.</li>
         </ul>
         <label class="row check">
@@ -296,7 +303,7 @@
           <span>Control the speed of videos and audio on websites</span>
         </label>
         <p class="row-hint">
-          Press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> on a page to start it there; Aloud
+          Press <kbd>Alt</kbd>+<kbd>M</kbd> on a page to start it there; Aloud
           asks for nothing in advance. Sites you add below start it by themselves, and each one
           asks for that site only.
         </p>
@@ -402,6 +409,20 @@
         </p>
         <button id="clearPositions">Forget reading positions</button>
         <button id="reset">Reset all settings to defaults</button>
+      </section>
+      </div>
+
+      <div class="view" id="view-shortcuts" data-view="shortcuts" role="region" aria-label="Shortcuts" hidden>
+      <section>
+        <div class="section-head">
+          <h2>Shortcuts</h2>
+          <p class="muted small">
+            Aloud's keys work on any page without asking for anything. They avoid
+            <kbd>Alt</kbd>+<kbd>Shift</kbd>+ letter on purpose: on Firefox that is the chord that
+            fires a page's own access keys, and the page wins.
+          </p>
+        </div>
+        <div id="shortcuts"></div>
       </section>
       </div>
 

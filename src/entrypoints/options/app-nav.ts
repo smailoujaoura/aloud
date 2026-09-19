@@ -19,6 +19,7 @@ export const VIEWS = [
   'pdfs',
   'pronunciation',
   'advanced',
+  'shortcuts',
   'backup',
 ] as const;
 export type View = (typeof VIEWS)[number];
@@ -65,7 +66,8 @@ export function setNavCount(view: View, n: number): void {
 
 /** Wire the navigation and show the view the address asks for (or `fallback`). */
 export function initNav(fallback: View = DEFAULT_VIEW): void {
-  for (const link of document.querySelectorAll<HTMLAnchorElement>('.nav-item[data-view]')) {
+  // Every link that names a view, in the navigation or inside a view's own text.
+  for (const link of document.querySelectorAll<HTMLAnchorElement>('a[data-view]')) {
     link.addEventListener('click', (e) => {
       if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
       e.preventDefault();

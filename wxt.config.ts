@@ -132,26 +132,31 @@ export default defineConfig({
     },
 
     commands: {
+      // Alt+<letter>, not Alt+Shift+<letter>: on Firefox (Linux and Windows) Alt+Shift+key is the
+      // chord that fires a web page's own accesskeys, so those shortcuts were being eaten by
+      // whatever page was in front. All of them can be changed in Settings → Shortcuts.
       'toggle-read': {
-        suggested_key: { default: 'Alt+Shift+R' },
+        suggested_key: { default: 'Alt+R' },
         description: 'Start / stop reading the current page aloud',
       },
       'save-note': {
-        suggested_key: { default: 'Alt+Shift+S' },
+        suggested_key: { default: 'Alt+S' },
         description: 'Save what you just heard (or the selected text) to Notes',
       },
       'back-a-little': {
-        suggested_key: { default: 'Alt+Shift+Comma' },
+        // Chromium allows four suggested shortcuts and there are five commands; this is the one
+        // that goes without a default there, since the reading bar has a button for it.
+        ...(browser === 'firefox' ? { suggested_key: { default: 'Alt+Comma' } } : {}),
         description: 'Back a little: replay the last few seconds',
       },
       'media-speed': {
-        suggested_key: { default: 'Alt+Shift+V' },
+        suggested_key: { default: 'Alt+M' },
         description: 'Control this page’s video / audio speed from the keyboard',
       },
-      // Chromium allows four suggested shortcuts, all taken; there it is set at
-      // chrome://extensions/shortcuts (and Alt+Shift+S with nothing selected shows the panel too).
+      // Chromium allows only four suggested shortcuts; "back a little" is the one that goes
+      // without there, since it is also a button on the reading bar.
       'notes-panel': {
-        ...(browser === 'firefox' ? { suggested_key: { default: 'Alt+Shift+N' } } : {}),
+        suggested_key: { default: 'Alt+N' },
         description: 'Show your notes on this page',
       },
     },
