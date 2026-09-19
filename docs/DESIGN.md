@@ -128,10 +128,11 @@ Piper. A capability that the runtime can disprove has to be measurable, in both 
 
 ### 0.1.2 Falling back must be explained, not silent
 
-The GPU path used to load Kokoro's **fp32** weights, which the CPU path never downloads, so the
-first GPU run on a machine was a large fresh download. (Both paths now load the one quantised
-model, ~86 MB — full precision measured no faster on the CPU, and the quantised model runs on
-WebGPU with its integer ops placed on the CPU inside the same session.) A single dropped connection there used to
+The GPU path loads Kokoro's **fp32** weights, which the CPU path never downloads (it reads the
+quantised build, measured no slower there), so the first GPU run on a machine is a large fresh
+download. The two cannot be merged: the quantised build loads on WebGPU and returns audio of the
+right length, but transcribing that audio gives back Mandarin rather than the sentence — its
+integer ops are wrong there — and fp16 will not load without `shader-f16`. A single dropped connection there used to
 push the whole session onto the CPU — three times slower — with nothing said beyond a line in the
 console. Two changes: a load that fails with a *network*-shaped error is retried once (a failure
 that is not about the network, such as an unsupported operator, is not — it would fail

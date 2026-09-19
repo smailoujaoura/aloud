@@ -106,8 +106,9 @@ on your machine, then restart. Kokoro then runs on the GPU.
 These are experimental settings; set them back to `false` if Firefox misbehaves, and Aloud
 returns to the CPU path on its own. The settings page spells the prefs out, copies them for you,
 and re-checks — it asks a real synthesis worker whether it has a GPU rather than assuming from
-the browser name, so what it tells you is what your machine actually does. It is the same 86 MB
-model either way; nothing more is downloaded.
+the browser name, so what it tells you is what your machine actually does. The GPU path reads
+Kokoro's full-precision build, so the first read on a GPU fetches it once: the quantised build
+loads on WebGPU but produces noise rather than speech, so the two paths cannot share a file.
 
 The options page tells you which of these applies to your machine; you never have to remember
 this table.

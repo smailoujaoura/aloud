@@ -26,7 +26,10 @@ export function engineConfigFor(
     engine,
     voice: opts.voice ?? voiceOf[engine],
     steps: settings.supertonicSteps,
-    preferWebGPU: settings.preferWebGPU,
+    // A download fetches the build the CPU path uses, which every machine can run and which is
+    // the smaller file. A machine with a GPU fetches its own build on the first read, with the
+    // reading bar showing that download.
+    preferWebGPU: opts.purpose === 'download' ? false : settings.preferWebGPU,
     speed: settings.speed,
     // Both purposes are single-shot; the reading pool is sized separately in the synth host.
     workers: 1,

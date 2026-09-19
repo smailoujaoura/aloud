@@ -612,6 +612,19 @@ function modelCard(
     el(document, 'b', {}, state.downloaded ? `${info.name} is on this device` : `${info.name} model`),
     el(document, 'span', { class: 'vi-meta' }, `${state.downloaded ? humanBytes(state.bytes) : info.approxSize} · ${licence}`),
   );
+  // A machine with a GPU reads with Kokoro's full-precision build — the quantised one returns
+  // noise instead of speech on WebGPU — so say that a larger download happens once, rather than
+  // letting it appear from nowhere on the first page.
+  if (engine === 'kokoro' && ctx.settings.preferWebGPU && capabilities().workerWebGPU) {
+    text.append(
+      el(
+        document,
+        'span',
+        { class: 'vi-meta' },
+        'This machine reads with the GPU, which uses Kokoro’s full-precision build: a larger download, once, the first time you read.',
+      ),
+    );
+  }
 
   const progress = new RowProgress();
   const isDelete = state.downloaded;

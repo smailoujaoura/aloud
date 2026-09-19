@@ -27,15 +27,27 @@ const MODEL_ID = 'onnx-community/Kokoro-82M-v1.0-ONNX';
 
 type KokoroDevice = 'wasm' | 'webgpu';
 
+type KokoroDtype = 'q8' | 'fp32';
+
 /**
- * The one model Aloud uses: the quantised build (~86 MB). Measured, the full-precision file ran
- * no faster on the CPU for four times the download, and the quantised one runs on WebGPU too.
+ * One model file per device, and the pairing is not a preference — it is what produces speech.
+ *
+ * The CPU reads the quantised build: measured, full precision ran no faster there for four times
+ * the download. WebGPU reads the full-precision build, which is what kokoro-js documents. The
+ * quantised one *loads* on WebGPU and returns audio of the right length, but the audio is not
+ * speech — its integer ops come out wrong there. Checked by transcribing what Aloud produced:
+ * the CPU build gives back "The quick brown fox jumps over the lazy dog", the same build on
+ * WebGPU gives back Mandarin. fp16 is no escape either: it fails to load without `shader-f16`.
+ * So this pairing is not a preference to tune; changing it silently breaks every Kokoro voice.
  */
-const DTYPE = 'q8';
+const MODEL_FILES: Record<KokoroDtype, string> = { q8: 'model_quantized.onnx', fp32: 'model.onnx' };
+export const dtypeFor = (device: KokoroDevice): KokoroDtype => (device === 'webgpu' ? 'fp32' : 'q8');
 const onnxUrl = (file: string) => `https://huggingface.co/${MODEL_ID}/resolve/main/onnx/${file}`;
-export const KOKORO_MODEL_URL = onnxUrl('model_quantized.onnx');
-/** Weights earlier versions could download and nothing reads any more. */
-const RETIRED_MODEL_URLS = [onnxUrl('model.onnx'), onnxUrl('model_fp16.onnx')];
+const modelUrl = (dtype: KokoroDtype) => onnxUrl(MODEL_FILES[dtype]);
+/** What the CPU path reads, and what the settings page counts as "Kokoro is on this device". */
+export const KOKORO_MODEL_URL = modelUrl('q8');
+/** Weights a version in between could download and nothing reads any more. */
+const RETIRED_MODEL_URLS = [onnxUrl('model_fp16.onnx')];
 
 /**
  * Kokoro, like Piper, decides how many audio frames each phoneme gets before it makes a sound —
@@ -89,20 +101,21 @@ export class KokoroEngine implements SynthEngine {
     const load = async (device: KokoroDevice) => {
       // Into Aloud's cache first, so transformers.js reads it from there — through the transform
       // above — even on the very first run, instead of straight from the network.
-      if (!(await cacheHas(KOKORO_MODEL_URL))) {
-        await fetchModelFile(KOKORO_MODEL_URL, {
-          label: 'Kokoro model',
+      const url = modelUrl(dtypeFor(device));
+      if (!(await cacheHas(url))) {
+        await fetchModelFile(url, {
+          label: `Kokoro ${device === 'webgpu' ? 'GPU' : ''} model`.replace('  ', ' '),
           onProgress: (p) => ctx.onProgress({ ...p, phase: 'download' }),
         });
       }
       // Only now is there nothing left to download: announcing "preparing" before the fetch left
-      // the settings page on "Preparing model…" at 0% while 86 MB came in.
+      // the settings page on "Preparing model…" at 0% for the whole download.
       ctx.onProgress({ file: `preparing ${device} model`, loaded: 0, total: 1, phase: 'compile' });
       return loadModel(device);
     };
     const loadModel = (device: KokoroDevice) =>
       KokoroTTS.from_pretrained(MODEL_ID, {
-        dtype: DTYPE,
+        dtype: dtypeFor(device),
         device,
         progress_callback: (p: {
           status?: string;
@@ -124,8 +137,8 @@ export class KokoroEngine implements SynthEngine {
         },
       });
 
-    // The GPU first when there is one (the quantised ops it lacks run on the CPU inside the same
-    // session), then the CPU. Same file either way, so falling back never downloads anything.
+    // The GPU first when there is one, then the CPU — each with the weights it can actually
+    // speak with (see MODEL_FILES), so a fallback may fetch the smaller file.
     const attempts: KokoroDevice[] = wantGpu ? ['webgpu', 'wasm'] : ['wasm'];
 
     let lastErr: unknown;
@@ -134,7 +147,7 @@ export class KokoroEngine implements SynthEngine {
 
     for (const device of attempts) {
       const tLoad = now();
-      const label = device === 'webgpu' ? `webgpu/${DTYPE}` : 'wasm';
+      const label = device === 'webgpu' ? `webgpu/${dtypeFor(device)}` : 'wasm';
       try {
         this.tts = await this.loadWithRetry(() => load(device), label, ctx);
         this.executionProvider = label;
@@ -144,8 +157,6 @@ export class KokoroEngine implements SynthEngine {
       } catch (err) {
         lastErr = err;
         log.warn(`[kokoro] ${label} failed to load: ${String(err)}`);
-        // Both attempts read the same file: if it could not be downloaded, neither can run.
-        if (isNetworkFailure(err)) break;
         if (device === 'webgpu') gpuFailures.push({ label, err });
       }
     }
