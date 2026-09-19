@@ -22,10 +22,26 @@ export interface Portrait {
 const PIPER: Record<string, string> = {
   alba: 'a Scottish woman of about 20',
   lessac: 'an American woman in her late thirties',
+  cori: 'an Englishwoman in her forties',
+  ljspeech: 'an American woman in her thirties',
+  ryan: 'an American man in his thirties',
+  northern_english_male: 'a man from the North of England in his forties',
 };
 
-/** Kokoro's best voices will join as their portraits are made. */
-const KOKORO: Record<string, string> = {};
+const KOKORO: Record<string, string> = {
+  af_heart: 'an American woman in her mid-twenties',
+  af_bella: 'an American woman in her early twenties',
+  af_nicole: 'an American woman in her late twenties, speaking softly',
+  af_sarah: 'an American woman of about thirty',
+  af_kore: 'an American woman in her late twenties',
+  af_aoede: 'an American woman in her mid-twenties',
+  bf_emma: 'an Englishwoman in her thirties',
+  am_michael: 'an American man in his forties',
+  am_fenrir: 'an American man in his thirties with a deep voice',
+  am_puck: 'an American man in his early twenties',
+  bm_george: 'an Englishman in his sixties',
+  bm_fable: 'an Englishman in his thirties',
+};
 
 /** The portrait for a voice, or null when it keeps the drawn avatar. */
 export function voicePortrait(engine: EngineId, id: string): Portrait | null {
