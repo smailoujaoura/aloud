@@ -228,13 +228,15 @@
           <span>Kokoro precision</span>
           <select id="kokoroDtype">
             <option value="q8">Quantised — ~86 MB (default)</option>
-            <option value="fp32">Full precision — ~320 MB, ~10% faster</option>
+            <option value="fp32">Full precision — ~320 MB, same speed on the CPU</option>
           </select>
         </label>
         <p class="row-hint" id="kokoroDtypeHint">
-          This applies when Kokoro runs on the CPU. On the GPU it always loads the full-precision
-          model (~320 MB, downloaded once), because that is the build with complete WebGPU
-          coverage.
+          This applies when Kokoro runs on the CPU with a single worker. Measured, the two run at the
+          same speed there; full precision only costs more download and memory. When several CPU
+          workers read at once, each loads the quantised model, since four full-precision copies
+          would take over a gigabyte of memory. On the GPU Kokoro always loads the full-precision
+          model (~320 MB, downloaded once), the build with complete WebGPU coverage.
         </p>
         <label class="row" id="supertonic-steps-row">
           <span>Supertonic detail</span>
