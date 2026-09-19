@@ -4,7 +4,8 @@
 //
 // What it proves, in order: the add-on installs; the reader starts on an article; the Piper voice
 // loads and returns real audio; playback starts; the word highlight steps through the spoken
-// words in order; "Save as MP3" produces a downloadable MP3. Exits non-zero on the first failure,
+// words in order; "Save as MP3" produces a downloadable MP3; a highlight made on the page is kept in
+// Notes and drawn again after a reload. Exits non-zero on the first failure,
 // with a screenshot in .output/e2e-firefox/.
 //
 // How, since Playwright cannot load extensions into Firefox itself:
@@ -177,8 +178,8 @@ const context = await firefox.launchPersistentContext(mkdtempSync(join(tmpdir(),
   },
 });
 
+let rdp = null;
 try {
-  let rdp = null;
   for (let i = 0; i < 50 && !rdp; i++) {
     rdp = await connectRdp(RDP_PORT).catch(() => null);
     if (!rdp) await new Promise((r) => setTimeout(r, 200));
@@ -218,7 +219,6 @@ try {
      await new Promise((r) => setTimeout(r, 300));
      await browser.tabs.sendMessage(tab.id, { type: 'activate', mode: 'article' });`,
   );
-  rdp.close();
 
   step((await waitFor(/planned \d+ sentences/, 30_000, 'the reader did not plan the article')).replace(/^\[aloud\]\s*/, ''));
   await waitFor(/engine ready/, 300_000, 'the voice did not load');
@@ -265,9 +265,42 @@ try {
   }
   step(`saved ${file.suggestedFilename()} (${Math.round(bytes.length / 1024)} kB)`);
 
+  // Highlights: keep a passage the way Alt+Shift+S does, then reload and expect it drawn again.
+  const inTab = (body) =>
+    evaluate(rdp, consoles.background, `const tab = (await browser.tabs.query({})).find((t) => t.url === ${JSON.stringify(articleUrl)}); ${body}`);
+  const injectAnnotator = () => inTab(`await browser.scripting.executeScript({ target: { tabId: tab.id }, files: ['/annotate-inject.js'] });`);
+  const passage = 'a bright cold day in April';
+  const noteHighlights = () =>
+    page.evaluate(() => [...CSS.highlights.entries()].filter(([k]) => k.startsWith('aloud-note')).flatMap(([, h]) => [...h].map((r) => r.toString())));
+  await injectAnnotator();
+  await page.waitForTimeout(400);
+  await page.evaluate((text) => {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const i = n.data.indexOf(text);
+      if (i < 0) continue;
+      const range = document.createRange();
+      range.setStart(n, i);
+      range.setEnd(n, i + text.length);
+      getSelection().removeAllRanges();
+      getSelection().addRange(range);
+      return;
+    }
+  }, passage);
+  const saved = await inTab(`return await browser.tabs.sendMessage(tab.id, { type: 'annotate-save-selection' });`);
+  if (!saved?.saved) await fail(`the highlight was not saved: ${JSON.stringify(saved)}`);
+  if (!(await noteHighlights()).includes(passage)) await fail('the new highlight was not drawn');
+  await page.reload();
+  await injectAnnotator();
+  await page.waitForTimeout(800);
+  const restored = await noteHighlights();
+  if (!restored.includes(passage)) await fail(`the highlight was not drawn again after a reload: ${JSON.stringify(restored)}`);
+  step(`highlight kept and redrawn after reload: “${passage}”`);
+
   writeFileSync(join(OUT, 'console.log'), logs.join('\n'));
   console.log('✓ Firefox end-to-end check passed');
 } finally {
+  rdp?.close();
   await context.close().catch(() => {});
   server.close();
 }

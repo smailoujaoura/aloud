@@ -26,8 +26,8 @@ pnpm test:e2e:firefox   # the Firefox build in a real headless Firefox (see belo
 
 `scripts/e2e-firefox.mjs` installs `.output/firefox-mv3` into Playwright's Firefox as a temporary
 add-on, reads an article aloud and checks each stage: the voice loads and returns audio, playback
-starts, the word highlight moves through every word in order, and "Save as MP3" downloads a real
-MP3. On failure it exits non-zero and leaves a screenshot in `.output/e2e-firefox/`.
+starts, the word highlight moves through every word in order, "Save as MP3" downloads a real
+MP3, and a highlight made on the page is kept in Notes and drawn again after a reload. On failure it exits non-zero and leaves a screenshot in `.output/e2e-firefox/`.
 
 It needs `npx playwright install firefox`, and an audio output: Firefox never starts an
 AudioContext without one. On a headless Linux machine, run a PulseAudio null sink
