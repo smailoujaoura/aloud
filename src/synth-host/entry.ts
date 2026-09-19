@@ -386,11 +386,7 @@ async function startPool(msg: Extract<WorkerRequest, { kind: 'init' }>, gen: num
         ? clampPool(requested)
         : autoPoolSize(engine, probe.available, poolEnv());
 
-  // Pooled Kokoro forces q8 weights: N full-precision copies (~320 MB each) would exhaust
-  // memory, and q8's small per-worker speed cost is dwarfed by the parallelism.
-  const config: EngineConfig =
-    targetSize > 1 && engine === 'kokoro' ? { ...msg.config, dtype: 'q8' } : msg.config;
-  initMsg = { ...msg, config };
+  initMsg = msg;
 
   // eslint-disable-next-line no-console
   console.info(
@@ -418,7 +414,7 @@ function resizePoolForProvider(provider: string): void {
   if (!initMsg || poolIsFixed) return;
   const engine = initMsg.config.engine;
   if (engine === 'piper') return;
-  const wanted = poolSizeForProvider(engine, provider, initMsg.config.dtype, poolEnv());
+  const wanted = poolSizeForProvider(engine, provider, poolEnv());
   if (wanted <= targetSize) return;
   // eslint-disable-next-line no-console
   console.info(

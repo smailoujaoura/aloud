@@ -10,6 +10,9 @@ import type { PronunciationRule } from '@/segment/pronunciations';
 export type EngineId = 'piper' | 'kokoro' | 'supertonic';
 
 /** How the page scrolls to follow the sentence being read. */
+/** How the word being spoken is marked (see `Settings.wordHighlight`). */
+export type WordHighlightStyle = 'darker' | 'underline' | 'off';
+
 export type ScrollMode = 'off' | 'keep-visible' | 'snap';
 
 /**
@@ -132,12 +135,6 @@ export interface Settings {
   kokoroVoice: string;
   /** Supertonic voice-style key, e.g. `F1`. */
   supertonicVoice: string;
-  /**
-   * Kokoro weight precision. `q8` (~86 MB) is the default: on the single-threaded CPU path
-   * fp32 is only marginally faster for 4× the download and RAM. `fp32` is worth it on the
-   * WebGPU path (Chromium), which runs one worker and absorbs the extra precision cheaply.
-   */
-  kokoroDtype: 'q8' | 'fp32';
   /** Supertonic flow-matching denoising steps (more = better, slower). 3–8 is sensible. */
   supertonicSteps: number;
   /**
@@ -156,10 +153,11 @@ export interface Settings {
   /** CSS color for the sentence highlight background. */
   highlightColor: string;
   /**
-   * Also mark the word being spoken, inside the sentence highlight. Only voices whose model
-   * reports when each sound plays can do it (Piper, Kokoro); Supertonic keeps the sentence highlight alone.
+   * How to mark the word being spoken, inside the sentence highlight: a darker shade of the
+   * highlight colour, an underline, or not at all. Only voices whose model reports when each
+   * sound plays can do it (Piper, Kokoro); Supertonic keeps the sentence highlight alone.
    */
-  wordHighlight: boolean;
+  wordHighlight: WordHighlightStyle;
   /** How the page follows the current sentence. */
   scrollMode: ScrollMode;
   /** How a PDF is shown in Aloud's reader page. */
@@ -199,7 +197,6 @@ export const DEFAULT_SETTINGS: Settings = {
   piperVoice: 'en_GB-alba-medium',
   kokoroVoice: 'af_heart',
   supertonicVoice: 'F1',
-  kokoroDtype: 'q8',
   supertonicSteps: 4,
   synthWorkers: 0,
   speed: 1,
@@ -208,7 +205,7 @@ export const DEFAULT_SETTINGS: Settings = {
   preferWebGPU: true,
   highlight: true,
   highlightColor: 'rgba(255, 214, 10, 0.45)',
-  wordHighlight: true,
+  wordHighlight: 'darker',
   scrollMode: 'keep-visible',
   pdfView: 'pages',
   sectionPauseMs: 0,
@@ -226,8 +223,18 @@ export const DEFAULT_SETTINGS: Settings = {
 
 const item = storage.defineItem<Settings>('local:settings', {
   fallback: DEFAULT_SETTINGS,
-  version: 4,
+  version: 5,
   migrations: {
+    // v4 -> v5: Kokoro has one model now, the quantised one (measured: full precision was no
+    // faster for four times the download), so the precision choice is gone.
+    // Also: the word mark became a choice of style, since an underline on every word can be a
+    // distraction — a darker shade is the quieter default.
+    5(prev: Record<string, unknown>): Record<string, unknown> {
+      const next = { ...prev };
+      delete next.kokoroDtype;
+      if (typeof next.wordHighlight === 'boolean') next.wordHighlight = next.wordHighlight ? 'darker' : 'off';
+      return next;
+    },
     // v3 -> v4: the default Piper voice became Alba (en_GB), which simply sounds better than the
     // old one. Only moved for profiles still on that old default, so a deliberate choice stands.
     4(prev: Record<string, unknown>): Record<string, unknown> {

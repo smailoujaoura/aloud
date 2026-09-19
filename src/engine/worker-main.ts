@@ -120,6 +120,10 @@ async function handleInit(req: Extract<WorkerRequest, { kind: 'init' }>): Promis
       if (p.phase === 'compile') {
         compiling = true;
       } else {
+        // A download reported after "preparing" is a real download (a fallback fetching another
+        // file, say): show it. A flag that stuck once set used to leave the settings page on
+        // "Preparing model…" at 0% for a whole 86 MB download.
+        compiling = false;
         progressByFile.set(p.file, { loaded: p.loaded, total: Math.max(p.total, p.loaded, 1) });
       }
       let loaded = 0;
@@ -149,7 +153,6 @@ async function handleInit(req: Extract<WorkerRequest, { kind: 'init' }>): Promis
     phase = `initialising ${req.config.engine} engine (voice "${req.config.voice}")`;
     await engine.init({
       voice: req.config.voice,
-      dtype: req.config.dtype,
       steps: req.config.steps,
       preferWebGPU: req.config.preferWebGPU,
       onProgress,
@@ -195,7 +198,6 @@ async function synthesizeOrFallBack(job: Job): ReturnType<SynthEngine['synthesiz
     engine = await createEngine(started.config.engine, started.manifest);
     await engine.init({
       voice: started.config.voice,
-      dtype: started.config.dtype,
       steps: started.config.steps,
       preferWebGPU: false,
       onProgress: () => undefined,

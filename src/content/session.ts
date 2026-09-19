@@ -345,6 +345,7 @@ export class ReaderSession {
     this.highlighter = new Highlighter(document, {
       color: this.settings.highlightColor,
       scrollMode: this.settings.scrollMode,
+      wordStyle: this.settings.wordHighlight,
     });
 
     this.media = new MediaControls(
@@ -687,7 +688,6 @@ export class ReaderSession {
     return {
       engine: this.engine,
       voice: this.voice,
-      dtype: this.settings.kokoroDtype,
       steps: this.settings.supertonicSteps,
       preferWebGPU: this.settings.preferWebGPU,
       speed: this.settings.speed,
@@ -1074,7 +1074,7 @@ export class ReaderSession {
     const item = this.playlist[playId];
     const timings = this.wordTimings.get(playId);
     const index = this.textIndex;
-    if (!this.settings.highlight || !this.settings.wordHighlight || !this.highlighter?.canShowWords) return;
+    if (!this.settings.highlight || this.settings.wordHighlight === 'off' || !this.highlighter?.canShowWords) return;
     if (!item || !timings || item.sourceAt == null || !index) return;
 
     const toSource = spokenToSource(item.spokenText, item.sourceText);
@@ -1404,9 +1404,10 @@ export class ReaderSession {
     this.highlighter?.setOptions({
       color: this.settings.highlightColor,
       scrollMode: this.settings.scrollMode,
+      wordStyle: this.settings.wordHighlight,
     });
-    if (!this.settings.highlight || !this.settings.wordHighlight) this.stopFollowingWords(true);
-    else if (!prev.wordHighlight && this.scheduler?.isPlaying()) this.prepareWords(this.currentPlayId);
+    if (!this.settings.highlight || this.settings.wordHighlight === 'off') this.stopFollowingWords(true);
+    else if (prev.wordHighlight === 'off' && this.scheduler?.isPlaying()) this.prepareWords(this.currentPlayId);
     if (prev.tapToSeek !== this.settings.tapToSeek) {
       this.tapToSeek?.setEnabled(this.settings.tapToSeek);
       this.bar?.setTapToSeek(this.settings.tapToSeek);

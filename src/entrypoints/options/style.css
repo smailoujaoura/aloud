@@ -152,8 +152,9 @@ code {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--fg) 10%, transparent);
 }
 .vi-avatar svg, .now-avatar svg { display: block; }
-.vi-avatar { width: 34px; height: 34px; }
-.now-avatar { width: 52px; height: 52px; }
+.vi-avatar { width: 40px; height: 40px; }
+.now-avatar { width: 56px; height: 56px; }
+.has-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 /* ---- reading with ---- */
 

@@ -9,7 +9,6 @@ export interface SynthResult {
 
 export interface InitContext {
   voice: string;
-  dtype: 'q8' | 'fp32';
   /** Supertonic denoising steps. */
   steps?: number;
   preferWebGPU: boolean;

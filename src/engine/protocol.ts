@@ -10,8 +10,6 @@ import type { EngineId } from '@/shared/settings';
 export interface EngineConfig {
   engine: EngineId;
   voice: string;
-  /** Kokoro only. */
-  dtype: 'q8' | 'fp32';
   /** Supertonic only — flow-matching denoising steps. */
   steps?: number;
   preferWebGPU: boolean;

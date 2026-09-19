@@ -41,28 +41,15 @@ export function piperVoiceBytes(entry: PiperVoiceEntry, sizes: CacheSizes): numb
 export function engineDownloaded(engine: EngineId, manifest: ModelManifest, sizes: CacheSizes): boolean {
   const hint = engineInfo(engine).cacheHint;
   if (!hint) return Object.values(manifest.piper).some((v) => piperDownloaded(v, sizes));
-  return sharedModelBytes(sizes, hint) > 0;
+  return sharedModelInstalled(engine, sizes);
 }
 
-/**
- * Which Kokoro weights are actually on disk, or null if none are.
- *
- * Kokoro ships several precisions of the same model as differently-named files in one repo, and
- * the panel's single Download/Delete button reports on the repo as a whole. Without this the UI
- * says "downloaded" while the precision the reader selected is still missing, and pressing
- * Download appears to do nothing.
- */
-export function kokoroInstalledPrecision(sizes: CacheSizes): 'q8' | 'fp32' | null {
-  let quantised = false;
-  let full = false;
-  for (const key of sizes.keys()) {
-    if (!key.includes('Kokoro-82M')) continue;
-    if (/model_quantized\.onnx$/.test(key)) quantised = true;
-    else if (/\/model\.onnx$/.test(key)) full = true;
-  }
-  // Prefer reporting full precision when both are present: it is what reading will pick up.
-  if (full) return 'fp32';
-  return quantised ? 'q8' : null;
+/** Is Kokoro's or Supertonic's one model — the weights, not just its config — on this device? */
+export function sharedModelInstalled(engine: EngineId, sizes: CacheSizes): boolean {
+  const { cacheHint: hint, requiredFile } = engineInfo(engine);
+  if (!hint) return false;
+  if (requiredFile) return [...sizes.keys()].some((k) => k.includes(hint) && k.endsWith(requiredFile));
+  return sharedModelBytes(sizes, hint) > 0;
 }
 
 /**

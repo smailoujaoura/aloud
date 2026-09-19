@@ -1,5 +1,7 @@
 /**
- * Portraits for voices: small illustrated avatars, drawn in SVG, one per voice.
+ * Portraits for voices: small illustrated avatars, drawn in SVG, one per voice. The best voices
+ * have a photographic portrait instead (voice-portraits.ts); this is every other voice's, and the
+ * fallback if a photo fails to load.
  *
  * They are not photographs of anyone — none of these voices has a face — but a list of 175 names
  * is scanned faster with pictures, and a voice described as female or male should look it. Each

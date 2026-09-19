@@ -10,6 +10,8 @@
  * absent.
  */
 
+import type { WordHighlightStyle } from '@/shared/settings';
+
 const HIGHLIGHT_NAME = 'aloud-sentence';
 const WORD_HIGHLIGHT_NAME = 'aloud-word';
 const STYLE_ID = 'aloud-highlight-style';
@@ -24,6 +26,8 @@ export interface HighlighterOptions {
    * near the viewport edge. `snap` — pull the sentence to the vertical centre on every advance.
    */
   scrollMode: ScrollMode;
+  /** How the word being spoken looks. `off` is handled by not showing words at all. */
+  wordStyle?: WordHighlightStyle;
 }
 
 export class Highlighter {
@@ -56,10 +60,7 @@ export class Highlighter {
         border-radius: 2px;
       }
       ::highlight(${WORD_HIGHLIGHT_NAME}) {
-        background-color: ${wordTone(this.opts.color).fill};
-        color: inherit;
-        text-decoration: underline 3px ${wordTone(this.opts.color).line};
-        text-underline-offset: 2px;
+        ${wordStyleCss(this.opts.color, this.opts.wordStyle ?? 'darker')}
       }
       .${SPAN_CLASS} {
         background-color: ${this.opts.color};
@@ -218,6 +219,19 @@ export class Highlighter {
     this.styleEl?.remove();
     this.styleEl = null;
   }
+}
+
+/**
+ * The word mark as CSS. `darker` paints the word in a deeper shade of the sentence colour — easy to
+ * follow without drawing anything across the text; `underline` leaves the colour alone and draws
+ * a line in the same hue under the word.
+ */
+export function wordStyleCss(color: string, style: WordHighlightStyle): string {
+  const tone = wordTone(color);
+  if (style === 'underline') {
+    return `color: inherit; text-decoration: underline 3px ${tone.line}; text-underline-offset: 2px;`;
+  }
+  return `background-color: ${tone.fill}; color: inherit;`;
 }
 
 /**

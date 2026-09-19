@@ -41,17 +41,13 @@ describe('clampPool', () => {
 
 describe('poolSizeForProvider', () => {
   it('grows the pool when the worker reports it ended up on the CPU', () => {
-    expect(poolSizeForProvider('kokoro', 'wasm', 'q8', desktop)).toBeGreaterThan(1);
+    expect(poolSizeForProvider('kokoro', 'wasm', desktop)).toBeGreaterThan(1);
   });
 
   it('collapses to one worker when the worker reports WebGPU', () => {
-    expect(poolSizeForProvider('kokoro', 'webgpu/fp32', 'fp32', desktop)).toBe(1);
+    expect(poolSizeForProvider('kokoro', 'webgpu/q8', desktop)).toBe(1);
   });
 
-  it('caps full-precision Kokoro on the CPU path, where each copy costs ~320 MB', () => {
-    expect(poolSizeForProvider('kokoro', 'wasm', 'fp32', desktop)).toBe(2);
-    expect(poolSizeForProvider('kokoro', 'wasm', 'q8', desktop)).toBe(4);
-  });
 });
 
 describe('backendOf', () => {

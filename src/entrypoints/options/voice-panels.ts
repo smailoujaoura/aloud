@@ -15,6 +15,7 @@
  * row with a quality picker rather than three near-identical rows.
  */
 import { voiceAvatar, voiceGender } from '@/ui/voice-avatar';
+import { voicePortrait } from '@/ui/voice-portraits';
 import { el } from '@/shared/dom';
 import { humanBytes } from '@/shared/log';
 import { capabilities } from '@/shared/browser-env';
@@ -28,10 +29,10 @@ import { RowProgress, downloadPiperVoice, downloadViaWorker } from './downloads'
 import { previewFor } from './preview-button';
 import { engineConfigFor } from './engine-config';
 import {
-  kokoroInstalledPrecision,
   piperDownloaded,
   piperVoiceBytes,
   sharedModelBytes,
+  sharedModelInstalled,
   type CacheSizes,
 } from '@/engine/installed-voices';
 
@@ -53,12 +54,6 @@ export interface VoiceHosts {
   tabs: HTMLElement;
   panel: HTMLElement;
 }
-
-/** How the Kokoro precision options are named in the Advanced section. */
-const PRECISION_LABEL: Record<'q8' | 'fp32', string> = {
-  q8: 'quantised (~86 MB)',
-  fp32: 'full precision (~320 MB)',
-};
 
 /** A search matching half the catalogue helps nobody; past this it asks for a narrower one. */
 const MAX_SEARCH_RESULTS = 40;
@@ -152,14 +147,14 @@ function renderNowReading(host: HTMLElement, ctx: PanelContext): void {
       name = v.label;
       meta = `${info.name} · ${ACCENT_NAME[v.language] ?? v.language} · ${v.gender}`;
     }
-    installed = sharedModelBytes(sizes, info.cacheHint ?? '') > 0;
+    installed = sharedModelInstalled(engine, sizes);
   } else {
     const v = manifest.supertonic?.voices[id];
     if (v) {
       name = v.label;
       meta = `${info.name} · ${v.gender}`;
     }
-    installed = sharedModelBytes(sizes, info.cacheHint ?? '') > 0;
+    installed = sharedModelInstalled(engine, sizes);
   }
 
   const text = el(document, 'div', { class: 'now-text' });
@@ -212,8 +207,7 @@ function installedSummary(engine: EngineId, ctx: PanelContext): string {
     const n = Object.values(ctx.manifest.piper).filter((v) => piperDownloaded(v, ctx.sizes)).length;
     return n ? `${n} on this device` : 'none downloaded';
   }
-  const hint = engineInfo(engine).cacheHint;
-  return hint && sharedModelBytes(ctx.sizes, hint) > 0 ? 'downloaded' : 'not downloaded';
+  return sharedModelInstalled(engine, ctx.sizes) ? 'downloaded' : 'not downloaded';
 }
 
 /** What the engine is and what it costs, at the top of its tab. */
@@ -239,8 +233,28 @@ function engineIntro(info: EngineInfo): HTMLElement {
  */
 function avatar(engine: EngineId, id: string, ctx: PanelContext, className = 'vi-avatar'): HTMLElement {
   const node = el(document, 'span', { class: className, 'aria-hidden': 'true' });
-  const size = className === 'now-avatar' ? 52 : 34;
-  node.append(voiceAvatar(document, `${engine}:${id}`, voiceGender(engine, id, ctx.manifest), size));
+  const size = className === 'now-avatar' ? 56 : 40;
+  const drawn = () => voiceAvatar(document, `${engine}:${id}`, voiceGender(engine, id, ctx.manifest), size);
+  const portrait = voicePortrait(engine, id);
+  if (!portrait) {
+    node.append(drawn());
+    return node;
+  }
+  // The best voices have a face, so they are remembered by it. Not a real person: say so where
+  // the face is, in the tooltip, along with who the voice sounds like.
+  node.classList.add('has-photo');
+  node.title = `Sounds like ${portrait.sounds}. Portrait generated — not a real person.`;
+  node.removeAttribute('aria-hidden');
+  const img = el(document, 'img', {
+    src: portrait.file,
+    alt: '',
+    width: String(size),
+    height: String(size),
+    decoding: 'async',
+    loading: 'lazy',
+  });
+  img.addEventListener('error', () => img.replaceWith(drawn()), { once: true });
+  node.append(img);
   return node;
 }
 
@@ -298,7 +312,7 @@ function piperGroups(manifest: ModelManifest): PiperGroup[] {
   return [...byKey.values()];
 }
 
-/** The variant a row shows: the one chosen here, else the one in use, else a downloaded one, else medium. */
+/** The variant a row shows: the one chosen here, else the one in use, else the highest quality. */
 function chosenVariant(group: PiperGroup, ctx: PanelContext): [string, PiperVoiceEntry] {
   const find = (pred: (id: string, v: PiperVoiceEntry) => boolean): [string, PiperVoiceEntry] | undefined =>
     group.variants.find(([id, v]) => pred(id, v));
@@ -306,9 +320,9 @@ function chosenVariant(group: PiperGroup, ctx: PanelContext): [string, PiperVoic
   return (
     (remembered ? find((id) => id === remembered) : undefined) ??
     (ctx.settings.engine === 'piper' ? find((id) => id === ctx.settings.piperVoice) : undefined) ??
-    find((_, v) => piperDownloaded(v, ctx.sizes)) ??
-    find((_, v) => v.quality === 'medium') ??
-    group.variants[0]!
+    // Otherwise the best recording there is: variants are sorted smallest first, so the last is
+    // `high` whenever the voice has one — offered even over a lower tier already downloaded.
+    group.variants[group.variants.length - 1]!
   );
 }
 
@@ -536,7 +550,7 @@ function sharedPanel(engine: 'kokoro' | 'supertonic', ctx: PanelContext): HTMLEl
   const panel = el(document, 'div', { class: 'panel-body' });
   const info = engineInfo(engine);
   const bytes = info.cacheHint ? sharedModelBytes(ctx.sizes, info.cacheHint) : 0;
-  const downloaded = bytes > 0;
+  const downloaded = sharedModelInstalled(engine, ctx.sizes);
   panel.append(engineIntro(info), modelCard(engine, { downloaded, bytes }, ctx));
 
   const voices = sharedVoices(engine, ctx.manifest).filter(
@@ -589,27 +603,8 @@ function modelCard(
     el(document, 'span', { class: 'vi-meta' }, `${state.downloaded ? humanBytes(state.bytes) : info.approxSize} · ${licence}`),
   );
 
-  // Kokoro exists at several precisions. If the installed one is not the selected one, say so
-  // and offer the fetch — otherwise the card reads "on this device" while reading still has to
-  // download, and pressing Delete then Download appears to change nothing.
-  const wanted = engine === 'kokoro' ? ctx.settings.kokoroDtype : null;
-  const installed = engine === 'kokoro' ? kokoroInstalledPrecision(ctx.sizes) : null;
-  const mismatch = wanted != null && installed != null && wanted !== installed;
-  if (installed) {
-    text.append(
-      el(
-        document,
-        'span',
-        { class: `vi-meta${mismatch ? ' warn-text' : ''}` },
-        mismatch
-          ? `Installed: ${PRECISION_LABEL[installed]} — you selected ${PRECISION_LABEL[wanted]}. Download to fetch it.`
-          : `Installed: ${PRECISION_LABEL[installed]}`,
-      ),
-    );
-  }
-
   const progress = new RowProgress();
-  const isDelete = state.downloaded && !mismatch;
+  const isDelete = state.downloaded;
   const btn = el(
     document,
     'button',

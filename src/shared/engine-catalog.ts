@@ -27,6 +27,11 @@ export interface EngineInfo {
    * download one model that unlocks all their voices; Piper downloads per voice and has none.
    */
   cacheHint?: string;
+  /**
+   * The cache key ending that must be present too — the weights themselves. A config file alone,
+   * or weights an earlier version used, must not make the engine look installed.
+   */
+  requiredFile?: string;
   /** Comfortably faster than real time only with GPU acceleration. */
   needsGpuForSpeed: boolean;
   /** Too slow or too large to be a good idea on a phone. */
@@ -53,8 +58,9 @@ const ENGINES: Record<EngineId, EngineInfo> = {
       'The most natural and expressive of the three. With GPU acceleration it is comfortably faster ' +
       'than real time; without one it runs around 3× slower than real time and leans on parallel ' +
       'workers to keep up with playback. One 86 MB download unlocks all 28 English voices (US and UK).',
-    approxSize: '~86 MB (q8)',
+    approxSize: '~86 MB',
     cacheHint: 'Kokoro-82M',
+    requiredFile: '/onnx/model_quantized.onnx',
     needsGpuForSpeed: true,
     heavyForMobile: true,
   },

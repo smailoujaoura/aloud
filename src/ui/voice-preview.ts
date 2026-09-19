@@ -87,7 +87,7 @@ let nextId = 1;
 /** Kokoro voices are hot-swappable (shared model), so the voice is not part of its warm key. */
 function configKey(c: EngineConfig): string {
   const voice = c.engine === 'kokoro' ? '*' : c.voice;
-  return [c.engine, voice, c.dtype, c.steps ?? '', c.preferWebGPU].join('|');
+  return [c.engine, voice, c.steps ?? '', c.preferWebGPU].join('|');
 }
 
 function ensureWorker(): Worker {

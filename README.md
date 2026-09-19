@@ -42,7 +42,8 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
   sentence's text, so an edited page never resumes in the wrong place; it is stored on this
   device only and can be cleared from the settings page.
 - **Word by word** — with Piper and Kokoro voices the word being spoken is marked inside the
-  sentence, timed from the voice model's own phoneme durations rather than estimated.
+  sentence, timed from the voice model's own phoneme durations rather than estimated. It is shown
+  as a darker shade by default; Settings switches it to an underline, or off.
 - **Highlights and notes on any page** — select text and press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>
   (or use the colour toolbar, or right-click → *Highlight and keep in Notes*). The passage is
   highlighted, kept with your note and tags, and highlighted again whenever you come back —
@@ -88,12 +89,12 @@ option and a fast one.
 **Firefox users can have the GPU path too.** In `about:config`, set
 `dom.webgpu.enabled` and `dom.webgpu.workers.enabled` to `true` (the second one is the one that
 matters — synthesis runs in a worker), plus `gfx.webrender.all` if hardware acceleration is off
-on your machine, then restart. Kokoro then loads on `webgpu/fp32` and runs faster than Piper.
+on your machine, then restart. Kokoro then runs on the GPU.
 These are experimental settings; set them back to `false` if Firefox misbehaves, and Aloud
 returns to the CPU path on its own. The settings page spells the prefs out, copies them for you,
 and re-checks — it asks a real synthesis worker whether it has a GPU rather than assuming from
-the browser name, so what it tells you is what your machine actually does. The first GPU run
-downloads Kokoro's full-precision model (~320 MB) once.
+the browser name, so what it tells you is what your machine actually does. It is the same 86 MB
+model either way; nothing more is downloaded.
 
 The options page tells you which of these applies to your machine; you never have to remember
 this table.

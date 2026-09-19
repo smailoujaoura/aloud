@@ -57,19 +57,7 @@ export function autoPoolSize(engine: EngineId, gpu: boolean, env: PoolEnvironmen
  * fully trustworthy signal: the pre-flight probe runs in the synth-host document, and a browser
  * may grant a document a GPU it does not grant a worker. So the pool is re-sized once the truth
  * is in, and grows if the GPU turned out not to be there.
- *
- * Full-precision Kokoro is the one case where growing is capped: each fp32 copy is ~320 MB, so a
- * pool of four would cost more than a gigabyte. Whoever asks for fp32 on a CPU-only machine gets
- * two workers, not four.
  */
-export function poolSizeForProvider(
-  engine: EngineId,
-  provider: string,
-  dtype: string,
-  env: PoolEnvironment,
-): number {
-  const gpu = provider.startsWith('webgpu');
-  const size = autoPoolSize(engine, gpu, env);
-  if (!gpu && engine === 'kokoro' && dtype === 'fp32') return Math.min(size, 2);
-  return size;
+export function poolSizeForProvider(engine: EngineId, provider: string, env: PoolEnvironment): number {
+  return autoPoolSize(engine, provider.startsWith('webgpu'), env);
 }

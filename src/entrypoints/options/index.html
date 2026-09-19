@@ -80,9 +80,13 @@
           <input type="checkbox" id="highlight" />
           <span>Highlight the sentence being read</span>
         </label>
-        <label class="row check">
-          <input type="checkbox" id="wordHighlight" />
-          <span>…and mark each word as it is spoken</span>
+        <label class="row">
+          <span>Mark the word being spoken</span>
+          <select id="wordHighlight">
+            <option value="darker">Darker colour</option>
+            <option value="underline">Underline</option>
+            <option value="off">Don't mark words</option>
+          </select>
         </label>
         <p class="row-hint">
           Piper and Kokoro voices: their models report exactly when each sound plays, so the mark
@@ -237,20 +241,6 @@
 
       <section>
         <h2>Advanced</h2>
-        <label class="row" id="kokoro-dtype-row">
-          <span>Kokoro precision</span>
-          <select id="kokoroDtype">
-            <option value="q8">Quantised — ~86 MB (default)</option>
-            <option value="fp32">Full precision — ~320 MB, same speed on the CPU</option>
-          </select>
-        </label>
-        <p class="row-hint" id="kokoroDtypeHint">
-          This applies when Kokoro runs on the CPU with a single worker. Measured, the two run at the
-          same speed there; full precision only costs more download and memory. When several CPU
-          workers read at once, each loads the quantised model, since four full-precision copies
-          would take over a gigabyte of memory. On the GPU Kokoro always loads the full-precision
-          model (~320 MB, downloaded once), the build with complete WebGPU coverage.
-        </p>
         <label class="row" id="supertonic-steps-row">
           <span>Supertonic detail</span>
           <input type="range" id="supertonicSteps" min="2" max="10" step="1" />
@@ -283,8 +273,7 @@
           </p>
           <ol class="pref-list" id="prefList"></ol>
           <p class="small">
-            Then restart Firefox and press <b>Check for a GPU again</b>. The first GPU run
-            downloads Kokoro's full-precision model (~320 MB) once.
+            Then restart Firefox and press <b>Check for a GPU again</b>.
           </p>
           <p class="small muted">
             These are experimental settings. If Firefox misbehaves afterwards — crashes, blank

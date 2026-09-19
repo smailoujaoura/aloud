@@ -41,7 +41,7 @@ import { applyTheme, watchSystemTheme, THEME_LABEL } from '@/ui/theme';
 import { createThemeSwitch, type ThemeSwitch } from '@/ui/theme-switch';
 import type { ModelManifest } from '@/engine/engines/types';
 
-import { piperDownloaded, readCacheSizes, sharedModelBytes, type CacheSizes } from '@/engine/installed-voices';
+import { piperDownloaded, readCacheSizes, sharedModelBytes, sharedModelInstalled, type CacheSizes } from '@/engine/installed-voices';
 import { engineInfo } from '@/shared/engine-catalog';
 import { engineConfigFor } from './engine-config';
 import { renderMediaSpeedPanel } from './media-speed-panel';
@@ -344,8 +344,8 @@ async function render(): Promise<void> {
   $<HTMLInputElement>('speed').value = String(settings.speed);
   $('speedOut').textContent = `${settings.speed.toFixed(2)}×`;
   $<HTMLInputElement>('highlight').checked = settings.highlight;
-  $<HTMLInputElement>('wordHighlight').checked = settings.wordHighlight;
-  $<HTMLInputElement>('wordHighlight').disabled = !settings.highlight;
+  $<HTMLSelectElement>('wordHighlight').value = settings.wordHighlight;
+  $<HTMLSelectElement>('wordHighlight').disabled = !settings.highlight;
   $<HTMLInputElement>('highlightColor').value = toHex(settings.highlightColor);
   $<HTMLSelectElement>('scrollMode').value = settings.scrollMode;
   $<HTMLSelectElement>('pdfView').value = settings.pdfView;
@@ -359,14 +359,12 @@ async function render(): Promise<void> {
   $<HTMLInputElement>('expandAbbreviations').checked = settings.expandAbbreviations;
   for (const [id, key] of SKIP_SWITCHES) $<HTMLInputElement>(id).checked = settings.skip[key];
 
-  $<HTMLSelectElement>('kokoroDtype').value = settings.kokoroDtype;
   $<HTMLInputElement>('supertonicSteps').value = String(settings.supertonicSteps);
   $('supertonicStepsOut').textContent = String(settings.supertonicSteps);
   $<HTMLInputElement>('synthWorkers').value = String(settings.synthWorkers);
   $('synthWorkersOut').textContent = settings.synthWorkers === 0 ? 'auto' : String(settings.synthWorkers);
   $<HTMLInputElement>('preferWebGPU').checked = settings.preferWebGPU;
   $<HTMLInputElement>('debug').checked = settings.debug;
-  $('kokoro-dtype-row').hidden = settings.engine !== 'kokoro';
   $('supertonic-steps-row').hidden = settings.engine !== 'supertonic';
 
   renderCapabilityHints();
@@ -464,7 +462,7 @@ function currentVoiceInstalled(manifest: ModelManifest, sizes: CacheSizes): bool
     const entry = manifest.piper[settings.piperVoice];
     return entry ? piperDownloaded(entry, sizes) : false;
   }
-  return sharedModelBytes(sizes, engineInfo(settings.engine).cacheHint ?? '') > 0;
+  return sharedModelInstalled(settings.engine, sizes);
 }
 
 function wire(): void {
@@ -491,7 +489,9 @@ function wire(): void {
   });
 
   wireCheckbox('highlight', 'highlight');
-  wireCheckbox('wordHighlight', 'wordHighlight');
+  $('wordHighlight').addEventListener('change', (e) =>
+    save({ wordHighlight: (e.target as HTMLSelectElement).value as Settings['wordHighlight'] }),
+  );
   wireCheckbox('tapToSeek', 'tapToSeek');
   wireCheckbox('matchPageLanguage', 'matchPageLanguage');
   wireCheckbox('skipUrls', 'skipUrls');
@@ -515,10 +515,6 @@ function wire(): void {
   $('scrollMode').addEventListener('change', (e) =>
     save({ scrollMode: (e.target as HTMLSelectElement).value as Settings['scrollMode'] }),
   );
-  $('kokoroDtype').addEventListener('change', async (e) => {
-    await save({ kokoroDtype: (e.target as HTMLSelectElement).value as Settings['kokoroDtype'] });
-    await render();
-  });
 
   let filterTimer = 0;
   $('voiceFilter').addEventListener('input', () => {

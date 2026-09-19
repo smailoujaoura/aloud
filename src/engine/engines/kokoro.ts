@@ -13,7 +13,7 @@
 import { KokoroTTS } from 'kokoro-js';
 import { env as hfEnv } from '@huggingface/transformers';
 
-import { TransformersCache, cacheHas, fetchModelFile, setCachedFileTransform } from '@/engine/model-cache';
+import { TransformersCache, cacheDelete, cacheHas, fetchModelFile, setCachedFileTransform } from '@/engine/model-cache';
 import { exposeNodeOutput } from '@/engine/onnx-outputs';
 import { soundsOf, splitWords, wordTimes, type TextWord, type TimedSound } from '@/engine/g2p/word-timing';
 import type { WordTiming } from '@/engine/protocol';
@@ -25,17 +25,17 @@ import type { SynthEngine, SynthResult, InitContext } from './types';
 
 const MODEL_ID = 'onnx-community/Kokoro-82M-v1.0-ONNX';
 
-type KokoroDtype = 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16';
 type KokoroDevice = 'wasm' | 'webgpu';
 
-/** The model file transformers.js loads for each precision (onnx-community's repo layout). */
-const MODEL_FILES: Partial<Record<KokoroDtype, string>> = {
-  fp32: 'model.onnx',
-  fp16: 'model_fp16.onnx',
-  q8: 'model_quantized.onnx',
-};
-const modelUrl = (dtype: KokoroDtype): string | null =>
-  MODEL_FILES[dtype] ? `https://huggingface.co/${MODEL_ID}/resolve/main/onnx/${MODEL_FILES[dtype]}` : null;
+/**
+ * The one model Aloud uses: the quantised build (~86 MB). Measured, the full-precision file ran
+ * no faster on the CPU for four times the download, and the quantised one runs on WebGPU too.
+ */
+const DTYPE = 'q8';
+const onnxUrl = (file: string) => `https://huggingface.co/${MODEL_ID}/resolve/main/onnx/${file}`;
+export const KOKORO_MODEL_URL = onnxUrl('model_quantized.onnx');
+/** Weights earlier versions could download and nothing reads any more. */
+const RETIRED_MODEL_URLS = [onnxUrl('model.onnx'), onnxUrl('model_fp16.onnx')];
 
 /**
  * Kokoro, like Piper, decides how many audio frames each phoneme gets before it makes a sound —
@@ -86,27 +86,23 @@ export class KokoroEngine implements SynthEngine {
     const wantGpu = eps[0] === 'webgpu';
     log.info(`[kokoro] init: preferWebGPU=${ctx.preferWebGPU} → execution providers ${JSON.stringify(eps)}`);
 
-    // WASM path precision. Without a GPU there are also no threads, and fp32 runs no faster than
-    // q8 there (measured single-threaded, same input: RTF 3.18 vs 3.15–3.24) for 4× the download
-    // and 4× the RAM per pooled worker — so q8 is the default on the CPU path. fp32 is worth it on
-    // the WebGPU path, which runs a single worker and has the complete kernel coverage.
-    const wasmDtype: KokoroDtype = ctx.dtype === 'fp32' ? 'fp32' : 'q8';
-
-    const load = async (device: KokoroDevice, dtype: KokoroDtype) => {
+    const load = async (device: KokoroDevice) => {
       // Into Aloud's cache first, so transformers.js reads it from there — through the transform
       // above — even on the very first run, instead of straight from the network.
-      const url = modelUrl(dtype);
-      if (url && !(await cacheHas(url))) {
-        await fetchModelFile(url, {
-          label: `Kokoro ${dtype} model`,
+      if (!(await cacheHas(KOKORO_MODEL_URL))) {
+        await fetchModelFile(KOKORO_MODEL_URL, {
+          label: 'Kokoro model',
           onProgress: (p) => ctx.onProgress({ ...p, phase: 'download' }),
         });
       }
-      return loadModel(device, dtype);
+      // Only now is there nothing left to download: announcing "preparing" before the fetch left
+      // the settings page on "Preparing model…" at 0% while 86 MB came in.
+      ctx.onProgress({ file: `preparing ${device} model`, loaded: 0, total: 1, phase: 'compile' });
+      return loadModel(device);
     };
-    const loadModel = (device: KokoroDevice, dtype: KokoroDtype) =>
+    const loadModel = (device: KokoroDevice) =>
       KokoroTTS.from_pretrained(MODEL_ID, {
-        dtype,
+        dtype: DTYPE,
         device,
         progress_callback: (p: {
           status?: string;
@@ -128,54 +124,42 @@ export class KokoroEngine implements SynthEngine {
         },
       });
 
-    // Try, in order: WebGPU fp32 (kokoro-js's documented default and the config most likely to
-    // have full WebGPU kernel coverage) → WebGPU fp16 → WASM (chosen precision).
-    const attempts: Array<{ device: KokoroDevice; dtype: KokoroDtype }> = wantGpu
-      ? [
-          { device: 'webgpu', dtype: 'fp32' },
-          { device: 'webgpu', dtype: 'fp16' },
-          { device: 'wasm', dtype: wasmDtype },
-        ]
-      : [{ device: 'wasm', dtype: wasmDtype }];
+    // The GPU first when there is one (the quantised ops it lacks run on the CPU inside the same
+    // session), then the CPU. Same file either way, so falling back never downloads anything.
+    const attempts: KokoroDevice[] = wantGpu ? ['webgpu', 'wasm'] : ['wasm'];
 
     let lastErr: unknown;
     /** Why each GPU attempt was abandoned, so the fallback can be explained rather than guessed. */
     const gpuFailures: Array<{ label: string; err: unknown }> = [];
 
-    for (const a of attempts) {
+    for (const device of attempts) {
       const tLoad = now();
-      const label = a.device === 'webgpu' ? `webgpu/${a.dtype}` : 'wasm';
+      const label = device === 'webgpu' ? `webgpu/${DTYPE}` : 'wasm';
       try {
-        ctx.onProgress({ file: `preparing ${a.device} model`, loaded: 0, total: 1, phase: 'compile' });
-        this.tts = await this.loadWithRetry(() => load(a.device, a.dtype), label, ctx);
+        this.tts = await this.loadWithRetry(() => load(device), label, ctx);
         this.executionProvider = label;
         log.info(`[kokoro] loaded ${this.executionProvider} in ${ms(tLoad)} ms`);
         lastErr = undefined;
         break;
       } catch (err) {
         lastErr = err;
-        if (a.device === 'webgpu') gpuFailures.push({ label, err });
         log.warn(`[kokoro] ${label} failed to load: ${String(err)}`);
+        // Both attempts read the same file: if it could not be downloaded, neither can run.
+        if (isNetworkFailure(err)) break;
+        if (device === 'webgpu') gpuFailures.push({ label, err });
       }
     }
 
     if (!this.tts) throw lastErr instanceof Error ? lastErr : new Error(String(lastErr ?? 'Kokoro failed to load'));
 
-    // Landing on the CPU after asking for the GPU is a threefold slowdown, and the two reasons
-    // for it call for different things from the user: a failed download is worth retrying, a GPU
-    // that cannot run the model is not. Say which happened instead of just being slow.
+    // Landing on the CPU after asking for the GPU is a threefold slowdown: say so instead of
+    // just being slow.
     if (wantGpu && this.executionProvider === 'wasm' && gpuFailures.length > 0) {
-      const networked = gpuFailures.every((f) => isNetworkFailure(f.err));
-      ctx.onNotice?.(
-        networked
-          ? 'The GPU version of this voice could not be downloaded — reading on the CPU for now.'
-          : 'This GPU could not run the voice, so it is running on the CPU.',
-      );
-      log.warn(
-        `[kokoro] fell back to WASM after ${gpuFailures.map((f) => f.label).join(', ')} failed` +
-          (networked ? ' (network)' : ''),
-      );
+      ctx.onNotice?.('This GPU could not run the voice, so it is running on the CPU.');
+      log.warn(`[kokoro] fell back to WASM after ${gpuFailures.map((f) => f.label).join(', ')} failed`);
     }
+    // Weights an earlier version downloaded and nothing reads any more: give the space back.
+    for (const url of RETIRED_MODEL_URLS) void cacheDelete(url).catch(() => {});
     // No warm-up pass: on the WASM path there is no shader compilation to hide, and a throwaway
     // synth just delays `ready` (and, across a worker pool, N of them pile up). The first real
     // sentence per worker absorbs the one-time eSpeak-NG init instead.
@@ -270,11 +254,9 @@ export class KokoroEngine implements SynthEngine {
   /**
    * Load once, and give a network failure exactly one second chance.
    *
-   * The GPU path needs full-precision weights (~320 MB) that the CPU path never downloads, so
-   * the first GPU run on a machine is a large fresh download — and a single dropped connection
-   * there was enough to push the whole session onto the CPU, where it stayed for the rest of the
-   * article. Retrying once costs a second when it fails and saves a threefold slowdown when it
-   * works. A failure that is *not* about the network (an unsupported operator, no adapter) is
+   * The first run on a machine is an 86 MB download, and a single dropped connection there
+   * used to fail the whole voice. Retrying once costs a second when it fails and saves starting
+   * over when it works. A failure that is *not* about the network (an unsupported operator, no adapter) is
    * not retried: it will fail identically.
    */
   private async loadWithRetry(

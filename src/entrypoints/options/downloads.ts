@@ -121,8 +121,14 @@ export function downloadViaWorker(config: EngineConfig, progress: RowProgress): 
       const m = ev.data;
       if (!m || typeof m !== 'object') return;
       if (m.kind === 'model-progress') {
-        if (m.phase === 'compile') progress.note('Preparing model…');
-        else progress.set(m.total > 0 ? m.loaded / m.total : 0);
+        if (m.phase === 'compile') {
+          progress.set(1);
+          progress.note('Downloaded — preparing the model…');
+        } else {
+          const ratio = m.total > 0 ? m.loaded / m.total : 0;
+          progress.set(ratio);
+          progress.note(`Downloading… ${Math.floor(ratio * 100)}%`);
+        }
       } else if (m.kind === 'ready') {
         finish();
       } else if (m.kind === 'error' && m.fatal) {

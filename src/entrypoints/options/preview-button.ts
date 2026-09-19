@@ -16,7 +16,7 @@ import { playClip, playSynthesized, stopPreview, type PreviewStatus } from '@/ui
 import type { EngineId, Settings } from '@/shared/settings';
 import type { ModelManifest } from '@/engine/engines/types';
 import { engineConfigFor } from './engine-config';
-import { sharedModelBytes, type CacheSizes } from '@/engine/installed-voices';
+import { sharedModelInstalled, type CacheSizes } from '@/engine/installed-voices';
 
 const IDLE_LABEL = '▶ Preview';
 
@@ -108,7 +108,7 @@ export function previewFor(
   }
 
   const info = engineInfo(engine);
-  const ready = info.cacheHint ? sharedModelBytes(ctx.sizes, info.cacheHint) > 0 : false;
+  const ready = sharedModelInstalled(engine, ctx.sizes);
   return previewButton(
     (onStatus) =>
       playSynthesized(
