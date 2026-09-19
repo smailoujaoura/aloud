@@ -14,6 +14,7 @@
  * Piper's catalogue is narrowed by language, and a voice published at several qualities is one
  * row with a quality picker rather than three near-identical rows.
  */
+import { voiceAvatar, voiceGender } from '@/ui/voice-avatar';
 import { el } from '@/shared/dom';
 import { humanBytes } from '@/shared/log';
 import { capabilities } from '@/shared/browser-env';
@@ -182,7 +183,7 @@ function renderNowReading(host: HTMLElement, ctx: PanelContext): void {
   const side = el(document, 'div', { class: 'now-side' });
   side.append(status, previewFor(engine, id, ctx));
 
-  host.replaceChildren(avatar(name, 'now-avatar'), text, side);
+  host.replaceChildren(avatar(engine, id, ctx, 'now-avatar'), text, side);
 }
 
 // ---- tabs ------------------------------------------------------------------
@@ -232,13 +233,14 @@ function engineIntro(info: EngineInfo): HTMLElement {
 
 // ---- shared pieces ---------------------------------------------------------
 
-/** A coloured initial, so a long list of names can be scanned by eye rather than read. */
-function avatar(name: string, className = 'vi-avatar'): HTMLElement {
-  const initial = (name.trim()[0] ?? '?').toUpperCase();
-  const node = el(document, 'span', { class: className, 'aria-hidden': 'true' }, initial);
-  let hue = 0;
-  for (const ch of name) hue = (hue * 31 + ch.charCodeAt(0)) % 360;
-  node.style.setProperty('--h', String(hue));
+/**
+ * A small portrait per voice (ui/voice-avatar.ts), so a long list of names can be scanned by eye
+ * rather than read — and so a voice described as female or male looks it.
+ */
+function avatar(engine: EngineId, id: string, ctx: PanelContext, className = 'vi-avatar'): HTMLElement {
+  const node = el(document, 'span', { class: className, 'aria-hidden': 'true' });
+  const size = className === 'now-avatar' ? 52 : 34;
+  node.append(voiceAvatar(document, `${engine}:${id}`, voiceGender(engine, id, ctx.manifest), size));
   return node;
 }
 
@@ -495,7 +497,7 @@ function piperItem(group: PiperGroup, ctx: PanelContext): HTMLElement {
     actions.append(download);
   }
 
-  item.append(avatar(group.name), main, actions, progress.wrap, progress.msg);
+  item.append(avatar('piper', id, ctx), main, actions, progress.wrap, progress.msg);
   return item;
 }
 
@@ -566,7 +568,7 @@ function sharedPanel(engine: 'kokoro' | 'supertonic', ctx: PanelContext): HTMLEl
       previewFor(engine, v.id, ctx),
       useControl(engine, v.id, v.name, ctx, downloaded ? undefined : `Download ${info.name} first`),
     );
-    item.append(avatar(v.name), main, actions);
+    item.append(avatar(engine, v.id, ctx), main, actions);
     list.append(item);
   }
   return panel;

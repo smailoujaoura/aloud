@@ -141,19 +141,19 @@ code {
 .pill.in-use { color: var(--accent-on); background: var(--accent-solid); border-color: transparent; font-weight: 600; }
 .warn-text { color: var(--warn); }
 
-/* A coloured initial per voice: a long list scans by shape and colour before it is read. */
+/* A portrait per voice (ui/voice-avatar.ts): a long list scans by face before it is read. */
 .vi-avatar,
 .now-avatar {
   display: grid;
   place-items: center;
   flex: 0 0 auto;
   border-radius: 50%;
-  font-weight: 650;
-  color: hsl(var(--h, 45) 55% var(--avatar-l));
-  background: hsl(var(--h, 45) 60% var(--avatar-bg-l));
+  overflow: hidden;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--fg) 10%, transparent);
 }
-.vi-avatar { width: 34px; height: 34px; font-size: 14px; }
-.now-avatar { width: 52px; height: 52px; font-size: 21px; }
+.vi-avatar svg, .now-avatar svg { display: block; }
+.vi-avatar { width: 34px; height: 34px; }
+.now-avatar { width: 52px; height: 52px; }
 
 /* ---- reading with ---- */
 
