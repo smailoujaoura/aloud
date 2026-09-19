@@ -29,6 +29,12 @@ interface Job {
 }
 
 let engine: SynthEngine | null = null;
+/**
+ * How the engine was last started, so it can be restarted on the CPU when the GPU fails at
+ * synthesis time — a model can load on WebGPU and still hit a kernel the browser's WebGPU cannot
+ * run (Piper's int64 GatherND on Firefox did, and every sentence came back as silence).
+ */
+let started: { config: EngineConfig; manifest: ModelManifest; onNotice: InitContext['onNotice']; fellBack: boolean } | null = null;
 let manifest: ModelManifest | null = null;
 const queue: Job[] = [];
 let processing = false;
@@ -138,6 +144,7 @@ async function handleInit(req: Extract<WorkerRequest, { kind: 'init' }>): Promis
 
     phase = `loading ${req.config.engine} engine module`;
     engine = await createEngine(req.config.engine, m);
+    started = { config: req.config, manifest: m, onNotice, fellBack: false };
 
     phase = `initialising ${req.config.engine} engine (voice "${req.config.voice}")`;
     await engine.init({
@@ -168,6 +175,36 @@ async function handleInit(req: Extract<WorkerRequest, { kind: 'init' }>): Promis
   }
 }
 
+/**
+ * Synthesise a job; if the GPU fails at it, restart the engine on the CPU once and try again.
+ *
+ * Failing over here, per worker and at most once, is what keeps a GPU that loads a model but
+ * cannot run it from turning a whole article into silence.
+ */
+async function synthesizeOrFallBack(job: Job): ReturnType<SynthEngine['synthesize']> {
+  try {
+    return await engine!.synthesize(job.text, job.speed, job.voice);
+  } catch (err) {
+    const onGpu = engine?.executionProvider.startsWith('webgpu') ?? false;
+    if (!onGpu || !started || started.fellBack) throw err;
+    started.fellBack = true;
+    // eslint-disable-next-line no-console
+    console.warn(`[aloud] GPU synthesis failed, restarting ${started.config.engine} on the CPU:`, errorInfo(err).message);
+    started.onNotice?.('The GPU could not run this voice, so it is running on the CPU instead.');
+    await engine?.dispose();
+    engine = await createEngine(started.config.engine, started.manifest);
+    await engine.init({
+      voice: started.config.voice,
+      dtype: started.config.dtype,
+      steps: started.config.steps,
+      preferWebGPU: false,
+      onProgress: () => undefined,
+      onNotice: started.onNotice,
+    });
+    return engine.synthesize(job.text, job.speed, job.voice);
+  }
+}
+
 async function drainQueue(): Promise<void> {
   if (processing) return;
   processing = true;
@@ -192,7 +229,7 @@ async function drainQueue(): Promise<void> {
         continue;
       }
       try {
-        const result = await engine.synthesize(job.text, job.speed, job.voice);
+        const result = await synthesizeOrFallBack(job);
         if (job.gen !== generation || disposed) continue; // a seek landed mid-synthesis
         const pcm = result.pcm.slice();
         post(

@@ -9,6 +9,7 @@
  */
 import type { ModelManifest } from '@/engine/engines/types';
 import type { EngineId } from '@/shared/settings';
+import { ENGINE_IDS } from './engine-catalog';
 
 export interface VoiceOption {
   /** Voice key as stored in settings, e.g. `en_US-hfc_female-medium` or `af_heart`. */
@@ -70,4 +71,24 @@ export function groupByLanguage(voices: VoiceOption[]): Array<[string, VoiceOpti
     const rank = (lang: string): number => (isEnglish(lang) ? 0 : 1);
     return rank(a) - rank(b) || a.localeCompare(b);
   });
+}
+
+/**
+ * A voice on the reading bar, where voices from every engine share one picker: the value is
+ * `engine:voice` so choosing Kokoro's af_heart while Piper reads is unambiguous.
+ */
+export type EngineVoice = VoiceOption & { engine: EngineId };
+
+export function voiceValue(engine: EngineId, id: string): string {
+  return `${engine}:${id}`;
+}
+
+/** `piper:en_GB-alba-medium` -> { engine, id }; a bare id (older bars) keeps the current engine. */
+export function parseVoiceValue(value: string, current: EngineId): { engine: EngineId; id: string } | null {
+  const at = value.indexOf(':');
+  if (at < 0) return value ? { engine: current, id: value } : null;
+  const engine = value.slice(0, at) as EngineId;
+  const id = value.slice(at + 1);
+  if (!ENGINE_IDS.includes(engine) || !id) return null;
+  return { engine, id };
 }

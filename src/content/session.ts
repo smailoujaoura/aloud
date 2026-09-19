@@ -30,7 +30,7 @@ import { WorkerClient } from '@/engine/worker-client';
 import type { EngineConfig, WordTiming } from '@/engine/protocol';
 import type { ModelManifest } from '@/engine/engines/types';
 import { getSettings, setSettings, activeVoice, voiceKeyFor, type EngineId, type Settings } from '@/shared/settings';
-import { ENGINE_IDS } from '@/shared/engine-catalog';
+import { ENGINE_IDS, engineInfo } from '@/shared/engine-catalog';
 import {
   languageName,
   pickVoiceForLanguage,
@@ -38,7 +38,7 @@ import {
   voiceLanguage,
   type CandidateVoice,
 } from '@/shared/language-voice';
-import { listVoices, type VoiceOption } from '@/shared/voice-catalog';
+import { listVoices, parseVoiceValue, voiceValue, type EngineVoice, type VoiceOption } from '@/shared/voice-catalog';
 import {
   clearPosition,
   documentKey,
@@ -131,6 +131,12 @@ const POSITION_SAVE_INTERVAL_MS = 4000;
 const HISTORY_WRITE_INTERVAL_MS = 15_000;
 /** A sentence heard for less than this when "save to notes" is pressed gives way to the previous one. */
 const JUST_STARTED_SECONDS = 1.2;
+/**
+ * After this many sentences in a row fail to synthesise, stop and say so. Skipping a sentence that
+ * fails is right; skipping *every* sentence is not — the page races past, highlighted and silent,
+ * and looks like a reader that works.
+ */
+const MAX_CONSECUTIVE_FAILURES = 3;
 /** How much speech "back a little" replays. */
 const BACK_A_LITTLE_SECONDS = 10;
 
@@ -192,6 +198,13 @@ export class ReaderSession {
   private outputLogged = false;
   /** When each word of a synthesised sentence is spoken, as the engine reported it (Piper). */
   private readonly wordTimings = new Map<number, WordTiming[]>();
+  /** Sentences in a row that failed to synthesise (see MAX_CONSECUTIVE_FAILURES). */
+  private failures = 0;
+  /**
+   * Set when the voice stopped producing audio: nothing more is asked of the engine until play
+   * is pressed or the voice changes, or it would keep failing the same way in the background.
+   */
+  private halted = false;
   /** Seconds of speech in each synthesised sentence, lead silence excluded. */
   private readonly audioSeconds = new Map<number, number>();
   private sourceHint: BeginOptions['source'] | null = null;
@@ -296,6 +309,7 @@ export class ReaderSession {
         if (this.state.status === 'loading-model') this.pushState();
       },
       onAudio: (playId, pcm, sr, words) => {
+        this.failures = 0;
         if (this.exporter) {
           this.exporter.accept(playId, pcm, sr);
           return;
@@ -314,6 +328,8 @@ export class ReaderSession {
       onError: ({ message, fatal, stack, playId }) => {
         log.error('worker error:', message, stack ? `\n${stack}` : '');
         if (fatal) this.fail(message);
+        else if (this.halted) return;
+        else if (playId != null && ++this.failures >= MAX_CONSECUTIVE_FAILURES && !this.exporter) void this.stopOnFailures(message);
         else if (playId != null) this.skipSentence(playId);
       },
     });
@@ -548,6 +564,7 @@ export class ReaderSession {
   }
 
   async play(): Promise<void> {
+    this.halted = false;
     if (this.exporter) {
       this.bar?.flash('Reading carries on once the MP3 is made', 'info');
       return;
@@ -691,17 +708,23 @@ export class ReaderSession {
   /** Fill the control bar's voice picker for the active engine. */
   private async refreshBarVoices(): Promise<void> {
     if (!this.bar || !this.manifest) return;
-    const current = this.voice;
-    const installed = await this.installedVoices();
+    const manifest = this.manifest;
+    const current = voiceValue(this.engine, this.voice);
+    // Every engine's downloaded voices: switching from Piper to a Kokoro voice is one pick.
+    const perEngine = await Promise.all(
+      ENGINE_IDS.map(async (engine) => (await this.installedVoices(engine)).map((v): EngineVoice => ({ ...v, engine }))),
+    );
+    const installed = perEngine.flat();
 
     const shown = [...installed];
-    if (!shown.some((v) => v.id === current)) {
+    if (!shown.some((v) => voiceValue(v.engine, v.id) === current)) {
       // A <select> must be able to show its own value, so the active voice is always listed —
       // labelled, when it is not on the device yet, so picking anything else is the obvious move.
-      const known = listVoices(this.engine, this.manifest).find((v) => v.id === current);
+      const known = listVoices(this.engine, manifest).find((v) => v.id === this.voice);
       shown.unshift({
-        id: current,
-        label: `${known?.label ?? current} · not downloaded yet`,
+        engine: this.engine,
+        id: this.voice,
+        label: `${known?.label ?? this.voice} · not downloaded yet`,
         group: known?.group ?? '',
       });
     }
@@ -727,35 +750,46 @@ export class ReaderSession {
   }
 
   /** Switch voice from the in-page bar, keeping the plan and position. */
-  private async changeVoice(voice: string): Promise<void> {
-    if (this.voice === voice) return;
+  /** A voice picked on the bar: `engine:voice`, so it may be another engine's. */
+  private async changeVoice(value: string): Promise<void> {
+    const picked = parseVoiceValue(value, this.engine);
+    if (!picked || (picked.engine === this.engine && picked.id === this.voice)) return;
+    const { engine, id: voice } = picked;
     // Named, not just "switching": the picker collapses the moment it is used, so the
     // confirmation is the only thing left saying which voice was chosen.
-    this.pendingVoiceLabel = this.voiceLabel(voice);
-    this.bar?.flash(`Switching to ${this.pendingVoiceLabel}…`);
+    this.pendingVoiceLabel = this.voiceLabel(voice, engine);
+    this.bar?.flash(
+      engine === this.engine
+        ? `Switching to ${this.pendingVoiceLabel}…`
+        : `Switching to ${this.pendingVoiceLabel} (${engineInfo(engine).name})…`,
+    );
     if (this.languageVoice) {
       // Picked while a page-language voice is reading: another voice for *this page*, not a new
       // default — reading one French article must not make every page French.
       this.languageVoice = {
-        ...this.languageVoice,
+        engine,
         id: voice,
         label: this.pendingVoiceLabel,
-        language: this.manifest ? voiceLanguage(this.languageVoice.engine, voice, this.manifest) : this.languageVoice.language,
+        language: this.manifest ? voiceLanguage(engine, voice, this.manifest) : this.languageVoice.language,
       };
     } else {
-      this.settings = await setSettings({ [voiceKeyFor(this.settings.engine)]: voice });
+      this.settings = await setSettings({ engine, [voiceKeyFor(engine)]: voice });
     }
+    this.failures = 0;
+    this.halted = false;
     await this.reloadEngine();
   }
 
-  /** The human name of a voice id for the active engine, falling back to the id itself. */
-  private voiceLabel(voice: string): string {
+  /** The human name of a voice id, falling back to the id itself. */
+  private voiceLabel(voice: string, engine: EngineId = this.engine): string {
     if (!this.manifest) return voice;
-    return listVoices(this.engine, this.manifest).find((v) => v.id === voice)?.label ?? voice;
+    return listVoices(engine, this.manifest).find((v) => v.id === voice)?.label ?? voice;
   }
 
   /** Re-initialise the worker for a new engine/voice, keeping the plan and position. */
   async reloadEngine(): Promise<void> {
+    this.halted = false;
+    this.failures = 0;
     this.settings = await getSettings();
     this.cancelExport('The voice changed, so the MP3 was stopped');
     await this.refreshBarVoices();
@@ -980,7 +1014,7 @@ export class ReaderSession {
 
   /** Keep the worker queue topped up from `fromPlayId` for the current engine's lookahead. */
   private ensureSynth(fromPlayId: number): void {
-    if (!this.engineReady || this.exporter) return;
+    if (!this.engineReady || this.exporter || this.halted) return;
     const end = Math.min(fromPlayId + this.tuning.lookahead + 1, this.playlist.length);
     for (let i = fromPlayId; i < end; i++) {
       if (this.requested.has(i)) continue;
@@ -1113,6 +1147,30 @@ export class ReaderSession {
    * failed sentence stalls the rest of the article behind a permanent "Buffering…", with no way
    * out but a manual seek past it.
    */
+  /**
+   * The voice is not producing audio at all: stop, keep the place, and say what to do. Picking
+   * another voice on the bar (or pressing play to try again) carries on from here.
+   */
+  private async stopOnFailures(message: string): Promise<void> {
+    const reason = message.split('\n')[0]!.replace(/^\[[^\]]*\]\s*/, '').slice(0, 140);
+    log.error(`${this.failures} sentences in a row failed — stopping instead of skipping on:`, reason);
+    this.failures = 0;
+    this.halted = true;
+    this.requested.clear();
+    this.worker.cancelFrom(this.currentPlayId, 0);
+    this.scheduler.seek(this.currentPlayId);
+    await this.pause();
+    // The status line keeps saying it until play is pressed; the flash offers the way out. The
+    // first-run tips card would hide both, and matters less than a voice that says nothing.
+    this.bar?.hideTips();
+    this.state.hint = `${this.voiceLabel(this.voice)} produced no audio — pick another voice`;
+    this.pushState();
+    this.bar?.flash(`${this.voiceLabel(this.voice)} is not producing any audio — pick another voice, or press play to retry`, 'info', {
+      label: 'Settings',
+      run: () => this.port?.postMessage({ type: 'open-options' }),
+    });
+  }
+
   private skipSentence(playId: number): void {
     log.warn(`sentence ${playId} could not be synthesised — skipping it`);
     // Left in `requested` on purpose: removing it made the very next top-up ask for the same

@@ -13,7 +13,6 @@ import type * as Ort from 'onnxruntime-web';
 import { fetchModelFile } from '@/engine/model-cache';
 import { phonemizeForPiper } from '@/engine/g2p/piper-phonemize';
 import { loadOrt } from '@/engine/ort-loader';
-import { chooseExecutionProviders } from '@/engine/runtime-env';
 import { exposeNodeOutput } from '@/engine/onnx-outputs';
 import { soundsOf, splitWords, wordTimes, type TimedSound } from '@/engine/g2p/word-timing';
 import type { WordTiming } from '@/engine/protocol';
@@ -84,25 +83,15 @@ export class PiperEngine implements SynthEngine {
     const modelBytes = exposed?.model ?? onnxBytes;
     this.durationsOutput = exposed?.name ?? null;
 
-    const eps = await chooseExecutionProviders(ctx.preferWebGPU);
+    // Always the CPU. Piper is small enough to run faster than real time there on any machine,
+    // WebGPU gains it little, and its model uses an int64 GatherND that Firefox's WebGPU cannot
+    // run: the session loads, then every sentence fails and the article plays as silence.
     ctx.onProgress({ file: 'compiling model', loaded: 0, total: 1, phase: 'compile' });
-    try {
-      this.session = await this.ort.InferenceSession.create(modelBytes, {
-        executionProviders: eps,
-        graphOptimizationLevel: 'all',
-      });
-      this.executionProvider = eps[0] ?? 'wasm';
-    } catch (err) {
-      if (eps[0] !== 'wasm') {
-        this.session = await this.ort.InferenceSession.create(modelBytes, {
-          executionProviders: ['wasm'],
-          graphOptimizationLevel: 'all',
-        });
-        this.executionProvider = 'wasm';
-      } else {
-        throw err;
-      }
-    }
+    this.session = await this.ort.InferenceSession.create(modelBytes, {
+      executionProviders: ['wasm'],
+      graphOptimizationLevel: 'all',
+    });
+    this.executionProvider = 'wasm';
     ctx.onProgress({ file: 'compiling model', loaded: 1, total: 1, phase: 'compile' });
   }
 

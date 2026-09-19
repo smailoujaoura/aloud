@@ -56,3 +56,15 @@ describe('languageName', () => {
     expect(languageName('pt-BR')).toMatch(/Portuguese/);
   });
 });
+
+describe('voices from every engine on the bar', () => {
+  it('round-trips engine:voice values, and reads a bare id as the current engine', async () => {
+    const { voiceValue, parseVoiceValue } = await import('@/shared/voice-catalog');
+    expect(voiceValue('kokoro', 'af_heart')).toBe('kokoro:af_heart');
+    expect(parseVoiceValue('kokoro:af_heart', 'piper')).toEqual({ engine: 'kokoro', id: 'af_heart' });
+    expect(parseVoiceValue('piper:en_GB-alba-medium', 'kokoro')).toEqual({ engine: 'piper', id: 'en_GB-alba-medium' });
+    expect(parseVoiceValue('en_GB-alba-medium', 'piper')).toEqual({ engine: 'piper', id: 'en_GB-alba-medium' });
+    expect(parseVoiceValue('nonsense:x', 'piper')).toBeNull();
+    expect(parseVoiceValue('', 'piper')).toBeNull();
+  });
+});

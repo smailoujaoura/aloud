@@ -18,7 +18,8 @@
  *    waits that outlive a keystroke.
  */
 import { el, svgIcon } from '@/shared/dom';
-import { groupByLanguage, type VoiceOption } from '@/shared/voice-catalog';
+import { groupByLanguage, voiceValue, type EngineVoice } from '@/shared/voice-catalog';
+import { ENGINE_IDS, engineInfo } from '@/shared/engine-catalog';
 import type { SessionState } from '@/shared/messages';
 import type { ThemeChoice } from '@/shared/settings';
 import { CONTROL_BAR_CSS } from './control-bar-styles';
@@ -455,24 +456,38 @@ export class ControlBar {
   // ---- public API ----------------------------------------------------------
 
   /** Populate the in-bar voice picker. Pass an empty list to hide it. */
-  setVoices(voices: VoiceOption[], current: string, opts: { downloadedOnly?: boolean } = {}): void {
+  /**
+   * The voice picker: every downloaded voice, from every engine, grouped "Engine · language".
+   * `current` is an `engine:voice` value (see shared/voice-catalog.ts); picking a voice of another
+   * engine switches engine, which the session handles like any voice change.
+   */
+  setVoices(voices: EngineVoice[], current: string, opts: { downloadedOnly?: boolean } = {}): void {
     if (!voices.length) {
       this.voiceEl.hidden = true;
       return;
     }
 
-    const option = (v: VoiceOption): HTMLOptionElement => {
-      const o = this.make('option', { value: v.id }, v.label);
-      if (v.id === current) o.selected = true;
+    const option = (v: EngineVoice): HTMLOptionElement => {
+      const value = voiceValue(v.engine, v.id);
+      const o = this.make('option', { value }, v.label);
+      if (value === current) o.selected = true;
       return o;
     };
 
+    const groups: HTMLElement[] = [];
+    for (const engine of ENGINE_IDS) {
+      const ofEngine = voices.filter((v) => v.engine === engine);
+      if (!ofEngine.length) continue;
+      const name = engineInfo(engine).name;
+      for (const [language, items] of groupByLanguage(ofEngine)) {
+        const group = this.make('optgroup', { label: language ? `${name} · ${readableLanguage(language)}` : name });
+        group.append(...items.map((v) => option(v as EngineVoice)));
+        groups.push(group);
+      }
+    }
+
     this.voiceEl.replaceChildren(
-      ...groupByLanguage(voices).map(([language, items]) => {
-        const group = this.make('optgroup', { label: language });
-        group.append(...items.map(option));
-        return group;
-      }),
+      ...groups,
       // Says what the list is, in the list. The bar offers only voices already on the device —
       // choosing one here should never start a 60 MB download in the middle of an article — and
       // a picker that silently holds back most of the catalogue owes the reader that sentence.
@@ -482,7 +497,7 @@ export class ControlBar {
     );
     this.voiceEl.value = current;
     this.voiceEl.title = opts.downloadedOnly
-      ? 'Voice — only voices downloaded to this device. Add more in Settings.'
+      ? 'Voice — every voice downloaded to this device, from any engine. Add more in Settings.'
       : 'Voice';
     this.voiceEl.hidden = false;
   }
@@ -802,6 +817,17 @@ export class ControlBar {
     if (this.lastState) this.renderToast(this.lastState);
   }
 
+  /**
+   * Put the tips card away without counting it as read — for when the bar has something more
+   * important to say (a voice producing no audio) than how its buttons work.
+   */
+  hideTips(): void {
+    if (!this.tips) return;
+    this.tips.remove();
+    this.tips = null;
+    if (this.lastState && !this.flashing) this.renderToast(this.lastState);
+  }
+
   // ---- rendering -----------------------------------------------------------
 
   private applyTheme(): void {
@@ -928,4 +954,14 @@ function formatDuration(seconds: number): string {
 
 function formatBytes(bytes: number): string {
   return bytes >= 1e6 ? `${(bytes / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1e3))} kB`;
+}
+
+/** "en-GB" -> "British English"; names that are already words pass through. */
+function readableLanguage(label: string): string {
+  if (!/^[a-z]{2,3}(-[A-Za-z]{2,4})?$/.test(label)) return label;
+  try {
+    return new Intl.DisplayNames(['en'], { type: 'language' }).of(label) ?? label;
+  } catch {
+    return label;
+  }
 }
