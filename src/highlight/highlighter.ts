@@ -11,9 +11,24 @@
  */
 
 import type { WordHighlightStyle } from '@/shared/settings';
+import { backgroundUnder, parseColor, readableTextColor } from './contrast';
 
 const HIGHLIGHT_NAME = 'aloud-sentence';
 const WORD_HIGHLIGHT_NAME = 'aloud-word';
+/**
+ * The same highlights, for text the highlight would otherwise swallow.
+ *
+ * A `::highlight()` rule styles every range in that highlight, so "this sentence needs dark
+ * letters" cannot be expressed by styling one range. It is expressed by putting the range in a
+ * different highlight instead: same wash, letters forced dark or light. Which one a sentence
+ * lands in is decided per sentence from the page's own colours (see contrast.ts).
+ */
+const DARK_TEXT_NAME = `${HIGHLIGHT_NAME}-dark`;
+const LIGHT_TEXT_NAME = `${HIGHLIGHT_NAME}-light`;
+const WORD_DARK_TEXT_NAME = `${WORD_HIGHLIGHT_NAME}-dark`;
+const WORD_LIGHT_TEXT_NAME = `${WORD_HIGHLIGHT_NAME}-light`;
+const DARK_INK = '#101014';
+const LIGHT_INK = '#ffffff';
 const STYLE_ID = 'aloud-highlight-style';
 const SPAN_CLASS = 'aloud-hl-span';
 
@@ -28,6 +43,11 @@ export interface HighlighterOptions {
   scrollMode: ScrollMode;
   /** How the word being spoken looks. `off` is handled by not showing words at all. */
   wordStyle?: WordHighlightStyle;
+  /**
+   * Give highlighted text a readable colour when the page's own colour would disappear into the
+   * highlight. Off leaves the page's colours exactly as they are.
+   */
+  keepReadable?: boolean;
 }
 
 export class Highlighter {
@@ -62,6 +82,24 @@ export class Highlighter {
       ::highlight(${WORD_HIGHLIGHT_NAME}) {
         ${wordStyleCss(this.opts.color, this.opts.wordStyle ?? 'darker')}
       }
+      ::highlight(${DARK_TEXT_NAME}) {
+        background-color: ${this.opts.color};
+        color: ${DARK_INK};
+        border-radius: 2px;
+      }
+      ::highlight(${LIGHT_TEXT_NAME}) {
+        background-color: ${this.opts.color};
+        color: ${LIGHT_INK};
+        border-radius: 2px;
+      }
+      ::highlight(${WORD_DARK_TEXT_NAME}) {
+        ${wordStyleCss(this.opts.color, this.opts.wordStyle ?? 'darker')}
+        color: ${DARK_INK};
+      }
+      ::highlight(${WORD_LIGHT_TEXT_NAME}) {
+        ${wordStyleCss(this.opts.color, this.opts.wordStyle ?? 'darker')}
+        color: ${LIGHT_INK};
+      }
       .${SPAN_CLASS} {
         background-color: ${this.opts.color};
         border-radius: 2px;
@@ -88,12 +126,12 @@ export class Highlighter {
       return;
     }
     if (this.supportsCSSHighlight) {
-      if (!this.highlight) {
-        this.highlight = new Highlight();
-        CSS.highlights.set(HIGHLIGHT_NAME, this.highlight);
-      }
-      this.highlight.clear();
-      this.highlight.add(range);
+      this.paint(range, {
+        plain: HIGHLIGHT_NAME,
+        dark: DARK_TEXT_NAME,
+        light: LIGHT_TEXT_NAME,
+        held: (h) => (this.highlight = h),
+      });
     } else {
       this.showWithSpan(range);
     }
@@ -193,26 +231,74 @@ export class Highlighter {
       this.wordHighlight?.clear();
       return;
     }
-    if (!this.wordHighlight) {
-      this.wordHighlight = new Highlight();
-      this.wordHighlight.priority = 1;
-      CSS.highlights.set(WORD_HIGHLIGHT_NAME, this.wordHighlight);
+    this.paint(range, {
+      plain: WORD_HIGHLIGHT_NAME,
+      dark: WORD_DARK_TEXT_NAME,
+      light: WORD_LIGHT_TEXT_NAME,
+      priority: 1,
+      held: (h) => (this.wordHighlight = h),
+    });
+  }
+
+  /**
+   * Put `range` in whichever of the three highlights keeps it readable, and empty the other two
+   * so the sentence is never painted twice.
+   */
+  private paint(
+    range: Range,
+    names: { plain: string; dark: string; light: string; priority?: number; held: (h: Highlight) => void },
+  ): void {
+    const ink = this.opts.keepReadable === false ? null : this.inkFor(range);
+    const wanted = ink === DARK_INK ? names.dark : ink === LIGHT_INK ? names.light : names.plain;
+    for (const name of [names.plain, names.dark, names.light]) {
+      const existing = CSS.highlights.get(name);
+      if (name === wanted) continue;
+      existing?.clear();
     }
-    this.wordHighlight.clear();
-    this.wordHighlight.add(range);
+    let highlight = CSS.highlights.get(wanted);
+    if (!highlight) {
+      highlight = new Highlight();
+      if (names.priority != null) highlight.priority = names.priority;
+      CSS.highlights.set(wanted, highlight);
+    }
+    highlight.clear();
+    highlight.add(range);
+    names.held(highlight);
+  }
+
+  /**
+   * The colour this range's letters need, or null to leave the page's own colour alone.
+   *
+   * Read from the page itself: the element's own colour, and the first ancestor that actually
+   * paints a background (everything above it is transparent by default, and `html` falls back to
+   * white — or to the canvas colour a dark page sets).
+   */
+  private inkFor(range: Range): string | null {
+    const node = range.startContainer;
+    const element = (node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement) as Element | null;
+    const view = this.doc.defaultView;
+    if (!element || !view) return null;
+    const text = parseColor(view.getComputedStyle(element).color);
+    const highlight = parseColor(this.opts.color);
+    if (!text || !highlight) return null;
+    return readableTextColor(text, backgroundUnder(element, view), highlight);
   }
 
   clear(): void {
-    this.wordHighlight?.clear();
-    if (this.highlight) this.highlight.clear();
+    if (this.supportsCSSHighlight) {
+      for (const name of [HIGHLIGHT_NAME, DARK_TEXT_NAME, LIGHT_TEXT_NAME, WORD_HIGHLIGHT_NAME, WORD_DARK_TEXT_NAME, WORD_LIGHT_TEXT_NAME]) {
+        CSS.highlights.get(name)?.clear();
+      }
+    }
     this.unwrapSpan();
   }
 
   dispose(): void {
     this.clear();
     if (this.supportsCSSHighlight) {
-      CSS.highlights.delete(HIGHLIGHT_NAME);
-      CSS.highlights.delete(WORD_HIGHLIGHT_NAME);
+      for (const name of [HIGHLIGHT_NAME, DARK_TEXT_NAME, LIGHT_TEXT_NAME, WORD_HIGHLIGHT_NAME, WORD_DARK_TEXT_NAME, WORD_LIGHT_TEXT_NAME]) {
+        CSS.highlights.delete(name);
+      }
     }
     this.highlight = null;
     this.wordHighlight = null;

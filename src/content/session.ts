@@ -68,6 +68,7 @@ import { TapToSeek } from './tap-to-seek';
 import { MediaControls } from './media-session';
 import { SleepTimer, type SleepChoice } from './sleep-timer';
 import { Mp3Export, audioFileName } from './audio-export';
+import { measuredWpm, wordsPerMinute } from '@/shared/reading-rate';
 
 interface BeginOptions {
   /** For "Read from here": the element that was right-clicked, when the browser can tell us. */
@@ -207,6 +208,9 @@ export class ReaderSession {
   private halted = false;
   /** Seconds of speech in each synthesised sentence, lead silence excluded. */
   private readonly audioSeconds = new Map<number, number>();
+  /** Audio produced at the current speed, for the words-a-minute readout on the bar. */
+  private spokenSeconds = 0;
+  private spokenWords = 0;
   private sourceHint: BeginOptions['source'] | null = null;
   private keepHistory = true;
   /** Listening not yet written to history, and what this session has measured of the voice's pace. */
@@ -314,7 +318,14 @@ export class ReaderSession {
           this.exporter.accept(playId, pcm, sr);
           return;
         }
-        if (sr > 0) this.audioSeconds.set(playId, pcm.length / sr);
+        if (sr > 0) {
+          this.audioSeconds.set(playId, pcm.length / sr);
+          // Enough real audio to say what the reading rate actually is, rather than the engine's
+          // measured average (see shared/reading-rate.ts).
+          this.spokenSeconds += pcm.length / sr;
+          this.spokenWords += countWords(this.playlist[playId]?.spokenText ?? '');
+          this.showReadingRate();
+        }
         if (words?.length) this.wordTimings.set(playId, words);
         else this.wordTimings.delete(playId);
         this.scheduler.provide(playId, pcm, sr, leadSilenceSec(this.playlist[playId], this.settings));
@@ -340,12 +351,14 @@ export class ReaderSession {
       theme: this.settings.theme,
     });
     void this.refreshBarVoices();
+    this.showReadingRate();
     this.watchViewport();
 
     this.highlighter = new Highlighter(document, {
       color: this.settings.highlightColor,
       scrollMode: this.settings.scrollMode,
       wordStyle: this.settings.wordHighlight,
+      keepReadable: this.settings.highlightReadable,
     });
 
     this.media = new MediaControls(
@@ -665,11 +678,22 @@ export class ReaderSession {
     this.refreshOffScreen();
   }
 
+  /** The rate on the bar: measured once there is enough audio, the engine's average until then. */
+  private showReadingRate(): void {
+    this.bar?.setReadingRate(
+      measuredWpm(this.spokenWords, this.spokenSeconds) ?? wordsPerMinute(this.engine, this.settings.speed),
+    );
+  }
+
   async setSpeed(speed: number): Promise<void> {
     this.settings = await setSettings({ speed });
     this.cancelExport('The speed changed, so the MP3 was stopped');
     this.bar?.setSpeed(speed);
-    this.bar?.flash(`Speed ${speed}×`);
+    // The measurement belonged to the old speed.
+    this.spokenSeconds = 0;
+    this.spokenWords = 0;
+    this.showReadingRate();
+    this.bar?.flash(`Speed ${speed}× · ${wordsPerMinute(this.engine, speed)} wpm`);
     if (!this.engineReady) return;
     // The sentence already playing keeps its old rate; everything after it is re-synthesised.
     const keepFrom = this.currentPlayId + 1;
@@ -1407,6 +1431,7 @@ export class ReaderSession {
       color: this.settings.highlightColor,
       scrollMode: this.settings.scrollMode,
       wordStyle: this.settings.wordHighlight,
+      keepReadable: this.settings.highlightReadable,
     });
     if (!this.settings.highlight || this.settings.wordHighlight === 'off') this.stopFollowingWords(true);
     else if (prev.wordHighlight === 'off' && this.scheduler?.isPlaying()) this.prepareWords(this.currentPlayId);
@@ -1414,7 +1439,12 @@ export class ReaderSession {
       this.tapToSeek?.setEnabled(this.settings.tapToSeek);
       this.bar?.setTapToSeek(this.settings.tapToSeek);
     }
-    if (prev.speed !== this.settings.speed) this.bar?.setSpeed(this.settings.speed);
+    if (prev.speed !== this.settings.speed) {
+      this.bar?.setSpeed(this.settings.speed);
+      this.spokenSeconds = 0;
+      this.spokenWords = 0;
+      this.showReadingRate();
+    }
     if (prev.theme !== this.settings.theme) this.bar?.setTheme(this.settings.theme);
 
     if (!sameValue(prev.skip, this.settings.skip)) {
@@ -1703,4 +1733,9 @@ function sameRange(a: Range, b: Range): boolean {
     a.endContainer === b.endContainer &&
     a.endOffset === b.endOffset
   );
+}
+
+/** Words in a sentence, for the reading-rate readout: runs of letters, digits or apostrophes. */
+function countWords(text: string): number {
+  return (text.match(/[\p{L}\p{N}'’]+/gu) ?? []).length;
 }

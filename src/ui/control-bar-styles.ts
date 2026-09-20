@@ -242,6 +242,12 @@ button[disabled]:hover { background: none; }
   white-space: nowrap; padding: 0 2px;
 }
 
+/* Words a minute, beside the speed: what "1.5×" actually means for the ear. */
+.rate {
+  flex: 0 0 auto; font-size: 11.5px; color: var(--bar-muted);
+  font-variant-numeric: tabular-nums; white-space: nowrap; padding-right: 2px;
+}
+
 /*
  * "all: unset" turns a <select> into an inline box that *wraps*, so a two-word voice name made
  * the bar two lines tall — the one thing the bar must never do. Nowrap + hidden overflow keeps
@@ -378,6 +384,7 @@ select optgroup { color: var(--bar-muted); font-weight: 600; }
   .progress > .track > i { border-radius: 5px; }
   .progress > .knob { width: 16px; height: 16px; margin-left: -8px; transform: translateY(-50%) scale(1); }
   .count { order: 11; }
+  .rate { display: none; }
   .side { order: 12; flex: 1 1 100%; justify-content: flex-end; }
   .voice { display: none; }
   .sep { display: none; }

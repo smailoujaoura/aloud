@@ -28,6 +28,7 @@ import {
   type ThemeChoice,
 } from '@/shared/settings';
 import { disposePreview, playSynthesized, stopPreview } from '@/ui/voice-preview';
+import { speedLabel } from '@/shared/reading-rate';
 import { clearAllPositions, countPositions } from '@/shared/reading-positions';
 
 /** Say how many pages have a remembered position, so the "forget" button has a visible effect. */
@@ -381,9 +382,10 @@ async function renderNow(): Promise<void> {
   const sizes = await readCacheSizes();
 
   $<HTMLInputElement>('speed').value = String(settings.speed);
-  $('speedOut').textContent = `${settings.speed.toFixed(2)}×`;
+  $('speedOut').textContent = speedLabel(settings.engine, settings.speed);
   $<HTMLInputElement>('highlight').checked = settings.highlight;
   $<HTMLSelectElement>('wordHighlight').value = settings.wordHighlight;
+  $<HTMLInputElement>('highlightReadable').checked = settings.highlightReadable;
   $<HTMLSelectElement>('wordHighlight').disabled = !settings.highlight;
   $<HTMLInputElement>('highlightColor').value = toHex(settings.highlightColor);
   $<HTMLSelectElement>('scrollMode').value = settings.scrollMode;
@@ -525,7 +527,7 @@ function currentVoiceInstalled(manifest: ModelManifest, sizes: CacheSizes): bool
 function wire(): void {
   renderPrefList();
 
-  wireSlider('speed', 'speedOut', 'speed', (v) => `${v.toFixed(2)}×`);
+  wireSlider('speed', 'speedOut', 'speed', (v) => speedLabel(settings.engine, v));
   wireSlider('sectionPauseMs', 'sectionPauseOut', 'sectionPauseMs', (v) => `${(v / 1000).toFixed(2)}s`);
   wireSlider('sentencePauseMs', 'sentencePauseOut', 'sentencePauseMs', (v) => `${(v / 1000).toFixed(2)}s`);
   wireSlider('supertonicSteps', 'supertonicStepsOut', 'supertonicSteps', String);
@@ -546,6 +548,7 @@ function wire(): void {
   });
 
   wireCheckbox('highlight', 'highlight');
+  wireCheckbox('highlightReadable', 'highlightReadable');
   $('wordHighlight').addEventListener('change', (e) =>
     save({ wordHighlight: (e.target as HTMLSelectElement).value as Settings['wordHighlight'] }),
   );

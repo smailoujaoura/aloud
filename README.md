@@ -41,6 +41,13 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
   sentence you stopped at, with a one-click "Start over". The position is checked against the
   sentence's text, so an edited page never resumes in the wrong place; it is stored on this
   device only and can be cleared from the settings page.
+- **Readable on someone else's page** — a highlight is a wash over text Aloud does not control,
+  and pale grey on white, or light grey on a dark page, disappears under it. Each sentence is
+  measured against the colour it is about to sit on, and only the ones that would be hard to read
+  are given black or white letters; everything else keeps the page's own colours.
+- **Words a minute** — the bar and the speed slider say what a speed means: 1× is about 185 wpm
+  with Piper, 165 with Kokoro. Once there is enough audio the figure is measured from it rather
+  than estimated.
 - **Word by word** — with Piper and Kokoro voices the word being spoken is marked inside the
   sentence, timed from the voice model's own phoneme durations rather than estimated. It is shown
   as a darker shade by default; Settings switches it to an underline, or off.

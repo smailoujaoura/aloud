@@ -197,6 +197,12 @@ export interface Settings {
    * sound plays can do it (Piper, Kokoro); Supertonic keeps the sentence highlight alone.
    */
   wordHighlight: WordHighlightStyle;
+  /**
+   * Give highlighted text a readable colour when the page's own colour would disappear into the
+   * highlight — pale grey on a light page, light text on a dark one. Only the sentences that need
+   * it change; everything else keeps the page's own colours.
+   */
+  highlightReadable: boolean;
   /** How the page follows the current sentence. */
   scrollMode: ScrollMode;
   /** How a PDF is shown in Aloud's reader page. */
@@ -245,6 +251,7 @@ export const DEFAULT_SETTINGS: Settings = {
   highlight: true,
   highlightColor: 'rgba(255, 214, 10, 0.45)',
   wordHighlight: 'darker',
+  highlightReadable: true,
   scrollMode: 'keep-visible',
   pdfView: 'pages',
   sectionPauseMs: 0,
