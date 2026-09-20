@@ -43,9 +43,26 @@ export function listVoices(engine: EngineId, manifest: ModelManifest): VoiceOpti
   }
 }
 
+/**
+ * Names the catalogue spells as one lower-case word, written the way their datasets write them.
+ * Everything else is title-cased from the id, which reads correctly on its own.
+ */
+const PIPER_NAMES: Record<string, string> = {
+  Ljspeech: 'LJSpeech',
+  Libritts: 'LibriTTS',
+  'Libritts R': 'LibriTTS-R',
+  'Hfc Female': 'HFC Female',
+  'Hfc Male': 'HFC Male',
+  Vctk: 'VCTK',
+  'Upc Ona': 'UPC Ona',
+  'Upc Pau': 'UPC Pau',
+  Mls: 'MLS',
+};
+
 /** Piper labels read "Name — Language (Country)"; the picker only needs the name. */
 export function shortPiperLabel(label: string): string {
-  return label.split(' — ')[0] ?? label;
+  const name = label.split(' — ')[0] ?? label;
+  return PIPER_NAMES[name] ?? name;
 }
 
 export function isEnglish(language: string): boolean {

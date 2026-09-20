@@ -51,7 +51,8 @@ import { renderShortcutsPanel } from './shortcuts-panel';
 import { renderSiteList } from './site-list';
 import { renderPronunciationEditor } from './pronunciation-editor';
 import { renderVoiceSection, type PanelContext } from './voice-panels';
-import { initNav, setNavCount, showView } from './app-nav';
+import { initNav, onViewChange, setNavCount, showView } from './app-nav';
+import { renderRail } from './rail';
 import { initLibrary } from '@/library/app';
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -350,7 +351,29 @@ function renderAnnotateSites(): void {
   });
 }
 
+/**
+ * The thread of colour at the top of the window while the page is working.
+ *
+ * Counted rather than toggled: two overlapping pieces of work (the GPU probe and a redraw) would
+ * otherwise have the first one to finish declare the page idle.
+ */
+let busyCount = 0;
+export function setBusy(on: boolean): void {
+  busyCount = Math.max(0, busyCount + (on ? 1 : -1));
+  const bar = document.getElementById('pageBusy');
+  if (bar) bar.hidden = busyCount === 0;
+}
+
 async function render(): Promise<void> {
+  setBusy(true);
+  try {
+    await renderNow();
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function renderNow(): Promise<void> {
   settings = await getSettings();
   applyTheme(document, settings.theme);
   for (const control of themeSwitches) control.setTheme(settings.theme);
@@ -648,6 +671,7 @@ void getSettings().then((s) => {
 //   3. a live probe inside a real synthesis worker, which is the answer — and the only one that
 //      catches a Firefox user who has just switched the about:config prefs on.
 void (async () => {
+  setBusy(true);
   const remembered = await loadWorkerGpu();
   if (remembered != null) applyWorkerGpuProbe(remembered);
   await probeGpu()
@@ -656,6 +680,7 @@ void (async () => {
       if (!probe.available && capabilities().engine !== 'gecko') applyGpuProbe(probe);
     })
     .catch(() => undefined);
+  setBusy(false);
   await render();
   await checkWorkerGpu();
 })();
@@ -693,5 +718,7 @@ watchSettings((next) => {
   settings = next;
   void render();
 });
+// The rail says what the view in front of you is for (rail.ts).
+onViewChange((view) => renderRail($('rail'), view));
 initNav();
 void initLibrary({ show: (view) => showView(view, { push: true }), setCount: setNavCount });
