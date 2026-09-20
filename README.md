@@ -139,6 +139,20 @@ itself aloud. Then open an article and click the **Aloud** toolbar button (or pr
 highlight colour, cached-model management — are on the extension's options page, which also
 reopens the walkthrough.
 
+## Checking that it speaks
+
+```bash
+npm run build:chrome
+npm run say -- --engine kokoro --voice af_heart          # writes kokoro-af_heart-cpu.wav
+npm run say -- --engine kokoro --voice af_heart --gpu    # the WebGPU path
+```
+
+`scripts/say.mjs` captures what a voice actually says into a WAV. It exists because every cheaper
+check — the worker replied, audio came back, the right number of samples at the right rate —
+passes happily on audio that is not speech: Kokoro's quantised weights load on WebGPU and return
+audio of the right length, but what comes out is Mandarin-sounding noise rather than the sentence.
+Play the file, or run it through any speech-to-text and see whether the sentence comes back.
+
 ## How it works
 
 The synthesis engine runs in a **Web Worker at the extension origin**, not in the content script.
