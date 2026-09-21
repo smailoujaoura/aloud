@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blend, contrastRatio, parseColor, readableTextColor } from '@/highlight/contrast';
+import { blend, contrastRatio, parseColor, readableTextColor, toneOf, washFor } from '@/highlight/contrast';
 
 const YELLOW = parseColor('rgba(255, 214, 10, 0.45)')!;
 
@@ -53,5 +53,24 @@ describe('readableTextColor', () => {
     // Black letters on a mid grey wash: neither black nor white clears the bar, and black is
     // already the better of the two.
     expect(readableTextColor(parseColor('rgb(0, 0, 0)')!, [128, 128, 128], parseColor('rgba(128, 128, 128, 1)')!)).toBeNull();
+  });
+});
+
+describe('washFor', () => {
+  it('leaves the colour alone on a light page', () => {
+    expect(washFor(YELLOW, 'light')).toEqual(YELLOW);
+  });
+
+  it('turns a dark page’s wash into a glow the page’s own light text still reads on', () => {
+    const page: [number, number, number] = [18, 18, 18];
+    expect(toneOf(page)).toBe('dark');
+    expect(toneOf([250, 250, 250])).toBe('light');
+    const text = parseColor('rgb(230, 230, 230)')!;
+    // Before: the full-strength wash needs its letters swapped to stay readable.
+    expect(readableTextColor(text, page, YELLOW)).not.toBeNull();
+    // After: the adapted wash leaves the page's own colour readable as it is.
+    expect(readableTextColor(text, page, washFor(YELLOW, 'dark'))).toBeNull();
+    // …and it is still visibly a highlight against the page.
+    expect(contrastRatio(blend(washFor(YELLOW, 'dark'), page), page)).toBeGreaterThan(1.8);
   });
 });

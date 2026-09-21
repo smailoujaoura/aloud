@@ -69,6 +69,7 @@ import { MediaControls } from './media-session';
 import { SleepTimer, type SleepChoice } from './sleep-timer';
 import { Mp3Export, audioFileName } from './audio-export';
 import { measuredWpm, wordsPerMinute } from '@/shared/reading-rate';
+import { READING_ATTR } from '@/annotate/palette';
 
 interface BeginOptions {
   /** For "Read from here": the element that was right-clicked, when the browser can tell us. */
@@ -345,6 +346,9 @@ export class ReaderSession {
       },
     });
 
+    // Your saved highlights draw as underlines while the reader is open, so the one wash on the
+    // page is the sentence being read (annotate/palette.ts: READING_ATTR).
+    document.documentElement.setAttribute(READING_ATTR, '');
     this.bar = new ControlBar(document, this.controlCallbacks(), {
       speed: this.settings.speed,
       tapToSeek: this.settings.tapToSeek,
@@ -359,6 +363,7 @@ export class ReaderSession {
       scrollMode: this.settings.scrollMode,
       wordStyle: this.settings.wordHighlight,
       keepReadable: this.settings.highlightReadable,
+      bottomInset: () => this.bar?.coveredHeight() ?? 0,
     });
 
     this.media = new MediaControls(
@@ -1659,6 +1664,7 @@ export class ReaderSession {
     this.worker?.dispose();
     this.highlighter?.dispose();
     this.bar?.dispose();
+    document.documentElement.removeAttribute(READING_ATTR);
 
     // Only clear the global if it still points at us — a replacement session ("Read from here" /
     // "Read selection" on a running reader) may already have taken the slot.

@@ -7,6 +7,14 @@
  * translucent, behind the text) or an underline (a darker tone of the same colour, under it).
  */
 import { DEFAULT_NOTE_COLORS, type NoteColor, type NoteStyle } from '@/shared/settings';
+import { washFor, type PageTone } from '@/highlight/contrast';
+
+/**
+ * Set on the page's root element while Aloud is reading it. Your highlights then draw as
+ * underlines, and the only wash on the page is the sentence being read — two backgrounds in the
+ * same yellow could not be told apart.
+ */
+export const READING_ATTR = 'data-aloud-reading';
 
 export const NOTE_STYLES: readonly NoteStyle[] = ['highlight', 'underline'];
 
@@ -29,13 +37,27 @@ export function markName(colorId: string, style: NoteStyle): string {
   return `aloud-note-${colorId.replace(/[^a-z0-9_-]/gi, '')}-${style}`;
 }
 
-/** The `::highlight()` rules for every colour in both styles. */
-export function markCss(palette: readonly NoteColor[]): string {
+/**
+ * The `::highlight()` rules for every colour in both styles, for a page of this tone.
+ *
+ * On a dark page the wash is lifted and faded (as the reader's own is — see contrast.ts) and the
+ * underline is drawn in a *light* tone of the colour: the usual darker ink disappears into a
+ * dark page. While Aloud reads (`READING_ATTR`), highlights become underlines.
+ */
+export function markCss(palette: readonly NoteColor[], tone: PageTone = 'light'): string {
   return palette
-    .flatMap((c) => [
-      `::highlight(${markName(c.id, 'highlight')}) { background-color: ${c.fill}99; color: inherit; }`,
-      `::highlight(${markName(c.id, 'underline')}) { text-decoration: underline 3px ${inkFor(c.fill)}; text-underline-offset: 3px; color: inherit; }`,
-    ])
+    .flatMap((c) => {
+      const rgb = parseHex(c.fill);
+      const wash = rgb ? washFor({ rgb, alpha: 0.6 }, tone) : null;
+      const fill = wash ? `rgba(${wash.rgb.join(', ')}, ${wash.alpha})` : `${c.fill}99`;
+      const ink = tone === 'dark' && wash ? `rgb(${wash.rgb.join(', ')})` : inkFor(c.fill);
+      const underline = `text-decoration: underline 3px ${ink}; text-underline-offset: 3px; color: inherit;`;
+      return [
+        `::highlight(${markName(c.id, 'highlight')}) { background-color: ${fill}; color: inherit; }`,
+        `::highlight(${markName(c.id, 'underline')}) { ${underline} }`,
+        `:root[${READING_ATTR}] ::highlight(${markName(c.id, 'highlight')}) { background-color: transparent; ${underline} }`,
+      ];
+    })
     .join('\n');
 }
 

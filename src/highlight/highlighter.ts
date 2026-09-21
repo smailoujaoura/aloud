@@ -11,7 +11,7 @@
  */
 
 import type { WordHighlightStyle } from '@/shared/settings';
-import { backgroundUnder, parseColor, readableTextColor } from './contrast';
+import { backgroundUnder, cssColor, parseColor, readableTextColor, toneOf, washFor, type PageTone } from './contrast';
 
 const HIGHLIGHT_NAME = 'aloud-sentence';
 const WORD_HIGHLIGHT_NAME = 'aloud-word';
@@ -48,6 +48,11 @@ export interface HighlighterOptions {
    * highlight. Off leaves the page's colours exactly as they are.
    */
   keepReadable?: boolean;
+  /**
+   * Pixels at the bottom of the window that something of Aloud's own covers (the reading bar).
+   * Following the reader keeps the sentence clear of it, rather than scrolling it underneath.
+   */
+  bottomInset?: () => number;
 }
 
 export class Highlighter {
@@ -66,42 +71,52 @@ export class Highlighter {
     this.injectStyle();
   }
 
+  /** Whether the text being highlighted sits on a light or a dark background (see `paint`). */
+  private tone: PageTone = 'light';
+
+  /** The chosen highlight colour, adapted to the page's tone (contrast.ts: washFor). */
+  private get wash(): string {
+    const color = parseColor(this.opts.color);
+    return color ? cssColor(washFor(color, this.tone)) : this.opts.color;
+  }
+
   private injectStyle(): void {
     if (this.doc.getElementById(STYLE_ID)) {
       this.styleEl = this.doc.getElementById(STYLE_ID) as HTMLStyleElement;
       return;
     }
+    const wash = this.wash;
     const style = this.doc.createElement('style');
     style.id = STYLE_ID;
     style.textContent = `
       ::highlight(${HIGHLIGHT_NAME}) {
-        background-color: ${this.opts.color};
+        background-color: ${wash};
         color: inherit;
         border-radius: 2px;
       }
       ::highlight(${WORD_HIGHLIGHT_NAME}) {
-        ${wordStyleCss(this.opts.color, this.opts.wordStyle ?? 'darker')}
+        ${wordStyleCss(wash, this.opts.wordStyle ?? 'darker')}
       }
       ::highlight(${DARK_TEXT_NAME}) {
-        background-color: ${this.opts.color};
+        background-color: ${wash};
         color: ${DARK_INK};
         border-radius: 2px;
       }
       ::highlight(${LIGHT_TEXT_NAME}) {
-        background-color: ${this.opts.color};
+        background-color: ${wash};
         color: ${LIGHT_INK};
         border-radius: 2px;
       }
       ::highlight(${WORD_DARK_TEXT_NAME}) {
-        ${wordStyleCss(this.opts.color, this.opts.wordStyle ?? 'darker')}
+        ${wordStyleCss(wash, this.opts.wordStyle ?? 'darker')}
         color: ${DARK_INK};
       }
       ::highlight(${WORD_LIGHT_TEXT_NAME}) {
-        ${wordStyleCss(this.opts.color, this.opts.wordStyle ?? 'darker')}
+        ${wordStyleCss(wash, this.opts.wordStyle ?? 'darker')}
         color: ${LIGHT_INK};
       }
       .${SPAN_CLASS} {
-        background-color: ${this.opts.color};
+        background-color: ${wash};
         border-radius: 2px;
         box-decoration-break: clone;
         -webkit-box-decoration-break: clone;
@@ -130,6 +145,8 @@ export class Highlighter {
         plain: HIGHLIGHT_NAME,
         dark: DARK_TEXT_NAME,
         light: LIGHT_TEXT_NAME,
+        // Above your own highlights (priority 0), so where you are always shows on top.
+        priority: 1,
         held: (h) => (this.highlight = h),
       });
     } else {
@@ -196,6 +213,11 @@ export class Highlighter {
     return true;
   }
 
+  /**
+   * Bring the sentence into the part of the window that is actually visible: above the reading
+   * bar, not merely inside the window. Centring in the whole window used to park the sentence
+   * behind the bar whenever it landed in the bottom third.
+   */
   private scrollIntoView(range: Range): void {
     const snap = this.opts.scrollMode === 'snap';
     const now = Date.now();
@@ -203,17 +225,32 @@ export class Highlighter {
     const rect = range.getBoundingClientRect();
     if (rect.width === 0 && rect.height === 0) return;
     const view = this.doc.defaultView!;
-    const margin = view.innerHeight * 0.15;
-    const outOfView = rect.top < margin || rect.bottom > view.innerHeight - margin;
-    if (snap || outOfView) {
-      this.lastScroll = now;
-      const el = range.startContainer.parentElement;
-      el?.scrollIntoView({
-        block: 'center',
-        inline: 'nearest',
-        behavior: this.reduceMotion ? 'auto' : 'smooth',
-      });
+    const covered = Math.max(0, this.opts.bottomInset?.() ?? 0);
+    const visible = view.innerHeight - covered;
+    const margin = visible * 0.15;
+    const outOfView = rect.top < margin || rect.bottom > visible - margin;
+    if (!snap && !outOfView) return;
+    this.lastScroll = now;
+    const behavior: ScrollBehavior = this.reduceMotion ? 'auto' : 'smooth';
+    const el = range.startContainer.parentElement;
+    if (!el) return;
+
+    // A paragraph taller than the visible area cannot be centred usefully: centring it can leave
+    // the sentence itself off-screen. When the window is what scrolls, move by the sentence.
+    const scroller = this.doc.scrollingElement;
+    const windowScrolls = !!scroller && scroller.scrollHeight > view.innerHeight + 1;
+    if (windowScrolls && el.getBoundingClientRect().height > visible - 2 * margin) {
+      const target = rect.height > visible - 2 * margin ? margin : (visible - rect.height) / 2;
+      view.scrollBy({ top: rect.top - target, behavior });
+      return;
     }
+
+    // Otherwise let the browser do it — it also knows about scrolling containers inside the page —
+    // with a scroll margin as tall as the bar, which lifts "centre" into the visible part.
+    const previous = el.style.scrollMarginBottom;
+    el.style.scrollMarginBottom = `${covered}px`;
+    el.scrollIntoView({ block: 'center', inline: 'nearest', behavior });
+    el.style.scrollMarginBottom = previous;
   }
 
   /** Whether this browser can mark a word inside the sentence (the CSS Custom Highlight API). */
@@ -235,7 +272,7 @@ export class Highlighter {
       plain: WORD_HIGHLIGHT_NAME,
       dark: WORD_DARK_TEXT_NAME,
       light: WORD_LIGHT_TEXT_NAME,
-      priority: 1,
+      priority: 2,
       held: (h) => (this.wordHighlight = h),
     });
   }
@@ -278,10 +315,22 @@ export class Highlighter {
     const element = (node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement) as Element | null;
     const view = this.doc.defaultView;
     if (!element || !view) return null;
+    const background = backgroundUnder(element, view);
+    // First the wash: a dark background gets the lighter, fainter version of the colour. The
+    // style is shared by every highlight, and only one sentence is lit at a time, so following
+    // the sentence's own background (a dark code block in a light page, say) costs one restyle.
+    const tone = toneOf(background);
+    if (tone !== this.tone) {
+      this.tone = tone;
+      this.styleEl?.remove();
+      this.styleEl = null;
+      this.injectStyle();
+    }
+    // Then the letters, only if they would still be hard to read on it.
     const text = parseColor(view.getComputedStyle(element).color);
-    const highlight = parseColor(this.opts.color);
+    const highlight = parseColor(this.wash);
     if (!text || !highlight) return null;
-    return readableTextColor(text, backgroundUnder(element, view), highlight);
+    return readableTextColor(text, background, highlight);
   }
 
   clear(): void {

@@ -24,6 +24,7 @@ import { DEFAULT_ANNOTATE, getSettings, watchSettings, type AnnotateSettings, ty
 import { anchorForRange, pageIndex, rangeForAnchor } from './page-anchoring';
 import { isTypingTarget } from '@/media-speed/keys';
 import { NOTE_STYLES, colorFor, markCss, markName } from './palette';
+import { backgroundUnder, toneOf, type PageTone } from '@/highlight/contrast';
 import { PANEL_CSS, PageNotesPanel } from './notes-panel';
 
 const HOST_ID = 'aloud-annotate-host';
@@ -57,6 +58,8 @@ export class PageAnnotator {
   /** Highlight names currently registered, so a removed colour's marks are cleared too. */
   private names = new Set<string>();
   private styleEl: HTMLStyleElement | null = null;
+  /** Light or dark page: decides how strong the washes are (palette.ts: markCss). */
+  private tone: PageTone = 'light';
   private panel: PageNotesPanel | null = null;
   private allNotes: Note[] = [];
 
@@ -130,6 +133,9 @@ export class PageAnnotator {
   // ---- painting ---------------------------------------------------------------------
 
   private paint(): void {
+    // A page that switched to its dark theme since the last paint gets washes to match.
+    const view = document.defaultView;
+    if (view && document.body && toneOf(backgroundUnder(document.body, view)) !== this.tone) this.injectStyle();
     this.index = pageIndex();
     this.painted = [];
     this.missing = 0;
@@ -160,7 +166,9 @@ export class PageAnnotator {
       const el = this.styleEl;
       this.cleanups.push(() => el.remove());
     }
-    this.styleEl.textContent = `${markCss(this.prefs.colors)}\n::highlight(${FLASH}) { background-color: #ff8c00aa; color: inherit; }`;
+    const view = document.defaultView;
+    if (view && document.body) this.tone = toneOf(backgroundUnder(document.body, view));
+    this.styleEl.textContent = `${markCss(this.prefs.colors, this.tone)}\n::highlight(${FLASH}) { background-color: #ff8c00aa; color: inherit; }`;
   }
 
   // ---- making highlights ------------------------------------------------------------------

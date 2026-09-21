@@ -41,10 +41,12 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
   sentence you stopped at, with a one-click "Start over". The position is checked against the
   sentence's text, so an edited page never resumes in the wrong place; it is stored on this
   device only and can be cleared from the settings page.
-- **Readable on someone else's page** — a highlight is a wash over text Aloud does not control,
-  and pale grey on white, or light grey on a dark page, disappears under it. Each sentence is
-  measured against the colour it is about to sit on, and only the ones that would be hard to read
-  are given black or white letters; everything else keeps the page's own colours.
+- **Readable on someone else's page** — a highlight is a wash over text Aloud does not control.
+  On a dark page the wash becomes paler and fainter (yellow at full strength over black is mud),
+  so the page's own light text stays readable; a sentence that would still be hard to read gets
+  black or white letters, and everything else keeps the page's colours. While Aloud reads, your
+  saved highlights turn into underlines, so the only wash is the sentence being read, and the
+  reading bar slides out of the way when you scroll down and keeps the sentence clear of itself.
 - **Words a minute** — the bar and the speed slider say what a speed means: 1× is about 185 wpm
   with Piper, 165 with Kokoro. Once there is enough audio the figure is measured from it rather
   than estimated.

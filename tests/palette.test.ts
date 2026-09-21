@@ -21,7 +21,18 @@ describe('note palette', () => {
   it('names and styles a highlight and an underline per colour', () => {
     expect(markName('blue', 'underline')).toBe('aloud-note-blue-underline');
     const css = markCss([{ id: 'blue', label: 'Blue', fill: '#8cc8ff' }]);
-    expect(css).toContain('::highlight(aloud-note-blue-highlight) { background-color: #8cc8ff99');
+    expect(css).toContain('::highlight(aloud-note-blue-highlight) { background-color: rgba(140, 200, 255, 0.6)');
     expect(css).toContain('::highlight(aloud-note-blue-underline) { text-decoration: underline 3px #547899');
+  });
+
+  it('turns highlights into underlines while Aloud reads, so the only wash is the sentence', () => {
+    const css = markCss([{ id: 'blue', label: 'Blue', fill: '#8cc8ff' }]);
+    expect(css).toContain(':root[data-aloud-reading] ::highlight(aloud-note-blue-highlight) { background-color: transparent; text-decoration: underline 3px #547899');
+  });
+
+  it('on a dark page, fades the wash and draws underlines in a light tone', () => {
+    const css = markCss([{ id: 'blue', label: 'Blue', fill: '#8cc8ff' }], 'dark');
+    expect(css).toContain('background-color: rgba(180, 219, 255, 0.28)');
+    expect(css).toContain('underline 3px rgb(180, 219, 255)');
   });
 });

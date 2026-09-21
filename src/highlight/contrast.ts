@@ -113,3 +113,28 @@ export function backgroundUnder(element: Element, view: Window): Rgb {
   for (const above of stack.reverse()) base = blend(above, base);
   return base;
 }
+
+export type PageTone = 'light' | 'dark';
+
+/** A background is dark when light text is what reads on it. */
+export function toneOf(background: Rgb): PageTone {
+  return contrastRatio(background, [255, 255, 255]) > contrastRatio(background, [0, 0, 0]) ? 'dark' : 'light';
+}
+
+/**
+ * The wash to paint on a page of this tone.
+ *
+ * A strong translucent colour is right on white and wrong on black: yellow at 45% over near-black
+ * is olive mud, darker than the text on it. On a dark page the same hue is lifted towards white
+ * and made fainter, so it reads as a glow around the words rather than a block behind them — and
+ * the page's own light text stays readable on it without any help.
+ */
+export function washFor(color: Rgba, tone: PageTone): Rgba {
+  if (tone === 'light') return color;
+  const lifted = color.rgb.map((v) => Math.round(v + (255 - v) * 0.35)) as Rgb;
+  return { rgb: lifted, alpha: Math.min(color.alpha, 0.28) };
+}
+
+export function cssColor(color: Rgba): string {
+  return `rgba(${color.rgb.join(', ')}, ${Number(color.alpha.toFixed(3))})`;
+}

@@ -92,6 +92,11 @@ export const CONTROL_BAR_CSS = `
   pointer-events: none;
 }
 .dock > * { pointer-events: auto; }
+/* Slid below the window while you scroll down the page (control-bar.ts: watchScrolling). */
+.dock { transition: transform 220ms ease, opacity 220ms ease; }
+.dock.is-tucked { transform: translate(-50%, calc(100% + 40px)); opacity: 0; }
+.dock.is-tucked > * { pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .dock { transition: none; } }
 
 .bar {
   position: relative;

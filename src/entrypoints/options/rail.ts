@@ -68,6 +68,7 @@ const CARDS: Partial<Record<View, RailCard>> = {
     body: [
       'The sentence being read is highlighted in the page itself, and the word being spoken is marked inside it — timed from the voice model’s own phoneme durations, not guessed from the length of the text.',
       'Supertonic reports no word timing, so it highlights the sentence alone.',
+      'On a dark page the highlight is paler and fainter — a glow rather than a block — so the page’s own light text stays readable on it. Where a sentence would still be hard to read, its letters are given a colour of their own.',
     ],
   },
   highlights: {
@@ -75,6 +76,7 @@ const CARDS: Partial<Record<View, RailCard>> = {
     body: [
       'Keep a passage from any page, with your note and tags. It is anchored by its text, so it is found again even when the page around it has changed.',
       'Your highlights appear on a page when Aloud is running there, when you open a note, and by themselves on the sites you list.',
+      'While Aloud is reading, they turn into underlines in their own colour, so the only wash on the page is the sentence being read.',
     ],
     keys: [
       ['K', 'keep the selected text (no modifier, where Aloud runs)'],

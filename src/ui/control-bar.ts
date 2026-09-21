@@ -139,6 +139,14 @@ export class ControlBar {
   private voiceEl!: HTMLSelectElement;
 
   private playing = false;
+  /** Slid out of the way while you scroll down the page (see `watchScrolling`). */
+  private tucked = false;
+  /** When the reader last did something that scrolls — so the page's own scrolling is ignored. */
+  private userScrollAt = 0;
+  private readonly lastScrollTop = new WeakMap<object, number>();
+  /** How much of the window the bar covers, measured while it was showing. */
+  private covered = 88;
+  private readonly offWindow: Array<() => void> = [];
   private currentSpeed: number;
   private tapToSeek: boolean;
   private theme: ThemeChoice;
@@ -315,6 +323,73 @@ export class ControlBar {
 
     this.wireProgress();
     this.bar.addEventListener('keydown', (e) => this.onKey(e));
+    this.watchScrolling();
+  }
+
+  /**
+   * Get out of the way of the page. Scrolling down means you are reading further on, and the
+   * bar at the bottom of the window is sitting on exactly the lines you are moving towards; so it
+   * slides away, and comes back when you scroll up, bring the pointer to the bottom edge, move
+   * focus into it, or reading stops. Only *your* scrolling counts: Aloud following the sentence
+   * down the page must not hide the bar it is being controlled from.
+   */
+  private watchScrolling(): void {
+    const view = this.doc.defaultView;
+    if (!view) return;
+    const on = <K extends string>(target: EventTarget, type: K, fn: (e: Event) => void, capture = false): void => {
+      target.addEventListener(type, fn, { capture, passive: true });
+      this.offWindow.push(() => target.removeEventListener(type, fn, { capture }));
+    };
+    const intent = (): void => {
+      this.userScrollAt = Date.now();
+    };
+    on(view, 'wheel', intent);
+    on(view, 'touchmove', intent);
+    on(view, 'pointerdown', intent);
+    on(view, 'keydown', (e) => {
+      if (/^(ArrowDown|ArrowUp|PageDown|PageUp|Home|End| )$/.test((e as KeyboardEvent).key)) intent();
+    });
+    // Captured, so a page that scrolls inside a container of its own is followed as well.
+    on(
+      this.doc,
+      'scroll',
+      (e) => {
+        const target = e.target === this.doc ? view : (e.target as Element);
+        const top = target === view ? view.scrollY : (target as Element).scrollTop;
+        const before = this.lastScrollTop.get(target) ?? top;
+        this.lastScrollTop.set(target, top);
+        if (Date.now() - this.userScrollAt > 700) return;
+        if (top - before > 6) this.setTucked(true);
+        else if (before - top > 6) this.setTucked(false);
+      },
+      true,
+    );
+    on(view, 'mousemove', (e) => {
+      if (this.tucked && (e as MouseEvent).clientY > view.innerHeight - 96) this.setTucked(false);
+    });
+    this.dock.addEventListener('focusin', () => this.setTucked(false));
+  }
+
+  private setTucked(tucked: boolean): void {
+    if (tucked === this.tucked) return;
+    // Measure while it is still in place; once tucked it reports where it went, not where it was.
+    if (tucked) this.covered = this.measureCovered();
+    // Never while something needs the bar: a paused reader, an open menu, a message on screen.
+    if (tucked && (!this.playing || this.popover || this.flashing)) return;
+    this.tucked = tucked;
+    this.dock.classList.toggle('is-tucked', tucked);
+  }
+
+  private measureCovered(): number {
+    const view = this.doc.defaultView;
+    if (!view) return this.covered;
+    const top = this.bar.getBoundingClientRect().top;
+    return top > 0 ? Math.max(0, view.innerHeight - top + 12) : this.covered;
+  }
+
+  /** Pixels at the bottom of the window the bar covers when showing — for following the reader. */
+  coveredHeight(): number {
+    return this.tucked ? this.covered : (this.covered = this.measureCovered());
   }
 
   /**
@@ -557,6 +632,8 @@ export class ControlBar {
    */
   flash(text: string, kind: 'info' | 'ok' = 'info', action?: FlashAction): void {
     if (this.lastState?.status === 'error') return;
+    // A message is an answer to something you just did: show the bar it appears on.
+    this.setTucked(false);
     this.flashing = true;
     // Shown even while the tips card is up: status can wait, but "Saved to Notes" is the answer
     // to something the reader just did, and silence would read as the button not working.
@@ -584,6 +661,8 @@ export class ControlBar {
   update(state: SessionState): void {
     this.lastState = state;
     this.playing = state.status === 'playing';
+    // Paused, stopped or loading: the bar is what you reach for next.
+    if (!this.playing) this.setTucked(false);
     this.renderPlayButton(state);
     this.renderProgress(state);
     if (!this.flashing || state.status === 'error') {
@@ -606,6 +685,8 @@ export class ControlBar {
   }
 
   dispose(): void {
+    for (const off of this.offWindow) off();
+    this.offWindow.length = 0;
     clearTimeout(this.flashTimer);
     this.closePopover();
     this.unwatchTheme();
