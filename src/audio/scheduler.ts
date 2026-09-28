@@ -378,7 +378,36 @@ export class GaplessScheduler {
   /** Speed changed: keep the currently sounding sentence, re-prime the rest. */
   reprimeForSpeed(): void {
     const keep = Math.max(this.lastEnded + 1, 0);
-    this.seek(keep);
+    // The sentence sounding now finishes at the rate it was made at — changing speed should not
+    // cut a word in half. `seek()` stopped every source including that one, which is exactly what
+    // the reader was told would not happen.
+    for (const [id, src] of [...this.sources]) {
+      if (id <= keep) continue;
+      try {
+        src.onended = null;
+        src.stop();
+        src.disconnect();
+      } catch {
+        /* already finished */
+      }
+      this.sources.delete(id);
+    }
+    this.ready.clear();
+    this.leads.clear();
+    this.pendingPcm.clear();
+    // Keep the timeline up to the sentence being kept, and start the next one after it ends.
+    const current = this.timeline.find((entry) => entry.playId === keep);
+    for (let i = this.timeline.length - 1; i >= 0; i--) {
+      if (this.timeline[i]!.playId > keep) this.timeline.splice(i, 1);
+    }
+    this.nextToSchedule = keep + 1;
+    if (this.ctx) {
+      this.nextStartTime = Math.max(current?.end ?? 0, this.ctx.currentTime + PRIME_GAP);
+      this.running = true;
+      this.startTicker();
+    }
+    this.primeDeadline = 0;
+    this.cb.onNeedMore(this.nextToSchedule);
   }
 
   async dispose(): Promise<void> {

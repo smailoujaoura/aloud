@@ -15,7 +15,7 @@
  * silently sped the video up again after the player had reset it to 1×.
  */
 import { clampRate, formatRate, nextPreset, stepRate } from './rate';
-import { isTypingTarget, matchesBinding } from './keys';
+import { isTypingEvent, matchesBinding } from './keys';
 import type { MediaSpeedSettings } from '@/shared/settings';
 
 /** Aloud's own reading bar: its keys are its own (see ui/control-bar.ts). */
@@ -40,6 +40,8 @@ export class MediaSpeedController {
   /** The rate we set last, to tell our own `ratechange` from the site's. */
   private applied = new WeakMap<Media, number>();
   private readonly known = new Set<Media>();
+  /** How to unhook each tracked element, so a removed one can be let go of entirely. */
+  private readonly listeners = new Map<Media, () => void>();
   private observer: MutationObserver | null = null;
   private badge: { host: HTMLElement; text: HTMLElement; timer: number } | null = null;
   private readonly cleanups: Array<() => void> = [];
@@ -56,7 +58,10 @@ export class MediaSpeedController {
         for (const node of record.addedNodes) if (node instanceof Element) this.scanFrom(node);
       }
       // A node moved into an existing player is just as common as a fresh one.
-      if (records.length) this.scan();
+      if (records.length) {
+        this.scan();
+        this.prune();
+      }
     });
     this.observer.observe(document.documentElement, { childList: true, subtree: true });
     this.listen(window, 'keydown', (e) => this.onKey(e as KeyboardEvent), true);
@@ -69,14 +74,16 @@ export class MediaSpeedController {
     this.cleanups.length = 0;
     this.clearBadge();
     this.known.clear();
+    this.listeners.clear();
   }
 
   setSettings(settings: MediaSpeedSettings): void {
     this.settings = settings;
   }
 
-  /** Media found so far in this frame. */
+  /** Media found so far in this frame, not counting ones that have left the page. */
   get mediaCount(): number {
+    this.prune();
     return this.known.size;
   }
 
@@ -125,6 +132,22 @@ export class MediaSpeedController {
     for (const media of mediaWithin(root)) this.track(media);
   }
 
+  /**
+   * Forget players that have left the page.
+   *
+   * An infinite feed builds and throws away a video per card. Each one used to be kept for ever
+   * by the tracking set and by its own listener closures, so a long session accumulated dead
+   * players that every later rate change then iterated over.
+   */
+  private prune(): void {
+    for (const media of [...this.known]) {
+      if (media.isConnected) continue;
+      this.known.delete(media);
+      this.listeners.get(media)?.();
+      this.listeners.delete(media);
+    }
+  }
+
   private track(media: Media): void {
     if (this.known.has(media)) return;
     this.known.add(media);
@@ -135,9 +158,10 @@ export class MediaSpeedController {
     const reapply = (): void => {
       if (this.chosen) this.apply(media);
     };
+    const off: Array<() => void> = [];
     for (const event of ['loadstart', 'loadeddata', 'canplay', 'play', 'playing', 'durationchange']) {
       media.addEventListener(event, reapply);
-      this.cleanups.push(() => media.removeEventListener(event, reapply));
+      off.push(() => media.removeEventListener(event, reapply));
     }
     const onRateChange = (): void => {
       if (this.rate == null) return;
@@ -153,7 +177,12 @@ export class MediaSpeedController {
     };
 
     media.addEventListener('ratechange', onRateChange);
-    this.cleanups.push(() => media.removeEventListener('ratechange', onRateChange));
+    off.push(() => media.removeEventListener('ratechange', onRateChange));
+    const release = (): void => {
+      for (const un of off) un();
+    };
+    this.listeners.set(media, release);
+    this.cleanups.push(release);
 
     if (this.rate == null && this.host.initialRate != null) {
       this.rate = clampRate(this.host.initialRate);
@@ -164,7 +193,7 @@ export class MediaSpeedController {
   // ---- keys -------------------------------------------------------------------------
 
   private onKey(e: KeyboardEvent): void {
-    if (!this.settings.enabled || e.defaultPrevented || isTypingTarget(e.target)) return;
+    if (!this.settings.enabled || e.defaultPrevented || isTypingEvent(e)) return;
     // Aloud's reading bar handles its own keys.
     if (e.composedPath().some((n) => n instanceof HTMLElement && n.id === CONTROL_HOST_ID)) return;
 

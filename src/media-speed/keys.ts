@@ -122,3 +122,20 @@ export function isTypingTarget(target: EventTarget | null): boolean {
   if (el.isContentEditable) return true;
   return !!el.closest('input, textarea, select, [contenteditable="true"], [role="textbox"]');
 }
+
+/**
+ * Is this key press going into something the reader is typing in?
+ *
+ * `event.target` is not enough: an input inside a shadow root retargets to its host, so a page
+ * that builds its search box in a web component looked like ordinary page text — and `d` sped the
+ * video up instead of appearing in the box. The composed path holds the real element, and
+ * `composedPath()` on a key event names every node it passed through.
+ */
+export function isTypingEvent(e: Event): boolean {
+  const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+  for (const node of path) {
+    if (isTypingTarget(node)) return true;
+    // A shadow root's own host is covered by the next entry in the path; keep walking.
+  }
+  return isTypingTarget(e.target);
+}

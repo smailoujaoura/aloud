@@ -51,3 +51,19 @@ describe('isSpeakable', () => {
     expect(isSpeakable('3')).toBe(true);
   });
 });
+
+describe('reading URLs aloud', () => {
+  it('leaves the address in place instead of repeating the sentence', () => {
+    // The audit's A11: "Visit https://example.com now." became
+    // "Visit Visit https://example.com now. now." because the whole sentence was passed as the
+    // replacement for each URL.
+    expect(normalizeForSpeech('Visit https://example.com now.', { urlReplacement: null })).toBe('Visit https://example.com now.');
+  });
+
+  it('handles several addresses and the punctuation around them', () => {
+    expect(normalizeForSpeech('See https://a.example and https://b.example, then stop.', { urlReplacement: null })).toBe(
+      'See https://a.example and https://b.example, then stop.',
+    );
+    expect(normalizeForSpeech('See https://a.example and https://b.example.')).toBe('See link and link');
+  });
+});

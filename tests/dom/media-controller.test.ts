@@ -67,3 +67,19 @@ describe('MediaSpeedController', () => {
     expect(controller.currentRate).toBe(1);
   });
 });
+
+describe('players that leave the page', () => {
+  it('are let go of, rather than kept for the life of the controller', () => {
+    document.body.innerHTML = '<video id="a"></video><video id="b"></video>';
+    const controller = new MediaSpeedController({
+      settings: { ...DEFAULT_MEDIA_SPEED, showBadge: false },
+      initialRate: null,
+      onRate: () => {},
+    });
+    controller.start();
+    expect(controller.mediaCount).toBe(2);
+    document.getElementById('a')!.remove();
+    expect(controller.mediaCount).toBe(1);
+    controller.stop();
+  });
+});

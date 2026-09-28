@@ -258,8 +258,10 @@ export function playSynthesized(
           };
           w.postMessage({ kind: 'init', id: initId, config });
         });
-        pending = {};
+        // Only the preview that is still current may clear the shared callbacks: an older one
+        // rejecting late used to wipe the *new* preview's, leaving it loading for ever.
         if (my !== token) return;
+        pending = {};
         warmKey = key;
       }
 
@@ -283,8 +285,8 @@ export function playSynthesized(
           });
         },
       );
-      pending = {};
       if (my !== token) return;
+      pending = {};
 
       onStatus({ phase: 'playing', engineInfo: warmEngineInfo });
       await playPcm(pcm, sampleRate, my);
@@ -293,8 +295,8 @@ export function playSynthesized(
         currentListener = NOOP;
       }
     } catch (err) {
-      pending = {};
       if (my !== token) return;
+      pending = {};
       onStatus({ phase: 'idle', error: err instanceof Error ? err.message : String(err) });
       currentListener = NOOP;
     }

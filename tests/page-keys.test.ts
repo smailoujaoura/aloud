@@ -42,3 +42,24 @@ describe('pageKeyAction', () => {
     expect(pageKeyAction(press('j'), keys, true)).toBeNull();
   });
 });
+
+describe('typing inside a shadow root', () => {
+  it('is typing, not a shortcut — the event retargets to the host', () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = host.attachShadow({ mode: 'open' });
+    const input = document.createElement('input');
+    root.append(input);
+    // What the browser delivers: target is the host, the real element is in the composed path.
+    const event = {
+      key: 'k',
+      ctrlKey: false,
+      altKey: false,
+      metaKey: false,
+      defaultPrevented: false,
+      target: host,
+      composedPath: () => [input, root, host, document.body, document],
+    } as never;
+    expect(pageKeyAction(event, { keep: 'k', panel: 'n' }, true)).toBeNull();
+  });
+});

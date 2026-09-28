@@ -22,7 +22,7 @@ import { addNote, loadNotes, notesForPage, parseTags, removeNote, restoreNote, u
 import type { TextIndex } from '@/extract/text-index';
 import { DEFAULT_ANNOTATE, getSettings, watchSettings, type AnnotateSettings, type NoteStyle } from '@/shared/settings';
 import { anchorForRange, pageIndex, rangeForAnchor } from './page-anchoring';
-import { isTypingTarget } from '@/media-speed/keys';
+import { isTypingEvent } from '@/media-speed/keys';
 import { NOTE_STYLES, colorFor, markCss, markName } from './palette';
 import { backgroundUnder, toneOf, type PageTone } from '@/highlight/contrast';
 import { PANEL_CSS, PageNotesPanel } from './notes-panel';
@@ -527,12 +527,17 @@ export class PageAnnotator {
  * each key only in the state it makes sense in — so an ordinary letter stays an ordinary letter.
  */
 export function pageKeyAction(
-  e: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'altKey' | 'metaKey' | 'defaultPrevented'> & { target?: EventTarget | null },
+  e: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'altKey' | 'metaKey' | 'defaultPrevented'> & {
+    target?: EventTarget | null;
+    composedPath?: () => EventTarget[];
+  },
   keys: { keep: string; panel: string },
   hasSelection: boolean,
 ): 'keep' | 'panel' | null {
   if (e.ctrlKey || e.altKey || e.metaKey || e.defaultPrevented) return null;
-  if (isTypingTarget(e.target ?? null)) return null;
+  // The composed path, not just the target: an input inside a shadow root retargets to its host,
+  // and K would then be kept as a shortcut instead of typed into the box.
+  if (isTypingEvent(e as unknown as Event)) return null;
   const key = e.key.toLowerCase();
   if (keys.keep && key === keys.keep.toLowerCase() && hasSelection) return 'keep';
   if (keys.panel && key === keys.panel.toLowerCase() && !hasSelection) return 'panel';

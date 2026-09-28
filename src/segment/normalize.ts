@@ -58,15 +58,18 @@ const URL_RE = /\b(?:https?:\/\/|www\.)[^\s<>()]+/gi;
 const EMAIL_RE = /\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b/gi;
 
 export interface NormalizeOptions {
-  /** What to say in place of a URL. Empty string drops it entirely. */
-  urlReplacement?: string;
+  /**
+   * What to say in place of a URL. Empty string drops it entirely; `null` leaves the address in
+   * the text to be read out as it stands.
+   */
+  urlReplacement?: string | null;
   /** What to say in place of an e-mail address. */
   emailReplacement?: string;
   /** Expand common abbreviations. */
   expandAbbreviations?: boolean;
 }
 
-const DEFAULTS: Required<NormalizeOptions> = {
+const DEFAULTS: { urlReplacement: string | null; emailReplacement: string; expandAbbreviations: boolean } = {
   urlReplacement: 'link',
   emailReplacement: 'e-mail address',
   expandAbbreviations: true,
@@ -77,7 +80,7 @@ export function normalizeForSpeech(input: string, options: NormalizeOptions = {}
   // Strip glyphs that NFKC would otherwise expand into letters ("™" -> "TM").
   let text = input.replace(/[™®©℠]/g, '').normalize('NFKC');
 
-  text = text.replace(URL_RE, ` ${opts.urlReplacement} `);
+  if (opts.urlReplacement != null) text = text.replace(URL_RE, ` ${opts.urlReplacement} `);
   text = text.replace(EMAIL_RE, ` ${opts.emailReplacement} `);
 
   if (opts.expandAbbreviations) {

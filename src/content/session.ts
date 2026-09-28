@@ -482,7 +482,9 @@ export class ReaderSession {
   private normalize = (text: string): string => {
     const fixed = applyPronunciations(text, this.settings.pronunciations);
     return normalizeForSpeech(fixed, {
-      urlReplacement: this.settings.skipUrls ? 'link' : fixed,
+      // Not "read URLs" as a replacement *string*: passing the sentence itself put the whole
+       // sentence in place of every address it contained ("Visit Visit https://…  now. now.").
+      urlReplacement: this.settings.skipUrls ? 'link' : null,
       expandAbbreviations: this.settings.expandAbbreviations,
     });
   };
@@ -721,13 +723,24 @@ export class ReaderSession {
 
   async setSpeed(speed: number): Promise<void> {
     this.settings = await setSettings({ speed });
+    this.applySpeed(speed, { flash: true });
+  }
+
+  /**
+   * One speed change, however it was asked for.
+   *
+   * The bar and the settings page used to do different things: the bar re-primed the scheduler,
+   * the settings page only redrew the number — leaving sentences already synthesised at the old
+   * speed to play on at it. Both now land here.
+   */
+  private applySpeed(speed: number, opts: { flash: boolean }): void {
     this.cancelExport('The speed changed, so the MP3 was stopped');
     this.bar?.setSpeed(speed);
     // The measurement belonged to the old speed.
     this.spokenSeconds = 0;
     this.spokenWords = 0;
     this.showReadingRate();
-    this.bar?.flash(`Speed ${speed}× · ${wordsPerMinute(this.engine, speed)} wpm`);
+    if (opts.flash) this.bar?.flash(`Speed ${speed}× · ${wordsPerMinute(this.engine, speed)} wpm`);
     if (!this.engineReady) return;
     // The sentence already playing keeps its old rate; everything after it is re-synthesised.
     const keepFrom = this.currentPlayId + 1;
@@ -1474,12 +1487,8 @@ export class ReaderSession {
       this.tapToSeek?.setEnabled(this.settings.tapToSeek);
       this.bar?.setTapToSeek(this.settings.tapToSeek);
     }
-    if (prev.speed !== this.settings.speed) {
-      this.bar?.setSpeed(this.settings.speed);
-      this.spokenSeconds = 0;
-      this.spokenWords = 0;
-      this.showReadingRate();
-    }
+    // A speed set in the settings page means the same thing as one set on the bar.
+    if (prev.speed !== this.settings.speed) this.applySpeed(this.settings.speed, { flash: false });
     if (prev.theme !== this.settings.theme) this.bar?.setTheme(this.settings.theme);
 
     if (!sameValue(prev.skip, this.settings.skip)) {
