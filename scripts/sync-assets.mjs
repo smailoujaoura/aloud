@@ -11,9 +11,27 @@
 //  - public/vendor/piper/  piper_phonemize (eSpeak-NG with every language's data) for Piper voices.
 //    Loaded by URL from the synthesis worker; see src/engine/g2p/piper-phonemize.ts. (Kokoro still
 //    uses the English-only `phonemizer` package that kokoro-js bundles, which is all it needs.)
-import { existsSync, mkdirSync, copyFileSync, statSync, readdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, copyFileSync, statSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+/**
+ * Is the copy in `dest` the same file as `src`?
+ *
+ * By content, not by length. A vendor file that changes without changing size — a patch release
+ * of a runtime, which is exactly when this matters — was treated as current and never copied, so
+ * a build could ship the previous version of it.
+ */
+function isCurrent(src, dest) {
+  if (!existsSync(dest)) return false;
+  if (statSync(dest).size !== statSync(src).size) return false;
+  return hashOf(src) === hashOf(dest);
+}
+
+function hashOf(file) {
+  return createHash('sha256').update(readFileSync(file)).digest('hex');
+}
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -49,7 +67,7 @@ export function syncAssets() {
     const s = join(piperSrc, f);
     const d = join(piperDest, f);
     if (!existsSync(s)) throw new Error(`missing ${s} — reinstall @diffusionstudio/piper-wasm`);
-    if (existsSync(d) && statSync(d).size === statSync(s).size) continue;
+    if (isCurrent(s, d)) continue;
     copyFileSync(s, d);
     piperCopied++;
   }
@@ -63,7 +81,7 @@ export function syncAssets() {
     const s = join(src, f);
     const d = join(dest, f);
     if (!existsSync(s)) throw new Error(`missing ${s} — reinstall onnxruntime-web`);
-    if (existsSync(d) && statSync(d).size === statSync(s).size) continue;
+    if (isCurrent(s, d)) continue;
     copyFileSync(s, d);
     copied++;
   }
@@ -81,7 +99,7 @@ export function syncAssets() {
     const s = join(pdfSrc, f);
     const d = join(pdfDest, f);
     if (!existsSync(s)) throw new Error(`missing ${s} — reinstall pdfjs-dist`);
-    if (existsSync(d) && statSync(d).size === statSync(s).size) continue;
+    if (isCurrent(s, d)) continue;
     copyFileSync(s, d);
     pdfCopied++;
   }
@@ -93,7 +111,7 @@ export function syncAssets() {
     for (const f of readdirSync(s)) {
       const sf = join(s, f);
       const df = join(d, f);
-      if (existsSync(df) && statSync(df).size === statSync(sf).size) continue;
+      if (isCurrent(sf, df)) continue;
       copyFileSync(sf, df);
       pdfCopied++;
     }

@@ -19,12 +19,15 @@ export interface ExportHost {
   /** Silence to put before sentence `id` (section and sentence pauses). */
   leadSilenceSec(id: number): number;
   onProgress(done: number, total: number): void;
-  onDone(file: Blob, seconds: number): void;
+  /** `missing` holds the sentences that could not be synthesised and are silence in the file. */
+  onDone(file: Blob, seconds: number, missing: number[]): void;
   onError(message: string): void;
 }
 
 export class Mp3Export {
   private next = 0;
+  /** Sentences that arrived as empty audio: silence in the file, and worth saying so. */
+  private readonly missing = new Set<number>();
   private requestedUpTo = -1;
   private readonly waiting = new Map<number, { pcm: Float32Array; sampleRate: number }>();
   private writer: Mp3Writer | null = null;
@@ -47,6 +50,9 @@ export class Mp3Export {
    */
   accept(id: number, pcm: Float32Array, sampleRate: number): void {
     if (this.stopped || id < this.next || this.waiting.has(id)) return;
+    // Empty audio is a sentence that could not be made. Counted, so the file is never presented
+    // as the whole page when part of it is missing.
+    if (pcm.length === 0) this.missing.add(id);
     this.waiting.set(id, { pcm, sampleRate });
     try {
       this.drain();
@@ -98,7 +104,7 @@ export class Mp3Export {
       this.host.onError('None of the sentences on this page could be turned into audio');
       return;
     }
-    this.host.onDone(this.writer.finish(), this.writer.durationSeconds);
+    this.host.onDone(this.writer.finish(), this.writer.durationSeconds, [...this.missing].sort((a, b) => a - b));
   }
 
   private fail(message: string): void {

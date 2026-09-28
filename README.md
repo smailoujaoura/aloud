@@ -1,7 +1,12 @@
 # Aloud — Offline Neural Reader
 
-Read any article aloud with a **fully local** neural voice. No servers, no accounts, nothing
-leaves your device after the one-time voice download.
+Read any article aloud with a **fully local** neural voice. No servers, no accounts: synthesis,
+your notes, your highlights and your reading positions never leave this device.
+
+What *does* go over the network, once each and only when you ask for it: downloading a voice
+model, previewing a Piper voice (a short hosted clip), and fetching a page or PDF you told Aloud
+to read or queue. A saved article's images stay unfetched until you press "Load images", so
+reopening one tells nobody you are reading it.
 
 Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave, Opera).
 

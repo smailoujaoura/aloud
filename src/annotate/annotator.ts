@@ -37,7 +37,15 @@ interface Painted {
 }
 
 export class PageAnnotator {
-  private readonly key = documentKey(location.href);
+  /**
+   * Which document these notes belong to.
+   *
+   * Not fixed at construction: a single-page site changes article under the same script with
+   * `history.pushState`, and notes kept after that were filed under the page that happened to be
+   * open when Aloud started — grouped in the Library under the wrong title, and never found again
+   * on the page they were taken from. `atCurrentDocument()` moves it when the address moves.
+   */
+  private key = documentKey(location.href);
   private notes: Note[] = [];
   private painted: Painted[] = [];
   private missing = 0;
@@ -132,7 +140,23 @@ export class PageAnnotator {
 
   // ---- painting ---------------------------------------------------------------------
 
+  /**
+   * Follow a single-page navigation: new address, new document, so the notes shown and saved are
+   * that document's. Returns true when it moved.
+   */
+  private atCurrentDocument(): boolean {
+    const now = documentKey(location.href);
+    if (now === this.key) return false;
+    this.key = now;
+    this.notes = notesForPage(this.allNotes, now);
+    this.closePopover();
+    this.closeToolbar();
+    this.panel?.close();
+    return true;
+  }
+
   private paint(): void {
+    this.atCurrentDocument();
     // A page that switched to its dark theme since the last paint gets washes to match.
     const view = document.defaultView;
     if (view && document.body && toneOf(backgroundUnder(document.body, view)) !== this.tone) this.injectStyle();
@@ -199,6 +223,9 @@ export class PageAnnotator {
    * nothing was selected.
    */
   async saveSelection(color?: string, openNote = false, style?: NoteStyle, quiet = false): Promise<Note | null> {
+    // The address may have changed since this page was first read (an SPA route): the note
+    // belongs to the article in front of the reader now.
+    this.atCurrentDocument();
     const range = this.selectedRange();
     const index = pageIndex();
     if (!range || !index) {

@@ -46,10 +46,12 @@ export function engineDownloaded(engine: EngineId, manifest: ModelManifest, size
 
 /** Is Kokoro's or Supertonic's one model — the weights, not just its config — on this device? */
 export function sharedModelInstalled(engine: EngineId, sizes: CacheSizes): boolean {
-  const { cacheHint: hint, requiredFile } = engineInfo(engine);
+  const { cacheHint: hint, requiredFiles } = engineInfo(engine);
   if (!hint) return false;
-  if (requiredFile) return [...sizes.keys()].some((k) => k.includes(hint) && k.endsWith(requiredFile));
-  return sharedModelBytes(sizes, hint) > 0;
+  if (!requiredFiles?.length) return sharedModelBytes(sizes, hint) > 0;
+  const keys = [...sizes.keys()].filter((k) => k.includes(hint) && (sizes.get(k) ?? 0) > 0);
+  // All of them: some bytes in the cache is not the same as a model that can speak.
+  return requiredFiles.every((file) => keys.some((k) => k.endsWith(file)));
 }
 
 /**
@@ -68,7 +70,6 @@ export function usableVoices(
       return entry ? piperDownloaded(entry, sizes) : false;
     });
   }
-  const hint = engineInfo(engine).cacheHint;
-  if (!hint || sharedModelBytes(sizes, hint) === 0) return [];
+  if (!sharedModelInstalled(engine, sizes)) return [];
   return listVoices(engine, manifest);
 }

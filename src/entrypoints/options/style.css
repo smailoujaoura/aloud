@@ -484,7 +484,19 @@ code {
 }
 
 @media (max-width: 560px) {
+  /* Nothing may push the page wider than the window: a phone then scrolls sideways over every
+     view, and the controls at the right edge of a row are the ones that get clipped. */
   .now-card { flex-wrap: wrap; }
+  .now-side { min-width: 0; flex-wrap: wrap; }
+  .speed-row, .key-row, .palette-row { flex-wrap: wrap; }
+  /* `#mediaSpeed .row-label` carries an id, so these have to as well to reach the same rows. */
+  .row > .row-label, #mediaSpeed .row-label, .key-row > .key-text { min-width: 0; flex: 1 1 100%; flex-wrap: wrap; }
+  .row > .row-label > span, #mediaSpeed .row-label > span, .key-text > span { min-width: 0; }
+  #mediaSpeed .row.speed-row { flex-wrap: wrap; }
+  #mediaSpeed .row.speed-row > select, #mediaSpeed .row.speed-row > input { flex: 1 1 100%; min-width: 0; }
+  .palette-preview { flex: 1 1 100%; }
+  .palette-name { flex: 1 1 8rem; width: auto; min-width: 0; }
+  .speed-row select, .speed-row input, .presets-input { flex: 1 1 100%; min-width: 0; }
   .now-side { flex: 1 1 100%; flex-direction: row; align-items: center; justify-content: flex-start; }
   .voice-toolbar { margin-inline: -16px; padding-inline: 16px; }
   .voice-tabs { flex: 1 1 100%; }

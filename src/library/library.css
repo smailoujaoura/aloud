@@ -132,3 +132,7 @@ a.card-title:hover { text-decoration: underline; }
 }
 .note-tags:hover { background: var(--surface-2); }
 .note-tags:focus { background: var(--bg); border-color: var(--border-strong); outline: none; color: var(--fg); }
+
+/* A saved article's images stay on its own site until they are asked for (queue-panel.ts). */
+.article-images { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.lib-view [data-aloud-held] { display: inline-block; min-height: 1em; opacity: .5; font-style: italic; }

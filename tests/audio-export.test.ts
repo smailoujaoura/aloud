@@ -10,14 +10,20 @@ function tone(seconds: number, sampleRate = 22050): Float32Array {
 function harness(count: number, lookahead = 2) {
   const requested: number[] = [];
   const progress: number[] = [];
-  const result: { file: Blob | null; seconds: number; error: string } = { file: null, seconds: 0, error: '' };
+  const result: { file: Blob | null; seconds: number; error: string; missing: number[] } = {
+    file: null,
+    seconds: 0,
+    error: '',
+    missing: [],
+  };
   const exp = new Mp3Export({
     count,
     lookahead,
     request: (id) => requested.push(id),
     leadSilenceSec: (id) => (id === 0 ? 0 : 0.25),
     onProgress: (done) => progress.push(done),
-    onDone: (f, s) => {
+    onDone: (f, s, missing) => {
+      result.missing = missing;
       result.file = f;
       result.seconds = s;
     },
@@ -53,13 +59,23 @@ describe('Mp3Export', () => {
     expect(h.result.file!.type).toBe('audio/mpeg');
   });
 
-  it('turns a sentence that failed into silence instead of stopping', () => {
+  it('turns a sentence that failed into silence instead of stopping, and says which', () => {
     const h = harness(2, 2);
     h.exp.start();
     h.exp.accept(0, tone(0.3), 22050);
     h.exp.accept(1, new Float32Array(0), 22050);
     expect(h.result.file).not.toBeNull();
     expect(h.result.error).toBe('');
+    // The audit's A20: a file that is partly silence must not be reported as simply "ready".
+    expect(h.result.missing).toEqual([1]);
+  });
+
+  it('reports nothing missing when every sentence was spoken', () => {
+    const h = harness(2, 2);
+    h.exp.start();
+    h.exp.accept(0, tone(0.3), 22050);
+    h.exp.accept(1, tone(0.3), 22050);
+    expect(h.result.missing).toEqual([]);
   });
 
   it('stops listening once cancelled', () => {

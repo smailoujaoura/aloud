@@ -28,10 +28,11 @@ export interface EngineInfo {
    */
   cacheHint?: string;
   /**
-   * The cache key ending that must be present too — the weights themselves. A config file alone,
-   * or weights an earlier version used, must not make the engine look installed.
+   * The cache key endings that must *all* be present — the weights themselves. A config file
+   * alone, or weights an earlier version used, must not make the engine look installed: a cache
+   * holding only Kokoro's `config.json` used to offer all 28 of its voices as ready to read.
    */
-  requiredFile?: string;
+  requiredFiles?: string[];
   /** Comfortably faster than real time only with GPU acceleration. */
   needsGpuForSpeed: boolean;
   /** Too slow or too large to be a good idea on a phone. */
@@ -60,7 +61,7 @@ const ENGINES: Record<EngineId, EngineInfo> = {
       'workers to keep up with playback. One 86 MB download unlocks all 28 English voices (US and UK).',
     approxSize: '~86 MB',
     cacheHint: 'Kokoro-82M',
-    requiredFile: '/onnx/model_quantized.onnx',
+    requiredFiles: ['/onnx/model_quantized.onnx'],
     needsGpuForSpeed: true,
     heavyForMobile: true,
   },
@@ -73,6 +74,13 @@ const ENGINES: Record<EngineId, EngineInfo> = {
       'download unlocks all 10 voices.',
     approxSize: '~262 MB',
     cacheHint: 'supertonic-2',
+    // Four separate networks plus the tokeniser: any one missing and synthesis cannot run.
+    requiredFiles: [
+      '/onnx/text_encoder.onnx',
+      '/onnx/duration_predictor.onnx',
+      '/onnx/vector_estimator.onnx',
+      '/onnx/vocoder.onnx',
+    ],
     needsGpuForSpeed: false,
     heavyForMobile: true,
   },

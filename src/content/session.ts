@@ -932,7 +932,7 @@ export class ReaderSession {
       onProgress: (done, total) => {
         if (this.exporter === exporter) this.setExport({ phase: 'running', done, total });
       },
-      onDone: (file, seconds) => {
+      onDone: (file, seconds, missing) => {
         if (this.exporter !== exporter) return;
         log.info(
           `mp3 export: ${this.playlist.length} sentences → ${seconds.toFixed(1)}s audio, ` +
@@ -941,7 +941,17 @@ export class ReaderSession {
         this.exportFile = file;
         this.endExport();
         this.setExport({ phase: 'done', seconds, bytes: file.size });
-        this.bar?.flash('MP3 ready — press the save button to keep it', 'ok');
+        // An export that lost sentences is still worth keeping, but saying "MP3 ready" alone
+        // would hide that part of the page is silence.
+        this.bar?.flash(
+          missing.length === 0
+            ? 'MP3 ready — press the save button to keep it'
+            : `MP3 ready, but ${missing.length} sentence${missing.length === 1 ? '' : 's'} could not be spoken and ${
+                missing.length === 1 ? 'is' : 'are'
+              } silent`,
+          missing.length === 0 ? 'ok' : 'info',
+        );
+        if (missing.length) log.warn(`mp3 export: ${missing.length} sentence(s) missing: ${missing.slice(0, 20).join(', ')}`);
       },
       onError: (message) => {
         if (this.exporter !== exporter) return;
