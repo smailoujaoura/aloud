@@ -179,6 +179,8 @@ export class ReaderSession {
   private engineReady = false;
   private wantsPlayback = false;
   private disposed = false;
+  /** Bumped by `dispose()`: anything still initialising from before it must stop where it is. */
+  private generation = 0;
   /** The voice a switch is waiting on, so its arrival can be confirmed by name. */
   private pendingVoiceLabel: string | null = null;
   /** The one-time tips card is offered once per session, and only once per profile. */
@@ -221,6 +223,12 @@ export class ReaderSession {
   private words: { playId: number; spans: Array<{ start: number; range: Range }>; shown: number } | null = null;
   private wordTimer = 0;
   private finishedHook: (() => void) | null = null;
+  /**
+   * The document was read to the end and nothing has moved since. Play then means "again from
+   * the top": the scheduler is parked past the last sentence, so without a seek it has nothing
+   * to start and the button did nothing at all.
+   */
+  private finishedAtEnd = false;
   /**
    * A downloaded voice in the page's language, chosen for this page only (never saved), or null
    * when the saved voice is reading. See `matchVoiceToPage`.
@@ -277,11 +285,19 @@ export class ReaderSession {
     // "Read selection" / "Read from here" are explicit "start reading now" actions.
     this.wantsPlayback = mode === 'selection' || mode === 'from-cursor' || opts.autoplay === true;
 
+    // Every await below is a chance for this session to be closed or replaced — a second tab
+    // taking over, the reader closed while the manifest loads. Continuing after that built an
+    // audio context, a worker and a bar that cleanup had already run past, and nothing would
+    // take them down again.
+    const generation = this.generation;
+    const superseded = (): boolean => this.disposed || this.generation !== generation;
+
     this.settings = await getSettings();
     // Chunk sizes are fixed at planning time, before any engine exists, so start from what
     // synthesis did last time on this device rather than from an assumption about the browser.
     this.backend = (await loadLastBackend()) ?? 'cpu';
     this.manifest = await this.loadManifest();
+    if (superseded()) return;
     this.connectPort();
     this.buildSubsystems();
 
@@ -299,7 +315,9 @@ export class ReaderSession {
 
     this.docKey = this.knownArticle?.key ?? documentKey(location.href);
     await this.maybeResume();
+    if (superseded()) return;
     await this.matchVoiceToPage();
+    if (superseded()) return;
     this.tapToSeek?.setEnabled(this.settings.tapToSeek);
     await this.loadEngine();
   }
@@ -584,6 +602,15 @@ export class ReaderSession {
 
   async play(): Promise<void> {
     this.halted = false;
+    // Play after the end is a replay, from wherever `onFinished` left the index (the top).
+    if (this.finishedAtEnd) {
+      this.finishedAtEnd = false;
+      this.requested.clear();
+      this.worker.cancelFrom(this.currentPlayId, 0);
+      this.scheduler.seek(this.currentPlayId);
+      this.state.currentIndex = this.currentPlayId;
+      this.highlighter?.show(this.playlist[this.currentPlayId]?.range ?? null);
+    }
     if (this.exporter) {
       this.bar?.flash('Reading carries on once the MP3 is made', 'info');
       return;
@@ -661,6 +688,8 @@ export class ReaderSession {
       return;
     }
     const target = Math.max(0, Math.min(playId, this.playlist.length - 1));
+    // Moving anywhere means this is no longer "sitting at the end of the document".
+    this.finishedAtEnd = false;
     this.currentPlayId = target;
     this.state.currentIndex = target;
     this.highlighter?.show(this.playlist[target]?.range ?? null);
@@ -1230,6 +1259,7 @@ export class ReaderSession {
   }
 
   private onFinished(): void {
+    this.finishedAtEnd = true;
     this.stopFollowingWords(true);
     this.wantsPlayback = false;
     this.state.busy = false;
@@ -1646,6 +1676,8 @@ export class ReaderSession {
     if (this.engineReady || this.currentPlayId > 0) this.rememberPosition(this.currentPlayId, true);
     this.recordHistory(this.currentPlayId);
     this.disposed = true;
+    // Anything still working through `begin()` stops at its next checkpoint.
+    this.generation++;
 
     this.stopFollowingWords(false);
     this.tapToSeek?.dispose();

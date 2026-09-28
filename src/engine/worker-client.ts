@@ -67,6 +67,12 @@ export class WorkerClient {
     this.dispose();
 
     const extOrigin = new URL(browser.runtime.getURL('/')).origin;
+    // Proof that this port comes from Aloud and not from the page around us: a ticket only the
+    // background can mint, and only an extension context can ask for (see background.ts).
+    const ticket = await browser.runtime
+      .sendMessage({ type: 'synth-ticket' })
+      .then((reply) => (reply as { ticket?: string } | undefined)?.ticket ?? null)
+      .catch(() => null);
     const channel = new MessageChannel();
     this.port = channel.port1;
     this.port.onmessage = (ev: MessageEvent) => this.onPortMessage(ev.data);
@@ -103,7 +109,7 @@ export class WorkerClient {
     // failsafe.
     frame.addEventListener('load', () => {
       // Hand the host one end of the channel; all further traffic is private to this port.
-      frame.contentWindow?.postMessage({ __aloud: 'port' }, extOrigin, [channel.port2]);
+      frame.contentWindow?.postMessage({ __aloud: 'port', ticket }, extOrigin, [channel.port2]);
     });
 
     (document.documentElement ?? document.body).appendChild(frame);

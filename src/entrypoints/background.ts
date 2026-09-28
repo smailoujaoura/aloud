@@ -83,6 +83,34 @@ function optional(feature: string, fn: () => void): void {
 /** Serialises read-modify-write storage across contexts (shared/storage-lock.ts). */
 const locks = createLockTable();
 
+/**
+ * One-shot tickets for connecting to the synthesis host.
+ *
+ * `synth-host.html` is web-accessible — it has to be, a content script embeds it — so any page
+ * could embed it too, hand it a MessagePort and drive synthesis with it. A page cannot, however,
+ * talk to this background script: `externally_connectable` is not set, so `runtime.sendMessage`
+ * from page script goes nowhere. That asymmetry is the proof of identity. A reader asks here for
+ * a ticket, sends it with its port, and the host redeems it here before accepting anything.
+ */
+const SYNTH_TICKET_MS = 30_000;
+const synthTickets = new Map<string, number>();
+
+function mintSynthTicket(): string {
+  const now = Date.now();
+  for (const [ticket, expires] of synthTickets) if (expires <= now) synthTickets.delete(ticket);
+  const ticket = crypto.randomUUID();
+  synthTickets.set(ticket, now + SYNTH_TICKET_MS);
+  return ticket;
+}
+
+/** True once, for a ticket that this background minted and that has not expired. */
+function redeemSynthTicket(ticket: unknown): boolean {
+  if (typeof ticket !== 'string') return false;
+  const expires = synthTickets.get(ticket);
+  synthTickets.delete(ticket);
+  return expires != null && expires > Date.now();
+}
+
 export default defineBackground({
   type: 'module',
   main() {
@@ -217,6 +245,11 @@ export default defineBackground({
         }
       } else if (m?.type === 'open-library') {
         void openLibrary((m as { tab?: LibraryTab }).tab);
+      } else if (m?.type === 'synth-ticket') {
+        // Only extension contexts reach this listener at all; a web page cannot.
+        return Promise.resolve({ ticket: mintSynthTicket() });
+      } else if (m?.type === 'synth-ticket-redeem') {
+        return Promise.resolve({ ok: redeemSynthTicket((m as { ticket?: unknown }).ticket) });
       } else if (m?.type === 'storage-lock') {
         // One writer at a time per stored value, across every context (shared/storage-lock.ts).
         const key = (m as { key?: string }).key;

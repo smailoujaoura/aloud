@@ -152,6 +152,30 @@ function fatalToContent(phase: string, message: string, stack?: string): void {
   port?.postMessage({ kind: 'error', id: 0, fatal: true, phase: `synth-host:${phase}`, message, stack });
 }
 
+/**
+ * A worker died. Before readiness that is a failed start-up, and the whole init fails; after it,
+ * it is one worker of a pool, and the reader must hear about the sentences it was holding.
+ *
+ * Silence was the old behaviour — `fatalToContent` returns as soon as readiness is forwarded —
+ * so a crash mid-article left its sentence marked in-flight for ever: the session kept waiting
+ * for audio that could not arrive, and the queue behind it never moved.
+ */
+function workerFailed(w: Worker, phase: string, message: string, stack?: string): void {
+  if (!readyForwarded) {
+    fatalToContent(phase, message, stack);
+    return;
+  }
+  for (const [chunkIndex, entry] of [...dispatched]) {
+    if (entry.worker !== w) continue;
+    dispatched.delete(chunkIndex);
+    relay({ kind: 'error', id: 0, fatal: false, chunkIndex, phase: `synth-host:${phase}`, message, stack });
+  }
+  // eslint-disable-next-line no-console
+  console.warn(`[aloud] ${clock()} ${workerName(w)} failed after ready (${phase}): ${message}`);
+  replaceWorker(w);
+  jobs.pump(readyWorkers);
+}
+
 function makeWorker(idx: number): Worker | null {
   let w: Worker;
   try {
@@ -166,14 +190,14 @@ function makeWorker(idx: number): Worker | null {
     ev.preventDefault?.();
     const where =
       ev.filename && ev.filename !== '' ? ` (${ev.filename}:${ev.lineno ?? 0}:${ev.colno ?? 0})` : '';
-    fatalToContent(
+    workerFailed(
+      w,
       `worker[${idx}].onerror`,
       (ev.message || ev.error?.message || 'the synthesis worker failed to start') + where,
       ev.error?.stack,
     );
   };
-  w.onmessageerror = () =>
-    fatalToContent(`worker[${idx}].onmessageerror`, 'worker sent an unreadable message');
+  w.onmessageerror = () => workerFailed(w, `worker[${idx}].onmessageerror`, 'worker sent an unreadable message');
   return w;
 }
 
@@ -211,6 +235,9 @@ function onWorkerMessage(w: Worker, data: WorkerResponse | undefined): void {
         if (!readyForwarded) {
           readyForwarded = true;
           relay(data);
+        } else {
+          // A worker that has declared itself broken mid-article: same treatment as a crash.
+          workerFailed(w, 'worker.fatal', data.message, data.stack);
         }
       } else {
         // This sentence is over for this worker, however badly — let it take the next one.
@@ -468,15 +495,42 @@ function handleFromContent(msg: WorkerRequest): void {
   broadcast(msg);
 }
 
-// The content script transfers us one MessagePort; everything flows over it after that.
+/**
+ * A reader transfers us one MessagePort; everything flows over it after that.
+ *
+ * This page is web-accessible, so the offer can come from any page that embeds it — the sender's
+ * origin is the embedding page either way, which is why it cannot be used to tell a content
+ * script from page script. What a page cannot do is obtain a ticket from the background, so the
+ * port is only accepted once the ticket it arrives with has been redeemed there.
+ */
 window.addEventListener('message', (ev: MessageEvent) => {
-  const data = ev.data as { __aloud?: string } | null;
+  const data = ev.data as { __aloud?: string; ticket?: unknown } | null;
   if (!data || data.__aloud !== 'port' || !ev.ports[0]) return;
+  const offered = ev.ports[0];
 
-  port = ev.ports[0];
-  port.onmessage = (pev: MessageEvent<WorkerRequest>) => handleFromContent(pev.data);
-  port.start?.();
-  port.postMessage({ __aloud: 'host-ready' });
+  void redeemTicket(data.ticket).then((ok) => {
+    if (!ok) {
+      // Not from a reader: no reply at all, and nothing it sends is ever read.
+      offered.close?.();
+      return;
+    }
+    port?.close?.();
+    port = offered;
+    port.onmessage = (pev: MessageEvent<WorkerRequest>) => handleFromContent(pev.data);
+    port.start?.();
+    port.postMessage({ __aloud: 'host-ready' });
+  });
 });
+
+async function redeemTicket(ticket: unknown): Promise<boolean> {
+  const runtime = (globalThis as { chrome?: { runtime?: { sendMessage?: (m: unknown) => Promise<unknown> } } }).chrome?.runtime;
+  if (!runtime?.sendMessage) return false;
+  try {
+    const reply = (await runtime.sendMessage({ type: 'synth-ticket-redeem', ticket })) as { ok?: boolean } | undefined;
+    return reply?.ok === true;
+  } catch {
+    return false;
+  }
+}
 
 window.addEventListener('pagehide', teardown);
