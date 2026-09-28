@@ -5,6 +5,7 @@
  * remembers about what you read.
  */
 import { storage } from 'wxt/utils/storage';
+import { withStorageLock } from '@/shared/storage-lock';
 
 export type SiteSpeeds = Record<string, { rate: number; at: number }>;
 
@@ -35,7 +36,7 @@ export async function loadSiteSpeeds(): Promise<SiteSpeeds> {
 
 export async function rememberSiteSpeed(host: string, rate: number | null): Promise<void> {
   try {
-    await item.setValue(withSiteSpeed(await loadSiteSpeeds(), host, rate));
+    await withStorageLock('site-speeds', async () => item.setValue(withSiteSpeed(await loadSiteSpeeds(), host, rate)));
   } catch {
     /* best-effort */
   }

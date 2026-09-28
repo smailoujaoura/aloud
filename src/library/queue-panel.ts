@@ -30,6 +30,8 @@ import { log } from '@/shared/log';
 import { $, toast } from './feedback';
 
 let queue: QueueItem[] = [];
+/** Articles this sitting could not download: kept in the queue, not started again by "next". */
+const failed = new Set<string>();
 let playingId: string | null = null;
 let session: ReaderSession | null = null;
 let speed = 1;
@@ -68,15 +70,21 @@ function renderList(): void {
       const text = el(document, 'div', { class: 'q-text' });
       const title = el(document, 'a', { href: item.url, target: '_blank', rel: 'noopener noreferrer', class: 'q-title' }, item.title);
       const seconds = listeningSeconds(item);
-      const meta = [item.site, seconds != null ? `about ${formatListeningTime(seconds)}` : 'downloads when played'];
+      const meta = [
+        item.site,
+        failed.has(item.id) ? 'could not be downloaded — try again' : seconds != null ? `about ${formatListeningTime(seconds)}` : 'downloads when played',
+      ];
       text.append(title, el(document, 'span', { class: 'q-meta' }, meta.join(' · ')));
 
       const actions = el(document, 'div', { class: 'q-actions' });
       if (playing) {
         actions.append(el(document, 'span', { class: 'pill in-use' }, 'Reading now'));
       } else {
-        const read = el(document, 'button', { type: 'button', class: 'btn-sm' }, '▶ Read');
-        read.addEventListener('click', () => void play(item.id));
+        const read = el(document, 'button', { type: 'button', class: 'btn-sm' }, failed.has(item.id) ? '↻ Try again' : '▶ Read');
+        read.addEventListener('click', () => {
+          failed.delete(item.id);
+          void play(item.id);
+        });
         actions.append(read);
       }
       const up = iconButton('↑', 'Move up', i === 0, () => void moveInQueue(item.id, -1));
@@ -118,9 +126,13 @@ export async function play(id: string): Promise<void> {
   const article = item.article ?? (await downloadArticle(item));
   if (playingId !== id) return; // superseded while downloading
   if (!article) {
-    await next(id); // skipped
+    // Could not be read *this time* — a 503, an offline moment, a permission declined. It stays
+    // in the queue with a Retry; only finishing an article takes it out.
+    failed.add(id);
+    await skip(id);
     return;
   }
+  failed.delete(id);
 
   renderArticle(item, article);
   window.scrollTo({ top: $('now').offsetTop - 16, behavior: 'smooth' });
@@ -149,13 +161,30 @@ async function next(finishedId: string): Promise<void> {
   const index = queue.findIndex((q) => q.id === finishedId);
   const following = index >= 0 ? queue[index + 1] : undefined;
   queue = await removeFromQueue(finishedId);
+  await goOn(following?.id, 'That was the last article in your queue');
+}
+
+/**
+ * `failedId` could not be read now. It keeps its place in the queue — losing an article because a
+ * site answered 503 is not something to recover from — and the next one is tried.
+ */
+async function skip(failedId: string): Promise<void> {
+  const index = queue.findIndex((q) => q.id === failedId);
+  const following = index >= 0 ? queue[index + 1] : undefined;
+  await goOn(following?.id, 'Kept in your queue to try again');
+}
+
+async function goOn(followingId: string | undefined, lastMessage: string): Promise<void> {
+  // Never start something already known to have failed in this sitting: that is how "next" turns
+  // into a loop through a queue of unreachable sites.
+  const following = followingId && !failed.has(followingId) ? followingId : undefined;
   if (following) {
-    toast(`Next: ${following.title}`);
-    await play(following.id);
+    toast(`Next: ${queue.find((q) => q.id === following)?.title ?? ''}`);
+    await play(following);
   } else {
     await stopPlaying();
     renderList();
-    toast('That was the last article in your queue');
+    toast(lastMessage);
   }
 }
 
@@ -244,7 +273,7 @@ async function downloadArticle(item: QueueItem): Promise<QueuedArticle | null> {
     return article;
   } catch (err) {
     log.warn('[queue] download failed:', err);
-    toast(`Could not read ${item.site} — ${err instanceof Error ? err.message : String(err)}. Skipping it.`, 'error');
+    toast(`Could not read ${item.site} — ${err instanceof Error ? err.message : String(err)}. It stays in your queue.`, 'error');
     prompt.hidden = true;
     return null;
   }

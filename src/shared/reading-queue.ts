@@ -11,6 +11,7 @@
  */
 import { storage } from 'wxt/utils/storage';
 import { documentKey } from './position-match';
+import { withStorageLock } from './storage-lock';
 
 export interface QueuedArticle {
   /** Readability's cleaned HTML; empty when it could only find plain text. */
@@ -74,6 +75,7 @@ export function withItemRemoved(queue: readonly QueueItem[], id: string): QueueI
 
 // ---- storage ---------------------------------------------------------------
 
+const LOCK_KEY = 'queue';
 const item = storage.defineItem<QueueItem[]>('local:readingQueue', { fallback: [] });
 
 export async function loadQueue(): Promise<QueueItem[]> {
@@ -89,15 +91,19 @@ function newId(): string {
 }
 
 export async function addToQueue(entry: NewQueueItem): Promise<{ added: boolean; full: boolean; size: number }> {
-  const result = withItemAdded(await loadQueue(), { ...entry, id: newId(), addedAt: Date.now() });
-  await item.setValue(result.queue);
-  return { added: result.added, full: result.full, size: result.queue.length };
+  return withStorageLock(LOCK_KEY, async () => {
+    const result = withItemAdded(await loadQueue(), { ...entry, id: newId(), addedAt: Date.now() });
+    await item.setValue(result.queue);
+    return { added: result.added, full: result.full, size: result.queue.length };
+  });
 }
 
 export async function removeFromQueue(id: string): Promise<QueueItem[]> {
-  const next = withItemRemoved(await loadQueue(), id);
-  await item.setValue(next);
-  return next;
+  return withStorageLock(LOCK_KEY, async () => {
+    const next = withItemRemoved(await loadQueue(), id);
+    await item.setValue(next);
+    return next;
+  });
 }
 
 export async function moveInQueue(id: string, delta: number): Promise<QueueItem[]> {
@@ -107,8 +113,10 @@ export async function moveInQueue(id: string, delta: number): Promise<QueueItem[
 }
 
 export async function updateQueueItem(id: string, patch: Partial<Omit<QueueItem, 'id'>>): Promise<void> {
-  const queue = await loadQueue();
-  await item.setValue(queue.map((q) => (q.id === id ? { ...q, ...patch } : q)));
+  await withStorageLock(LOCK_KEY, async () => {
+    const queue = await loadQueue();
+    await item.setValue(queue.map((q) => (q.id === id ? { ...q, ...patch } : q)));
+  });
 }
 
 export async function clearQueue(): Promise<void> {

@@ -6,6 +6,7 @@
  */
 import { storage } from 'wxt/utils/storage';
 import type { PronunciationRule } from '@/segment/pronunciations';
+import { withStorageLock } from './storage-lock';
 
 export type EngineId = 'piper' | 'kokoro' | 'supertonic';
 
@@ -355,14 +356,83 @@ export function withDefaults(stored: Partial<Settings> | null | undefined): Sett
 }
 
 
+/**
+ * Settings from outside — a restored backup — with every value checked against what it means.
+ *
+ * `withDefaults` fills in what is missing; this is about what is *present and wrong*: a negative
+ * speed, an engine that does not exist, a colour list that is null. Those reach the reader, the
+ * bar and the page marks, and a file should not be able to put them there.
+ */
+export function sanitizeSettings(raw: Settings): Settings {
+  const oneOf = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T =>
+    allowed.includes(value as T) ? (value as T) : fallback;
+  const clamp = (value: unknown, min: number, max: number, fallback: number): number =>
+    typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
+  const colors = Array.isArray(raw.annotate?.colors)
+    ? raw.annotate.colors.filter(
+        (c): c is NoteColor => !!c && typeof c.id === 'string' && typeof c.label === 'string' && typeof c.fill === 'string',
+      )
+    : [];
+  const hosts = (value: unknown): string[] =>
+    Array.isArray(value) ? value.filter((h): h is string => typeof h === 'string' && h.length > 0) : [];
+  const presets = Array.isArray(raw.mediaSpeed?.presets)
+    ? raw.mediaSpeed.presets.filter((p): p is number => typeof p === 'number' && p > 0 && p <= 16)
+    : [];
+  return {
+    ...raw,
+    engine: oneOf(raw.engine, ['piper', 'kokoro', 'supertonic'] as const, DEFAULT_SETTINGS.engine),
+    piperVoice: typeof raw.piperVoice === 'string' && raw.piperVoice ? raw.piperVoice : DEFAULT_SETTINGS.piperVoice,
+    kokoroVoice: typeof raw.kokoroVoice === 'string' && raw.kokoroVoice ? raw.kokoroVoice : DEFAULT_SETTINGS.kokoroVoice,
+    supertonicVoice: typeof raw.supertonicVoice === 'string' && raw.supertonicVoice ? raw.supertonicVoice : DEFAULT_SETTINGS.supertonicVoice,
+    speed: clamp(raw.speed, 0.5, 4, DEFAULT_SETTINGS.speed),
+    supertonicSteps: Math.round(clamp(raw.supertonicSteps, 2, 10, DEFAULT_SETTINGS.supertonicSteps)),
+    synthWorkers: Math.round(clamp(raw.synthWorkers, 0, 6, DEFAULT_SETTINGS.synthWorkers)),
+    sectionPauseMs: clamp(raw.sectionPauseMs, 0, 5000, DEFAULT_SETTINGS.sectionPauseMs),
+    sentencePauseMs: clamp(raw.sentencePauseMs, 0, 5000, DEFAULT_SETTINGS.sentencePauseMs),
+    theme: oneOf(raw.theme, ['system', 'light', 'dark'] as const, DEFAULT_SETTINGS.theme),
+    scrollMode: oneOf(raw.scrollMode, ['off', 'keep-visible', 'snap'] as const, DEFAULT_SETTINGS.scrollMode),
+    pdfView: oneOf(raw.pdfView, ['pages', 'reflow'] as const, DEFAULT_SETTINGS.pdfView),
+    wordHighlight: oneOf(raw.wordHighlight, ['darker', 'underline', 'off'] as const, DEFAULT_SETTINGS.wordHighlight),
+    highlightColor: typeof raw.highlightColor === 'string' && raw.highlightColor ? raw.highlightColor : DEFAULT_SETTINGS.highlightColor,
+    pronunciations: Array.isArray(raw.pronunciations)
+      ? raw.pronunciations.filter((r) => !!r && typeof r.from === 'string' && typeof r.to === 'string')
+      : [],
+    annotate: {
+      ...DEFAULT_ANNOTATE,
+      ...raw.annotate,
+      colors: colors.length ? colors : DEFAULT_NOTE_COLORS,
+      defaultStyle: oneOf(raw.annotate?.defaultStyle, ['highlight', 'underline'] as const, DEFAULT_ANNOTATE.defaultStyle),
+      alwaysOn: hosts(raw.annotate?.alwaysOn),
+      pageKeys: {
+        keep: typeof raw.annotate?.pageKeys?.keep === 'string' ? raw.annotate.pageKeys.keep.slice(0, 1) : DEFAULT_ANNOTATE.pageKeys.keep,
+        panel: typeof raw.annotate?.pageKeys?.panel === 'string' ? raw.annotate.pageKeys.panel.slice(0, 1) : DEFAULT_ANNOTATE.pageKeys.panel,
+      },
+    },
+    mediaSpeed: {
+      ...DEFAULT_MEDIA_SPEED,
+      ...raw.mediaSpeed,
+      step: clamp(raw.mediaSpeed?.step, 0.01, 1, DEFAULT_MEDIA_SPEED.step),
+      preferred: clamp(raw.mediaSpeed?.preferred, 0.25, 5, DEFAULT_MEDIA_SPEED.preferred),
+      startAt: clamp(raw.mediaSpeed?.startAt, 0, 5, DEFAULT_MEDIA_SPEED.startAt),
+      presets: presets.length ? presets : [...DEFAULT_MEDIA_SPEED.presets],
+      alwaysOn: hosts(raw.mediaSpeed?.alwaysOn),
+      keys: { ...DEFAULT_MEDIA_SPEED.keys, ...raw.mediaSpeed?.keys },
+    },
+  };
+}
+
 export async function getSettings(): Promise<Settings> {
   return withDefaults(await item.getValue());
 }
 
 export async function setSettings(patch: Partial<Settings>): Promise<Settings> {
-  const next = { ...(await getSettings()), ...patch };
-  await item.setValue(next);
-  return next;
+  // Two settings saved at once — the bar's speed and the options page's theme — used to keep
+  // only one of them: each read the whole object and wrote its own copy back.
+  return withStorageLock('settings', async () => {
+    const next = { ...(await getSettings()), ...patch };
+    await item.setValue(next);
+    return next;
+  });
 }
 
 export function watchSettings(cb: (s: Settings) => void): () => void {

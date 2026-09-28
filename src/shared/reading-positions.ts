@@ -11,6 +11,7 @@
  */
 import { storage } from 'wxt/utils/storage';
 import { withPosition, type PositionMap, type SavedPosition } from './position-match';
+import { withStorageLock } from './storage-lock';
 
 export { documentKey, excerptOf, resumeIndex, type SavedPosition } from './position-match';
 
@@ -26,7 +27,7 @@ export async function loadPosition(key: string): Promise<SavedPosition | undefin
 
 export async function savePosition(key: string, pos: SavedPosition): Promise<void> {
   try {
-    await item.setValue(withPosition(await item.getValue(), key, pos));
+    await withStorageLock('positions', async () => item.setValue(withPosition(await item.getValue(), key, pos)));
   } catch {
     /* best-effort */
   }
@@ -35,10 +36,12 @@ export async function savePosition(key: string, pos: SavedPosition): Promise<voi
 /** Forget a document — used when it is read to the end, so it next opens at the top. */
 export async function clearPosition(key: string): Promise<void> {
   try {
-    const map = await item.getValue();
-    if (!(key in map)) return;
-    const { [key]: _finished, ...rest } = map;
-    await item.setValue(rest);
+    await withStorageLock('positions', async () => {
+      const map = await item.getValue();
+      if (!(key in map)) return;
+      const { [key]: _finished, ...rest } = map;
+      await item.setValue(rest);
+    });
   } catch {
     /* best-effort */
   }

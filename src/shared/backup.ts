@@ -11,9 +11,10 @@
  * position already here is kept unless the backup's copy is newer, so restoring an old backup
  * never throws away what was kept since.
  */
-import { MAX_NOTES, type Note } from './notes';
-import type { QueueItem } from './reading-queue';
-import { SETTINGS_VERSION, migrateSettings, withDefaults, type Settings } from './settings';
+import { MAX_NOTES, normalizeNote, type Note } from './notes';
+import { MAX_QUEUE, type QueueItem } from './reading-queue';
+import { documentKey } from './position-match';
+import { SETTINGS_VERSION, migrateSettings, sanitizeSettings, withDefaults, type Settings } from './settings';
 
 export const BACKUP_FORMAT = 'aloud-backup';
 export const BACKUP_VERSION = 1;
@@ -106,8 +107,8 @@ export function parseBackup(text: string): Backup {
     aloud: String(b.aloud ?? ''),
     settingsVersion: typeof b.settingsVersion === 'number' ? b.settingsVersion : 1,
     settings: b.settings && typeof b.settings === 'object' ? b.settings : null,
-    notes: Array.isArray(b.notes) ? b.notes.filter(isNote) : [],
-    queue: Array.isArray(b.queue) ? b.queue.filter((q) => q && typeof q === 'object' && typeof (q as QueueItem).id === 'string') : [],
+    notes: Array.isArray(b.notes) ? b.notes.map((n) => normalizeNote(n)).filter((n): n is Note => n != null) : [],
+    queue: Array.isArray(b.queue) ? b.queue.map(normalizeQueueItem).filter((q): q is QueueItem => q != null) : [],
     history: obj(b.history),
     positions: obj(b.positions),
     siteSpeeds: obj(b.siteSpeeds),
@@ -121,9 +122,35 @@ export function parseBackup(text: string): Backup {
   };
 }
 
-function isNote(n: unknown): n is Note {
-  const note = n as Note | null;
-  return !!note && typeof note === 'object' && typeof note.id === 'string' && typeof note.text === 'string' && !!note.source;
+/**
+ * A queued article from a file. Anything without a usable address cannot be played or removed
+ * sensibly, so it is dropped rather than restored as an entry that does nothing.
+ */
+function normalizeQueueItem(raw: unknown): QueueItem | null {
+  const item = raw as Partial<QueueItem> | null;
+  if (!item || typeof item !== 'object' || typeof item.url !== 'string') return null;
+  try {
+    new URL(item.url);
+  } catch {
+    return null;
+  }
+  const article =
+    item.article && typeof item.article === 'object' && typeof item.article.text === 'string'
+      ? {
+          html: typeof item.article.html === 'string' ? item.article.html : '',
+          text: item.article.text,
+          lang: typeof item.article.lang === 'string' ? item.article.lang : '',
+          byline: typeof item.article.byline === 'string' ? item.article.byline : null,
+        }
+      : undefined;
+  return {
+    id: typeof item.id === 'string' && item.id ? item.id : `restored-${Math.random().toString(36).slice(2, 10)}`,
+    url: item.url,
+    title: typeof item.title === 'string' && item.title ? item.title : item.url,
+    site: typeof item.site === 'string' ? item.site : '',
+    addedAt: Number.isFinite(item.addedAt) ? (item.addedAt as number) : Date.now(),
+    ...(article ? { article } : {}),
+  };
 }
 
 /** One line per part: what restoring would bring in. */
@@ -143,7 +170,9 @@ export function describeBackup(b: Backup): Record<BackupPart, string> {
 /** The backup's settings, brought up to this version, with defaults for anything missing. */
 export function restoredSettings(b: Backup): Settings | null {
   if (!b.settings) return null;
-  return withDefaults(migrateSettings(b.settings as Record<string, unknown>, b.settingsVersion) as Partial<Settings>);
+  // Migrated, defaulted, *and* checked: a file can carry a negative speed or an engine that does
+  // not exist, and those reach every part of the reader once they are in storage.
+  return sanitizeSettings(withDefaults(migrateSettings(b.settings as Record<string, unknown>, b.settingsVersion) as Partial<Settings>));
 }
 
 /** Notes from both, one per id — the more recently edited copy — newest first. */
@@ -153,14 +182,67 @@ export function mergeNotes(here: readonly Note[], incoming: readonly Note[]): No
     const have = byId.get(note.id);
     if (!have || (note.updatedAt ?? 0) > (have.updatedAt ?? 0)) byId.set(note.id, note);
   }
-  return [...byId.values()].sort((a, b) => b.createdAt - a.createdAt).slice(0, MAX_NOTES);
+  const merged = [...byId.values()].sort((a, b) => b.createdAt - a.createdAt);
+  if (merged.length <= MAX_NOTES) return merged;
+  // Over the cap, what is already here outranks what the file brought: a restore must not be a
+  // way of losing notes. `overflowOf` reports how many were left out.
+  const mine = new Set(here.map((n) => n.id));
+  const kept = merged.filter((n) => mine.has(n.id)).slice(0, MAX_NOTES);
+  for (const note of merged) {
+    if (kept.length >= MAX_NOTES) break;
+    if (!mine.has(note.id)) kept.push(note);
+  }
+  return kept.sort((a, b) => b.createdAt - a.createdAt);
 }
 
 /** The queue here, then what the backup has that is not already queued. */
 export function mergeQueue(here: readonly QueueItem[], incoming: readonly QueueItem[]): QueueItem[] {
   const ids = new Set(here.map((q) => q.id));
-  const urls = new Set(here.map((q) => q.url));
-  return [...here, ...incoming.filter((q) => !ids.has(q.id) && !urls.has(q.url))];
+  // Documents, not addresses: `?utm_source=` should not make the same article a second entry.
+  const keys = new Set(here.map((q) => documentKey(q.url)));
+  const merged = [...here];
+  for (const item of incoming) {
+    const key = documentKey(item.url);
+    // Each accepted entry joins the sets, or a file holding the same article twice adds it twice.
+    if (ids.has(item.id) || keys.has(key)) continue;
+    if (merged.length >= MAX_QUEUE) break;
+    ids.add(item.id);
+    keys.add(key);
+    merged.push(item);
+  }
+  return merged;
+}
+
+/** Notes a restore could not take: shown rather than silently dropped. */
+export interface MergeOverflow {
+  notes: number;
+  queue: number;
+}
+
+/** What `restorePlan` had to leave out, for the page to report. */
+export function overflowOf(b: Backup, all: Record<string, unknown>): MergeOverflow {
+  const notesHere = Array.isArray(all[STORAGE_KEYS.notes]) ? (all[STORAGE_KEYS.notes] as Note[]) : [];
+  const queueHere = Array.isArray(all[STORAGE_KEYS.queue]) ? (all[STORAGE_KEYS.queue] as QueueItem[]) : [];
+  const notesWanted = new Set([...notesHere, ...b.notes].map((n) => n.id)).size;
+  const queueWanted = mergeQueueUncapped(queueHere, b.queue).length;
+  return {
+    notes: Math.max(0, notesWanted - MAX_NOTES),
+    queue: Math.max(0, queueWanted - MAX_QUEUE),
+  };
+}
+
+function mergeQueueUncapped(here: readonly QueueItem[], incoming: readonly QueueItem[]): QueueItem[] {
+  const ids = new Set(here.map((q) => q.id));
+  const keys = new Set(here.map((q) => documentKey(q.url)));
+  const merged = [...here];
+  for (const item of incoming) {
+    const key = documentKey(item.url);
+    if (ids.has(item.id) || keys.has(key)) continue;
+    ids.add(item.id);
+    keys.add(key);
+    merged.push(item);
+  }
+  return merged;
 }
 
 /** Records keyed by document or site: the entry touched most recently wins. */

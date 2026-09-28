@@ -24,7 +24,37 @@ export interface DocSource {
 
 /** The address to show and link for a source, if it has one. */
 export function sourceUrl(source: DocSource): string | null {
-  return source.reopen.kind === 'file' ? null : source.reopen.url;
+  // Defensive about `reopen`: a note restored from an older or hand-edited file may not have one,
+  // and one unreadable record must not take the whole Notes view down with it.
+  const reopen = source?.reopen;
+  if (!reopen || reopen.kind === 'file') return null;
+  return typeof reopen.url === 'string' ? reopen.url : null;
+}
+
+/**
+ * A source that can be shown, from whatever a file provided, or null if there is nothing usable.
+ *
+ * Imports are the one place records arrive without Aloud having written them, and a note whose
+ * source is half-missing used to be stored and then throw while the list drew it.
+ */
+export function normalizeSource(raw: unknown): DocSource | null {
+  const source = raw as Partial<DocSource> | null;
+  if (!source || typeof source !== 'object' || typeof source.key !== 'string' || !source.key) return null;
+  const reopen = normalizeReopen(source.reopen, source.key);
+  if (!reopen) return null;
+  const title = typeof source.title === 'string' && source.title ? source.title : (sourceUrl({ ...(source as DocSource), reopen }) ?? source.key);
+  const site = typeof source.site === 'string' ? source.site : siteOf(reopen.kind === 'file' ? '' : reopen.url);
+  return { key: source.key, title, site, reopen };
+}
+
+function normalizeReopen(raw: unknown, key: string): Reopen | null {
+  const reopen = raw as Partial<Reopen> & { url?: unknown; id?: unknown; name?: unknown };
+  const url = typeof reopen?.url === 'string' ? reopen.url : null;
+  if (reopen?.kind === 'file') return typeof reopen.name === 'string' ? { kind: 'file', name: reopen.name } : null;
+  if (reopen?.kind === 'queue') return url && typeof reopen.id === 'string' ? { kind: 'queue', id: reopen.id, url } : null;
+  if ((reopen?.kind === 'web' || reopen?.kind === 'pdf') && url) return { kind: reopen.kind, url };
+  // No usable `reopen`, but the key is how Aloud names a document and is usually its address.
+  return /^https?:\/\//.test(key) ? { kind: 'web', url: key } : null;
 }
 
 /** Host name of a URL, or '' when it has none worth showing. */

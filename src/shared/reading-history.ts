@@ -7,6 +7,7 @@
  */
 import { storage } from 'wxt/utils/storage';
 import type { DocSource } from './doc-source';
+import { withStorageLock } from './storage-lock';
 
 export interface HistoryEntry {
   source: DocSource;
@@ -117,19 +118,18 @@ export async function loadHistory(): Promise<History> {
   }
 }
 
-/** Updates arrive every few seconds from one reader; chain them so none overwrites another. */
-let pending: Promise<void> = Promise.resolve();
-
+/** Updates arrive every few seconds, from this reader and from any other tab's. */
 export function recordListening(update: ListeningUpdate): Promise<void> {
-  pending = pending
-    .then(async () => item.setValue(withListening(await loadHistory(), update)))
-    .catch(() => undefined);
-  return pending;
+  return withStorageLock('history', async () => {
+    await item.setValue(withListening(await loadHistory(), update));
+  }).catch(() => undefined);
 }
 
 export async function removeFromHistory(key: string): Promise<void> {
-  const { [key]: _gone, ...rest } = await loadHistory();
-  await item.setValue(rest);
+  await withStorageLock('history', async () => {
+    const { [key]: _gone, ...rest } = await loadHistory();
+    await item.setValue(rest);
+  });
 }
 
 export async function clearHistory(): Promise<void> {

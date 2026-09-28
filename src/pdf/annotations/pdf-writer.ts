@@ -40,7 +40,14 @@ async function load(lib: PdfLib, bytes: Uint8Array): Promise<PDFDocumentType> {
 }
 
 /**
- * Remove every highlight, underline, strike-through and sticky note (and their pop-ups).
+ * Remove the highlights, underlines, strike-throughs and sticky notes **that Aloud imported**
+ * (and their pop-ups), leaving every other annotation in the file untouched.
+ *
+ * "That Aloud imported" is the important part. The importer skips annotations that are hidden or
+ * marked not-to-display, and any whose geometry it cannot read; stripping by subtype alone
+ * therefore deleted marks that were never shown to the reader and never came back — someone
+ * else's hidden review comment, silently dropped on save. The rule here has to be exactly the
+ * importer's rule, so this mirrors it (model.ts: `importAnnotations`).
  *
  * Returns how many were removed, so a caller can skip saving a copy that did not change.
  */
@@ -62,7 +69,8 @@ function stripManaged(lib: PdfLib, doc: PDFDocumentType): number {
 
     const gone = new Set<PDFObject>();
     entries.forEach((raw, i) => {
-      if (MANAGED.has(subtypeOf(dicts[i]!))) gone.add(raw);
+      const dict = dicts[i];
+      if (dict && MANAGED.has(subtypeOf(dict)) && wasImported(lib, dict, subtypeOf(dict))) gone.add(raw);
     });
     // A pop-up belongs to the markup annotation it opens from, and goes with it.
     entries.forEach((raw, i) => {
@@ -193,4 +201,28 @@ export function pdfDate(ms: number): string {
   const d = new Date(ms);
   const p = (v: number) => String(v).padStart(2, '0');
   return `D:${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}Z`;
+}
+
+/**
+ * Would `importAnnotations` have turned this annotation into an editable mark?
+ *
+ * Hidden (flag bit 2) and NoView (bit 6) annotations are skipped by the importer, as are ones
+ * whose quad points or rectangle it cannot use. Anything it skipped is somebody else's and stays.
+ */
+function wasImported(lib: PdfLib, dict: PDFDictType, subtype: string): boolean {
+  const { PDFName, PDFNumber, PDFArray } = lib;
+  const flags = dict.lookupMaybe(PDFName.of('F'), PDFNumber)?.asNumber() ?? 0;
+  const HIDDEN = 2;
+  const NO_VIEW = 32;
+  if ((flags & HIDDEN) !== 0 || (flags & NO_VIEW) !== 0) return false;
+
+  const numbers = (name: string): number[] =>
+    (dict.lookupMaybe(PDFName.of(name), PDFArray)?.asArray() ?? [])
+      .map((v) => (v instanceof PDFNumber ? v.asNumber() : Number.NaN))
+      .filter((n) => Number.isFinite(n));
+
+  // A sticky note is placed by its rectangle; a text markup by its quad points, falling back to
+  // the rectangle — the same order the importer uses.
+  if (subtype === 'Text') return numbers('Rect').length >= 4;
+  return numbers('QuadPoints').length >= 8 || numbers('Rect').length >= 4;
 }

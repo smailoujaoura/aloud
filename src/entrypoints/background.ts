@@ -29,6 +29,7 @@ import type { EngineId } from '@/shared/settings';
 import type { VoiceOption } from '@/shared/voice-catalog';
 import type { ModelManifest } from '@/engine/engines/types';
 import { getSettings, watchSettings } from '@/shared/settings';
+import { createLockTable } from '@/shared/storage-lock';
 
 const CONTENT_FILE = '/reader-inject.js';
 /** The media speed control (src/entrypoints/speed-inject.ts). */
@@ -77,6 +78,10 @@ function optional(feature: string, fn: () => void): void {
     console.info(`[aloud] ${feature} is unavailable in this browser:`, err);
   }
 }
+
+
+/** Serialises read-modify-write storage across contexts (shared/storage-lock.ts). */
+const locks = createLockTable();
 
 export default defineBackground({
   type: 'module',
@@ -212,6 +217,13 @@ export default defineBackground({
         }
       } else if (m?.type === 'open-library') {
         void openLibrary((m as { tab?: LibraryTab }).tab);
+      } else if (m?.type === 'storage-lock') {
+        // One writer at a time per stored value, across every context (shared/storage-lock.ts).
+        const key = (m as { key?: string }).key;
+        if (typeof key === 'string') return locks.acquire(key).then((token) => ({ token }));
+      } else if (m?.type === 'storage-unlock') {
+        const { key, token } = m as { key?: string; token?: number };
+        if (typeof key === 'string' && typeof token === 'number') locks.release(key, token);
       } else if (m?.type === 'installed-voices') {
         // Answered here because only an extension-origin context can read the model cache: the
         // reading bar lives in the page, whose IndexedDB is a different origin entirely.

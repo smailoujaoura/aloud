@@ -7,9 +7,10 @@
  */
 import { storage } from 'wxt/utils/storage';
 import type { DocSource } from './doc-source';
-import { sourceUrl } from './doc-source';
+import { normalizeSource, sourceUrl } from './doc-source';
 import type { TextAnchor } from '@/annotate/anchor';
 import type { NoteStyle } from './settings';
+import { withStorageLock } from './storage-lock';
 
 export interface NotePosition {
   /** Playlist index of the sentence, and the playlist length then (see `position-match.ts`). */
@@ -148,21 +149,52 @@ export function parseNotesFile(text: string): Note[] {
   const holder = data as { notes?: unknown } | null;
   const list = Array.isArray(data) ? data : Array.isArray(holder?.notes) ? holder.notes : null;
   if (!list) throw new Error('No notes in that file.');
-  const notes = list.filter(isNote);
-  if (notes.length === 0) throw new Error('No notes in that file.');
+  const notes = list.map((n) => normalizeNote(n)).filter((n): n is Note => n != null);
+  if (notes.length === 0) throw new Error('No notes in that file: none of its records had a passage and a page.');
   return notes;
 }
 
-function isNote(n: unknown): n is Note {
-  const note = n as Note | null;
-  return (
-    !!note &&
-    typeof note === 'object' &&
-    typeof note.id === 'string' &&
-    typeof note.text === 'string' &&
-    !!note.source &&
-    typeof note.source.key === 'string'
-  );
+/**
+ * A note from a file, with everything the rest of Aloud assumes filled in — or null when there is
+ * nothing usable in the record.
+ *
+ * What arrives from an import is the only data Aloud did not write itself. Accepting a record with
+ * three of its fields and storing it put the Notes view into a state where drawing it threw, and
+ * the only way out was clearing every note.
+ */
+export function normalizeNote(raw: unknown, now = Date.now()): Note | null {
+  const note = raw as Partial<Note> | null;
+  if (!note || typeof note !== 'object') return null;
+  const text = typeof note.text === 'string' ? note.text.trim() : '';
+  const source = normalizeSource(note.source);
+  if (!text || !source) return null;
+  const createdAt = Number.isFinite(note.createdAt) ? (note.createdAt as number) : now;
+  const at =
+    note.at && typeof note.at === 'object' && Number.isFinite(note.at.index) && Number.isFinite(note.at.total)
+      ? { index: note.at.index, total: note.at.total, excerpt: String(note.at.excerpt ?? '') }
+      : null;
+  const anchor =
+    note.anchor && typeof note.anchor === 'object' && typeof note.anchor.exact === 'string'
+      ? {
+          exact: note.anchor.exact,
+          prefix: String(note.anchor.prefix ?? ''),
+          suffix: String(note.anchor.suffix ?? ''),
+          start: Number.isFinite(note.anchor.start) ? (note.anchor.start as number) : 0,
+        }
+      : undefined;
+  return {
+    id: typeof note.id === 'string' && note.id ? note.id : newId(),
+    text,
+    comment: typeof note.comment === 'string' ? note.comment : '',
+    source,
+    at,
+    ...(anchor ? { anchor } : {}),
+    ...(typeof note.color === 'string' ? { color: note.color } : {}),
+    ...(note.style === 'underline' || note.style === 'highlight' ? { style: note.style } : {}),
+    tags: Array.isArray(note.tags) ? note.tags.filter((t): t is string => typeof t === 'string') : [],
+    createdAt,
+    updatedAt: Number.isFinite(note.updatedAt) ? (note.updatedAt as number) : createdAt,
+  };
 }
 
 
@@ -203,6 +235,7 @@ export function notesToMarkdown(notes: readonly Note[]): string {
 
 // ---- storage ---------------------------------------------------------------------------------
 
+const LOCK_KEY = 'notes';
 const item = storage.defineItem<Note[]>('local:notes', { fallback: [] });
 
 function newId(): string {
@@ -219,6 +252,7 @@ export async function loadNotes(): Promise<Note[]> {
 
 /** Add notes from a file, keeping the newer copy of anything already here. Returns how many are new. */
 export async function mergeInNotes(incoming: readonly Note[]): Promise<{ added: number; updated: number }> {
+  return withStorageLock(LOCK_KEY, async () => {
   const here = await loadNotes();
   const byId = new Map(here.map((n) => [n.id, n]));
   let added = 0;
@@ -237,28 +271,33 @@ export async function mergeInNotes(incoming: readonly Note[]): Promise<{ added: 
     await item.setValue([...byId.values()].sort((a, b) => b.createdAt - a.createdAt).slice(0, MAX_NOTES));
   }
   return { added, updated };
+  });
 }
 
 export async function addNote(entry: NewNote, now = Date.now()): Promise<{ note: Note; duplicate: boolean }> {
-  const note: Note = { comment: '', ...entry, id: newId(), createdAt: now, updatedAt: now };
-  const result = withNoteAdded(await loadNotes(), note);
-  if (!result.duplicate) await item.setValue(result.notes);
-  return { note: result.added, duplicate: result.duplicate };
+  return withStorageLock(LOCK_KEY, async () => {
+    const note: Note = { comment: '', ...entry, id: newId(), createdAt: now, updatedAt: now };
+    const result = withNoteAdded(await loadNotes(), note);
+    if (!result.duplicate) await item.setValue(result.notes);
+    return { note: result.added, duplicate: result.duplicate };
+  });
 }
 
 export async function updateNote(id: string, patch: NotePatch): Promise<void> {
-  await item.setValue(withNoteUpdated(await loadNotes(), id, patch));
+  await withStorageLock(LOCK_KEY, async () => item.setValue(withNoteUpdated(await loadNotes(), id, patch)));
 }
 
 export async function removeNote(id: string): Promise<void> {
-  await item.setValue(withNoteRemoved(await loadNotes(), id));
+  await withStorageLock(LOCK_KEY, async () => item.setValue(withNoteRemoved(await loadNotes(), id)));
 }
 
 /** Put a removed note back ("Undo"). */
 export async function restoreNote(note: Note): Promise<void> {
-  const notes = await loadNotes();
-  if (notes.some((n) => n.id === note.id)) return;
-  await item.setValue([note, ...notes].sort((a, b) => b.createdAt - a.createdAt).slice(0, MAX_NOTES));
+  await withStorageLock(LOCK_KEY, async () => {
+    const notes = await loadNotes();
+    if (notes.some((n) => n.id === note.id)) return;
+    await item.setValue([note, ...notes].sort((a, b) => b.createdAt - a.createdAt).slice(0, MAX_NOTES));
+  });
 }
 
 export function watchNotes(cb: (notes: Note[]) => void): () => void {

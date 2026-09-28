@@ -11,6 +11,7 @@ import {
   describeBackup,
   makeBackup,
   parseBackup,
+  overflowOf,
   restorePlan,
   type Backup,
   type BackupModels,
@@ -129,7 +130,14 @@ function showRestore(host: HTMLElement, backup: Backup, opts: BackupPanelOptions
       const plan = restorePlan(backup, all, parts);
       if (Object.keys(plan).length) await browser.storage.local.set(plan);
       await opts.onRestored();
-      opts.toast('Restored', 'ok');
+      // What would not fit is said out loud: a restore that quietly drops records is the kind of
+      // thing people find out about months later.
+      const over = overflowOf(backup, all);
+      const missed = [
+        parts.has('notes') && over.notes ? `${over.notes} note${over.notes === 1 ? '' : 's'}` : '',
+        parts.has('library') && over.queue ? `${over.queue} queued article${over.queue === 1 ? '' : 's'}` : '',
+      ].filter(Boolean);
+      opts.toast(missed.length ? `Restored — ${missed.join(' and ')} did not fit and were left out` : 'Restored', missed.length ? 'info' : 'ok');
       await followUps(after, backup, parts, opts);
     } catch (err) {
       opts.toast(`Could not restore: ${String(err)}`, 'error');
