@@ -349,6 +349,16 @@ export class ReaderSession {
         else this.wordTimings.delete(playId);
         this.scheduler.provide(playId, pcm, sr, leadSilenceSec(this.playlist[playId], this.settings));
       },
+      onProvider: (executionProvider) => {
+        // Where synthesis runs decides how far ahead the reader works and how much it buffers;
+        // a GPU that gave out mid-article left both set for a machine that is no longer there.
+        const backend = backendOf(executionProvider);
+        if (backend === this.backend) return;
+        log.info(`engine moved to ${executionProvider}: re-tuning for the ${backend}`);
+        this.backend = backend;
+        void saveLastBackend(backend);
+        this.ensureSynth(this.currentPlayId);
+      },
       onNotice: (message) => {
         // The engine has something to say that is not a failure — most often that it is running
         // on the CPU, and why. Worth a line in the bar: otherwise "slow" is all the user sees.
@@ -761,6 +771,7 @@ export class ReaderSession {
       voice: this.voice,
       steps: this.settings.supertonicSteps,
       preferWebGPU: this.settings.preferWebGPU,
+      debug: this.settings.debug,
       speed: this.settings.speed,
       workers: this.settings.synthWorkers,
     };

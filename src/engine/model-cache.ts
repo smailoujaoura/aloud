@@ -9,7 +9,15 @@
 
 const DB_NAME = 'aloud-models';
 const STORE = 'files';
-const DB_VERSION = 1;
+/**
+ * v2 adds an index over [size, storedAt]. Listing what is cached used to call `getAll()`, which
+ * deserialises every record — and each record holds a whole model. Asking "which voices are on
+ * this device?" therefore pulled hundreds of megabytes into memory, on a page that only wanted
+ * names and sizes. A key cursor over the index answers from the index alone: the model bytes are
+ * never read.
+ */
+const DB_VERSION = 2;
+const META_INDEX = 'meta';
 
 interface FileRecord {
   key: string;
@@ -39,7 +47,10 @@ function openDb(): Promise<IDBDatabase> {
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(STORE)) {
-        db.createObjectStore(STORE, { keyPath: 'key' });
+        db.createObjectStore(STORE, { keyPath: 'key' }).createIndex(META_INDEX, ['size', 'storedAt']);
+      } else if (req.transaction) {
+        const store = req.transaction.objectStore(STORE);
+        if (!store.indexNames.contains(META_INDEX)) store.createIndex(META_INDEX, ['size', 'storedAt']);
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -111,8 +122,26 @@ export async function cacheDelete(key: string): Promise<void> {
 
 export async function cacheEntries(): Promise<Array<{ key: string; size: number; storedAt: number }>> {
   try {
-    const all = await tx<FileRecord[]>('readonly', (s) => s.getAll() as IDBRequest<FileRecord[]>);
-    return all.map(({ key, size, storedAt }) => ({ key, size, storedAt }));
+    return await new Promise((resolve, reject) => {
+      void openDb().then((db) => {
+        const store = db.transaction(STORE, 'readonly').objectStore(STORE);
+        // The index holds [size, storedAt] and the cursor also carries the primary key (the url),
+        // so everything this returns comes from the index — no model buffer is ever deserialised.
+        const req = store.index(META_INDEX).openKeyCursor();
+        const out: Array<{ key: string; size: number; storedAt: number }> = [];
+        req.onsuccess = () => {
+          const cursor = req.result;
+          if (!cursor) {
+            resolve(out);
+            return;
+          }
+          const [size, storedAt] = cursor.key as [number, number];
+          out.push({ key: String(cursor.primaryKey), size, storedAt });
+          cursor.continue();
+        };
+        req.onerror = () => reject(req.error ?? new Error('cacheEntries failed'));
+      }, reject);
+    });
   } catch {
     return [];
   }

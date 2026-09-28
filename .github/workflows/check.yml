@@ -1,0 +1,34 @@
+# The release gate the audit found missing: everything that must be true before a build ships.
+#
+# It fails on a non-zero exit, which is the point — `npm test` used to print 257 green assertions
+# and exit 1 on an unhandled rejection, and a summary nobody reads would have called that a pass.
+name: check
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.12'
+          cache: npm
+      - run: npm ci
+      - name: Types
+        run: npm run compile
+      - name: Tests
+        run: npm test
+      - name: Build both browsers
+        run: npm run build
+      - name: Firefox extension lint
+        run: npm run lint:ext
+      - name: The build carries what it needs
+        run: |
+          test -f .output/firefox-mv3/manifest.json
+          test -f .output/chrome-mv3/manifest.json
+          test "$(ls .output/chrome-mv3/portraits/*.webp | wc -l)" -gt 0

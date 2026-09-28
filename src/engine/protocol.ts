@@ -13,6 +13,8 @@ export interface EngineConfig {
   /** Supertonic only — flow-matching denoising steps. */
   steps?: number;
   preferWebGPU: boolean;
+  /** Verbose console logging (settings: `debug`). Sentence text is only logged when it is on. */
+  debug?: boolean;
   speed: number;
   /**
    * How many parallel synthesis Workers the synth-host should spawn (each with its own model).
@@ -77,6 +79,12 @@ export type WorkerResponse =
    * abandoned and why. Silently running three times slower is the failure mode this prevents.
    */
   | { kind: 'notice'; id: number; message: string }
+  /**
+   * The engine is no longer running where it said it was — a GPU that initialised and then
+   * failed, so synthesis restarted on the CPU. The pool size and the reader's buffering were both
+   * chosen for the old provider and have to be reconsidered.
+   */
+  | { kind: 'provider'; id: number; executionProvider: string }
   | {
       kind: 'model-progress';
       id: number;

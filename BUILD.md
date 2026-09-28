@@ -2,7 +2,8 @@
 
 ## Requirements
 
-- Node.js ≥ 20 (developed on 22)
+- Node.js ≥ 22.12 — what the installed WXT (≥ 22) and Vite (≥ 22.12) require; `engines` in
+  package.json says the same, so `npm install` warns on anything older
 - pnpm ≥ 9 (`npm i -g pnpm`) — npm also works with `--legacy-peer-deps` (already set in `.npmrc`)
 - Firefox ≥ 142 or Chromium ≥ 120 to run it
 
@@ -94,7 +95,7 @@ the worker are capability checks (`src/shared/browser-env.ts`), not build flags.
 **Chromium** — `chrome://extensions` → **Developer mode** → **Load unpacked** → select the
 `.output/chrome-mv3` **folder** (not a file).
 
-Then click the toolbar button (or press `Alt+Shift+R`) on any article. First activation downloads
+Then click the toolbar button (or press `Alt+R`) on any article. First activation downloads
 the selected voice once; after that it is fully offline.
 
 ## Regenerating model integrity hashes (optional)

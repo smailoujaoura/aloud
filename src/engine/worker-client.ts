@@ -19,6 +19,8 @@ export interface WorkerClientCallbacks {
   onError(info: { message: string; fatal: boolean; playId?: number; stack?: string; phase?: string }): void;
   /** Something worth telling the reader that is not a failure, e.g. "…running on the CPU". */
   onNotice?(message: string): void;
+  /** Synthesis moved to another execution provider after start-up (a GPU that gave out). */
+  onProvider?(executionProvider: string): void;
 }
 
 const HOST_URL = '/synth-host.html' as const;
@@ -174,6 +176,9 @@ export class WorkerClient {
       }
       case 'notice':
         this.cb.onNotice?.(msg.message);
+        break;
+      case 'provider':
+        this.cb.onProvider?.(msg.executionProvider);
         break;
       case 'gpu-probe':
         // Only the options page asks for this, and it talks to its own worker directly.

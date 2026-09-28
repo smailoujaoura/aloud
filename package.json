@@ -4,6 +4,9 @@
   "description": "Fast offline neural text-to-speech for Firefox: Readability extraction, Piper/Kokoro via ONNX Runtime Web, gapless Web Audio playback, in-place sentence highlighting.",
   "license": "GPL-3.0-or-later",
   "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
   "scripts": {
     "postinstall": "wxt prepare",
     "dev": "wxt --browser firefox",

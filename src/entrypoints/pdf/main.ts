@@ -416,7 +416,13 @@ async function startEditor(
     fileName: name,
     onChange(next) {
       clearTimeout(pending);
-      pending = window.setTimeout(() => void saveMarks(hash, name, next), 250);
+      // Held so a burst of edits is one write — but a close inside those 250 ms would have lost
+      // the last one, so the pending write is remembered and flushed on the way out.
+      pendingMarks = { hash, name, marks: next };
+      pending = window.setTimeout(() => {
+        pendingMarks = null;
+        void saveMarks(hash, name, next);
+      }, 250);
     },
     async onSave(next) {
       let written: Uint8Array | null = null;
@@ -641,7 +647,17 @@ document.addEventListener('drop', (e) => {
   void handle.then((h) => openFile(file, h?.kind === 'file' ? (h as FileSystemFileHandle) : null));
 });
 
+
+/** A mark edit inside its debounce, kept so closing the page still writes it. */
+let pendingMarks: { hash: string; name: string; marks: readonly Mark[] } | null = null;
+
 window.addEventListener('pagehide', () => {
+  // An edit still inside its debounce is written now: `pagehide` is the last moment there is.
+  if (pendingMarks) {
+    const { hash, name, marks } = pendingMarks;
+    pendingMarks = null;
+    void saveMarks(hash, name, marks);
+  }
   editor?.dispose();
   void session?.dispose();
   pageObserver?.disconnect();

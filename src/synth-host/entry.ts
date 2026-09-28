@@ -32,6 +32,9 @@ import { MAX_POOL, autoPoolSize, clampPool, poolSizeForProvider } from './pool-s
 
 const WORKER_URL = new URL('/tts-worker.js', location.href).href;
 
+/** Whether to print what is being read. Set from the reader's `debug` setting on `init`. */
+let verbose = false;
+
 /** Collect transferable ArrayBuffers anywhere in a (shallow) message tree. */
 function collectBuffers(value: unknown, out: ArrayBuffer[], depth = 0): void {
   if (value == null || depth > 4) return;
@@ -87,10 +90,12 @@ const jobs = new JobQueue<Worker, SynthesizeRequest>(
       /* worker gone */
     }
     dispatched.set(job.chunkIndex, { at: performance.now(), worker });
+    // The sentence itself only with verbose logging on: what someone is reading does not belong
+    // in an ordinary console, where a screen share or a support log would carry it away.
     // eslint-disable-next-line no-console
     console.info(
       `[aloud] ${clock()} ${workerName(worker)} ← chunk ${job.chunkIndex} ` +
-        `"${preview(job.text)}" (${job.text.length} chars) · ${poolState()}`,
+        `${verbose ? `"${preview(job.text)}" ` : ''}(${job.text.length} chars) · ${poolState()}`,
     );
   },
   (job) => job.chunkIndex,
@@ -221,6 +226,15 @@ function onWorkerMessage(w: Worker, data: WorkerResponse | undefined): void {
       }
       return;
     }
+
+    case 'provider':
+      // A GPU that initialised and then failed: the pool was sized for it, and one CPU worker
+      // cannot keep up with playback where four could.
+      // eslint-disable-next-line no-console
+      console.info(`[aloud] ${clock()} ${workerName(w)} now on ${data.executionProvider} · resizing the pool`);
+      resizePoolForProvider(data.executionProvider);
+      relay(data);
+      return;
 
     case 'model-progress':
       // Each file downloads once (navigator.locks); forward a monotonic max so the bar is smooth.
@@ -413,6 +427,7 @@ async function startPool(msg: Extract<WorkerRequest, { kind: 'init' }>, gen: num
         ? clampPool(requested)
         : autoPoolSize(engine, probe.available, poolEnv());
 
+  verbose = msg.config.debug === true;
   initMsg = msg;
 
   // eslint-disable-next-line no-console

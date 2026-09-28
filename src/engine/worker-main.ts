@@ -34,7 +34,14 @@ let engine: SynthEngine | null = null;
  * synthesis time — a model can load on WebGPU and still hit a kernel the browser's WebGPU cannot
  * run (Piper's int64 GatherND on Firefox did, and every sentence came back as silence).
  */
-let started: { config: EngineConfig; manifest: ModelManifest; onNotice: InitContext['onNotice']; fellBack: boolean } | null = null;
+let started: {
+  config: EngineConfig;
+  manifest: ModelManifest;
+  onNotice: InitContext['onNotice'];
+  /** Tell the host and the reader where synthesis actually runs now. */
+  onProvider?: (executionProvider: string) => void;
+  fellBack: boolean;
+} | null = null;
 let manifest: ModelManifest | null = null;
 const queue: Job[] = [];
 let processing = false;
@@ -148,7 +155,13 @@ async function handleInit(req: Extract<WorkerRequest, { kind: 'init' }>): Promis
 
     phase = `loading ${req.config.engine} engine module`;
     engine = await createEngine(req.config.engine, m);
-    started = { config: req.config, manifest: m, onNotice, fellBack: false };
+    started = {
+      config: req.config,
+      manifest: m,
+      onNotice,
+      onProvider: (executionProvider) => post({ kind: 'provider', id: req.id, executionProvider }),
+      fellBack: false,
+    };
 
     phase = `initialising ${req.config.engine} engine (voice "${req.config.voice}")`;
     await engine.init({
@@ -194,6 +207,7 @@ async function synthesizeOrFallBack(job: Job): ReturnType<SynthEngine['synthesiz
     // eslint-disable-next-line no-console
     console.warn(`[aloud] GPU synthesis failed, restarting ${started.config.engine} on the CPU:`, errorInfo(err).message);
     started.onNotice?.('The GPU could not run this voice, so it is running on the CPU instead.');
+    started.onProvider?.('wasm');
     await engine?.dispose();
     engine = await createEngine(started.config.engine, started.manifest);
     await engine.init({
