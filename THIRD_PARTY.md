@@ -18,6 +18,7 @@ build inside the `phonemizer` package that kokoro-js uses.
 | [`@mozilla/readability`](https://github.com/mozilla/readability) | 0.6.0 | Apache-2.0 | Article extraction | `reader-inject.js` |
 | [`@breezystack/lamejs`](https://github.com/breezystack/lamejs) (JavaScript port of LAME) | 1.2.7 | **LGPL-3.0** | MP3 encoding for “Save as MP3” | `reader-inject.js`, and the shared reader chunk the PDF and queue pages load |
 | [`pdf-lib`](https://github.com/Hopding/pdf-lib) | 1.17.1 | MIT | Writing highlights and notes into PDF files | a chunk of the PDF page, loaded on first save |
+| [pdf.js](https://github.com/mozilla/pdf.js) (legacy build) | as shipped in `pdfjs-dist` | Apache-2.0 | Rendering and text extraction for PDFs | `vendor/pdfjs/*` (loaded at runtime, with its own worker, CMaps and standard fonts) |
 | [WXT](https://wxt.dev) | 0.21.4 | MIT | Build tooling only (not shipped) | — |
 
 `onnxruntime-web` is intentionally **not** bundled into `tts-worker.js`; it is copied verbatim to
@@ -28,25 +29,31 @@ inline its ~33 MB of `.wasm` as base64.
 
 ### Piper — [`rhasspy/piper-voices`](https://huggingface.co/rhasspy/piper-voices) @ `v1.0.0`
 
-Model weights are Apache-2.0 (the Piper project). Each *voice* carries its own dataset licence,
-recorded per-entry in `public/models.json`:
+Model weights are Apache-2.0 (the Piper project). The catalogue in `public/models.json` lists
+**175 voices**, and each one's `license` field currently reads "see MODEL_CARD (per-voice;
+rhasspy/piper-voices)" rather than the dataset's actual licence — the table that used to stand
+here named eight voices and read as though it were the whole list, which it never was.
 
-| Voice | Dataset licence |
-|---|---|
-| `en_US-hfc_female-medium` | HiFi-CAPTAIN / CC0-style |
-| `en_US-lessac-medium` | Blizzard 2013 (research/BSD-style) |
-| `en_US-ryan-high` | CC-BY-4.0 |
-| `en_US-amy-medium` | CC-BY-4.0 |
-| `en_GB-alan-medium` | Open Government Licence v3.0 |
-| `de_DE-thorsten-medium` | CC0-1.0 |
-| `fr_FR-siwis-medium` | CC-BY-4.0 |
-| `es_ES-sharvard-medium` | CC-BY-4.0 |
+Each voice's real dataset licence is in its own model card under
+[`rhasspy/piper-voices`](https://huggingface.co/rhasspy/piper-voices) (`@ v1.0.0`), beside the
+`.onnx` file Aloud downloads. Examples of the range: `en_US-ryan-high` and `en_US-amy-medium` are
+CC-BY-4.0, `de_DE-thorsten-medium` is CC0-1.0, `en_GB-alan-medium` is Open Government Licence
+v3.0, and `en_US-lessac-*` comes from Blizzard 2013 (research terms). Resolving all 175 into this
+file, from the model cards at build time, is outstanding work — until then, treat the model card
+as the authority for any voice you ship or redistribute.
 
 ### Kokoro — [`onnx-community/Kokoro-82M-v1.0-ONNX`](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX)
 
 Model weights: **Apache-2.0**. Per-voice style vectors (`voices/*.bin`) are fetched by `kokoro-js`
 and cached via the Cache API (`kokoro-voices`) — the one download that does not go through the
 extension's IndexedDB store.
+
+### Supertonic — [`Supertone/supertonic-2`](https://huggingface.co/Supertone/supertonic-2)
+
+Model weights: **OpenRAIL-M**, a *use-restricted* licence — its behavioural conditions travel with
+the weights, so anyone redistributing them (or a product built on them) must pass the conditions
+on. Aloud never bundles the weights: they are downloaded from Hugging Face on first use, and the
+licence is shown on the engine's card in Settings before that download.
 
 ## Source availability
 
