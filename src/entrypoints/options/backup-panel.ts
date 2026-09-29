@@ -18,6 +18,7 @@ import {
   type BackupPart,
 } from '@/shared/backup';
 import { el } from '@/shared/dom';
+import { withStorageLocks } from '@/shared/storage-lock';
 import { piperDownloaded, readCacheSizes, sharedModelInstalled } from '@/engine/installed-voices';
 import type { ModelManifest } from '@/engine/engines/types';
 import { getSettings, type Settings } from '@/shared/settings';
@@ -30,6 +31,9 @@ export interface BackupPanelOptions {
   /** Settings were replaced: redraw the page from storage. */
   onRestored(): Promise<void>;
 }
+
+/** Every stored value a restore may rewrite, by the lock its own writers take. */
+const RESTORE_LOCKS = ['settings', 'notes', 'queue', 'history', 'positions', 'site-speeds'];
 
 const PART_LABEL: Record<BackupPart, string> = {
   settings: 'Settings and voices',
@@ -126,9 +130,14 @@ function showRestore(host: HTMLElement, backup: Backup, opts: BackupPanelOptions
     go.disabled = true;
     const parts = new Set(BACKUP_PARTS.filter((p) => boxes.get(p)!.checked));
     try {
-      const all = (await browser.storage.local.get(null)) as Record<string, unknown>;
-      const plan = restorePlan(backup, all, parts);
-      if (Object.keys(plan).length) await browser.storage.local.set(plan);
+      // Read, merge and write under the same locks every other writer takes: a note kept in a
+      // reading tab between the read and the write would otherwise be overwritten by the merge.
+      const all = await withStorageLocks(RESTORE_LOCKS, async () => {
+        const current = (await browser.storage.local.get(null)) as Record<string, unknown>;
+        const plan = restorePlan(backup, current, parts);
+        if (Object.keys(plan).length) await browser.storage.local.set(plan);
+        return current;
+      });
       await opts.onRestored();
       // What would not fit is said out loud: a restore that quietly drops records is the kind of
       // thing people find out about months later.

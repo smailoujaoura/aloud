@@ -62,11 +62,14 @@ export class WorkerClient {
   private readonly wanted = new Set<number>();
   private handshake: Deferred | null = null;
   private engineReady: Deferred | null = null;
+  /** Bumped by every init and dispose, so an init overtaken while it waited can tell. */
+  private generation = 0;
 
   constructor(private readonly cb: WorkerClientCallbacks) {}
 
   async init(config: EngineConfig): Promise<void> {
     this.dispose();
+    const generation = ++this.generation;
 
     const extOrigin = new URL(browser.runtime.getURL('/')).origin;
     // Proof that this port comes from Aloud and not from the page around us: a ticket only the
@@ -75,6 +78,14 @@ export class WorkerClient {
       .sendMessage({ type: 'synth-ticket' })
       .then((reply) => (reply as { ticket?: string } | undefined)?.ticket ?? null)
       .catch(() => null);
+    // Disposed (or re-initialised) while the ticket was on its way: building the host now would
+    // leave a hidden frame and a worker loading a model on a page nobody is reading.
+    if (generation !== this.generation) throw new Error('synthesis host disposed');
+    // The host refuses a port without a ticket, and says nothing — which would surface as a
+    // fifteen-second handshake timeout with no hint of why. Say why, now.
+    if (!ticket) {
+      throw new Error('Aloud could not reach its background page to start the voice. Reload the page and try again.');
+    }
     const channel = new MessageChannel();
     this.port = channel.port1;
     this.port.onmessage = (ev: MessageEvent) => this.onPortMessage(ev.data);
@@ -219,6 +230,8 @@ export class WorkerClient {
   }
 
   dispose(): void {
+    // Any init still waiting on its ticket is stale from here on.
+    this.generation++;
     if (this.port) {
       this.send({ kind: 'dispose', id: this.nextId++ });
       try {

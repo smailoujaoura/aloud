@@ -538,11 +538,25 @@ window.addEventListener('message', (ev: MessageEvent) => {
 });
 
 async function redeemTicket(ticket: unknown): Promise<boolean> {
-  const runtime = (globalThis as { chrome?: { runtime?: { sendMessage?: (m: unknown) => Promise<unknown> } } }).chrome?.runtime;
-  if (!runtime?.sendMessage) return false;
+  type Runtime = { sendMessage?: (m: unknown, callback?: (reply: unknown) => void) => Promise<unknown> | void; lastError?: unknown };
+  const scope = globalThis as { browser?: { runtime?: Runtime }; chrome?: { runtime?: Runtime } };
+  const message = { type: 'synth-ticket-redeem', ticket };
   try {
-    const reply = (await runtime.sendMessage({ type: 'synth-ticket-redeem', ticket })) as { ok?: boolean } | undefined;
-    return reply?.ok === true;
+    // `browser.*` returns a promise everywhere it exists (Firefox). `chrome.*` is asked with a
+    // callback, which every Chromium supports, rather than trusting it to return a promise.
+    if (scope.browser?.runtime?.sendMessage) {
+      const reply = (await scope.browser.runtime.sendMessage(message)) as { ok?: boolean } | undefined;
+      return reply?.ok === true;
+    }
+    const runtime = scope.chrome?.runtime;
+    if (!runtime?.sendMessage) return false;
+    const reply = await new Promise<unknown>((resolve) => {
+      runtime.sendMessage!(message, (answer) => {
+        void runtime.lastError; // read, so Chromium does not log an unchecked error
+        resolve(answer);
+      });
+    });
+    return (reply as { ok?: boolean } | undefined)?.ok === true;
   } catch {
     return false;
   }

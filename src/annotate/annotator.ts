@@ -122,6 +122,20 @@ export class PageAnnotator {
       }, 800);
     });
     this.observer.observe(document.body ?? document.documentElement, { childList: true, subtree: true, characterData: true });
+
+    // A single-page app changes its address with history.pushState, which a content script cannot
+    // hear (it runs in its own world). Until something else repainted, the old article's marks
+    // stayed on screen and its notes stayed in the panel. So look at the address now and then —
+    // one string comparison a second — and at once on the navigations that do fire events.
+    const follow = (): void => {
+      if (document.visibilityState === 'hidden' || documentKey(location.href) === this.key) return;
+      this.repaints = 0;
+      this.paint();
+    };
+    this.listen(window, 'popstate', follow);
+    this.listen(window, 'hashchange', follow);
+    const poll = window.setInterval(follow, 1000);
+    this.cleanups.push(() => clearInterval(poll));
   }
 
   stop(): void {

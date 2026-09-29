@@ -222,8 +222,16 @@ export default defineBackground({
     // The content script telling us the page it was injected into is really a PDF: Chromium
     // renders one inside a plugin <embed> whose document has no text, which is what used to
     // surface as "this page doesn't look like an article".
-    browser.runtime.onMessage.addListener((msg: unknown, sender) => {
+    browser.runtime.onMessage.addListener((msg: unknown, sender, sendResponse: (reply: unknown) => void) => {
       const m = msg as { type?: string; engine?: EngineId };
+      // Replying later is `sendResponse` plus `return true`. Returning a promise also works in
+      // Firefox and in recent Chromium, but not in the older Chromium the build still targets
+      // (chrome120) — where every reply below would have arrived as `undefined`: no ticket, so
+      // no voice; no lock, so no ordering.
+      const replyWith = (answer: Promise<unknown> | unknown): true => {
+        void Promise.resolve(answer).then(sendResponse, () => sendResponse(undefined));
+        return true;
+      };
       if (m?.type === 'open-pdf-reader') {
         const tab = sender.tab;
         if (tab?.url) void openPdfReader(tab.url, tab.id ?? null, tab.index);
@@ -247,21 +255,20 @@ export default defineBackground({
         void openLibrary((m as { tab?: LibraryTab }).tab);
       } else if (m?.type === 'synth-ticket') {
         // Only extension contexts reach this listener at all; a web page cannot.
-        return Promise.resolve({ ticket: mintSynthTicket() });
+        return replyWith({ ticket: mintSynthTicket() });
       } else if (m?.type === 'synth-ticket-redeem') {
-        return Promise.resolve({ ok: redeemSynthTicket((m as { ticket?: unknown }).ticket) });
+        return replyWith({ ok: redeemSynthTicket((m as { ticket?: unknown }).ticket) });
       } else if (m?.type === 'storage-lock') {
         // One writer at a time per stored value, across every context (shared/storage-lock.ts).
         const key = (m as { key?: string }).key;
-        if (typeof key === 'string') return locks.acquire(key).then((token) => ({ token }));
+        if (typeof key === 'string') return replyWith(locks.acquire(key).then((token) => ({ token })));
       } else if (m?.type === 'storage-unlock') {
         const { key, token } = m as { key?: string; token?: number };
         if (typeof key === 'string' && typeof token === 'number') locks.release(key, token);
       } else if (m?.type === 'installed-voices') {
         // Answered here because only an extension-origin context can read the model cache: the
         // reading bar lives in the page, whose IndexedDB is a different origin entirely.
-        // Returning a promise is how both browsers reply asynchronously.
-        return installedVoices(m.engine ?? 'piper');
+        return replyWith(installedVoices(m.engine ?? 'piper'));
       }
       return false;
     });

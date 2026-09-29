@@ -38,14 +38,21 @@ class FakeWorker implements FakeWorkerLike {
 
 /** The background: it approves only the ticket it minted. */
 let validTicket: string | null = 'ticket-1';
-const runtime = {
-  sendMessage: async (m: { type?: string; ticket?: string }) =>
-    m.type === 'synth-ticket-redeem' ? { ok: m.ticket != null && m.ticket === validTicket } : {},
+const answer = (m: { type?: string; ticket?: string }) =>
+  m.type === 'synth-ticket-redeem' ? { ok: m.ticket != null && m.ticket === validTicket } : {};
+/** Chromium's `chrome.runtime`: answers through a callback (older versions return no promise). */
+const chromeRuntime = {
+  sendMessage: (m: { type?: string; ticket?: string }, callback?: (reply: unknown) => void) => {
+    setTimeout(() => callback?.(answer(m)), 0);
+  },
 };
+/** Firefox's `browser.runtime`: answers with a promise. */
+const browserRuntime = { sendMessage: async (m: { type?: string; ticket?: string }) => answer(m) };
 
-async function loadHost() {
+async function loadHost(flavour: 'chrome' | 'firefox' = 'chrome') {
   vi.stubGlobal('Worker', FakeWorker as unknown as typeof Worker);
-  vi.stubGlobal('chrome', { runtime });
+  if (flavour === 'chrome') vi.stubGlobal('chrome', { runtime: chromeRuntime });
+  else vi.stubGlobal('browser', { runtime: browserRuntime });
   workers.length = 0;
   vi.resetModules();
   await import('@/synth-host/entry');
@@ -88,6 +95,14 @@ describe('the synthesis host', () => {
   });
 
   it('accepts a reader that brings a valid ticket', async () => {
+    const { replies } = offerPort('ticket-1');
+    await settle();
+    expect(replies[0]).toEqual({ __aloud: 'host-ready' });
+  });
+
+  it('accepts a valid ticket in Firefox, where the runtime is `browser`', async () => {
+    vi.unstubAllGlobals();
+    await loadHost('firefox');
     const { replies } = offerPort('ticket-1');
     await settle();
     expect(replies[0]).toEqual({ __aloud: 'host-ready' });

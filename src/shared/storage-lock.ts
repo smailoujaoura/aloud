@@ -41,6 +41,17 @@ export async function withStorageLock<T>(key: string, run: () => Promise<T>): Pr
   return mine;
 }
 
+/**
+ * Several keys at once — for a restore, which reads and rewrites nearly everything. Taken in a
+ * fixed order, so two callers asking for overlapping sets can never each hold what the other waits
+ * for. (Every other writer takes one key.)
+ */
+export async function withStorageLocks<T>(keys: readonly string[], run: () => Promise<T>): Promise<T> {
+  const sorted = [...new Set(keys)].sort();
+  const hold = (i: number): Promise<T> => (i === sorted.length ? run() : withStorageLock(sorted[i]!, () => hold(i + 1)));
+  return hold(0);
+}
+
 async function holdAndRun<T>(key: string, run: () => Promise<T>): Promise<T> {
   const token = await acquire(key);
   try {
@@ -81,18 +92,32 @@ export function createLockTable(now: () => number = Date.now, timeoutMs = LOCK_T
     token: number;
     since: number;
     waiting: Array<(token: number) => void>;
+    timer: ReturnType<typeof setTimeout> | null;
   }
   const keys = new Map<string, Held>();
   let nextToken = 1;
 
+  // Waiters already queued behind a holder that went away must not depend on some *new* caller
+  // arriving to notice the timeout: each grant carries a deadline that hands the key on by itself.
+  const watch = (key: string, held: Held): void => {
+    if (held.timer) clearTimeout(held.timer);
+    const token = held.token;
+    held.timer = setTimeout(() => {
+      held.timer = null;
+      if (keys.get(key) === held && held.token === token) handOn(key, held);
+    }, timeoutMs + 1);
+  };
+
   const handOn = (key: string, held: Held): void => {
     const next = held.waiting.shift();
     if (!next) {
+      if (held.timer) clearTimeout(held.timer);
       keys.delete(key);
       return;
     }
     held.token = nextToken++;
     held.since = now();
+    watch(key, held);
     next(held.token);
   };
 
@@ -102,7 +127,9 @@ export function createLockTable(now: () => number = Date.now, timeoutMs = LOCK_T
       const held = keys.get(key);
       if (!held) {
         const token = nextToken++;
-        keys.set(key, { token, since: now(), waiting: [] });
+        const fresh: Held = { token, since: now(), waiting: [], timer: null };
+        keys.set(key, fresh);
+        watch(key, fresh);
         return Promise.resolve(token);
       }
       // A holder that went away (a closed tab) must not wedge the key for everyone else.

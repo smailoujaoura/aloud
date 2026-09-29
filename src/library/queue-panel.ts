@@ -158,10 +158,9 @@ export async function play(id: string): Promise<void> {
 
 /** `finishedId` has been read: it leaves the queue, and the one after it starts. */
 async function next(finishedId: string): Promise<void> {
-  const index = queue.findIndex((q) => q.id === finishedId);
-  const following = index >= 0 ? queue[index + 1] : undefined;
+  const after = idsAfter(finishedId);
   queue = await removeFromQueue(finishedId);
-  await goOn(following?.id, 'That was the last article in your queue');
+  await goOn(after, 'That was the last article in your queue');
 }
 
 /**
@@ -169,15 +168,20 @@ async function next(finishedId: string): Promise<void> {
  * site answered 503 is not something to recover from — and the next one is tried.
  */
 async function skip(failedId: string): Promise<void> {
-  const index = queue.findIndex((q) => q.id === failedId);
-  const following = index >= 0 ? queue[index + 1] : undefined;
-  await goOn(following?.id, 'Kept in your queue to try again');
+  await goOn(idsAfter(failedId), 'Kept in your queue to try again');
 }
 
-async function goOn(followingId: string | undefined, lastMessage: string): Promise<void> {
+/** The articles queued after `id`, in order. */
+function idsAfter(id: string): string[] {
+  const index = queue.findIndex((q) => q.id === id);
+  return index >= 0 ? queue.slice(index + 1).map((q) => q.id) : [];
+}
+
+async function goOn(candidates: string[], lastMessage: string): Promise<void> {
   // Never start something already known to have failed in this sitting: that is how "next" turns
-  // into a loop through a queue of unreachable sites.
-  const following = followingId && !failed.has(followingId) ? followingId : undefined;
+  // into a loop through a queue of unreachable sites. But one failure further down must not end
+  // the listening either — step over it to the next article that has not failed.
+  const following = candidates.find((id) => !failed.has(id) && queue.some((q) => q.id === id));
   if (following) {
     toast(`Next: ${queue.find((q) => q.id === following)?.title ?? ''}`);
     await play(following);
