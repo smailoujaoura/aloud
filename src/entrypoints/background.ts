@@ -678,12 +678,19 @@ async function startSpeedControl(tabId: number): Promise<void> {
  */
 async function syncSpeedSites(): Promise<void> {
   const { mediaSpeed, annotate } = await getSettings();
-  await syncRegistration(SPEED_SCRIPT_ID, SPEED_FILE, mediaSpeed.enabled ? mediaSpeed.alwaysOn : [], true);
+  // The speed control starts with the page: its autoplay guard must be there before the video is.
+  await syncRegistration(SPEED_SCRIPT_ID, SPEED_FILE, mediaSpeed.enabled ? mediaSpeed.alwaysOn : [], true, 'document_start');
   await syncRegistration(ANNOTATE_SCRIPT_ID, ANNOTATE_FILE, annotate.alwaysOn, false);
 }
 
 /** Register `file` for the granted ones among `hosts` (`*` = every site), replacing any earlier registration. */
-async function syncRegistration(id: string, file: string, hosts: readonly string[], allFrames: boolean): Promise<void> {
+async function syncRegistration(
+  id: string,
+  file: string,
+  hosts: readonly string[],
+  allFrames: boolean,
+  runAt: 'document_start' | 'document_idle' = 'document_idle',
+): Promise<void> {
   if (!browser.scripting?.registerContentScripts) return;
   try {
     const wanted: string[] = [];
@@ -695,7 +702,7 @@ async function syncRegistration(id: string, file: string, hosts: readonly string
     if (existing.length > 0) await browser.scripting.unregisterContentScripts({ ids: [id] });
     if (wanted.length === 0) return;
     await browser.scripting.registerContentScripts([
-      { id, js: [file.slice(1)], matches: [...new Set(wanted)], allFrames, runAt: 'document_idle', persistAcrossSessions: true },
+      { id, js: [file.slice(1)], matches: [...new Set(wanted)], allFrames, runAt, persistAcrossSessions: true },
     ]);
     console.info(`[aloud] ${id} runs by itself on ${new Set(wanted).size} pattern(s)`);
   } catch (err) {

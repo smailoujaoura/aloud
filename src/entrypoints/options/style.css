@@ -154,6 +154,7 @@ main { width: 100%; max-width: 720px; margin: 0; padding: 28px 24px 96px; box-si
 .row { display: flex; align-items: center; gap: 12px; margin: 10px 0; }
 .row > span:first-child { flex: 0 0 150px; }
 .row.check > span { flex: 1; }
+.row.check .check-hint { display: block; margin-top: 2px; }
 .row select, .row input[type='range'] { flex: 1; }
 .row-hint { color: var(--fg-muted); font-size: 12.5px; margin: -2px 0 12px 162px; }
 .row-hint.warn { color: var(--warn); }

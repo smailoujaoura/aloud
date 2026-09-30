@@ -93,6 +93,8 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
   player resets it between videos, and shown briefly on the video. It starts with
   <kbd>Alt</kbd>+<kbd>M</kbd> and asks for no permissions; sites you list in
   settings start it by themselves, one granted site at a time.
+  On those sites it can also stop video and audio from playing by themselves (off until you
+  switch it on): anything you start — a click, a tap, <kbd>Space</kbd> — plays as usual.
 - **Offline & private** — models download once from Hugging Face and are cached on the device.
 
 ## Which voice to use

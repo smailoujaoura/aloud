@@ -29,6 +29,8 @@ export interface ControllerHost {
   initialRate: number | null;
   /** Called when the rate changes, so it can be remembered for this site. */
   onRate(rate: number): void;
+  /** Called for each media element as it is found (the autoplay guard); returns its unhook. */
+  onMedia?(media: HTMLMediaElement): () => void;
 }
 
 type Media = HTMLMediaElement;
@@ -63,7 +65,8 @@ export class MediaSpeedController {
         this.prune();
       }
     });
-    this.observer.observe(document.documentElement, { childList: true, subtree: true });
+    // `document`, not its root element: started with the page, there may not be one yet.
+    this.observer.observe(document, { childList: true, subtree: true });
     this.listen(window, 'keydown', (e) => this.onKey(e as KeyboardEvent), true);
   }
 
@@ -125,10 +128,10 @@ export class MediaSpeedController {
   // ---- finding media ---------------------------------------------------------------
 
   private scan(): void {
-    this.scanFrom(document.documentElement);
+    this.scanFrom(document);
   }
 
-  private scanFrom(root: Element | ShadowRoot): void {
+  private scanFrom(root: Element | ShadowRoot | Document): void {
     for (const media of mediaWithin(root)) this.track(media);
   }
 
@@ -178,6 +181,8 @@ export class MediaSpeedController {
 
     media.addEventListener('ratechange', onRateChange);
     off.push(() => media.removeEventListener('ratechange', onRateChange));
+    const unhook = this.host.onMedia?.(media);
+    if (unhook) off.push(unhook);
     const release = (): void => {
       for (const un of off) un();
     };
@@ -220,16 +225,29 @@ export class MediaSpeedController {
   // ---- the badge ----------------------------------------------------------------------
 
   /**
+   * Say something over `media` whatever the badge setting — it is not about the speed, and a video
+   * that stopped by itself with no word why looks broken. Once every few seconds at most, for sites
+   * that keep calling play.
+   */
+  notice(text: string, media?: Media): void {
+    const now = Date.now();
+    if (now - this.lastNotice < 4000) return;
+    this.lastNotice = now;
+    this.showBadge(text, media, true);
+  }
+  private lastNotice = 0;
+
+  /**
    * The speed, over the largest video on screen (or at the corner of the window when the media
    * has no box of its own, as audio does not). Its own closed shadow root, so nothing of the
    * page's styling reaches it and nothing of ours reaches the page.
    */
-  private showBadge(text: string): void {
-    if (!this.settings.showBadge) return;
+  private showBadge(text: string, over?: Media, always = false): void {
+    if (!this.settings.showBadge && !always) return;
     const badge = this.badge ?? this.createBadge();
     if (!badge) return;
     badge.text.textContent = text;
-    const box = largestBox(this.known);
+    const box = (over && largestBox([over])) ?? largestBox(this.known);
     const top = box ? Math.max(8, box.top + 12) : 16;
     const left = box ? Math.max(8, box.left + 12) : 16;
     badge.host.style.top = `${top}px`;
@@ -238,7 +256,7 @@ export class MediaSpeedController {
     clearTimeout(badge.timer);
     badge.timer = window.setTimeout(() => {
       if (this.badge) this.badge.host.style.display = 'none';
-    }, BADGE_MS);
+    }, always ? BADGE_MS * 2 : BADGE_MS);
   }
 
   private createBadge(): { host: HTMLElement; text: HTMLElement; timer: number } | null {

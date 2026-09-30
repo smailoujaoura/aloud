@@ -52,18 +52,24 @@ export function renderMediaSpeedPanel(host: HTMLElement, opts: MediaSpeedPanelOp
       (value) => void opts.save({ step: Number(value) }),
     )),
     labelledRow('Your speed', 'The speed the “your speed” key jumps to', select(
-      rateOptions(s.presets),
+      rateOptions(s.presets, s.preferred),
       String(s.preferred),
       (value) => void opts.save({ preferred: clampRate(Number(value)) }),
     )),
     labelledRow('Start videos at', 'Applied when a page’s video first appears', select(
-      [{ value: '0', label: 'Whatever the site chose' }, ...rateOptions(s.presets)],
+      [{ value: '0', label: 'Whatever the site chose' }, ...rateOptions(s.presets, s.startAt)],
       String(s.startAt),
       (value) => void opts.save({ startAt: Number(value) }),
     )),
     presetsRow(s, opts),
     checkboxRow('Remember the speed of each site', s.rememberPerSite, (on) => void opts.save({ rememberPerSite: on })),
     checkboxRow('Show the speed on the video when it changes', s.showBadge, (on) => void opts.save({ showBadge: on })),
+    checkboxRow(
+      'Stop videos and audio from playing by themselves',
+      s.blockAutoplay,
+      (on) => void opts.save({ blockAutoplay: on }),
+      'On the sites above. Anything you start — a click, a tap, Space — plays as usual.',
+    ),
   );
 
   const forget = el(document, 'button', { type: 'button', class: 'ghost btn-sm' }, 'Forget remembered site speeds');
@@ -155,8 +161,9 @@ function presetsRow(s: MediaSpeedSettings, opts: MediaSpeedPanelOptions): HTMLEl
   return labelledRow('Preset speeds', 'The speeds the preset keys step through', input);
 }
 
-function rateOptions(presets: readonly number[]): Array<{ value: string; label: string }> {
-  const rates = [...new Set([...presets, 1, 1.5, 2])].sort((a, b) => a - b);
+/** The presets, the usual rates, and `current` — a picker that lacks the saved value shows its first option instead. */
+function rateOptions(presets: readonly number[], current: number): Array<{ value: string; label: string }> {
+  const rates = [...new Set([...presets, 1, 1.5, 2, ...(current > 0 ? [current] : [])])].sort((a, b) => a - b);
   return rates.map((r) => ({ value: String(r), label: formatRate(r) }));
 }
 
@@ -168,12 +175,14 @@ function labelledRow(label: string, hint: string, control: HTMLElement): HTMLEle
   return row;
 }
 
-function checkboxRow(label: string, checked: boolean, onChange: (on: boolean) => void): HTMLElement {
+function checkboxRow(label: string, checked: boolean, onChange: (on: boolean) => void, hint?: string): HTMLElement {
   const row = el(document, 'label', { class: 'row check' });
   const box = el(document, 'input', { type: 'checkbox' }) as HTMLInputElement;
   box.checked = checked;
   box.addEventListener('change', () => onChange(box.checked));
-  row.append(box, el(document, 'span', {}, label));
+  const text = el(document, 'span', {}, label);
+  if (hint) text.append(el(document, 'span', { class: 'muted small check-hint' }, hint));
+  row.append(box, text);
   return row;
 }
 

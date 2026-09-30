@@ -76,6 +76,11 @@ export interface MediaSpeedSettings {
   rememberPerSite: boolean;
   /** Show the speed briefly over the video when it changes. */
   showBadge: boolean;
+  /**
+   * Pause video and audio that start without being asked — on arrival, the next one in a feed —
+   * wherever the speed control runs (media-speed/autoplay.ts).
+   */
+  blockAutoplay: boolean;
   /** Hosts the control starts on by itself, once that site's permission has been granted. */
   alwaysOn: string[];
   /** Key bindings, as text — see media-speed/keys.ts. */
@@ -102,6 +107,7 @@ export const DEFAULT_MEDIA_SPEED: MediaSpeedSettings = {
   startAt: 0,
   rememberPerSite: true,
   showBadge: true,
+  blockAutoplay: false,
   alwaysOn: [],
   keys: {
     faster: 'd',
@@ -414,6 +420,7 @@ export function sanitizeSettings(raw: Settings): Settings {
       step: clamp(raw.mediaSpeed?.step, 0.01, 1, DEFAULT_MEDIA_SPEED.step),
       preferred: clamp(raw.mediaSpeed?.preferred, 0.25, 5, DEFAULT_MEDIA_SPEED.preferred),
       startAt: clamp(raw.mediaSpeed?.startAt, 0, 5, DEFAULT_MEDIA_SPEED.startAt),
+      blockAutoplay: raw.mediaSpeed?.blockAutoplay === true,
       presets: presets.length ? presets : [...DEFAULT_MEDIA_SPEED.presets],
       alwaysOn: hosts(raw.mediaSpeed?.alwaysOn),
       keys: { ...DEFAULT_MEDIA_SPEED.keys, ...raw.mediaSpeed?.keys },
