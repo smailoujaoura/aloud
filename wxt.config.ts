@@ -38,7 +38,8 @@ export default defineConfig({
     name: 'Aloud — Offline Neural Reader',
     short_name: 'Aloud',
     description:
-      'Fast, fully offline text-to-speech. Extracts the article, reads it aloud with a local neural voice, and highlights each sentence as it plays.',
+      // The Chrome Web Store refuses an upload whose description is over 132 characters.
+      'Reads any article or PDF aloud in a natural neural voice that runs on your device. Offline and private, it highlights every word.',
 
     permissions: ['activeTab', 'scripting', 'storage', 'unlimitedStorage', 'contextMenus', 'tabs'],
 
@@ -117,7 +118,7 @@ export default defineConfig({
     },
 
     action: {
-      default_title: 'Read this page aloud (Alt+Shift+R)',
+      default_title: 'Read this page aloud (Alt+R)',
       default_icon: {
         16: '/icon/16.png',
         32: '/icon/32.png',
@@ -168,7 +169,9 @@ export default defineConfig({
       ? {
           browser_specific_settings: {
             gecko: {
-              id: 'aloud@offline-tts.mozilla.org',
+              // Permanent once the add-on is on AMO: every update must carry the same ID. It is on
+              // the author's own domain; an ID under mozilla.org would claim to be Mozilla's.
+              id: 'aloud@souj.dev',
               // 142+: native CSS Custom Highlight API, and Android
               // `data_collection_permissions` support (the last web-ext lint warning).
               strict_min_version: '142.0',
