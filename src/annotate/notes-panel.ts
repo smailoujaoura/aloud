@@ -11,7 +11,7 @@ import { textFragmentUrl } from '@/annotate/anchor';
 import { sourceUrl } from '@/shared/doc-source';
 import { searchNotes, type Note } from '@/shared/notes';
 import type { NoteColor } from '@/shared/settings';
-import { colorFor, inkFor } from './palette';
+import { READING_ATTR, colorFor, inkFor } from './palette';
 
 export interface NotesPanelDeps {
   /** Document key of the page (shared/position-match.ts). */
@@ -32,6 +32,8 @@ export class PageNotesPanel {
   private palette: NoteColor[] = [];
   private scope: Scope = 'page';
   private query = '';
+  /** Keeps the sheet clear of the reading bar while Aloud reads (see `aboveBar`). */
+  private readingWatch: MutationObserver | null = null;
 
   constructor(
     private readonly root: ShadowRoot,
@@ -53,6 +55,8 @@ export class PageNotesPanel {
   }
 
   close(): void {
+    this.readingWatch?.disconnect();
+    this.readingWatch = null;
     this.sheet?.remove();
     this.sheet = null;
     this.list = null;
@@ -72,6 +76,12 @@ export class PageNotesPanel {
     sheet.className = 'notes-sheet';
     sheet.setAttribute('role', 'dialog');
     sheet.setAttribute('aria-label', 'Your notes');
+    // The reading bar is docked at the bottom of the window, above everything: the sheet's foot
+    // would sit under it. Stop short of the bar for as long as Aloud reads.
+    const aboveBar = (): void => void sheet.classList.toggle('above-bar', document.documentElement.hasAttribute(READING_ATTR));
+    aboveBar();
+    this.readingWatch = new MutationObserver(aboveBar);
+    this.readingWatch.observe(document.documentElement, { attributes: true, attributeFilter: [READING_ATTR] });
 
     const head = document.createElement('div');
     head.className = 'sheet-head';
@@ -246,6 +256,7 @@ export const PANEL_CSS = `
     color: #1b1b1f; background: #fff; border: 1px solid rgba(0,0,0,.14); border-radius: 14px;
     box-shadow: 0 10px 40px rgba(0,0,0,.25);
   }
+  .notes-sheet.above-bar { bottom: 92px; }
   @media (prefers-color-scheme: dark) { .notes-sheet { color: #ececf1; background: #25252b; border-color: rgba(255,255,255,.14); } }
   .sheet-head { display: flex; align-items: center; gap: 8px; }
   .sheet-head b { font-size: 15px; margin-right: auto; }

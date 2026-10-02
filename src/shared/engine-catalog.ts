@@ -46,8 +46,8 @@ const ENGINES: Record<EngineId, EngineInfo> = {
     tag: 'Fast, small downloads',
     blurb:
       'A small, fast neural voice. Faster than real time on any machine, including phones, with ' +
-      'or without a GPU. Each voice is a separate 20–60 MB download.',
-    approxSize: '20–60 MB per voice',
+      'or without a GPU. Each voice is a separate download of 21–137 MB, by quality.',
+    approxSize: '21–137 MB per voice',
     needsGpuForSpeed: false,
     heavyForMobile: false,
   },
