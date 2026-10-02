@@ -294,7 +294,22 @@ details.fit { margin-top: 20px; border: 1px solid var(--rule); border-radius: va
 details.fit summary { cursor: pointer; padding: 16px 20px; font-weight: 600; list-style: none; display: flex; justify-content: space-between; gap: 12px; }
 details.fit summary::-webkit-details-marker { display: none; }
 details.fit summary::after { content: "+"; font: 500 1.2rem/1 var(--mono); color: var(--ink-faint); }
-details.fit[open] summary::after { content: "–"; }
+details.fit .fit-note a { color: var(--ink); font-weight: 600; }
+details.fit[open] > summary::after { content: "–"; }
+details.fit summary { align-items: center; }
+details.howto { margin: 0 20px 18px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface-2); }
+details.howto summary { padding: 12px 16px; font-size: 0.95rem; }
+details.howto summary::after { content: "+"; }
+details.howto[open] > summary::after { content: "–"; }
+details.howto ol { margin: 0; padding: 0 20px 6px 38px; display: grid; gap: 10px; font-size: 0.94rem; }
+details.howto li { padding-left: 4px; }
+details.howto code { background: var(--surface); border: 1px solid var(--rule); border-radius: 5px; padding: 1px 6px; overflow-wrap: anywhere; }
+details.howto .copy {
+  font: 600 0.75rem/1 var(--sans); padding: 5px 9px; margin-left: 4px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--rule-strong); background: var(--surface); color: var(--ink); vertical-align: 1px;
+}
+details.howto .copy:hover { background: var(--bg); }
+.howto-note { padding: 4px 20px 16px; font-size: 0.88rem; color: var(--ink-muted); }
 .table-scroll { overflow-x: auto; border-top: 1px solid var(--rule); }
 table { width: 100%; min-width: 560px; border-collapse: collapse; font-size: 0.93rem; }
 th, td { text-align: left; padding: 12px 20px; border-bottom: 1px solid var(--rule); vertical-align: top; }
@@ -517,7 +532,7 @@ footer .by b { color: var(--ink); }
         <div class="engine">
           <h3>Supertonic-2</h3>
           <p class="meta">10 voices · English · ~262 MB</p>
-          <p>A smooth middle ground on Chrome, and roughly real time on a Firefox desktop processor.</p>
+          <p>The middle ground: smooth with a graphics card, roughly real time on a processor alone.</p>
         </div>
       </div>
 
@@ -525,16 +540,26 @@ footer .by b { color: var(--ink); }
         <summary>Which engine suits my browser?</summary>
         <div class="table-scroll">
           <table>
-            <thead><tr><th scope="col">Your browser</th><th scope="col">Piper</th><th scope="col">Kokoro-82M</th><th scope="col">Supertonic-2</th></tr></thead>
+            <thead><tr><th scope="col">Your setup</th><th scope="col">Piper</th><th scope="col">Kokoro-82M</th><th scope="col">Supertonic-2</th></tr></thead>
             <tbody>
-              <tr><th scope="row">Chrome and friends</th><td>fast</td><td class="best">best, on WebGPU</td><td>good</td></tr>
-              <tr><th scope="row">Firefox desktop</th><td class="best">best choice, fast</td><td>works, about 3× slower than real time</td><td>roughly real time</td></tr>
-              <tr><th scope="row">Firefox with WebGPU on</th><td>fast</td><td class="best">best, faster than Piper</td><td>good</td></tr>
+              <tr><th scope="row">Chrome or Firefox, with WebGPU</th><td>fast</td><td class="best">best, and faster than Piper</td><td>good</td></tr>
+              <tr><th scope="row">Chrome or Firefox, processor only</th><td class="best">best choice, fast</td><td>works, about 3× slower than real time</td><td>roughly real time</td></tr>
               <tr><th scope="row">Firefox for Android</th><td class="best">the one to use</td><td>too slow</td><td>too large</td></tr>
             </tbody>
           </table>
         </div>
-        <p class="fit-note">You don't have to remember this. Aloud's settings test your machine and tell you what it can actually do, and on Firefox it shows the switches that turn the graphics card on.</p>
+        <p class="fit-note">Chrome and Firefox do equally well: what matters is whether the voice can reach your graphics card through WebGPU. Chrome has it on already. Firefox keeps it switched off for now, and it takes a minute to <a href="#firefox-webgpu" data-open="firefox-webgpu">turn on</a>. Aloud's settings test your machine and tell you which case you're in.</p>
+        <details class="howto" id="firefox-webgpu">
+          <summary>Turn on WebGPU in Firefox</summary>
+          <ol>
+            <li>Open a new tab, type <code>about:config</code> into the address bar, and accept the warning.</li>
+            <li>Search for <code>dom.webgpu.enabled</code> <button class="copy" type="button" data-copy="dom.webgpu.enabled">Copy</button> and set it to <b>true</b>. This turns WebGPU on.</li>
+            <li>Search for <code>dom.webgpu.workers.enabled</code> <button class="copy" type="button" data-copy="dom.webgpu.workers.enabled">Copy</button> and set it to <b>true</b>. This is the one that matters: Aloud makes its voice in a background worker, and this lets the worker use the graphics card.</li>
+            <li>Only if hardware acceleration is off on your machine: set <code>gfx.webrender.all</code> <button class="copy" type="button" data-copy="gfx.webrender.all">Copy</button> to <b>true</b>.</li>
+            <li>Reload the page you're reading. Aloud's settings should now say the voice runs on your graphics card; if they don't, restart Firefox.</li>
+          </ol>
+          <p class="howto-note">To undo it, search for the same names and click the reset arrow next to each.</p>
+        </details>
       </details>
     </div>
   </section>
@@ -855,6 +880,25 @@ footer .by b { color: var(--ink); }
     b.addEventListener('click', () => {
       document.getElementById('demo').scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
       play();
+    });
+  }
+
+  // ---- Firefox WebGPU steps: a link that opens them, and buttons that copy the setting names.
+  const openSteps = (id) => {
+    const steps = document.getElementById(id);
+    if (!steps) return;
+    for (let d = steps; d; d = d.parentElement?.closest('details')) d.open = true;
+    steps.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  };
+  for (const a of document.querySelectorAll('[data-open]')) {
+    a.addEventListener('click', (e) => { e.preventDefault(); openSteps(a.dataset.open); history.replaceState(null, '', '#' + a.dataset.open); });
+  }
+  if (location.hash === '#firefox-webgpu') openSteps('firefox-webgpu');
+  for (const b of document.querySelectorAll('.copy[data-copy]')) {
+    b.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = 'Copied'; }
+      catch { b.textContent = 'Select it above'; }
+      setTimeout(() => (b.textContent = 'Copy'), 1600);
     });
   }
 

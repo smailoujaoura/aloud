@@ -99,21 +99,22 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
 
 ## Which voice to use
 
-This is the one thing that differs meaningfully by browser, because it comes down to whether the
-extension's Worker can reach the GPU:
+What decides it is not the browser but whether the extension's Worker can reach the GPU through
+WebGPU. With it, Chromium and Firefox perform the same:
 
 | | Piper | Kokoro-82M | Supertonic-2 |
 |---|---|---|---|
-| **Chromium desktop** | fast | **best — runs on WebGPU** | good |
-| **Firefox desktop** | **best choice — fast** | works, ~3× slower than real time | roughly real time |
-| **Firefox desktop, WebGPU switched on** | fast | **best — faster than Piper** | good |
+| **Chromium or Firefox, with WebGPU** | fast | **best — faster than Piper** | good |
+| **Chromium or Firefox, CPU only** | **best choice — fast** | works, ~3× slower than real time | roughly real time |
 | **Firefox Android** | **the only sensible choice** | too slow | too large |
+
+Chromium has WebGPU on by default; Firefox desktop ships it switched off (see below).
 
 Firefox ships WebGPU switched off, and extensions get no `SharedArrayBuffer`
 ([bug 1673477](https://bugzilla.mozilla.org/show_bug.cgi?id=1673477)), so ONNX Runtime is stuck
 on a single WASM thread there by default. Aloud compensates with a pool of synthesis workers, and
-Piper is the comfortable default. On Chromium the GPU path makes Kokoro both the best sounding
-option and a fast one.
+Piper is the comfortable default. With WebGPU, in either browser, Kokoro is both the best
+sounding option and a fast one.
 
 **Firefox users can have the GPU path too.** In `about:config`, set
 `dom.webgpu.enabled` and `dom.webgpu.workers.enabled` to `true` (the second one is the one that
