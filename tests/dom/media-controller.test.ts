@@ -121,3 +121,66 @@ describe('players that leave the page', () => {
     expect(video.playbackRate).toBe(1);
   });
 });
+
+describe('rewind and skip forward (YouTube Shorts has neither)', () => {
+  function player(id: string, opts: { duration: number; time: number; playing: boolean; box: [number, number] }) {
+    const v = document.createElement('video');
+    v.id = id;
+    let t = opts.time;
+    Object.defineProperty(v, 'duration', { value: opts.duration, configurable: true });
+    Object.defineProperty(v, 'currentTime', { get: () => t, set: (x: number) => (t = x), configurable: true });
+    Object.defineProperty(v, 'paused', { value: !opts.playing, configurable: true });
+    v.getBoundingClientRect = () => ({ left: 0, top: 0, right: opts.box[0], bottom: opts.box[1], width: opts.box[0], height: opts.box[1], x: 0, y: 0, toJSON() {} }) as DOMRect;
+    document.body.append(v);
+    return v;
+  }
+  const press = (key: string) =>
+    window.dispatchEvent(new KeyboardEvent('keydown', { key, code: `Key${key.toUpperCase()}`, bubbles: true }));
+
+  function start() {
+    const controller = new MediaSpeedController({
+      settings: { ...DEFAULT_MEDIA_SPEED, showBadge: false, seekSeconds: 10 },
+      initialRate: null,
+      onRate: () => {},
+    });
+    controller.start();
+    return controller;
+  }
+
+  it('Z goes back and X forward, on the clip that is playing — not the ones loaded beside it', () => {
+    document.body.innerHTML = '';
+    const previous = player('prev', { duration: 40, time: 30, playing: false, box: [400, 700] });
+    const current = player('cur', { duration: 58, time: 23, playing: true, box: [400, 700] });
+    const controller = start();
+    press('z');
+    expect(current.currentTime).toBe(13);
+    press('x');
+    press('x');
+    expect(current.currentTime).toBe(33);
+    expect(previous.currentTime).toBe(30);
+    controller.stop();
+  });
+
+  it('stops at the start and just short of the end', () => {
+    document.body.innerHTML = '';
+    const v = player('v', { duration: 20, time: 4, playing: true, box: [400, 700] });
+    const controller = start();
+    press('z');
+    expect(v.currentTime).toBe(0);
+    press('x');
+    press('x');
+    press('x');
+    expect(v.currentTime).toBeCloseTo(19.9);
+    controller.stop();
+  });
+
+  it('leaves the key alone while typing', () => {
+    document.body.innerHTML = '<input id="i">';
+    const v = player('v', { duration: 60, time: 30, playing: true, box: [400, 700] });
+    const controller = start();
+    const input = document.getElementById('i')!;
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', bubbles: true, composed: true }));
+    expect(v.currentTime).toBe(30);
+    controller.stop();
+  });
+});

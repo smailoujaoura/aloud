@@ -205,6 +205,13 @@ export class MediaSpeedController {
     if (e.composedPath().some((n) => n instanceof HTMLElement && n.id === CONTROL_HOST_ID)) return;
 
     const { keys } = this.settings;
+    const seek = matchesBinding(e, keys.rewind) ? -1 : matchesBinding(e, keys.advance) ? 1 : 0;
+    if (seek) {
+      e.preventDefault();
+      e.stopPropagation();
+      this.seekBy(seek * (this.settings.seekSeconds || 10));
+      return;
+    }
     const current = this.rate ?? currentRateOf(this.known) ?? 1;
     let next: number | null = null;
     if (matchesBinding(e, keys.faster)) next = stepRate(current, this.settings.step, 1);
@@ -222,6 +229,32 @@ export class MediaSpeedController {
       return;
     }
     this.setRate(next);
+  }
+
+  // ---- seeking --------------------------------------------------------------------------
+
+  /**
+   * Move the video you are watching by `seconds`, and say where it is now.
+   *
+   * For players that offer no way back at all: YouTube Shorts has no rewind key and, on most
+   * Shorts, no seek bar, so a missed sentence meant watching the whole thing again.
+   */
+  seekBy(seconds: number): void {
+    this.prune();
+    const media = activeMedia(this.known);
+    if (!media) {
+      this.showBadge('No video or audio here', undefined, true);
+      return;
+    }
+    const duration = Number.isFinite(media.duration) ? media.duration : null;
+    const target = Math.max(0, duration != null ? Math.min(duration - 0.1, media.currentTime + seconds) : media.currentTime + seconds);
+    try {
+      media.currentTime = target;
+    } catch {
+      return; // a live stream with nothing to seek into
+    }
+    const where = duration != null ? `${clock(target)} / ${clock(duration)}` : clock(target);
+    this.showBadge(`${seconds < 0 ? '−' : '+'}${Math.abs(seconds)} s · ${where}`, media);
   }
 
   // ---- the badge ----------------------------------------------------------------------
@@ -330,4 +363,34 @@ function largestBox(media: Iterable<Media>): DOMRect | null {
     if (!best || box.width * box.height > best.width * best.height) best = box;
   }
   return best;
+}
+
+/**
+ * The player the reader means: the one playing (the largest, if several), else the largest on
+ * screen. Shorts keeps the next and previous clips loaded and paused beside the one you watch.
+ */
+function activeMedia(media: Iterable<Media>): Media | null {
+  let best: Media | null = null;
+  let bestScore = -1;
+  for (const el of media) {
+    const box = el.getBoundingClientRect();
+    const onScreen = box.bottom > 0 && box.top < window.innerHeight && box.right > 0 && box.left < window.innerWidth;
+    const area = onScreen ? box.width * box.height : 0;
+    // Playing outranks everything; then size on screen. Audio (no box) still counts if it plays.
+    const score = (el.paused ? 0 : 1e9) + area + (onScreen ? 1 : 0);
+    if (score > bestScore) {
+      best = el;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+/** 83 → "1:23"; 3723 → "1:02:03". */
+function clock(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const ss = String(s % 60).padStart(2, '0');
+  return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
 }

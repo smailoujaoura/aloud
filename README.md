@@ -88,8 +88,9 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
   save the marks into the PDF file.
 - **Speed control for every player** — the same keyboard control for any `<video>` or `<audio>` on
   the web, not just Aloud's own reading: <kbd>D</kbd> / <kbd>S</kbd> step the speed, <kbd>G</kbd>
-  jumps to your preferred speed, <kbd>R</kbd> goes back to 1×, and <kbd>Shift</kbd> with D or S
-  steps through your presets — all rebindable. The speed is remembered per site, re-applied when a
+  jumps to your preferred speed, <kbd>R</kbd> goes back to 1×, <kbd>Shift</kbd> with D or S
+  steps through your presets, and <kbd>Z</kbd> / <kbd>X</kbd> rewind and skip forward 10 seconds —
+  even on players with no seek bar, like YouTube Shorts. All rebindable. The speed is remembered per site, re-applied when a
   player resets it between videos, and shown briefly on the video. It starts with
   <kbd>Alt</kbd>+<kbd>M</kbd> and asks for no permissions; sites you list in
   settings start it by themselves, one granted site at a time.

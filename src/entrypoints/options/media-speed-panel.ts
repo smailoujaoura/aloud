@@ -26,6 +26,8 @@ const KEY_ROWS: Array<{ key: keyof MediaSpeedSettings['keys']; label: string; hi
   { key: 'preferred', label: 'Your speed', hint: 'Jump to your preferred speed, and back' },
   { key: 'nextPreset', label: 'Next preset', hint: 'Up through the preset speeds' },
   { key: 'previousPreset', label: 'Previous preset', hint: 'Down through the preset speeds' },
+  { key: 'rewind', label: 'Rewind', hint: 'Back a few seconds — even where the player has no seek bar' },
+  { key: 'advance', label: 'Skip forward', hint: 'Forward a few seconds' },
 ];
 
 export function renderMediaSpeedPanel(host: HTMLElement, opts: MediaSpeedPanelOptions): void {
@@ -60,6 +62,11 @@ export function renderMediaSpeedPanel(host: HTMLElement, opts: MediaSpeedPanelOp
       [{ value: '0', label: 'Whatever the site chose' }, ...rateOptions(s.presets, s.startAt)],
       String(s.startAt),
       (value) => void opts.save({ startAt: Number(value) }),
+    )),
+    labelledRow('Rewind and skip by', 'How far one press of rewind or skip forward moves', select(
+      [5, 10, 15, 30].map((v) => ({ value: String(v), label: `${v} seconds` })),
+      String(s.seekSeconds),
+      (value) => void opts.save({ seekSeconds: Number(value) }),
     )),
     presetsRow(s, opts),
     checkboxRow('Remember the speed of each site', s.rememberPerSite, (on) => void opts.save({ rememberPerSite: on })),

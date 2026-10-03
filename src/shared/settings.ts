@@ -83,6 +83,8 @@ export interface MediaSpeedSettings {
   blockAutoplay: boolean;
   /** Hosts the control starts on by itself, once that site's permission has been granted. */
   alwaysOn: string[];
+  /** How far one press of rewind or skip forward moves, in seconds. */
+  seekSeconds: number;
   /** Key bindings, as text — see media-speed/keys.ts. */
   keys: {
     faster: string;
@@ -91,6 +93,9 @@ export interface MediaSpeedSettings {
     preferred: string;
     nextPreset: string;
     previousPreset: string;
+    /** Back and forward by `seekSeconds` — for players that offer neither (YouTube Shorts). */
+    rewind: string;
+    advance: string;
   };
 }
 
@@ -108,6 +113,7 @@ export const DEFAULT_MEDIA_SPEED: MediaSpeedSettings = {
   rememberPerSite: true,
   showBadge: true,
   blockAutoplay: false,
+  seekSeconds: 10,
   alwaysOn: [],
   keys: {
     faster: 'd',
@@ -116,6 +122,9 @@ export const DEFAULT_MEDIA_SPEED: MediaSpeedSettings = {
     preferred: 'g',
     nextPreset: 'shift+d',
     previousPreset: 'shift+s',
+    // Z and X: free on YouTube, Netflix and the BBC, and what Video Speed Controller users know.
+    rewind: 'z',
+    advance: 'x',
   },
 };
 
@@ -419,6 +428,7 @@ export function sanitizeSettings(raw: Settings): Settings {
       preferred: clamp(raw.mediaSpeed?.preferred, 0.25, 5, DEFAULT_MEDIA_SPEED.preferred),
       startAt: clamp(raw.mediaSpeed?.startAt, 0, 5, DEFAULT_MEDIA_SPEED.startAt),
       blockAutoplay: raw.mediaSpeed?.blockAutoplay === true,
+      seekSeconds: Math.round(clamp(raw.mediaSpeed?.seekSeconds, 1, 120, DEFAULT_MEDIA_SPEED.seekSeconds)),
       presets: presets.length ? presets : [...DEFAULT_MEDIA_SPEED.presets],
       alwaysOn: hosts(raw.mediaSpeed?.alwaysOn),
       keys: mediaKeys(raw.mediaSpeed?.keys),
