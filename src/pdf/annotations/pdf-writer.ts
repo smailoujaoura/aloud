@@ -13,7 +13,7 @@
  * pdf-lib is loaded on first use; opening and reading a PDF never pays for it.
  */
 import type { PDFDict as PDFDictType, PDFDocument as PDFDocumentType, PDFObject, PDFRef as PDFRefType } from 'pdf-lib';
-import { PDF_SUBTYPES, rgbOf, unionBox, type Box, type Mark } from './model';
+import { PDF_SUBTYPES, markFingerprint, rgbOf, unionBox, type Box, type Mark } from './model';
 
 type PdfLib = typeof import('pdf-lib');
 
@@ -51,7 +51,7 @@ async function load(lib: PdfLib, bytes: Uint8Array): Promise<PDFDocumentType> {
  *
  * Returns how many were removed, so a caller can skip saving a copy that did not change.
  */
-function stripManaged(lib: PdfLib, doc: PDFDocumentType): number {
+function stripManaged(lib: PdfLib, doc: PDFDocumentType, keep: ReadonlySet<string> = new Set()): number {
   const { PDFName, PDFArray, PDFDict, PDFRef } = lib;
   const ctx = doc.context;
   let removed = 0;
@@ -70,6 +70,8 @@ function stripManaged(lib: PdfLib, doc: PDFDocumentType): number {
     const gone = new Set<PDFObject>();
     entries.forEach((raw, i) => {
       const dict = dicts[i];
+      // `keep`: imported marks left as they were, named the way pdf.js names them (`12R`, `12R3`).
+      if (raw instanceof PDFRef && keep.has(`${raw.objectNumber}R${raw.generationNumber || ''}`)) return;
       if (dict && MANAGED.has(subtypeOf(dict)) && wasImported(lib, dict, subtypeOf(dict))) gone.add(raw);
     });
     // A pop-up belongs to the markup annotation it opens from, and goes with it.
@@ -110,9 +112,15 @@ export async function withoutMarks(bytes: Uint8Array): Promise<Uint8Array | null
 export async function withMarks(bytes: Uint8Array, marks: readonly Mark[]): Promise<Uint8Array> {
   const lib = await pdfLib();
   const doc = await load(lib, bytes);
-  stripManaged(lib, doc);
+  // An imported mark nobody changed keeps its original annotation, byte for byte: its author,
+  // dates, name and flags are someone else's (model.ts: MarkOrigin).
+  const untouched = new Set(
+    marks.filter((m) => m.origin?.ref && markFingerprint(m) === m.origin.fingerprint).map((m) => m.origin!.ref!),
+  );
+  stripManaged(lib, doc, untouched);
   const pages = doc.getPages();
   for (const mark of marks) {
+    if (mark.origin?.ref && untouched.has(mark.origin.ref)) continue;
     const page = pages[mark.page - 1];
     if (!page || mark.boxes.length === 0) continue;
     const ref = annotationFor(lib, doc, mark);
@@ -153,9 +161,12 @@ function annotationFor(lib: PdfLib, doc: PDFDocumentType, mark: Mark): PDFRefTyp
       : { QuadPoints: mark.boxes.flatMap(([l, bt, rt, t]) => [l, t, rt, t, l, bt, rt, bt]).map((n) => round(n)) }),
   });
   dict.set(lib.PDFName.of('NM'), PDFString.of(`aloud-${mark.id}`));
-  dict.set(lib.PDFName.of('T'), PDFHexString.fromText('Aloud'));
+  // An edited mark from the file is still its author's, made when they made it.
+  const author = mark.origin ? mark.origin.author : 'Aloud';
+  if (author) dict.set(lib.PDFName.of('T'), PDFHexString.fromText(author));
   dict.set(lib.PDFName.of('M'), PDFString.of(pdfDate(mark.updated)));
-  dict.set(lib.PDFName.of('CreationDate'), PDFString.of(pdfDate(mark.created)));
+  dict.set(lib.PDFName.of('CreationDate'), PDFString.of(mark.origin?.created ?? pdfDate(mark.created)));
+  if (mark.origin?.flags != null) dict.set(lib.PDFName.of('F'), ctx.obj(mark.origin.flags));
   if (mark.note) dict.set(lib.PDFName.of('Contents'), PDFHexString.fromText(mark.note));
   return ctx.register(dict);
 }

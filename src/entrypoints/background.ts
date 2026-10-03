@@ -29,7 +29,8 @@ import type { EngineId } from '@/shared/settings';
 import type { VoiceOption } from '@/shared/voice-catalog';
 import type { ModelManifest } from '@/engine/engines/types';
 import { getSettings, watchSettings } from '@/shared/settings';
-import { createLockTable } from '@/shared/storage-lock';
+import { createLockTable, useLockTable } from '@/shared/storage-lock';
+import { loadWorkerGpu } from '@/shared/backend-memory';
 
 const CONTENT_FILE = '/reader-inject.js';
 /** The media speed control (src/entrypoints/speed-inject.ts). */
@@ -82,6 +83,9 @@ function optional(feature: string, fn: () => void): void {
 
 /** Serialises read-modify-write storage across contexts (shared/storage-lock.ts). */
 const locks = createLockTable();
+// The background writes too (the context menu's "Add to queue"): its writes take this table's
+// locks directly, since it cannot message itself.
+useLockTable(locks);
 
 /**
  * One-shot tickets for connecting to the synthesis host.
@@ -262,6 +266,9 @@ export default defineBackground({
         // One writer at a time per stored value, across every context (shared/storage-lock.ts).
         const key = (m as { key?: string }).key;
         if (typeof key === 'string') return replyWith(locks.acquire(key).then((token) => ({ token })));
+      } else if (m?.type === 'storage-lock-renew') {
+        const { key, token } = m as { key?: unknown; token?: unknown };
+        if (typeof key === 'string' && typeof token === 'number') locks.renew(key, token);
       } else if (m?.type === 'storage-unlock') {
         const { key, token } = m as { key?: string; token?: number };
         if (typeof key === 'string' && typeof token === 'number') locks.release(key, token);
@@ -552,7 +559,12 @@ let manifestCache: ModelManifest | null = null;
 async function installedVoices(engine: EngineId): Promise<VoiceOption[]> {
   try {
     manifestCache ??= (await (await fetch(browser.runtime.getURL('/models.json'))).json()) as ModelManifest;
-    return usableVoices(engine, manifestCache, await readCacheSizes());
+    // Online, a missing voice file or GPU build is fetched on the first read, with the bar showing
+    // it (engine-config.ts: a download takes the CPU build). Offline nothing can be fetched: only
+    // voices whose files are all here, with the weights for where this machine runs the model.
+    const online = navigator.onLine;
+    const gpu = online ? null : await loadWorkerGpu().catch(() => null);
+    return usableVoices(engine, manifestCache, await readCacheSizes(), { gpu, online });
   } catch (err) {
     // An empty list means "we do not know", and the bar keeps showing the active voice alone.
     console.warn('[aloud] could not list installed voices:', err);

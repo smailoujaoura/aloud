@@ -12,14 +12,18 @@
 import { storage } from 'wxt/utils/storage';
 import { withPosition, type PositionMap, type SavedPosition } from './position-match';
 import { withStorageLock } from './storage-lock';
+import { normalizePosition, recordsOf } from './record-shapes';
 
 export { documentKey, excerptOf, resumeIndex, type SavedPosition } from './position-match';
 
 const item = storage.defineItem<PositionMap>('local:readingPositions', { fallback: {} });
 
+/** The stored map, with any damaged entry dropped (shared/record-shapes.ts). */
+const readMap = async (): Promise<PositionMap> => recordsOf(await item.getValue(), normalizePosition);
+
 export async function loadPosition(key: string): Promise<SavedPosition | undefined> {
   try {
-    return (await item.getValue())[key];
+    return (await readMap())[key];
   } catch {
     return undefined; // storage unavailable (some private windows) — resuming is best-effort
   }
@@ -27,7 +31,7 @@ export async function loadPosition(key: string): Promise<SavedPosition | undefin
 
 export async function savePosition(key: string, pos: SavedPosition): Promise<void> {
   try {
-    await withStorageLock('positions', async () => item.setValue(withPosition(await item.getValue(), key, pos)));
+    await withStorageLock('positions', async () => item.setValue(withPosition(await readMap(), key, pos)));
   } catch {
     /* best-effort */
   }
@@ -37,7 +41,7 @@ export async function savePosition(key: string, pos: SavedPosition): Promise<voi
 export async function clearPosition(key: string): Promise<void> {
   try {
     await withStorageLock('positions', async () => {
-      const map = await item.getValue();
+      const map = await readMap();
       if (!(key in map)) return;
       const { [key]: _finished, ...rest } = map;
       await item.setValue(rest);
@@ -50,7 +54,7 @@ export async function clearPosition(key: string): Promise<void> {
 /** How many documents have a saved position, for the settings page. */
 export async function countPositions(): Promise<number> {
   try {
-    return Object.keys(await item.getValue()).length;
+    return Object.keys(await readMap()).length;
   } catch {
     return 0;
   }
@@ -59,7 +63,7 @@ export async function countPositions(): Promise<number> {
 /** Forget every document — the settings page's "clear reading positions". */
 export async function clearAllPositions(): Promise<void> {
   try {
-    await item.setValue({});
+    await withStorageLock('positions', () => item.setValue({}));
   } catch {
     /* best-effort */
   }

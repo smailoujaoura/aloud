@@ -9,9 +9,11 @@
  *
  * - **You did something** in the last few seconds: a click, a tap, a key (Space on YouTube). That
  *   also covers clicking a video in a single-page site, where the player starts a moment later.
- * - **Playback carrying on**: something was playing a moment ago and the site swapped the source —
- *   an ad handing over to the video you started. Without this, the video you pressed play on
- *   would stop dead after its ad.
+ * - **The same playback carrying on**: within a moment of a player stopping, *that* player starting
+ *   again with a new source, or another player in the very same place on screen — an ad handing
+ *   over to the video you started, whether the site swaps the source or lays a second player over
+ *   the first. Without this, the video you pressed play on would stop dead after its ad. A video
+ *   elsewhere on the page (the next card in a feed) is not the same playback, and is paused.
  *
  * Everything else — a video playing as the page opens, the next one in a feed, a preview on hover —
  * is paused, and says so on the video.
@@ -43,6 +45,8 @@ export class AutoplayGuard {
   private leavePlaying: boolean;
   private lastGesture = Number.NEGATIVE_INFINITY;
   private lastStop = Number.NEGATIVE_INFINITY;
+  /** The player that stopped last, and where it was, for telling a handover from a new video. */
+  private lastStopped: { media: Media; box: Box | null } | null = null;
   /** Media playing right now, so a stop can be told from a source that never played. */
   private readonly playing = new WeakSet<Media>();
   /** Media this guard paused, so its own pause is not taken as playback ending. */
@@ -84,7 +88,10 @@ export class AutoplayGuard {
     };
     const onStop = (): void => {
       if (this.paused.delete(media)) return;
-      if (this.playing.delete(media)) this.lastStop = this.now();
+      if (this.playing.delete(media)) {
+        this.lastStop = this.now();
+        this.lastStopped = { media, box: boxOf(media) };
+      }
     };
     const events: Array<[string, () => void]> = [
       ['play', onPlay],
@@ -104,14 +111,16 @@ export class AutoplayGuard {
     };
   }
 
-  /** Whether a `play` right now was asked for. */
-  allows(): boolean {
+  /** Whether `media` starting to play right now was asked for. */
+  allows(media: Media): boolean {
     const now = this.now();
-    return now - this.lastGesture <= GESTURE_MS || now - this.lastStop <= HANDOVER_MS || this.activated();
+    if (now - this.lastGesture <= GESTURE_MS || this.activated()) return true;
+    if (now - this.lastStop > HANDOVER_MS || !this.lastStopped) return false;
+    return this.lastStopped.media === media || samePlace(this.lastStopped.box, boxOf(media));
   }
 
   private onPlay(media: Media): void {
-    if (!this.enabled || this.allows()) return;
+    if (!this.enabled || this.allows(media)) return;
     this.paused.add(media);
     this.playing.delete(media);
     try {
@@ -122,4 +131,24 @@ export class AutoplayGuard {
     }
     this.opts.notice(media);
   }
+}
+
+type Box = { left: number; top: number; width: number; height: number };
+
+function boxOf(media: Media): Box | null {
+  try {
+    const r = media.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 ? { left: r.left, top: r.top, width: r.width, height: r.height } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Two players in the same place: most of the smaller one inside the other. */
+function samePlace(a: Box | null, b: Box | null): boolean {
+  if (!a || !b) return false;
+  const w = Math.min(a.left + a.width, b.left + b.width) - Math.max(a.left, b.left);
+  const h = Math.min(a.top + a.height, b.top + b.height) - Math.max(a.top, b.top);
+  if (w <= 0 || h <= 0) return false;
+  return (w * h) / Math.min(a.width * a.height, b.width * b.height) >= 0.6;
 }

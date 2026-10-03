@@ -107,9 +107,13 @@ export async function removeFromQueue(id: string): Promise<QueueItem[]> {
 }
 
 export async function moveInQueue(id: string, delta: number): Promise<QueueItem[]> {
-  const next = withItemMoved(await loadQueue(), id, delta);
-  await item.setValue(next);
-  return next;
+  // Under the lock like every other write: a reorder that read the queue before an article was
+  // added, and wrote it back after, erased that article while both reported success.
+  return withStorageLock(LOCK_KEY, async () => {
+    const next = withItemMoved(await loadQueue(), id, delta);
+    await item.setValue(next);
+    return next;
+  });
 }
 
 export async function updateQueueItem(id: string, patch: Partial<Omit<QueueItem, 'id'>>): Promise<void> {
@@ -120,7 +124,7 @@ export async function updateQueueItem(id: string, patch: Partial<Omit<QueueItem,
 }
 
 export async function clearQueue(): Promise<void> {
-  await item.setValue([]);
+  await withStorageLock(LOCK_KEY, () => item.setValue([]));
 }
 
 export function watchQueue(cb: (queue: QueueItem[]) => void): () => void {

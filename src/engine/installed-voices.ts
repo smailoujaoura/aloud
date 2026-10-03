@@ -17,7 +17,28 @@ export type CacheSizes = Map<string, number>;
 
 export async function readCacheSizes(): Promise<CacheSizes> {
   const entries = await cacheEntries();
-  return new Map(entries.map((e) => [e.key, e.size]));
+  const sizes: CacheSizes = new Map(entries.map((e) => [e.key, e.size]));
+  // Kokoro's per-voice files are the one thing not in Aloud's own store: kokoro-js keeps them in
+  // Cache Storage. Without them here, a voice never used looked ready to read offline.
+  try {
+    const cache = await caches.open('kokoro-voices');
+    for (const request of await cache.keys()) if (!sizes.has(request.url)) sizes.set(request.url, 1);
+  } catch {
+    /* no Cache Storage in this context */
+  }
+  return sizes;
+}
+
+/**
+ * What is known about the machine, for questions whose answer depends on it.
+ *
+ * `gpu`: whether the synthesis worker last reached a GPU (null: not known). `online`: whether a
+ * missing small file can simply be fetched — a voice's own file is a few hundred kilobytes, so
+ * online every voice of an installed model is usable; offline only the ones already fetched.
+ */
+export interface Availability {
+  gpu?: boolean | null;
+  online?: boolean;
 }
 
 /** Total bytes held for a shared model, identified by a substring of its download URLs. */
@@ -44,14 +65,28 @@ export function engineDownloaded(engine: EngineId, manifest: ModelManifest, size
   return sharedModelInstalled(engine, sizes);
 }
 
-/** Is Kokoro's or Supertonic's one model — the weights, not just its config — on this device? */
-export function sharedModelInstalled(engine: EngineId, sizes: CacheSizes): boolean {
-  const { cacheHint: hint, requiredFiles } = engineInfo(engine);
+/**
+ * Is Kokoro's or Supertonic's model — every file it loads, not just some of them — on this device?
+ *
+ * With `gpu` known, the weights for that path are required; unknown, either set will do.
+ */
+export function sharedModelInstalled(engine: EngineId, sizes: CacheSizes, where: Availability = {}): boolean {
+  const { cacheHint: hint, requiredFiles = [], weights } = engineInfo(engine);
   if (!hint) return false;
-  if (!requiredFiles?.length) return sharedModelBytes(sizes, hint) > 0;
-  const keys = [...sizes.keys()].filter((k) => k.includes(hint) && (sizes.get(k) ?? 0) > 0);
+  if (!requiredFiles.length && !weights) return sharedModelBytes(sizes, hint) > 0;
+  const has = (file: string): boolean => cached(sizes, hint, file);
   // All of them: some bytes in the cache is not the same as a model that can speak.
-  return requiredFiles.every((file) => keys.some((k) => k.endsWith(file)));
+  if (!requiredFiles.every(has)) return false;
+  if (!weights) return true;
+  if (where.gpu === true) return has(weights.gpu);
+  if (where.gpu === false) return has(weights.cpu);
+  return has(weights.cpu) || has(weights.gpu);
+}
+
+/** A file of the model `hint`, present with something in it. */
+function cached(sizes: CacheSizes, hint: string, file: string): boolean {
+  for (const [key, size] of sizes) if (size > 0 && key.includes(hint) && key.endsWith(file)) return true;
+  return false;
 }
 
 /**
@@ -63,6 +98,7 @@ export function usableVoices(
   engine: EngineId,
   manifest: ModelManifest,
   sizes: CacheSizes,
+  where: Availability = {},
 ): VoiceOption[] {
   if (engine === 'piper') {
     return listVoices('piper', manifest).filter((v) => {
@@ -70,6 +106,10 @@ export function usableVoices(
       return entry ? piperDownloaded(entry, sizes) : false;
     });
   }
-  if (!sharedModelInstalled(engine, sizes)) return [];
-  return listVoices(engine, manifest);
+  if (!sharedModelInstalled(engine, sizes, where)) return [];
+  const voices = listVoices(engine, manifest);
+  const { cacheHint, voiceFile } = engineInfo(engine);
+  // Offline, a voice whose own file was never fetched cannot start.
+  if (where.online !== false || !voiceFile || !cacheHint) return voices;
+  return voices.filter((v) => cached(sizes, cacheHint, voiceFile(v.id)));
 }

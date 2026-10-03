@@ -351,12 +351,13 @@ export function withDefaults(stored: Partial<Settings> | null | undefined): Sett
     annotate: {
       ...DEFAULT_ANNOTATE,
       ...stored?.annotate,
-      pageKeys: { ...DEFAULT_ANNOTATE.pageKeys, ...stored?.annotate?.pageKeys },
+      // Checked on every read, not just on import: storage damaged by an older restore heals.
+      pageKeys: pageKeys(stored?.annotate?.pageKeys),
     },
     mediaSpeed: {
       ...DEFAULT_MEDIA_SPEED,
       ...stored?.mediaSpeed,
-      keys: { ...DEFAULT_MEDIA_SPEED.keys, ...stored?.mediaSpeed?.keys },
+      keys: mediaKeys(stored?.mediaSpeed?.keys),
     },
   };
 }
@@ -409,10 +410,7 @@ export function sanitizeSettings(raw: Settings): Settings {
       colors: colors.length ? colors : DEFAULT_NOTE_COLORS,
       defaultStyle: oneOf(raw.annotate?.defaultStyle, ['highlight', 'underline'] as const, DEFAULT_ANNOTATE.defaultStyle),
       alwaysOn: hosts(raw.annotate?.alwaysOn),
-      pageKeys: {
-        keep: typeof raw.annotate?.pageKeys?.keep === 'string' ? raw.annotate.pageKeys.keep.slice(0, 1) : DEFAULT_ANNOTATE.pageKeys.keep,
-        panel: typeof raw.annotate?.pageKeys?.panel === 'string' ? raw.annotate.pageKeys.panel.slice(0, 1) : DEFAULT_ANNOTATE.pageKeys.panel,
-      },
+      pageKeys: pageKeys(raw.annotate?.pageKeys),
     },
     mediaSpeed: {
       ...DEFAULT_MEDIA_SPEED,
@@ -423,8 +421,32 @@ export function sanitizeSettings(raw: Settings): Settings {
       blockAutoplay: raw.mediaSpeed?.blockAutoplay === true,
       presets: presets.length ? presets : [...DEFAULT_MEDIA_SPEED.presets],
       alwaysOn: hosts(raw.mediaSpeed?.alwaysOn),
-      keys: { ...DEFAULT_MEDIA_SPEED.keys, ...raw.mediaSpeed?.keys },
+      keys: mediaKeys(raw.mediaSpeed?.keys),
     },
+  };
+}
+
+/**
+ * Key bindings are text ("d", "shift+s", "" for off). Anything else — a number from an edited
+ * backup — reached `formatBinding`, which threw, and the options page stopped rendering.
+ */
+function mediaKeys(keys: unknown): MediaSpeedSettings['keys'] {
+  const out = { ...DEFAULT_MEDIA_SPEED.keys };
+  if (keys && typeof keys === 'object') {
+    for (const name of Object.keys(out) as Array<keyof typeof out>) {
+      const value = (keys as Record<string, unknown>)[name];
+      if (typeof value === 'string' && value.length <= 40) out[name] = value;
+    }
+  }
+  return out;
+}
+
+/** The two single-letter page keys, as text; anything else falls back to the default. */
+function pageKeys(keys: unknown): AnnotateSettings['pageKeys'] {
+  const k = (keys && typeof keys === 'object' ? keys : {}) as Record<string, unknown>;
+  return {
+    keep: typeof k.keep === 'string' ? k.keep.slice(0, 1) : DEFAULT_ANNOTATE.pageKeys.keep,
+    panel: typeof k.panel === 'string' ? k.panel.slice(0, 1) : DEFAULT_ANNOTATE.pageKeys.panel,
   };
 }
 

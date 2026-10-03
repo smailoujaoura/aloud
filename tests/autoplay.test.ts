@@ -4,6 +4,11 @@ import { AutoplayGuard, GESTURE_MS, HANDOVER_MS } from '@/media-speed/autoplay';
 /** Just enough of a media element: events, `paused`, and a `pause()` that fires `pause`. */
 class FakeMedia extends EventTarget {
   paused = true;
+  /** Where it is on screen; zero-sized (audio, or not laid out) by default. */
+  box = { left: 0, top: 0, width: 0, height: 0 };
+  getBoundingClientRect() {
+    return this.box;
+  }
   play(): void {
     this.paused = false;
     this.dispatchEvent(new Event('play'));
@@ -37,8 +42,9 @@ function setup(opts: { leavePlaying?: boolean; enabled?: boolean } = {}) {
     Object.defineProperty(e, 'isTrusted', { value: true });
     gestures.dispatchEvent(e);
   };
-  const media = () => {
+  const media = (box?: FakeMedia['box']) => {
     const m = new FakeMedia();
+    if (box) m.box = box;
     guard.track(m as unknown as HTMLMediaElement);
     return m;
   };
@@ -139,5 +145,32 @@ describe('the autoplay guard', () => {
     const video = media();
     video.play();
     expect(video.paused).toBe(true);
+  });
+
+  it('the recheck’s R11: a different video starting just after one ends, elsewhere, is paused', () => {
+    const { media, gesture, advance } = setup();
+    const first = media({ left: 0, top: 0, width: 640, height: 360 });
+    gesture();
+    first.play();
+    advance(60_000);
+    first.end();
+    advance(100);
+    const next = media({ left: 0, top: 420, width: 640, height: 360 }); // the next card, below
+    next.play();
+    expect(next.paused).toBe(true);
+  });
+
+  it('an ad in its own player, laid over the video, hands over to that video', () => {
+    const { media, gesture, advance } = setup();
+    const place = { left: 10, top: 10, width: 640, height: 360 };
+    const ad = media(place);
+    const video = media(place);
+    gesture();
+    ad.play();
+    advance(20_000);
+    ad.end();
+    advance(300);
+    video.play();
+    expect(video.paused).toBe(false);
   });
 });

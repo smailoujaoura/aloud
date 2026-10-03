@@ -158,7 +158,7 @@ desktop-only. Two adaptations:
 ### 0.3 Build
 
 One WXT config, `manifest` as a function of the target browser (`wxt.config.ts`).
-`browser_specific_settings` is emitted for Firefox only. `pnpm build` produces both outputs. The
+`browser_specific_settings` is emitted for Firefox only. `npm run build` produces both outputs. The
 synthesis worker is a *single* bundle targeting both baselines, so the shared `public/` directory
 cannot be clobbered by whichever browser built last. See `BUILD.md`.
 
@@ -202,7 +202,7 @@ Where the shipped code deviates from the plan below, and why:
     is split the same way (`options/{model-status,downloads,preview-button,voice-panels}.ts`).
 
 Pure-logic and DOM-planning modules (`normalize`, `sentences`, `fuzzy-align`, `text-index`,
-`block-model`, `playlist`, `engine-catalog`) have vitest coverage (`pnpm test`). The audio
+`block-model`, `playlist`, `engine-catalog`) have vitest coverage (`npm test`). The audio
 pipeline, WASM execution and highlighting need a real browser — see `BUILD.md`.
 
 ### Decisions locked in with the user

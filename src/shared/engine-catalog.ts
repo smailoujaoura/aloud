@@ -33,6 +33,16 @@ export interface EngineInfo {
    * holding only Kokoro's `config.json` used to offer all 28 of its voices as ready to read.
    */
   requiredFiles?: string[];
+  /**
+   * The weights, which depend on where the engine runs: Kokoro loads full-precision weights on a
+   * GPU and quantised ones on the CPU, and a cache holding only one of them cannot start the other.
+   */
+  weights?: { cpu: string; gpu: string };
+  /**
+   * The file one voice needs on top of the shared model. Without it that voice cannot start
+   * offline, however complete the model is.
+   */
+  voiceFile?: (voice: string) => string;
   /** Comfortably faster than real time only with GPU acceleration. */
   needsGpuForSpeed: boolean;
   /** Too slow or too large to be a good idea on a phone. */
@@ -61,7 +71,11 @@ const ENGINES: Record<EngineId, EngineInfo> = {
       'workers to keep up with playback. One 86 MB download unlocks all 28 English voices (US and UK).',
     approxSize: '~86 MB',
     cacheHint: 'Kokoro-82M',
-    requiredFiles: ['/onnx/model_quantized.onnx'],
+    // What kokoro-js loads besides the weights (seen in a real cache): config and tokeniser.
+    requiredFiles: ['/config.json', '/tokenizer.json', '/tokenizer_config.json'],
+    weights: { cpu: '/onnx/model_quantized.onnx', gpu: '/onnx/model.onnx' },
+    // kokoro-js keeps these in Cache Storage ("kokoro-voices"); readCacheSizes lists them.
+    voiceFile: (voice) => `/voices/${voice}.bin`,
     needsGpuForSpeed: true,
     heavyForMobile: true,
   },
@@ -74,13 +88,17 @@ const ENGINES: Record<EngineId, EngineInfo> = {
       'download unlocks all 10 voices.',
     approxSize: '~262 MB',
     cacheHint: 'supertonic-2',
-    // Four separate networks plus the tokeniser: any one missing and synthesis cannot run.
+    // Four separate networks, the config and the character table: any one missing and synthesis
+    // cannot run (engines/supertonic.ts loads all of them before the first sentence).
     requiredFiles: [
       '/onnx/text_encoder.onnx',
       '/onnx/duration_predictor.onnx',
       '/onnx/vector_estimator.onnx',
       '/onnx/vocoder.onnx',
+      '/onnx/tts.json',
+      '/onnx/unicode_indexer.json',
     ],
+    voiceFile: (voice) => `/voice_styles/${voice}.json`,
     needsGpuForSpeed: false,
     heavyForMobile: true,
   },

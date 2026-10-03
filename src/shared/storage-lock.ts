@@ -13,7 +13,13 @@
  * is a test — the local queue alone still orders everything in this context.
  *
  * A holder that never releases (a tab closed mid-write) must not wedge the key, so the background
- * hands the lock on after `LOCK_TIMEOUT_MS` regardless.
+ * hands the lock on after `LOCK_TIMEOUT_MS`. A holder that is merely slow is not the same thing: it
+ * renews its lease while it works, so the lock expires only once its holder has stopped answering —
+ * a closed tab, a crashed page — never under a writer that is still running.
+ *
+ * The background is itself a writer (the context menu's "Add to queue"), and a context cannot
+ * message itself: its request went nowhere, and its writes ran outside the lock everyone else
+ * used. It registers its table with `useLockTable`, and its writes take the lock directly.
  */
 import { browser } from 'wxt/browser';
 
@@ -28,6 +34,23 @@ export interface LockRelease {
   type: 'storage-unlock';
   key: string;
   token: number;
+}
+export interface LockRenew {
+  type: 'storage-lock-renew';
+  key: string;
+  token: number;
+}
+
+/** How often a holder renews its lease: well inside the timeout, so one late tick costs nothing. */
+const RENEW_MS = Math.floor(LOCK_TIMEOUT_MS / 3);
+
+type LockTable = ReturnType<typeof createLockTable>;
+/** Set in the background, which owns the table: there, locks are taken without a message. */
+let localTable: LockTable | null = null;
+
+/** The background's own table, for its own writes (see the file comment). */
+export function useLockTable(table: LockTable): void {
+  localTable = table;
 }
 
 /** In-context ordering: the promise each key's last waiter is waiting on. */
@@ -54,14 +77,17 @@ export async function withStorageLocks<T>(keys: readonly string[], run: () => Pr
 
 async function holdAndRun<T>(key: string, run: () => Promise<T>): Promise<T> {
   const token = await acquire(key);
+  const renewal = token != null ? setInterval(() => void renew(key, token), RENEW_MS) : null;
   try {
     return await run();
   } finally {
+    if (renewal != null) clearInterval(renewal);
     if (token != null) void release(key, token);
   }
 }
 
 async function acquire(key: string): Promise<number | null> {
+  if (localTable) return localTable.acquire(key);
   try {
     const reply = (await browser.runtime.sendMessage({ type: 'storage-lock', key } satisfies LockRequest)) as
       | { token?: number }
@@ -73,7 +99,23 @@ async function acquire(key: string): Promise<number | null> {
   }
 }
 
+async function renew(key: string, token: number): Promise<void> {
+  if (localTable) {
+    localTable.renew(key, token);
+    return;
+  }
+  try {
+    await browser.runtime.sendMessage({ type: 'storage-lock-renew', key, token } satisfies LockRenew);
+  } catch {
+    /* the background is gone too; nothing to keep */
+  }
+}
+
 async function release(key: string, token: number): Promise<void> {
+  if (localTable) {
+    localTable.release(key, token);
+    return;
+  }
   try {
     await browser.runtime.sendMessage({ type: 'storage-unlock', key, token } satisfies LockRelease);
   } catch {
@@ -140,6 +182,15 @@ export function createLockTable(now: () => number = Date.now, timeoutMs = LOCK_T
         });
       }
       return new Promise<number>((resolve) => held.waiting.push(resolve));
+    },
+
+    /** The holder is still working: start its lease again. False if it no longer holds `key`. */
+    renew(key: string, token: number): boolean {
+      const held = keys.get(key);
+      if (!held || held.token !== token) return false;
+      held.since = now();
+      watch(key, held);
+      return true;
     },
 
     release(key: string, token: number): void {

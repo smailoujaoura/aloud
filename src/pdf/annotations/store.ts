@@ -11,6 +11,7 @@
  */
 import { storage } from 'wxt/utils/storage';
 import type { Mark } from './model';
+import { normalizeStoredMarks } from '@/shared/record-shapes';
 
 export interface StoredMarks {
   /** The file name last seen, for a future "annotated documents" list. */
@@ -27,7 +28,7 @@ export async function hashBytes(bytes: Uint8Array): Promise<string> {
 }
 
 export async function loadMarks(hash: string): Promise<StoredMarks | null> {
-  return (await storage.getItem<StoredMarks>(`local:${PREFIX}${hash}`)) ?? null;
+  return normalizeStoredMarks(await storage.getItem(`local:${PREFIX}${hash}`)) as StoredMarks | null;
 }
 
 export async function saveMarks(hash: string, name: string, marks: readonly Mark[]): Promise<void> {

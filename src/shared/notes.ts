@@ -250,27 +250,57 @@ export async function loadNotes(): Promise<Note[]> {
   }
 }
 
-/** Add notes from a file, keeping the newer copy of anything already here. Returns how many are new. */
-export async function mergeInNotes(incoming: readonly Note[]): Promise<{ added: number; updated: number }> {
-  return withStorageLock(LOCK_KEY, async () => {
-  const here = await loadNotes();
+export interface NotesMerge {
+  notes: Note[];
+  /** Notes from `incoming` that are now kept and were not here before. */
+  added: number;
+  /** Notes here replaced by a newer copy from `incoming`. */
+  updated: number;
+  /** New notes from `incoming` left out because the cap was reached. */
+  skipped: number;
+}
+
+/**
+ * `here` plus `incoming`, the newer copy of each note winning — the one merge used by both the
+ * notes import and a full restore.
+ *
+ * At the cap, notes already here outrank new ones from the file: an import must never be a way of
+ * losing notes. Sorting everything and keeping the newest 5,000 silently deleted a kept note for
+ * every one imported, while reporting success.
+ */
+export function mergeNoteLists(here: readonly Note[], incoming: readonly Note[]): NotesMerge {
   const byId = new Map(here.map((n) => [n.id, n]));
-  let added = 0;
+  const fresh: Note[] = [];
   let updated = 0;
   for (const note of incoming) {
     const have = byId.get(note.id);
-    if (!have) {
-      added++;
-      byId.set(note.id, note);
-    } else if ((note.updatedAt ?? 0) > (have.updatedAt ?? 0)) {
-      updated++;
-      byId.set(note.id, note);
+    if (have) {
+      if ((note.updatedAt ?? 0) > (have.updatedAt ?? 0)) {
+        byId.set(note.id, note);
+        updated++;
+      }
+    } else if (!fresh.some((f) => f.id === note.id)) {
+      fresh.push(note);
     }
   }
-  if (added || updated) {
-    await item.setValue([...byId.values()].sort((a, b) => b.createdAt - a.createdAt).slice(0, MAX_NOTES));
-  }
-  return { added, updated };
+  const room = Math.max(0, MAX_NOTES - byId.size);
+  // Newest first when not all of them fit.
+  const taken = [...fresh].sort((a, b) => b.createdAt - a.createdAt).slice(0, room);
+  for (const note of taken) byId.set(note.id, note);
+  return {
+    notes: [...byId.values()].sort((a, b) => b.createdAt - a.createdAt),
+    added: taken.length,
+    updated,
+    skipped: fresh.length - taken.length,
+  };
+}
+
+/** Add notes from a file, keeping the newer copy of anything already here. */
+export async function mergeInNotes(incoming: readonly Note[]): Promise<{ added: number; updated: number; skipped: number }> {
+  return withStorageLock(LOCK_KEY, async () => {
+    const { notes, added, updated, skipped } = mergeNoteLists(await loadNotes(), incoming);
+    if (added || updated) await item.setValue(notes);
+    return { added, updated, skipped };
   });
 }
 
@@ -296,7 +326,9 @@ export async function restoreNote(note: Note): Promise<void> {
   await withStorageLock(LOCK_KEY, async () => {
     const notes = await loadNotes();
     if (notes.some((n) => n.id === note.id)) return;
-    await item.setValue([note, ...notes].sort((a, b) => b.createdAt - a.createdAt).slice(0, MAX_NOTES));
+    // Undo puts back what was just removed; it never pushes another note out to make room.
+    if (notes.length >= MAX_NOTES) return;
+    await item.setValue([note, ...notes].sort((a, b) => b.createdAt - a.createdAt));
   });
 }
 

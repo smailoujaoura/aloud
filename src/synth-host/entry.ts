@@ -139,6 +139,14 @@ function preview(text: string): string {
 
 let readyForwarded = false;
 let maxProgress = 0;
+/**
+ * Replacement workers that died before they were ever ready, since the pool last made progress
+ * (a worker became ready, or a sentence came back). A replacement that fails the same way every
+ * time — a model that no longer loads, memory that has run out — used to be replaced for ever,
+ * each one failing in turn, while the reader waited on sentences nobody was making.
+ */
+let restartFailures = 0;
+const MAX_RESTART_FAILURES = 3;
 
 function relay(data: unknown): void {
   if (!port) return;
@@ -177,7 +185,26 @@ function workerFailed(w: Worker, phase: string, message: string, stack?: string)
   }
   // eslint-disable-next-line no-console
   console.warn(`[aloud] ${clock()} ${workerName(w)} failed after ready (${phase}): ${message}`);
-  replaceWorker(w);
+  if (!readyWorkers.includes(w)) restartFailures++;
+  if (restartFailures >= MAX_RESTART_FAILURES) {
+    // Replacing again would only fail again: let this one go, and keep whatever still works.
+    replaceWorker(w, false);
+    if (allWorkers.length === 0) {
+      jobs.clear();
+      relay({
+        kind: 'error',
+        id: 0,
+        fatal: true,
+        phase: `synth-host:${phase}`,
+        message: `The voice stopped working and could not be restarted (${message}). Close the reader and start it again.`,
+        stack,
+      });
+      return;
+    }
+  } else {
+    // A little longer to wait each time, so a failure that repeats does not spin.
+    replaceWorker(w, true, restartFailures * 1000);
+  }
   jobs.pump(readyWorkers);
 }
 
@@ -211,6 +238,7 @@ function onWorkerMessage(w: Worker, data: WorkerResponse | undefined): void {
 
   switch (data.kind) {
     case 'ready': {
+      restartFailures = 0;
       if (!readyWorkers.includes(w)) readyWorkers.push(w);
       // eslint-disable-next-line no-console
       console.info(
@@ -232,7 +260,13 @@ function onWorkerMessage(w: Worker, data: WorkerResponse | undefined): void {
       // cannot keep up with playback where four could.
       // eslint-disable-next-line no-console
       console.info(`[aloud] ${clock()} ${workerName(w)} now on ${data.executionProvider} · resizing the pool`);
+      if (initMsg && data.executionProvider === 'wasm' && initMsg.config.preferWebGPU) {
+        // New workers start where this one ended up, instead of each trying the GPU and failing.
+        initMsg = { ...initMsg, config: { ...initMsg.config, preferWebGPU: false } };
+      }
       resizePoolForProvider(data.executionProvider);
+      // Growing the target is not enough: the workers it promises have to be started.
+      spawnRest();
       relay(data);
       return;
 
@@ -261,6 +295,7 @@ function onWorkerMessage(w: Worker, data: WorkerResponse | undefined): void {
       return;
 
     case 'audio': {
+      restartFailures = 0;
       // Read the length *before* relaying: the buffer is transferred, and detached after that.
       const seconds = data.sampleRate > 0 ? data.pcm.byteLength / 4 / data.sampleRate : 0;
       const started = dispatched.get(data.chunkIndex);
@@ -316,7 +351,7 @@ function spawnRest(): void {
  * Terminating costs a model reload, but the weights are already in the cache, so a replacement is
  * ready in a few seconds — against up to a minute of a worker being useless.
  */
-function replaceWorker(worker: Worker): void {
+function replaceWorker(worker: Worker, replace = true, delayMs = 0): void {
   const all = allWorkers.indexOf(worker);
   if (all >= 0) allWorkers.splice(all, 1);
   const ready = readyWorkers.indexOf(worker);
@@ -328,11 +363,16 @@ function replaceWorker(worker: Worker): void {
     /* already gone */
   }
 
-  if (disposed || !initMsg || allWorkers.length >= targetSize) return;
-  const replacement = makeWorker(nextWorkerId++);
-  if (!replacement) return;
-  allWorkers.push(replacement);
-  replacement.postMessage(initMsg);
+  if (!replace) return;
+  const start = (): void => {
+    if (disposed || !initMsg || allWorkers.length >= targetSize) return;
+    const replacement = makeWorker(nextWorkerId++);
+    if (!replacement) return;
+    allWorkers.push(replacement);
+    replacement.postMessage(initMsg);
+  };
+  if (delayMs > 0) setTimeout(start, delayMs);
+  else start();
 }
 
 /**
@@ -473,6 +513,7 @@ function handleFromContent(msg: WorkerRequest): void {
     disposed = false;
     readyForwarded = false;
     maxProgress = 0;
+    restartFailures = 0;
     initMsg = null;
     preStartRequests.length = 0;
     void startPool(msg, ++initGeneration);

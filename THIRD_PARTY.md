@@ -57,7 +57,7 @@ licence is shown on the engine's card in Settings before that download.
 
 ## Source availability
 
-This repository is the complete corresponding source. `pnpm install && pnpm build` reproduces
+This repository is the complete corresponding source. `npm ci && npm run build` reproduces
 `.output/firefox-mv3/` (see `BUILD.md`). The only non-source binaries in the tree are the vendored
 ONNX Runtime Web `.wasm`/`.mjs` files under `public/vendor/ort/`, copied unmodified from the
 `onnxruntime-web` npm package by `scripts/sync-assets.mjs`.

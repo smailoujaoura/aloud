@@ -28,6 +28,7 @@ import {
 import { getSettings } from '@/shared/settings';
 import { log } from '@/shared/log';
 import { $, toast } from './feedback';
+import { heldCount, releaseHeld, sanitised } from './article-sanitise';
 
 let queue: QueueItem[] = [];
 /** Articles this sitting could not download: kept in the queue, not started again by "next". */
@@ -211,16 +212,12 @@ function imageNotice(held: number): HTMLElement {
   const row = el(document, 'p', { class: 'q-prompt article-images' });
   row.append(
     document.createTextNode(
-      `${held} image${held === 1 ? '' : 's'} ${held === 1 ? 'is' : 'are'} not loaded — they live on the original site, and fetching them tells it you are reading. `,
+      `${held} image${held === 1 ? '' : 's'} or media file${held === 1 ? '' : 's'} not loaded — they live on the original site, and fetching them tells it you are reading. `,
     ),
   );
   const load = el(document, 'button', { type: 'button', class: 'btn-sm' }, 'Load images');
   load.addEventListener('click', () => {
-    for (const node of $('article').querySelectorAll('[data-aloud-held]')) {
-      const src = node.getAttribute('data-aloud-held') ?? '';
-      node.removeAttribute('data-aloud-held');
-      if (src) node.setAttribute('src', src);
-    }
+    releaseHeld($('article'));
     row.remove();
   });
   row.append(load);
@@ -234,7 +231,7 @@ function renderArticle(item: QueueItem, article: QueuedArticle): void {
   if (article.byline) nodes.push(el(document, 'p', { class: 'byline muted' }, article.byline));
   if (article.html) {
     const body = sanitised(article.html);
-    const held = body.querySelectorAll('[data-aloud-held]').length;
+    const held = heldCount(body);
     if (held > 0) nodes.push(imageNotice(held));
     nodes.push(body);
   } else {
@@ -243,48 +240,6 @@ function renderArticle(item: QueueItem, article: QueuedArticle): void {
     }
   }
   root.replaceChildren(...nodes);
-}
-
-/**
- * Readability's output, minus anything that could run or submit: no scripts, frames, forms or
- * event handlers, and every link opening in a new tab. Parsed with DOMParser into an inert
- * document and imported node by node — never assigned as markup to the live page.
- */
-function sanitised(html: string): DocumentFragment {
-  const parsed = new DOMParser().parseFromString(html, 'text/html');
-  parsed
-    .querySelectorAll('script, style, link, meta, iframe, frame, object, embed, form, input, button, select, textarea, noscript, template')
-    .forEach((n) => n.remove());
-  for (const node of parsed.body.querySelectorAll('*')) {
-    for (const attr of [...node.attributes]) {
-      const name = attr.name.toLowerCase();
-      const unsafeUrl = (name === 'href' || name === 'src' || name === 'xlink:href') && /^\s*(javascript|data):/i.test(attr.value);
-      if (name.startsWith('on') || name === 'style' || name === 'srcdoc' || name === 'srcset' || unsafeUrl) {
-        node.removeAttribute(attr.name);
-      }
-    }
-    if (node.tagName === 'A') {
-      node.setAttribute('target', '_blank');
-      node.setAttribute('rel', 'noopener noreferrer');
-    }
-    // An article saved for offline reading still carried its images as addresses on someone
-    // else's server, and the browser fetched them as soon as they scrolled into view — a request
-    // to that host, with a time, from a page Aloud says runs on your device. They are held back
-    // and loaded only if asked for.
-    if (node.tagName === 'IMG' || node.tagName === 'SOURCE') {
-      const src = node.getAttribute('src') ?? '';
-      if (/^https?:/i.test(src)) {
-        node.setAttribute('data-aloud-held', src);
-        node.removeAttribute('src');
-        node.setAttribute('alt', node.getAttribute('alt') || 'Image not loaded');
-      }
-      node.setAttribute('loading', 'lazy');
-    }
-    if (node.tagName === 'VIDEO' || node.tagName === 'AUDIO') node.removeAttribute('poster');
-  }
-  const fragment = document.createDocumentFragment();
-  for (const child of [...parsed.body.childNodes]) fragment.appendChild(document.importNode(child, true));
-  return fragment;
 }
 
 /**

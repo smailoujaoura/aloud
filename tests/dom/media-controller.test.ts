@@ -82,4 +82,42 @@ describe('players that leave the page', () => {
     expect(controller.mediaCount).toBe(1);
     controller.stop();
   });
+
+  it('keep no cleanup for a removed player: a feed of a thousand cards holds nothing it threw away', () => {
+    document.body.innerHTML = '';
+    const controller = new MediaSpeedController({
+      settings: { ...DEFAULT_MEDIA_SPEED, showBadge: false },
+      initialRate: null,
+      onRate: () => {},
+    });
+    controller.start();
+    const inner = controller as unknown as { cleanups: unknown[]; listeners: Map<unknown, unknown> };
+    const before = inner.cleanups.length;
+    for (let i = 0; i < 50; i++) {
+      const v = document.createElement('video');
+      document.body.append(v);
+      (controller as unknown as { scan(): void }).scan();
+      v.remove();
+      expect(controller.mediaCount).toBe(0);
+    }
+    expect(inner.listeners.size).toBe(0);
+    expect(inner.cleanups.length).toBe(before);
+    controller.stop();
+  });
+
+  it('still unhooks the players that are left when the control stops', () => {
+    document.body.innerHTML = '<video id="v"></video>';
+    const video = document.getElementById('v') as HTMLVideoElement;
+    const controller = new MediaSpeedController({
+      settings: { ...DEFAULT_MEDIA_SPEED, showBadge: false },
+      initialRate: 2,
+      onRate: () => {},
+    });
+    controller.start();
+    controller.setRate(2, false);
+    controller.stop();
+    video.playbackRate = 1;
+    video.dispatchEvent(new Event('play')); // a stopped control must not put its rate back
+    expect(video.playbackRate).toBe(1);
+  });
 });

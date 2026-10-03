@@ -33,9 +33,7 @@ const ADDON_DIR = join(ROOT, '.output/firefox-mv3');
 const OUT = join(ROOT, '.output/e2e-firefox');
 const ADDON_ID = JSON.parse(readFileSync(join(ADDON_DIR, 'manifest.json'), 'utf8')).browser_specific_settings.gecko.id;
 const RDP_PORT = 6000 + Math.floor(Math.random() * 1000);
-/** The reading bar's buttons at this viewport (the bar is centred at the bottom). */
 const VIEWPORT = { width: 1100, height: 800 };
-const BAR = { play: [198, 753], save: [831, 753] };
 
 const ARTICLE = `<!doctype html><html lang="en"><title>Aloud Firefox check</title><article>
 <h1>Aloud Firefox check</h1>
@@ -186,6 +184,33 @@ try {
   }
   if (!rdp) await fail('could not reach Firefox’s debugging server');
   const consoles = await installAddon(rdp);
+
+  /**
+   * Click one of the reading bar's buttons, where it really is. The bar lives in a closed shadow
+   * root, so its buttons are measured from the content script's own world (where the session is
+   * `window.__aloudSession`) and clicked with the real mouse. Fixed coordinates broke the moment
+   * the bar gained a button, and then clicked the wrong one.
+   */
+  const clickBar = async (button) => {
+    const at = await evaluate(
+      rdp,
+      consoles.background,
+      `const tab = (await browser.tabs.query({})).find((t) => t.url === ${JSON.stringify(articleUrl)});
+       const [result] = await browser.scripting.executeScript({
+         target: { tabId: tab.id },
+         args: [${JSON.stringify(button)}],
+         func: (name) => {
+           const el = window.__aloudSession?.bar?.[name];
+           if (!el) return null;
+           const r = el.getBoundingClientRect();
+           return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+         },
+       });
+       return result?.result ?? null;`,
+    );
+    if (!at) await fail(`the reading bar has no ${button}`);
+    await page.mouse.click(at.x, at.y);
+  };
   step(`installed ${ADDON_ID}`);
 
   await evaluate(
@@ -226,7 +251,7 @@ try {
   const chunk = await waitFor(/→ chunk \d+ in [\d.]+s → [\d.]+s audio/, 120_000, 'no audio came back from the engine');
   step(`audio: ${chunk.replace(/^\[aloud\]\s*/, '')}`);
 
-  await page.mouse.click(...BAR.play);
+  await clickBar('playBtn');
   await waitFor(/audio output:/, 30_000, 'playback did not start (is there an audio output? see PULSE_SERVER)');
   step('playing');
 
@@ -248,7 +273,7 @@ try {
   if (marked.length < 6 || !inOrder) await fail(`word highlight did not follow the speech word by word: ${JSON.stringify(marked)}`);
   step(`word highlight: ${marked.join(' → ')}`);
 
-  await page.mouse.click(...BAR.save);
+  await clickBar('saveBtn');
   await page.waitForTimeout(400);
   await page.keyboard.press('Enter'); // "Make the MP3"
   step((await waitFor(/mp3 export: \d+ sentences →|mp3 export failed/, 600_000, 'the MP3 export did not finish')).replace(/^\[aloud\]\s*/, ''));

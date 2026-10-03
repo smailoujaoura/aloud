@@ -140,4 +140,55 @@ describe('the synthesis host', () => {
     const dispatched = replacement.messages.filter((m) => (m as { kind?: string }).kind === 'synthesize');
     expect(dispatched.map((m) => (m as { chunkIndex: number }).chunkIndex)).toContain(1);
   });
+
+  it('stops replacing a worker that keeps failing, and tells the reader the voice has stopped', async () => {
+    const { port, replies } = offerPort('ticket-1');
+    await settle();
+    port.onmessage?.({
+      data: { kind: 'init', id: 1, config: { engine: 'piper', voice: 'en_GB-alba-medium', speed: 1, workers: 1, preferWebGPU: false } },
+    });
+    await settle();
+    workers[0]!.onmessage?.({ data: { kind: 'ready', id: 1, executionProvider: 'wasm', sampleRate: 22050 } });
+    await settle();
+    // The worker crashes, and every replacement dies before it is ready (a model that no longer loads).
+    workers[0]!.onerror?.({ message: 'crash', preventDefault() {} });
+    for (let round = 0; round < 6; round++) {
+      await new Promise((r) => setTimeout(r, 1100 * (round + 1)));
+      const latest = workers[workers.length - 1]!;
+      if (latest.terminated) break;
+      latest.onerror?.({ message: 'crash again', preventDefault() {} });
+    }
+    await settle();
+    // Bounded: the first worker, then three replacements that never came up — not one per crash for ever.
+    expect(workers.length).toBe(4);
+    expect(workers.every((w) => w.terminated)).toBe(true);
+    const fatal = replies.filter((r) => r.kind === 'error' && r.fatal === true);
+    expect(fatal).toHaveLength(1);
+    expect(String(fatal[0]!.message)).toMatch(/could not be restarted/);
+  }, 20_000);
+
+  it('on falling back from the GPU, starts the extra CPU workers it promised, on the CPU', async () => {
+    Object.defineProperty(navigator, 'gpu', { value: { requestAdapter: async () => ({ info: {} }) }, configurable: true });
+    Object.defineProperty(navigator, 'hardwareConcurrency', { value: 8, configurable: true });
+    try {
+      const { port } = offerPort('ticket-1');
+      await settle();
+      port.onmessage?.({
+        data: { kind: 'init', id: 1, config: { engine: 'kokoro', voice: 'af_heart', speed: 1, preferWebGPU: true } },
+      });
+      await new Promise((r) => setTimeout(r, 50));
+      const before = workers.length;
+      workers[0]!.onmessage?.({ data: { kind: 'ready', id: 1, executionProvider: 'webgpu', sampleRate: 24000 } });
+      await new Promise((r) => setTimeout(r, 50));
+      expect(workers.length).toBe(before); // one GPU worker is the whole pool
+      // The GPU fails after start-up; the worker carries on, on the CPU.
+      workers[0]!.onmessage?.({ data: { kind: 'provider', id: 1, executionProvider: 'wasm' } });
+      await new Promise((r) => setTimeout(r, 1600));
+      expect(workers.length).toBeGreaterThan(1);
+      const inits = workers.slice(1).map((w) => w.messages.find((m) => (m as { kind?: string }).kind === 'init') as { config: { preferWebGPU: boolean } });
+      expect(inits.every((m) => m && m.config.preferWebGPU === false)).toBe(true);
+    } finally {
+      delete (navigator as { gpu?: unknown }).gpu;
+    }
+  });
 });

@@ -14,6 +14,7 @@ import {
   loadNotes,
   noteFacets,
   mergeInNotes,
+  MAX_NOTES,
   notesToFile,
   parseNotesFile,
   notesToMarkdown,
@@ -87,11 +88,16 @@ export async function initNotes(opts: { onCount: (n: number) => void; onListen: 
     file.value = '';
     if (!chosen) return;
     try {
-      const { added, updated } = await mergeInNotes(parseNotesFile(await chosen.text()));
+      const { added, updated, skipped } = await mergeInNotes(parseNotesFile(await chosen.text()));
+      const plural = (n: number): string => `${n} note${n === 1 ? '' : 's'}`;
+      // A note that did not fit is said out loud, and is never made room for by deleting one.
+      const full = skipped ? ` · ${plural(skipped)} left out: you have the maximum ${MAX_NOTES.toLocaleString()} notes` : '';
       toast(
         added || updated
-          ? `${added} note${added === 1 ? '' : 's'} added${updated ? `, ${updated} updated` : ''}`
-          : 'Those notes were already here',
+          ? `${plural(added)} added${updated ? `, ${updated} updated` : ''}${full}`
+          : skipped
+            ? `Nothing added${full}`
+            : 'Those notes were already here',
       );
     } catch (err) {
       toast(err instanceof Error ? err.message : String(err), 'error');

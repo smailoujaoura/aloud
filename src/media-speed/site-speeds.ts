@@ -6,6 +6,7 @@
  */
 import { storage } from 'wxt/utils/storage';
 import { withStorageLock } from '@/shared/storage-lock';
+import { normalizeSiteSpeed, recordsOf } from '@/shared/record-shapes';
 
 export type SiteSpeeds = Record<string, { rate: number; at: number }>;
 
@@ -28,7 +29,7 @@ const item = storage.defineItem<SiteSpeeds>('local:mediaSpeedSites', { fallback:
 
 export async function loadSiteSpeeds(): Promise<SiteSpeeds> {
   try {
-    return await item.getValue();
+    return recordsOf(await item.getValue(), normalizeSiteSpeed);
   } catch {
     return {};
   }
@@ -43,9 +44,9 @@ export async function rememberSiteSpeed(host: string, rate: number | null): Prom
 }
 
 export async function clearSiteSpeeds(): Promise<void> {
-  await item.setValue({});
+  await withStorageLock('site-speeds', () => item.setValue({}));
 }
 
 export function watchSiteSpeeds(cb: (sites: SiteSpeeds) => void): () => void {
-  return item.watch((value) => cb(value ?? {}));
+  return item.watch((value) => cb(recordsOf(value, normalizeSiteSpeed)));
 }

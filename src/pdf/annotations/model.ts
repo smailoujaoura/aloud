@@ -29,6 +29,35 @@ export interface Mark {
   note: string;
   created: number;
   updated: number;
+  /** Set when the mark came from the file rather than from Aloud (see `MarkOrigin`). */
+  origin?: MarkOrigin;
+}
+
+/**
+ * Where an imported mark came from, so saving does not rewrite someone else's annotation.
+ *
+ * Saving used to delete every annotation it could read and write each back as new: an untouched
+ * sticky note from "Original reviewer", made in 2020, came back authored by "Aloud" and dated
+ * today. Now an imported mark that is unchanged keeps its original annotation exactly; one that
+ * was edited is rewritten with its original author, creation date and flags.
+ */
+export interface MarkOrigin {
+  /** The annotation's PDF object, as pdf.js names it (`12R`, or `12R3` for generation 3); null when inline. */
+  ref: string | null;
+  /** Its author (`/T`), empty when it had none. */
+  author: string;
+  /** Its `/CreationDate`, exactly as written in the file. */
+  created: string | null;
+  /** Its annotation flags (`/F`). */
+  flags: number | null;
+  /** `markFingerprint` as imported: a different one now means the mark was edited. */
+  fingerprint: string;
+}
+
+/** What a mark looks like on the page, for telling an edited imported mark from an untouched one. */
+export function markFingerprint(mark: Pick<Mark, 'kind' | 'color' | 'boxes' | 'note'>): string {
+  const r = (v: number): number => Math.round(v * 100) / 100;
+  return JSON.stringify([mark.kind, mark.color.toLowerCase(), mark.boxes.map((b) => b.map(r)), mark.note]);
 }
 
 export interface MarkColor {
@@ -164,6 +193,11 @@ export interface PdfJsAnnotation {
   color?: ArrayLike<number> | null;
   contentsObj?: { str?: string } | null;
   noView?: boolean;
+  /** The PDF object reference, `12R`; `annot_…` for an annotation written inline. */
+  id?: string;
+  titleObj?: { str?: string } | null;
+  creationDate?: string | null;
+  annotationFlags?: number;
 }
 
 /**
@@ -177,7 +211,7 @@ export function importAnnotations(page: number, annotations: readonly PdfJsAnnot
     if (!kind || a.noView) continue;
     const boxes = kind === 'note' ? rectBox(a.rect) : quadBoxes(a.quadPoints) ?? rectBox(a.rect);
     if (boxes.length === 0) continue;
-    marks.push({
+    const mark: Mark = {
       id: newMarkId(),
       page,
       kind,
@@ -187,7 +221,15 @@ export function importAnnotations(page: number, annotations: readonly PdfJsAnnot
       note: a.contentsObj?.str?.trim() ?? '',
       created: now,
       updated: now,
-    });
+    };
+    mark.origin = {
+      ref: a.id && /^\d+R\d*$/.test(a.id) ? a.id : null,
+      author: a.titleObj?.str ?? '',
+      created: typeof a.creationDate === 'string' ? a.creationDate : null,
+      flags: typeof a.annotationFlags === 'number' ? a.annotationFlags : null,
+      fingerprint: markFingerprint(mark),
+    };
+    marks.push(mark);
   }
   return marks;
 }

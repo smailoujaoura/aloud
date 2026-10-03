@@ -75,6 +75,7 @@ export class MediaSpeedController {
     this.observer = null;
     for (const off of this.cleanups) off();
     this.cleanups.length = 0;
+    for (const release of this.listeners.values()) release();
     this.clearBadge();
     this.known.clear();
     this.listeners.clear();
@@ -186,8 +187,9 @@ export class MediaSpeedController {
     const release = (): void => {
       for (const un of off) un();
     };
+    // Only in `listeners`: `prune` deletes it there, and with it the last reference to the element.
+    // Kept in `cleanups` as well, a removed player stayed reachable until the control stopped.
     this.listeners.set(media, release);
-    this.cleanups.push(release);
 
     if (this.rate == null && this.host.initialRate != null) {
       this.rate = clampRate(this.host.initialRate);

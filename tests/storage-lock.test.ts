@@ -106,3 +106,43 @@ describe('taking several keys', () => {
     expect(order.indexOf('note')).toBeLessThan(order.indexOf('restore'));
   });
 });
+
+describe('a holder that is still working', () => {
+  it('keeps the lock past the timeout while it renews, and loses it once it stops', async () => {
+    vi.useFakeTimers();
+    try {
+      const locks = createLockTable(Date.now, 5000);
+      const token = await locks.acquire('notes');
+      let waiter = false;
+      void locks.acquire('notes').then(() => (waiter = true));
+      for (let i = 0; i < 6; i++) {
+        await vi.advanceTimersByTimeAsync(1600);
+        expect(locks.renew('notes', token)).toBe(true); // a slow write, still alive
+      }
+      expect(waiter).toBe(false); // ~10 s in: never handed on under a running writer
+      await vi.advanceTimersByTimeAsync(6000); // renewals stop: the holder has gone away
+      expect(waiter).toBe(true);
+      expect(locks.renew('notes', token)).toBe(false); // and a late renewal cannot take it back
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('the background, which cannot message itself', () => {
+  it('takes locks from its own table, in the same order as everyone else', async () => {
+    const { withStorageLock, useLockTable } = await import('@/shared/storage-lock');
+    const table = createLockTable();
+    useLockTable(table);
+    // Another context holds the key through the table (as a message would have taken it).
+    const other = await table.acquire('queue');
+    let ran = false;
+    const mine = withStorageLock('queue', async () => void (ran = true));
+    await new Promise((r) => setTimeout(r, 5));
+    expect(ran).toBe(false); // waits for the other context, rather than writing alongside it
+    table.release('queue', other);
+    await mine;
+    expect(ran).toBe(true);
+    expect(table.size).toBe(0);
+  });
+});

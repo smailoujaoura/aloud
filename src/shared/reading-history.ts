@@ -8,6 +8,7 @@
 import { storage } from 'wxt/utils/storage';
 import type { DocSource } from './doc-source';
 import { withStorageLock } from './storage-lock';
+import { normalizeHistoryEntry, recordsOf } from './record-shapes';
 
 export interface HistoryEntry {
   source: DocSource;
@@ -112,7 +113,9 @@ const item = storage.defineItem<History>('local:readingHistory', { fallback: {} 
 
 export async function loadHistory(): Promise<History> {
   try {
-    return await item.getValue();
+    // Checked on the way out as well as in: storage damaged before the import was strict must
+    // not take the Library down (shared/record-shapes.ts).
+    return recordsOf(await item.getValue(), normalizeHistoryEntry);
   } catch {
     return {};
   }
@@ -133,9 +136,9 @@ export async function removeFromHistory(key: string): Promise<void> {
 }
 
 export async function clearHistory(): Promise<void> {
-  await item.setValue({});
+  await withStorageLock('history', () => item.setValue({}));
 }
 
 export function watchHistory(cb: (history: History) => void): () => void {
-  return item.watch((value) => cb(value ?? {}));
+  return item.watch((value) => cb(recordsOf(value, normalizeHistoryEntry)));
 }

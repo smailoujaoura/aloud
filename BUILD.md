@@ -4,23 +4,24 @@
 
 - Node.js ≥ 22.12 — what the installed WXT (≥ 22) and Vite (≥ 22.12) require; `engines` in
   package.json says the same, so `npm install` warns on anything older
-- pnpm ≥ 9 (`npm i -g pnpm`) — npm also works with `--legacy-peer-deps` (already set in `.npmrc`)
+- npm (comes with Node). `package-lock.json` is the one lockfile, and `npm ci` installs exactly what
+  it lists; `.npmrc` sets `legacy-peer-deps`, which the lockfile was made with
 - Firefox ≥ 142 or Chromium ≥ 120 to run it
 
 ## Commands
 
 ```bash
-pnpm install            # also runs `wxt prepare`
-pnpm build              # both targets: .output/firefox-mv3/ and .output/chrome-mv3/
-pnpm build:firefox      # -> .output/firefox-mv3/
-pnpm build:chrome       # -> .output/chrome-mv3/
-pnpm zip                # -> .output/*.zip   (packaged for AMO / the Chrome Web Store)
-pnpm dev                # live-reload dev build + launches Firefox
-pnpm dev:chrome         # live-reload dev build + launches Chrome
-pnpm compile            # tsc --noEmit
-pnpm test               # vitest (pure logic + happy-dom DOM tests)
-pnpm lint:ext           # web-ext lint on the Firefox output
-pnpm test:e2e:firefox   # the Firefox build in a real headless Firefox (see below)
+npm ci                 # exactly the locked versions; also runs `wxt prepare`
+npm run build          # both targets: .output/firefox-mv3/ and .output/chrome-mv3/
+npm run build:firefox  # -> .output/firefox-mv3/
+npm run build:chrome   # -> .output/chrome-mv3/
+npm run zip            # -> .output/*.zip   (packaged for AMO / the Chrome Web Store)
+npm run dev            # live-reload dev build + launches Firefox
+npm run dev:chrome     # live-reload dev build + launches Chrome
+npm run compile        # tsc --noEmit
+npm run test           # vitest (pure logic + happy-dom DOM tests)
+npm run lint:ext       # web-ext lint on the Firefox output
+npm run test:e2e:firefox  # the Firefox build in a real headless Firefox (see below)
 ```
 
 ### The Firefox end-to-end check
@@ -61,7 +62,7 @@ targets `['firefox128', 'chrome120']` and lets esbuild take the lower bound, so 
 `public/` output cannot be clobbered by whichever browser was built last. Runtime differences in
 the worker are capability checks (`src/shared/browser-env.ts`), not build flags.
 
-## What `pnpm build` does
+## What `npm run build` does
 
 1. `wxt.config.ts`'s `build:before` hook runs `scripts/prebuild.mjs`, which:
    - `scripts/gen-voices.mjs` — regenerates `public/models.json` from `scripts/models.base.json`.
@@ -88,7 +89,7 @@ the worker are capability checks (`src/shared/browser-env.ts`), not build flags.
 **Firefox** — `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on** → pick
 `.output/firefox-mv3/manifest.json`.
 
-**Firefox for Android** — requires a signed build; use `pnpm zip:firefox` and an AMO-signed
+**Firefox for Android** — requires a signed build; use `npm run zip:firefox` and an AMO-signed
 `.xpi`, or Firefox Nightly with a custom add-on collection. The manifest declares
 `gecko_android`, without which AMO treats the add-on as desktop-only.
 

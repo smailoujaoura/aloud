@@ -873,7 +873,8 @@ footer .by b { color: var(--ink); }
     const r = RATES[rate];
     audio.playbackRate = r;
     const wpm = Math.round((BASE_WPM * r) / 5) * 5;
-    speedBtn.textContent = r.toFixed(r % 1 ? 2 : 1).replace(/0$/, '') + '× · ' + wpm + ' wpm';
+    // 1 → "1.0×", 1.25 → "1.25×", 1.5 → "1.5×", 0.85 → "0.85×".
+    speedBtn.textContent = (Number.isInteger(r) ? r.toFixed(1) : String(r)) + '× · ' + wpm + ' wpm';
     speedBtn.setAttribute('aria-label', 'Reading speed: ' + r + '×. Change speed');
   });
   for (const b of document.querySelectorAll('[data-hear]')) {
@@ -906,6 +907,7 @@ footer .by b { color: var(--ink); }
   const quote = document.getElementById('quote');
   const voice = new Audio();
   let playing = null;
+  let turn = 0;
   const idle = () => {
     playing?.classList.remove('playing');
     playing = null;
@@ -916,7 +918,7 @@ footer .by b { color: var(--ink); }
   for (const face of document.querySelectorAll('.face')) {
     face.setAttribute('aria-label', 'Hear ' + face.querySelector('.name').firstChild.textContent);
     face.addEventListener('click', async () => {
-      if (playing === face) { voice.pause(); idle(); return; }
+      if (playing === face) { turn++; voice.pause(); idle(); return; }
       claim(voice, idle);
       playing?.classList.remove('playing');
       playing = face;
@@ -930,7 +932,10 @@ footer .by b { color: var(--ink); }
       tag.textContent = who.firstChild.textContent + ' · ' + who.querySelector('small').textContent;
       quote.append(tag);
       voice.src = 'assets/voices/' + face.dataset.src + '.mp3';
-      try { await voice.play(); } catch { idle(); }
+      // Only the latest click may reset the wall: switching voices quickly rejects the earlier
+      // play(), and its catch used to clear the face that is playing now.
+      const mine = ++turn;
+      try { await voice.play(); } catch { if (mine === turn) idle(); }
     });
   }
 })();

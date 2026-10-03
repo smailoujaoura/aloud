@@ -5,7 +5,7 @@
 //   - `supertonic` and everything else: passed through verbatim from scripts/models.base.json.
 //
 // Network fetches are cached under .gen/voices/ so offline rebuilds keep working. The merged
-// file is written to public/models.json AND committed, so `pnpm test` / partial builds don't
+// file is written to public/models.json AND committed, so `npm test` / partial builds don't
 // need the network.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';

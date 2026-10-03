@@ -377,10 +377,16 @@ export class GaplessScheduler {
 
   /** Speed changed: keep the currently sounding sentence, re-prime the rest. */
   reprimeForSpeed(): void {
-    const keep = Math.max(this.lastEnded + 1, 0);
+    const current = Math.max(this.lastEnded + 1, 0);
     // The sentence sounding now finishes at the rate it was made at — changing speed should not
     // cut a word in half. `seek()` stopped every source including that one, which is exactly what
     // the reader was told would not happen.
+    //
+    // But only a sentence that *is* sounding — one with a source scheduled. Before the first Play,
+    // while buffering, or between sentences there is none, and keeping `current` then meant
+    // throwing its audio away and starting at the sentence after it: the first sentence was never
+    // spoken. With nothing sounding, everything from `current` is made again at the new speed.
+    const keep = this.sources.has(current) ? current : current - 1;
     for (const [id, src] of [...this.sources]) {
       if (id <= keep) continue;
       try {
@@ -396,13 +402,13 @@ export class GaplessScheduler {
     this.leads.clear();
     this.pendingPcm.clear();
     // Keep the timeline up to the sentence being kept, and start the next one after it ends.
-    const current = this.timeline.find((entry) => entry.playId === keep);
+    const kept = this.timeline.find((entry) => entry.playId === keep);
     for (let i = this.timeline.length - 1; i >= 0; i--) {
       if (this.timeline[i]!.playId > keep) this.timeline.splice(i, 1);
     }
     this.nextToSchedule = keep + 1;
     if (this.ctx) {
-      this.nextStartTime = Math.max(current?.end ?? 0, this.ctx.currentTime + PRIME_GAP);
+      this.nextStartTime = Math.max(kept?.end ?? 0, this.ctx.currentTime + PRIME_GAP);
       this.running = true;
       this.startTicker();
     }

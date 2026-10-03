@@ -11,9 +11,10 @@
  * position already here is kept unless the backup's copy is newer, so restoring an old backup
  * never throws away what was kept since.
  */
-import { MAX_NOTES, normalizeNote, type Note } from './notes';
+import { MAX_NOTES, mergeNoteLists, normalizeNote, type Note } from './notes';
 import { MAX_QUEUE, type QueueItem } from './reading-queue';
 import { documentKey } from './position-match';
+import { normalizeHistoryEntry, normalizePosition, normalizeSiteSpeed, normalizeStoredMarks, recordsOf } from './record-shapes';
 import { SETTINGS_VERSION, migrateSettings, sanitizeSettings, withDefaults, type Settings } from './settings';
 
 export const BACKUP_FORMAT = 'aloud-backup';
@@ -109,10 +110,15 @@ export function parseBackup(text: string): Backup {
     settings: b.settings && typeof b.settings === 'object' ? b.settings : null,
     notes: Array.isArray(b.notes) ? b.notes.map((n) => normalizeNote(n)).filter((n): n is Note => n != null) : [],
     queue: Array.isArray(b.queue) ? b.queue.map(normalizeQueueItem).filter((q): q is QueueItem => q != null) : [],
-    history: obj(b.history),
-    positions: obj(b.positions),
-    siteSpeeds: obj(b.siteSpeeds),
-    pdfMarks: Object.fromEntries(Object.entries(obj(b.pdfMarks)).filter(([k]) => k.startsWith(PDF_MARKS_PREFIX))),
+    // Every record checked before it can reach storage (shared/record-shapes.ts): a `null` history
+    // entry used to be restored as it was, and the Library threw on it from then on.
+    history: recordsOf(b.history, normalizeHistoryEntry),
+    positions: recordsOf(b.positions, normalizePosition),
+    siteSpeeds: recordsOf(b.siteSpeeds, normalizeSiteSpeed),
+    pdfMarks: recordsOf(
+      Object.fromEntries(Object.entries(obj(b.pdfMarks)).filter(([k]) => k.startsWith(PDF_MARKS_PREFIX))),
+      normalizeStoredMarks,
+    ),
     models: {
       piper: Array.isArray(b.models?.piper) ? b.models.piper.filter((v): v is string => typeof v === 'string') : [],
       kokoro: b.models?.kokoro === true,
@@ -177,22 +183,9 @@ export function restoredSettings(b: Backup): Settings | null {
 
 /** Notes from both, one per id — the more recently edited copy — newest first. */
 export function mergeNotes(here: readonly Note[], incoming: readonly Note[]): Note[] {
-  const byId = new Map<string, Note>();
-  for (const note of [...here, ...incoming]) {
-    const have = byId.get(note.id);
-    if (!have || (note.updatedAt ?? 0) > (have.updatedAt ?? 0)) byId.set(note.id, note);
-  }
-  const merged = [...byId.values()].sort((a, b) => b.createdAt - a.createdAt);
-  if (merged.length <= MAX_NOTES) return merged;
-  // Over the cap, what is already here outranks what the file brought: a restore must not be a
-  // way of losing notes. `overflowOf` reports how many were left out.
-  const mine = new Set(here.map((n) => n.id));
-  const kept = merged.filter((n) => mine.has(n.id)).slice(0, MAX_NOTES);
-  for (const note of merged) {
-    if (kept.length >= MAX_NOTES) break;
-    if (!mine.has(note.id)) kept.push(note);
-  }
-  return kept.sort((a, b) => b.createdAt - a.createdAt);
+  // Over the cap, what is already here outranks what the file brought (shared/notes.ts);
+  // `overflowOf` reports how many were left out.
+  return mergeNoteLists(here, incoming).notes;
 }
 
 /** The queue here, then what the backup has that is not already queued. */
