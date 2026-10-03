@@ -82,12 +82,38 @@ export function normalizeStoredMarks(raw: unknown): { name: string; marks: unkno
       Array.isArray(m.boxes) &&
       m.boxes.every((b) => Array.isArray(b) && b.length === 4 && b.every(finite))
     );
-  }).map((m) => ({
-    ...m,
-    text: typeof m.text === 'string' ? m.text : '',
-    note: typeof m.note === 'string' ? m.note : '',
-    created: count(m.created),
-    updated: count(m.updated),
-  }));
+  }).map((m) => {
+    const { origin, ...rest } = m;
+    const checked = normalizeOrigin(origin);
+    return {
+      ...rest,
+      text: typeof m.text === 'string' ? m.text : '',
+      note: typeof m.note === 'string' ? m.note : '',
+      created: count(m.created),
+      updated: count(m.updated),
+      ...(checked ? { origin: checked } : {}),
+    };
+  });
   return { name: typeof raw.name === 'string' ? raw.name : '', marks, updated: count(raw.updated) };
+}
+
+/**
+ * Where an imported PDF mark came from (pdf/annotations/model.ts: MarkOrigin), field by field.
+ *
+ * Copied through unchecked, an author that was an array reached the PDF writer and made every
+ * export of that document throw. A damaged field is dropped rather than the mark: the highlight
+ * and its note are the reader's, the origin only says how to write them back. Without a usable
+ * fingerprint the mark simply counts as edited, and is written out afresh.
+ */
+function normalizeOrigin(raw: unknown):
+  | { ref: string | null; author: string; created: string | null; flags: number | null; fingerprint: string }
+  | null {
+  if (!isObject(raw)) return null;
+  return {
+    ref: typeof raw.ref === 'string' && /^\d+R\d*$/.test(raw.ref) ? raw.ref : null,
+    author: typeof raw.author === 'string' ? raw.author : '',
+    created: typeof raw.created === 'string' && raw.created.length <= 64 ? raw.created : null,
+    flags: finite(raw.flags) && Number.isInteger(raw.flags) && raw.flags >= 0 ? raw.flags : null,
+    fingerprint: typeof raw.fingerprint === 'string' ? raw.fingerprint : '',
+  };
 }

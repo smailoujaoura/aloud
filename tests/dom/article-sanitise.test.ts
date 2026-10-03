@@ -61,4 +61,30 @@ describe('a saved article, before "Load images"', () => {
     expect(doc.querySelector('source')!.getAttribute('src')).toBe('https://site.test/v.webm');
     expect(doc.querySelector('table')!.getAttribute('background')).toBe('https://site.test/bg.png');
   });
+
+  it('the second recheck’s V04: addresses the browser accepts in odd forms are held too', () => {
+    // Where the Library really is. (Against an http page, `http:/x` is a relative address on that
+    // same host — correctly so; against Aloud's own page it is another site.)
+    (window as unknown as { happyDOM: { setURL(url: string): void } }).happyDOM.setURL('chrome-extension://aloud/library.html');
+    const doc = document.createElement('div');
+    doc.append(sanitised('<img id="a" src="http:/site.test/single.png"><img id="b" src="h&#9;ttp://site.test/tab.png">'));
+    expect(doc.querySelector('#a')!.hasAttribute('src')).toBe(false);
+    expect(doc.querySelector('#b')!.hasAttribute('src')).toBe(false);
+    expect(heldCount(doc)).toBe(2);
+  });
+
+  it('removes SVG animation, which could set an address after cleaning', () => {
+    const doc = document.createElement('div');
+    doc.append(sanitised('<svg><image width="9" height="9"><set attributeName="href" to="https://site.test/animated.png" begin="0s"/></image><animate attributeName="href" values="https://site.test/a.png"/></svg>'));
+    expect(doc.querySelector('set, animate')).toBeNull();
+    expect(doc.innerHTML).not.toContain('site.test');
+  });
+
+  it('does not accept an article that arrives with Aloud’s own held-address marks already set', () => {
+    const doc = document.createElement('div');
+    doc.append(sanitised('<p data-aloud-held data-aloud-held-src="https://site.test/planted.png">x</p>'));
+    expect(heldCount(doc)).toBe(0);
+    releaseHeld(doc);
+    expect(doc.innerHTML).not.toContain('site.test');
+  });
 });

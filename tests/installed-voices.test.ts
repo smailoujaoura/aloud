@@ -101,3 +101,30 @@ describe('the recheck’s R09: what a voice needs to start', () => {
     expect(usableVoices('supertonic', manifest, full, { online: false }).map((v) => v.id)).toEqual(['F1']);
   });
 });
+
+describe('the second recheck’s V06: which weights reading will use', async () => {
+  const { readingOnGpu } = await import('@/engine/installed-voices');
+  const KOKORO_CPU = cache({
+    [`${KOKORO}/config.json`]: 1,
+    [`${KOKORO}/tokenizer.json`]: 1,
+    [`${KOKORO}/tokenizer_config.json`]: 1,
+    [`${KOKORO}/onnx/model_quantized.onnx`]: 1,
+    [`${KOKORO}/voices/af_heart.bin`]: 1,
+  });
+
+  it('a machine with a GPU, set to read on the CPU, keeps its CPU voices offline', () => {
+    const gpu = readingOnGpu(false, true);
+    expect(gpu).toBe(false);
+    expect(usableVoices('kokoro', manifest, KOKORO_CPU, { gpu, online: false }).map((v) => v.id)).toEqual(['af_heart']);
+  });
+
+  it('set to use the GPU, and with one, needs the GPU weights', () => {
+    expect(readingOnGpu(true, true)).toBe(true);
+    expect(usableVoices('kokoro', manifest, KOKORO_CPU, { gpu: true, online: false })).toEqual([]);
+  });
+
+  it('set to use the GPU, without one, reads on the CPU', () => {
+    expect(readingOnGpu(true, false)).toBe(false);
+    expect(readingOnGpu(undefined, null)).toBeNull();
+  });
+});

@@ -108,3 +108,52 @@ describe('importing notes at the cap', async () => {
     expect(ids.filter((id) => id.startsWith('old'))).toHaveLength(MAX_NOTES - 1);
   });
 });
+
+describe('the second recheck’s V03: restoring a PDF’s marks', () => {
+  const mark = (id: string, updated: number, note = '') => ({
+    id, page: 1, kind: 'note', color: '#ffd83a', boxes: [[1, 1, 2, 2]], text: '', note, created: 1, updated,
+  });
+  const record = (marks: unknown[], updated: number) => ({ name: 'paper.pdf', marks, updated });
+
+  it('keeps the marks made here since the backup, and adds the backup’s', () => {
+    const b = backup({ pdfMarks: { 'pdfMarks:abc': record([mark('incoming-note', 5)], 9) } });
+    const here = { 'pdfMarks:abc': record([mark('local-note', 3)], 4) };
+    const plan = restorePlan(b, here, new Set(['pdfMarks']));
+    const ids = (plan['pdfMarks:abc'] as { marks: { id: string }[] }).marks.map((m) => m.id).sort();
+    expect(ids).toEqual(['incoming-note', 'local-note']);
+  });
+
+  it('takes the newer copy of a mark both sides have', () => {
+    const b = backup({ pdfMarks: { 'pdfMarks:abc': record([mark('m', 2, 'old')], 9) } });
+    const here = { 'pdfMarks:abc': record([mark('m', 7, 'edited here')], 1) };
+    const plan = restorePlan(b, here, new Set(['pdfMarks']));
+    expect(plan['pdfMarks:abc']).toBeUndefined(); // nothing newer to bring in: no write at all
+    const b2 = backup({ pdfMarks: { 'pdfMarks:abc': record([mark('m', 8, 'newer in backup')], 9) } });
+    const plan2 = restorePlan(b2, here, new Set(['pdfMarks']));
+    expect((plan2['pdfMarks:abc'] as { marks: { note: string }[] }).marks.map((m) => m.note)).toEqual(['newer in backup']);
+  });
+
+  it('a PDF this device has no marks for takes the backup’s record as it is', () => {
+    const b = backup({ pdfMarks: { 'pdfMarks:new': record([mark('a', 1)], 1) } });
+    const plan = restorePlan(b, {}, new Set(['pdfMarks']));
+    expect((plan['pdfMarks:new'] as { marks: unknown[] }).marks).toHaveLength(1);
+  });
+});
+
+describe('the second recheck’s V07: the same note twice in one file', async () => {
+  const { mergeNoteLists } = await import('@/shared/notes');
+  const note = (text: string, updatedAt: number) => ({ id: 'n', text, comment: '', source, at: null, createdAt: 1, updatedAt }) as never;
+
+  it('keeps the newest version, whatever order they come in', () => {
+    expect(mergeNoteLists([], [note('old', 1), note('new', 2)]).notes.map((n) => n.text)).toEqual(['new']);
+    expect(mergeNoteLists([], [note('new', 2), note('old', 1)]).notes.map((n) => n.text)).toEqual(['new']);
+  });
+
+  it('counts it once', () => {
+    expect(mergeNoteLists([], [note('old', 1), note('new', 2)]).added).toBe(1);
+    const here = [note('mine', 1)];
+    const r = mergeNoteLists(here, [note('older', 0), note('newer', 5)]);
+    expect(r).toMatchObject({ added: 0, updated: 1 });
+    expect(r.notes.map((n) => n.text)).toEqual(['newer']);
+  });
+});

@@ -279,10 +279,39 @@ export function restorePlan(b: Backup, all: Record<string, unknown>, parts: Read
   }
   if (parts.has('pdfMarks')) {
     for (const [key, value] of Object.entries(b.pdfMarks)) {
-      if (!(key in all) || stamp(value) > stamp(all[key])) out[key] = value;
+      const here = normalizeStoredMarks(all[key]);
+      const merged = here ? mergePdfMarks(here, value as StoredMarksRecord) : value;
+      if (merged !== here) out[key] = merged;
     }
   }
   return out;
+}
+
+type StoredMarksRecord = NonNullable<ReturnType<typeof normalizeStoredMarks>>;
+type MarkRecord = { id: string; updated: number };
+
+/**
+ * One PDF's marks from a backup, into the marks this device has for it.
+ *
+ * Mark by mark, the newer copy of each winning, and every mark only one side has kept. Choosing
+ * the whole document's record by its date deleted every mark made here since the backup — under
+ * a screen promising that nothing kept since would be lost. A mark deleted here that the backup
+ * still has comes back: of the two ways to be wrong, that is the one that loses nothing.
+ *
+ * Returns `here` itself when the backup adds nothing, so the caller can skip the write.
+ */
+export function mergePdfMarks(here: StoredMarksRecord, incoming: StoredMarksRecord): StoredMarksRecord {
+  const byId = new Map<string, MarkRecord>((here.marks as MarkRecord[]).map((m) => [m.id, m]));
+  let changed = false;
+  for (const mark of incoming.marks as MarkRecord[]) {
+    const have = byId.get(mark.id);
+    if (!have || mark.updated > have.updated) {
+      byId.set(mark.id, mark);
+      changed = true;
+    }
+  }
+  if (!changed) return here;
+  return { name: here.name || incoming.name, marks: [...byId.values()], updated: Math.max(here.updated, incoming.updated) };
 }
 
 /** `aloud-backup-2026-09-19.json`. */

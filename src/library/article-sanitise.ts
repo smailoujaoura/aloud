@@ -15,8 +15,18 @@
 
 /** Attributes that make the browser fetch something by themselves. */
 const LOADS = new Set(['src', 'href', 'xlink:href', 'poster', 'background', 'data', 'lowsrc', 'dynsrc']);
-/** An address on another host: `https://…`, `http://…` or `//…`. Relative ones resolve to Aloud's own pages. */
-const OUTSIDE = /^\s*(?:https?:)?\/\//i;
+/**
+ * Does `value` point anywhere but Aloud's own pages? Decided by the browser's own URL parser, not
+ * a pattern: browsers also accept `http:/host`, and `h<tab>ttp://host`, and fetch them like any
+ * other address. Relative addresses resolve to Aloud's page, and are left alone.
+ */
+function outside(value: string): boolean {
+  try {
+    return new URL(value, location.href).origin !== location.origin;
+  } catch {
+    return false; // not an address anything can load
+  }
+}
 const HELD = 'data-aloud-held';
 const HELD_PREFIX = 'data-aloud-held-';
 const XLINK = 'http://www.w3.org/1999/xlink';
@@ -25,8 +35,11 @@ export function sanitised(html: string): DocumentFragment {
   const parsed = new DOMParser().parseFromString(html, 'text/html');
   parsed
     .querySelectorAll(
-      // <base> would re-point every relative address at the original site.
-      'script, style, link, meta, base, iframe, frame, object, embed, form, input, button, select, textarea, noscript, template',
+      // <base> would re-point every relative address at the original site. SVG animation elements
+      // can set an `href` after this has run, and the browser then loads it: an article read
+      // aloud needs none of them.
+      'script, style, link, meta, base, iframe, frame, object, embed, form, input, button, select, textarea, noscript, template, ' +
+        'set, animate, animateMotion, animateTransform, animateColor, discard',
     )
     .forEach((n) => n.remove());
   for (const node of parsed.body.querySelectorAll('*')) {
@@ -35,6 +48,11 @@ export function sanitised(html: string): DocumentFragment {
     let held = false;
     for (const attr of [...node.attributes]) {
       const name = attr.name.toLowerCase();
+      // Aloud's own marks for held addresses: an article must not arrive with some already set.
+      if (name === HELD || name.startsWith(HELD_PREFIX)) {
+        node.removeAttribute(attr.name);
+        continue;
+      }
       const scriptUrl = (name === 'href' || name === 'src' || name === 'xlink:href') && /^\s*(javascript|data):/i.test(attr.value);
       // `ping` reports a click to a third party; `srcset` is a second list of image addresses.
       if (name.startsWith('on') || name === 'style' || name === 'srcdoc' || name === 'srcset' || name === 'ping' || scriptUrl) {
@@ -42,7 +60,7 @@ export function sanitised(html: string): DocumentFragment {
         continue;
       }
       if (isLink && name === 'href') continue;
-      if (LOADS.has(name) && OUTSIDE.test(attr.value)) {
+      if (LOADS.has(name) && outside(attr.value)) {
         if (name === 'poster') {
           node.removeAttribute(attr.name); // a still frame is not worth a request
           continue;

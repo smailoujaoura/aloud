@@ -268,7 +268,15 @@ export interface NotesMerge {
  * losing notes. Sorting everything and keeping the newest 5,000 silently deleted a kept note for
  * every one imported, while reporting success.
  */
-export function mergeNoteLists(here: readonly Note[], incoming: readonly Note[]): NotesMerge {
+export function mergeNoteLists(here: readonly Note[], incomingRaw: readonly Note[]): NotesMerge {
+  // A file can hold the same note twice (two exports joined, an edit appended). Each one settles
+  // on its newest version first; keeping whichever came first kept the older text.
+  const newest = new Map<string, Note>();
+  for (const note of incomingRaw) {
+    const seen = newest.get(note.id);
+    if (!seen || (note.updatedAt ?? 0) > (seen.updatedAt ?? 0)) newest.set(note.id, note);
+  }
+  const incoming = [...newest.values()];
   const byId = new Map(here.map((n) => [n.id, n]));
   const fresh: Note[] = [];
   let updated = 0;
@@ -279,7 +287,7 @@ export function mergeNoteLists(here: readonly Note[], incoming: readonly Note[])
         byId.set(note.id, note);
         updated++;
       }
-    } else if (!fresh.some((f) => f.id === note.id)) {
+    } else {
       fresh.push(note);
     }
   }

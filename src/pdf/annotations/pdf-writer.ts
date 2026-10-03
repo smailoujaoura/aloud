@@ -110,25 +110,59 @@ export async function withoutMarks(bytes: Uint8Array): Promise<Uint8Array | null
 
 /** The file with exactly `marks` as its highlights, underlines, strike-throughs and notes. */
 export async function withMarks(bytes: Uint8Array, marks: readonly Mark[]): Promise<Uint8Array> {
+  return (await writeMarks(bytes, marks)).bytes;
+}
+
+/**
+ * `withMarks`, and also the marks as they now are in the written file — each with an `origin`
+ * naming its annotation there.
+ *
+ * Those are what to remember for the new file. The marks passed in describe `bytes`; an edited
+ * one's annotation is replaced by a new object on writing, so remembering the old reference meant
+ * the next save looked for an annotation the new file does not have — and a mark whose text was
+ * changed back then matched its old fingerprint, was taken as untouched, and was not written at
+ * all: the annotation disappeared.
+ */
+export async function writeMarks(bytes: Uint8Array, marks: readonly Mark[]): Promise<{ bytes: Uint8Array; marks: Mark[] }> {
   const lib = await pdfLib();
   const doc = await load(lib, bytes);
+  const pages = doc.getPages();
+  const refName = (ref: PDFRefType): string => `${ref.objectNumber}R${ref.generationNumber || ''}`;
+  // What is really in this file, page by page: a mark is only "untouched" if its annotation is.
+  const present = pages.map((page) => {
+    const annots = page.node.lookupMaybe(lib.PDFName.of('Annots'), lib.PDFArray);
+    return new Set((annots?.asArray() ?? []).filter((r): r is PDFRefType => r instanceof lib.PDFRef).map(refName));
+  });
   // An imported mark nobody changed keeps its original annotation, byte for byte: its author,
   // dates, name and flags are someone else's (model.ts: MarkOrigin).
-  const untouched = new Set(
-    marks.filter((m) => m.origin?.ref && markFingerprint(m) === m.origin.fingerprint).map((m) => m.origin!.ref!),
-  );
+  const isUntouched = (m: Mark): boolean =>
+    !!m.origin?.ref && markFingerprint(m) === m.origin.fingerprint && present[m.page - 1]?.has(m.origin.ref) === true;
+  const untouched = new Set(marks.filter(isUntouched).map((m) => m.origin!.ref!));
   stripManaged(lib, doc, untouched);
-  const pages = doc.getPages();
+  const written: Mark[] = [];
   for (const mark of marks) {
-    if (mark.origin?.ref && untouched.has(mark.origin.ref)) continue;
+    if (isUntouched(mark)) {
+      written.push(mark);
+      continue;
+    }
     const page = pages[mark.page - 1];
     if (!page || mark.boxes.length === 0) continue;
     const ref = annotationFor(lib, doc, mark);
     const annots = page.node.lookupMaybe(lib.PDFName.of('Annots'), lib.PDFArray);
     if (annots) annots.push(ref);
     else page.node.set(lib.PDFName.of('Annots'), doc.context.obj([ref]));
+    written.push({
+      ...mark,
+      origin: {
+        ref: refName(ref),
+        author: mark.origin ? mark.origin.author : 'Aloud',
+        created: mark.origin?.created ?? pdfDate(mark.created),
+        flags: mark.origin?.flags ?? 4,
+        fingerprint: markFingerprint(mark),
+      },
+    });
   }
-  return doc.save({ updateFieldAppearances: false });
+  return { bytes: await doc.save({ updateFieldAppearances: false }), marks: written };
 }
 
 function annotationFor(lib: PdfLib, doc: PDFDocumentType, mark: Mark): PDFRefType {

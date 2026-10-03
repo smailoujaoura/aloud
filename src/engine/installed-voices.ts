@@ -36,6 +36,16 @@ export async function readCacheSizes(): Promise<CacheSizes> {
  * missing small file can simply be fetched — a voice's own file is a few hundred kilobytes, so
  * online every voice of an installed model is usable; offline only the ones already fetched.
  */
+/**
+ * Will reading use the GPU? Only where the settings ask for it *and* the worker has one: a machine
+ * with a GPU, set to read on the CPU, needs the CPU weights — and was told it had no voices offline,
+ * because its GPU weights were missing. Null when it cannot be known.
+ */
+export function readingOnGpu(preferWebGPU: boolean | undefined, workerGpu: boolean | null): boolean | null {
+  if (preferWebGPU === false) return false;
+  return workerGpu;
+}
+
 export interface Availability {
   gpu?: boolean | null;
   online?: boolean;

@@ -11,6 +11,7 @@ import type { ActivateMode } from '@/shared/messages';
 import { log } from '@/shared/log';
 import { extractArticle } from '@/extract/readability';
 import type { NewQueueItem } from '@/shared/reading-queue';
+import { replyLater } from '@/shared/reply';
 
 interface AloudGlobal {
   __aloudLoaded?: boolean;
@@ -52,11 +53,11 @@ export default defineUnlistedScript(() => {
   };
   w.__aloudActivate = activate;
 
-  browser.runtime.onMessage.addListener((msg: unknown) => {
+  browser.runtime.onMessage.addListener((msg: unknown, _sender, sendResponse: (reply: unknown) => void) => {
     const m = msg as { type?: string; mode?: ActivateMode; targetElementId?: number };
-    // "Add page to reading queue": extract now, while the page is open and readable. Replying with
-    // a promise is how both browsers answer a message asynchronously.
-    if (m?.type === 'extract-for-queue') return Promise.resolve(extractForQueue());
+    // "Add page to reading queue": extract now, while the page is open and readable. Answered with
+    // `sendResponse`: a returned promise arrives as `undefined` in Chromium 120 (shared/reply.ts).
+    if (m?.type === 'extract-for-queue') return replyLater(sendResponse, extractForQueue());
     if (m?.type !== 'activate') return false;
     let target: Element | null = null;
     if (m.targetElementId != null) {

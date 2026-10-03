@@ -24,7 +24,7 @@ import { ReaderSession, type KnownArticle } from '@/content/session';
 import { openRenderer, readPdf, type LoadedPdf, type PdfPageView, type PdfRenderer } from '@/pdf/load-pdf';
 import { MarkEditor, type EditorPage } from '@/pdf/annotations/editor';
 import { importAnnotations, type Mark } from '@/pdf/annotations/model';
-import { withMarks, withoutMarks } from '@/pdf/annotations/pdf-writer';
+import { withoutMarks, writeMarks } from '@/pdf/annotations/pdf-writer';
 import { hashBytes, loadMarks, saveMarks } from '@/pdf/annotations/store';
 import { canOpenWithHandle, pickPdfWithHandle, saveFile, saveMode } from '@/pdf/annotations/save-file';
 import { takePdf } from '@/pdf/handoff';
@@ -425,16 +425,18 @@ async function startEditor(
       }, 250);
     },
     async onSave(next) {
-      let written: Uint8Array | null = null;
+      let written: { bytes: Uint8Array; marks: Mark[] } | null = null;
       const result = await saveFile(handle?.name ?? name, handle, async () => {
-        written = await withMarks(original, next);
-        return written;
+        written = await writeMarks(original, next);
+        return written.bytes;
       });
       if (result.kind === 'cancelled' || !written) return null;
-      // The file now has these bytes, so that is the document to find the marks under next time.
+      // The file now has these bytes, so that is the document to find the marks under next time —
+      // as they are in *that* file, each pointing at its annotation there (pdf-writer: writeMarks).
       clearTimeout(pending);
-      hash = await hashBytes(written);
-      await saveMarks(hash, name, next);
+      const saved = written as { bytes: Uint8Array; marks: Mark[] };
+      hash = await hashBytes(saved.bytes);
+      await saveMarks(hash, name, saved.marks);
       if (result.kind === 'written') {
         handle = result.handle;
         log.info(`[pdf] wrote ${next.length} mark(s) into ${result.name}`);

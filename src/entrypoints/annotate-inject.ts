@@ -9,6 +9,7 @@ import { browser } from 'wxt/browser';
 import { defineUnlistedScript } from 'wxt/utils/define-unlisted-script';
 import { PageAnnotator } from '@/annotate/annotator';
 import { log } from '@/shared/log';
+import { replyLater } from '@/shared/reply';
 
 interface AnnotateGlobal {
   __aloudAnnotator?: Promise<PageAnnotator>;
@@ -28,26 +29,34 @@ export default defineUnlistedScript(() => {
     return annotator;
   })();
 
-  browser.runtime.onMessage.addListener((msg: unknown) => {
+  // Answers go through `sendResponse` (shared/reply.ts): a returned promise reaches the sender as
+  // `undefined` in Chromium before 148.
+  browser.runtime.onMessage.addListener((msg: unknown, _sender, sendResponse: (reply: unknown) => void) => {
     const m = msg as { type?: string; id?: string; color?: string; openNote?: boolean; quiet?: boolean };
     if (m?.type === 'annotate-save-selection') {
-      return w.__aloudAnnotator!.then((a) => a.saveSelection(m.color, m.openNote === true, undefined, m.quiet === true)).then((note) => ({ saved: !!note }));
+      return replyLater(
+        sendResponse,
+        w.__aloudAnnotator!.then((a) => a.saveSelection(m.color, m.openNote === true, undefined, m.quiet === true)).then((note) => ({ saved: !!note })),
+      );
     }
     if (m?.type === 'annotate-panel') {
-      return w.__aloudAnnotator!.then((a) => {
-        a.togglePanel();
-        return { shown: true };
-      });
+      return replyLater(
+        sendResponse,
+        w.__aloudAnnotator!.then((a) => {
+          a.togglePanel();
+          return { shown: true };
+        }),
+      );
     }
     if (m?.type === 'annotate-reveal' && m.id) {
       // The page may still be filling in its content; give the passage a few chances to appear.
-      return w.__aloudAnnotator!.then(async (a) => {
+      return replyLater(sendResponse, w.__aloudAnnotator!.then(async (a) => {
         for (let attempt = 0; attempt < 6; attempt++) {
           if (a.reveal(m.id!)) return { revealed: true };
           await new Promise((r) => setTimeout(r, 500));
         }
         return { revealed: false };
-      });
+      }));
     }
     return false;
   });
