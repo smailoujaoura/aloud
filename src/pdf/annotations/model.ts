@@ -211,8 +211,11 @@ export function importAnnotations(page: number, annotations: readonly PdfJsAnnot
     if (!kind || a.noView) continue;
     const boxes = kind === 'note' ? rectBox(a.rect) : quadBoxes(a.quadPoints) ?? rectBox(a.rect);
     if (boxes.length === 0) continue;
+    const ref = a.id && /^\d+R\d*$/.test(a.id) ? a.id : null;
     const mark: Mark = {
-      id: newMarkId(),
+      // The same annotation gets the same id on every device that opens this file, so a backup
+      // from one device merges into another's marks instead of adding a second copy.
+      id: ref ? `pdf-${page}-${ref}` : newMarkId(),
       page,
       kind,
       color: hexOf(a.color) ?? (kind === 'note' ? MARK_COLORS[0]!.fill : toneFor(kind, 'yellow')),
@@ -223,7 +226,7 @@ export function importAnnotations(page: number, annotations: readonly PdfJsAnnot
       updated: now,
     };
     mark.origin = {
-      ref: a.id && /^\d+R\d*$/.test(a.id) ? a.id : null,
+      ref,
       author: a.titleObj?.str ?? '',
       created: typeof a.creationDate === 'string' ? a.creationDate : null,
       flags: typeof a.annotationFlags === 'number' ? a.annotationFlags : null,
@@ -336,6 +339,24 @@ export class MarkHistory {
     this.past.push(this.current);
     this.current = next;
     return true;
+  }
+
+  /**
+   * Take marks changed in another tab. Undo history is cleared: stepping back past them would
+   * quietly undo the other tab's work, and the next save would write that.
+   */
+  replaceAll(next: readonly Mark[]): void {
+    this.current = [...next];
+    this.past = [];
+    this.future = [];
+  }
+
+  /** Change every version of every mark, past and future included — for rebasing after a save. */
+  mapAll(fn: (mark: Mark) => Mark): void {
+    const map = (marks: Mark[]): Mark[] => marks.map(fn);
+    this.current = map(this.current);
+    this.past = this.past.map(map);
+    this.future = this.future.map(map);
   }
 
   private commit(next: Mark[]): void {

@@ -25,7 +25,8 @@ import { openRenderer, readPdf, type LoadedPdf, type PdfPageView, type PdfRender
 import { MarkEditor, type EditorPage } from '@/pdf/annotations/editor';
 import { importAnnotations, type Mark } from '@/pdf/annotations/model';
 import { withoutMarks, writeMarks } from '@/pdf/annotations/pdf-writer';
-import { hashBytes, loadMarks, saveMarks } from '@/pdf/annotations/store';
+import { hashBytes, loadMarks } from '@/pdf/annotations/store';
+import { MarkSync } from '@/pdf/annotations/sync';
 import { canOpenWithHandle, pickPdfWithHandle, saveFile, saveMode } from '@/pdf/annotations/save-file';
 import { takePdf } from '@/pdf/handoff';
 import { buildTextLayer } from '@/pdf/page-view';
@@ -397,32 +398,38 @@ async function marksFromFile(doc: LoadedPdf, bytes: Uint8Array): Promise<Mark[] 
 
 async function startEditor(
   pages: EditorPage[],
-  original: Uint8Array,
+  bytes: Uint8Array,
   name: string,
   handle: FileSystemFileHandle | null,
   fileMarks: Mark[],
 ): Promise<void> {
-  let hash = await hashBytes(original);
+  // The document as it is on disk; replaced when a save writes into it.
+  let original = bytes;
+  const hash = await hashBytes(original);
   const stored = await loadMarks(hash).catch(() => null);
-  const marks = stored ? stored.marks : fileMarks;
-  if (!stored && fileMarks.length) void saveMarks(hash, name, fileMarks);
+  const marks = stored ? (stored.marks as Mark[]) : fileMarks;
+  // Every write goes through `sync`: this tab's changes on top of what other tabs stored.
+  const sync = new MarkSync(hash, name, stored ? marks : []);
+  if (!stored && fileMarks.length) void sync.persist(fileMarks);
 
   let pending = 0;
+  const flush = (): Promise<unknown> => {
+    clearTimeout(pending);
+    pendingMarks = null;
+    return editor ? sync.persist(editor.marks) : Promise.resolve();
+  };
   editor = new MarkEditor({
     pages,
     marks,
     savedMarks: fileMarks,
     saveMode: saveMode(handle),
     fileName: name,
-    onChange(next) {
+    onChange() {
       clearTimeout(pending);
       // Held so a burst of edits is one write — but a close inside those 250 ms would have lost
       // the last one, so the pending write is remembered and flushed on the way out.
-      pendingMarks = { hash, name, marks: next };
-      pending = window.setTimeout(() => {
-        pendingMarks = null;
-        void saveMarks(hash, name, next);
-      }, 250);
+      pendingMarks = flush;
+      pending = window.setTimeout(() => void flush(), 250);
     },
     async onSave(next) {
       let written: { bytes: Uint8Array; marks: Mark[] } | null = null;
@@ -431,23 +438,36 @@ async function startEditor(
         return written.bytes;
       });
       if (result.kind === 'cancelled' || !written) return null;
-      // The file now has these bytes, so that is the document to find the marks under next time —
-      // as they are in *that* file, each pointing at its annotation there (pdf-writer: writeMarks).
-      clearTimeout(pending);
       const saved = written as { bytes: Uint8Array; marks: Mark[] };
-      hash = await hashBytes(saved.bytes);
-      await saveMarks(hash, name, saved.marks);
+      // Each mark as it is in the written file, pointing at its annotation there.
+      const inFile = new Map(saved.marks.map((m) => [m.id, m]));
+      const rebased = (m: Mark): Mark => (inFile.has(m.id) ? { ...m, origin: inFile.get(m.id)!.origin } : m);
+      const newHash = await hashBytes(saved.bytes);
       if (result.kind === 'written') {
+        // The open document *is* the written file now. Its marks move to it — the editor's marks
+        // as they are now, not the snapshot that was written: an edit typed while the file was
+        // being written used to stay behind under the old document, and was not there when the
+        // saved file was opened again. Still unsaved in the file, it stays marked unsaved.
+        await flush();
+        original = saved.bytes;
+        editor?.rebase(rebased);
+        await sync.moveTo(newHash, editor ? editor.marks : saved.marks);
+        sync.watch(() => editor?.marks ?? [], (shown) => editor?.adopt(shown));
         handle = result.handle;
         log.info(`[pdf] wrote ${next.length} mark(s) into ${result.name}`);
         return { message: `Saved into ${result.name}`, saveMode: saveMode(handle) };
       }
+      // A downloaded copy is a separate file: it gets its own marks, and this document keeps its.
+      await new MarkSync(newHash, name, []).persist(saved.marks);
       return {
         message: result.askedWhere ? `Saved ${result.name}` : `Downloaded ${result.name} with its marks`,
         saveMode: saveMode(handle),
       };
     },
   });
+  // Another tab with the same PDF: its changes appear here, with this tab's own still on top.
+  sync.watch(() => editor?.marks ?? [], (shown) => editor?.adopt(shown));
+  pdfSync = sync;
 }
 
 /**
@@ -651,15 +671,18 @@ document.addEventListener('drop', (e) => {
 
 
 /** A mark edit inside its debounce, kept so closing the page still writes it. */
-let pendingMarks: { hash: string; name: string; marks: readonly Mark[] } | null = null;
+/** A change still inside its debounce: written on `pagehide`, the last moment there is. */
+let pendingMarks: (() => Promise<unknown>) | null = null;
+let pdfSync: MarkSync | null = null;
 
 window.addEventListener('pagehide', () => {
   // An edit still inside its debounce is written now: `pagehide` is the last moment there is.
   if (pendingMarks) {
-    const { hash, name, marks } = pendingMarks;
+    const write = pendingMarks;
     pendingMarks = null;
-    void saveMarks(hash, name, marks);
+    void write();
   }
+  pdfSync?.dispose();
   editor?.dispose();
   void session?.dispose();
   pageObserver?.disconnect();

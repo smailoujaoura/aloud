@@ -1,0 +1,116 @@
+/**
+ * One PDF's marks, kept in step between every tab that has it open.
+ *
+ * Each editor used to write its whole list of marks on every change. Two tabs on the same PDF
+ * then took turns erasing each other: tab A's edit to the first note, then tab B's to the second
+ * — saved with B's copy of the first note, from before A changed it. Nothing was written at the
+ * same moment; each tab simply wrote what it had seen.
+ *
+ * So an editor never writes its list. It writes *its own changes* — what differs from the marks
+ * it last saw stored (its baseline) — on top of whatever is stored now, under the document's lock,
+ * and other tabs' changes are folded into the open editors as they arrive (`reconcileMarks`).
+ *
+ * The rules, per mark:
+ * - changed here, untouched there: ours;
+ * - changed in both since the baseline: the later `updated` wins;
+ * - deleted here, untouched there: deleted;
+ * - deleted here, but edited there afterwards: kept — a deletion never silently takes someone's
+ *   later work with it;
+ * - added anywhere: kept.
+ */
+import { storage } from 'wxt/utils/storage';
+import { withStorageLock } from '@/shared/storage-lock';
+import { normalizeStoredMarks } from '@/shared/record-shapes';
+import type { Mark } from './model';
+import { loadMarks, saveMarks } from './store';
+
+const same = (a: Mark, b: Mark): boolean => JSON.stringify(a) === JSON.stringify(b);
+
+/** `current`'s changes since `baseline`, applied on top of `latest`. */
+export function reconcileMarks(latest: readonly Mark[], baseline: readonly Mark[], current: readonly Mark[]): Mark[] {
+  const result = new Map(latest.map((m) => [m.id, m]));
+  const base = new Map(baseline.map((m) => [m.id, m]));
+  const mine = new Map(current.map((m) => [m.id, m]));
+
+  for (const [id, before] of base) {
+    if (mine.has(id)) continue;
+    // Deleted here. Gone there too, or unchanged there since: delete. Edited there since: keep.
+    const theirs = result.get(id);
+    if (theirs && (theirs.updated ?? 0) <= (before.updated ?? 0)) result.delete(id);
+  }
+  for (const mark of current) {
+    const before = base.get(mark.id);
+    if (before && same(before, mark)) continue; // not changed here: whatever is stored stands
+    const theirs = result.get(mark.id);
+    const changedThere = before ? theirs != null && !same(theirs, before) : theirs != null;
+    if (!changedThere || (mark.updated ?? 0) >= (theirs?.updated ?? 0)) result.set(mark.id, mark);
+  }
+  return [...result.values()];
+}
+
+/** The stored marks of one document, for one editor. */
+export class MarkSync {
+  private baseline: Mark[];
+  private stopWatching: (() => void) | null = null;
+
+  constructor(
+    private hash: string,
+    private readonly name: string,
+    baseline: readonly Mark[],
+  ) {
+    this.baseline = [...baseline];
+  }
+
+  get documentHash(): string {
+    return this.hash;
+  }
+
+  /** Write this editor's changes since it last synced; returns the marks now stored. */
+  persist(current: readonly Mark[]): Promise<Mark[]> {
+    const hash = this.hash;
+    return withStorageLock(`pdfMarks:${hash}`, async () => {
+      const stored = await loadMarks(hash).catch(() => null);
+      const merged = reconcileMarks(stored ? (stored.marks as Mark[]) : this.baseline, this.baseline, current);
+      await saveMarks(hash, this.name, merged);
+      if (hash === this.hash) this.baseline = merged;
+      return merged;
+    });
+  }
+
+  /**
+   * Follow other tabs: `onRemote` gets the marks to show — theirs, with this editor's unsaved
+   * changes still on top. `current` reads this editor's marks at that moment.
+   */
+  watch(current: () => readonly Mark[], onRemote: (marks: Mark[]) => void): void {
+    this.stopWatching?.();
+    const hash = this.hash;
+    this.stopWatching = storage.watch(`local:pdfMarks:${hash}`, (value) => {
+      if (hash !== this.hash) return;
+      const stored = normalizeStoredMarks(value);
+      if (!stored) return;
+      const theirs = stored.marks as Mark[];
+      if (JSON.stringify(theirs) === JSON.stringify(this.baseline)) return; // our own write
+      const shown = reconcileMarks(theirs, this.baseline, current());
+      this.baseline = theirs;
+      onRemote(shown);
+    });
+  }
+
+  /**
+   * The file was saved and is now a different document (new bytes, new hash): carry `marks` —
+   * the editor's marks *now*, including anything typed while saving — over to it.
+   */
+  async moveTo(hash: string, marks: readonly Mark[]): Promise<void> {
+    this.stopWatching?.();
+    this.stopWatching = null;
+    this.hash = hash;
+    const stored = await loadMarks(hash).catch(() => null);
+    this.baseline = stored ? (stored.marks as Mark[]) : [];
+    await this.persist(marks);
+  }
+
+  dispose(): void {
+    this.stopWatching?.();
+    this.stopWatching = null;
+  }
+}

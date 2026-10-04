@@ -55,6 +55,8 @@ function stripManaged(lib: PdfLib, doc: PDFDocumentType, keep: ReadonlySet<strin
   const { PDFName, PDFArray, PDFDict, PDFRef } = lib;
   const ctx = doc.context;
   let removed = 0;
+  /** Objects the removed annotations used: deleted only if nothing that stays still uses them. */
+  const candidates = new Set<PDFRefType>();
 
   for (const page of doc.getPages()) {
     const annots = page.node.lookupMaybe(PDFName.of('Annots'), PDFArray);
@@ -86,15 +88,55 @@ function stripManaged(lib: PdfLib, doc: PDFDocumentType, keep: ReadonlySet<strin
     removed += entries.filter((raw, i) => gone.has(raw) && subtypeOf(dicts[i]!) !== 'Popup').length;
     for (const raw of gone) {
       if (!(raw instanceof PDFRef)) continue;
+      candidates.add(raw);
       const appearance = (ctx.lookup(raw) as PDFDictType | undefined)?.lookupMaybe(PDFName.of('AP'), PDFDict);
-      for (const state of appearance?.values() ?? []) if (state instanceof PDFRef) ctx.delete(state);
-      ctx.delete(raw);
+      for (const state of appearance?.values() ?? []) {
+        if (state instanceof PDFRef) candidates.add(state);
+        else if (state instanceof PDFDict) for (const v of state.values()) if (v instanceof PDFRef) candidates.add(v);
+      }
     }
     const kept = entries.filter((raw) => !gone.has(raw));
     if (kept.length) page.node.set(PDFName.of('Annots'), ctx.obj(kept));
     else page.node.delete(PDFName.of('Annots'));
   }
+  deleteUnreferenced(lib, doc, candidates);
   return removed;
+}
+
+/**
+ * Delete those of `candidates` that nothing kept refers to.
+ *
+ * A removed note's drawing can be shared: one appearance stream used by the note *and* by a stamp
+ * Aloud does not touch. Deleting everything the removed note referred to took the stamp's drawing
+ * with it — the stamp stayed in the file and vanished from the page. So an object goes only when
+ * no remaining object points at it; when unsure, it stays (a few unused bytes cost nothing, a
+ * missing drawing is someone's annotation gone). Repeated until nothing changes, since an object
+ * kept for that reason keeps whatever *it* refers to.
+ */
+function deleteUnreferenced(lib: PdfLib, doc: PDFDocumentType, candidates: Set<PDFRefType>): void {
+  if (candidates.size === 0) return;
+  const { PDFArray, PDFDict, PDFRef, PDFStream } = lib;
+  const key = (ref: PDFRefType): string => `${ref.objectNumber} ${ref.generationNumber}`;
+  const doomed = new Map([...candidates].map((ref) => [key(ref), ref]));
+  const refsIn = (obj: unknown, into: Set<string>): void => {
+    if (obj instanceof PDFRef) into.add(key(obj));
+    else if (obj instanceof PDFDict) for (const v of obj.values()) refsIn(v, into);
+    else if (obj instanceof PDFArray) for (const v of obj.asArray()) refsIn(v, into);
+    else if (obj instanceof PDFStream) refsIn(obj.dict, into);
+  };
+  const objects = doc.context.enumerateIndirectObjects();
+  for (let changed = true; changed; ) {
+    changed = false;
+    const used = new Set<string>();
+    for (const [ref, obj] of objects) if (!doomed.has(key(ref))) refsIn(obj, used);
+    for (const k of [...doomed.keys()]) {
+      if (used.has(k)) {
+        doomed.delete(k);
+        changed = true;
+      }
+    }
+  }
+  for (const ref of doomed.values()) doc.context.delete(ref);
 }
 
 /**

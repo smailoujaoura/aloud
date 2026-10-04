@@ -129,6 +129,19 @@ export class MarkEditor {
     return this.history.marks;
   }
 
+  /** Show marks another tab saved (pdf/annotations/sync.ts). Not a change of this editor's own. */
+  adopt(marks: readonly Mark[]): void {
+    const open = this.popover?.id;
+    this.history.replaceAll(marks);
+    if (open && !marks.some((m) => m.id === open)) this.closePopover();
+    this.redraw();
+  }
+
+  /** After a save: each mark now refers to its annotation in the written file. */
+  rebase(fn: (mark: Mark) => Mark): void {
+    this.history.mapAll(fn);
+  }
+
   dispose(): void {
     clearTimeout(this.selectionTimer);
     for (const off of this.cleanups) off();

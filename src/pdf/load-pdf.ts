@@ -21,6 +21,7 @@
  */
 import type { PdfJsAnnotation } from './annotations/model';
 import { layoutPdfText, type PdfOutline, type PdfPageInput, type PdfTextItem } from './text-layout';
+import { ensureStreamIteration } from './stream-iteration';
 
 /** Where the bytes come from. `url` is fetched by whoever can reach it; `data` is already read. */
 export type PdfSource = { kind: 'url'; url: string } | { kind: 'data'; data: ArrayBuffer };
@@ -115,6 +116,7 @@ let modulePromise: Promise<PdfJsModule> | null = null;
 
 function loadPdfJs(): Promise<PdfJsModule> {
   if (modulePromise) return modulePromise;
+  ensureStreamIteration(); // pdf.js reads text with `for await`; Chromium 120 cannot (stream-iteration.ts)
   modulePromise = (async () => {
     const url = vendorUrl('pdf.min.mjs');
     const mod = (await import(/* @vite-ignore */ url)) as unknown as PdfJsModule;

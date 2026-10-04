@@ -16,6 +16,7 @@ import { MAX_QUEUE, type QueueItem } from './reading-queue';
 import { documentKey } from './position-match';
 import { normalizeHistoryEntry, normalizePosition, normalizeSiteSpeed, normalizeStoredMarks, recordsOf } from './record-shapes';
 import { SETTINGS_VERSION, migrateSettings, sanitizeSettings, withDefaults, type Settings } from './settings';
+import { markFingerprint, type Mark } from '@/pdf/annotations/model';
 
 export const BACKUP_FORMAT = 'aloud-backup';
 export const BACKUP_VERSION = 1;
@@ -288,7 +289,7 @@ export function restorePlan(b: Backup, all: Record<string, unknown>, parts: Read
 }
 
 type StoredMarksRecord = NonNullable<ReturnType<typeof normalizeStoredMarks>>;
-type MarkRecord = { id: string; updated: number };
+type MarkRecord = { id: string; updated: number; origin?: { ref: string | null; fingerprint: string } };
 
 /**
  * One PDF's marks from a backup, into the marks this device has for it.
@@ -301,17 +302,25 @@ type MarkRecord = { id: string; updated: number };
  * Returns `here` itself when the backup adds nothing, so the caller can skip the write.
  */
 export function mergePdfMarks(here: StoredMarksRecord, incoming: StoredMarksRecord): StoredMarksRecord {
-  const byId = new Map<string, MarkRecord>((here.marks as MarkRecord[]).map((m) => [m.id, m]));
+  // One annotation of the file is one mark, whatever id each device gave it: imported marks are
+  // matched by the annotation they came from. (Before ids came from the annotation, two devices
+  // opening the same PDF named the same note differently, and a restore kept both.)
+  const keyOf = (m: MarkRecord): string => (m.origin?.ref ? `ref:${m.origin.ref}` : `id:${m.id}`);
+  // An imported mark nobody edited is not "newer" for having been imported later: it must not
+  // replace an edit made on the other device.
+  const when = (m: MarkRecord): number =>
+    m.origin && markFingerprint(m as unknown as Mark) === m.origin.fingerprint ? 0 : m.updated;
+  const byKey = new Map<string, MarkRecord>((here.marks as MarkRecord[]).map((m) => [keyOf(m), m]));
   let changed = false;
   for (const mark of incoming.marks as MarkRecord[]) {
-    const have = byId.get(mark.id);
-    if (!have || mark.updated > have.updated) {
-      byId.set(mark.id, mark);
+    const have = byKey.get(keyOf(mark));
+    if (!have || when(mark) > when(have)) {
+      byKey.set(keyOf(mark), have ? { ...mark, id: have.id } : mark);
       changed = true;
     }
   }
   if (!changed) return here;
-  return { name: here.name || incoming.name, marks: [...byId.values()], updated: Math.max(here.updated, incoming.updated) };
+  return { name: here.name || incoming.name, marks: [...byKey.values()], updated: Math.max(here.updated, incoming.updated) };
 }
 
 /** `aloud-backup-2026-09-19.json`. */
