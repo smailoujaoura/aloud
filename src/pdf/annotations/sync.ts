@@ -59,8 +59,43 @@ export function reconcileMarks(latest: readonly Mark[], baseline: readonly Mark[
   return [...result.values()];
 }
 
+/**
+ * Apply `current`'s changes since `baseline` to what is stored for `hash`, under its lock; returns
+ * what is stored now. `onMerged` sees the result before it is written.
+ *
+ * Shared by the editors and the background — which finishes an editor's last change when its tab
+ * closes before the write could (see `MarkSync.handoff`).
+ */
+export async function persistChanges(
+  hash: string,
+  name: string,
+  baseline: readonly Mark[],
+  current: readonly Mark[],
+  onMerged?: (merged: Mark[]) => void,
+): Promise<Mark[]> {
+  return withStorageLock(`pdfMarks:${hash}`, async () => {
+    const stored = await loadMarks(hash).catch(() => null);
+    const merged = reconcileMarks(stored ? (stored.marks as Mark[]) : baseline, baseline, current);
+    onMerged?.(merged);
+    await saveMarks(hash, name, merged);
+    return merged;
+  });
+}
+
+/** What the background needs to finish an editor's write after its tab has gone. */
+export interface MarksHandoff {
+  type: 'pdf-marks-handoff';
+  hash: string;
+  name: string;
+  baseline: Mark[];
+  current: Mark[];
+}
+
 /** The stored marks of one document, for one editor. */
 export class MarkSync {
+  /** A write is under way (it may not finish if the tab closes now). */
+  private writing = 0;
+  private disposed = false;
   private baseline: Mark[];
   /** What this editor last wrote, to recognise its own write coming back through the watch. */
   private lastWritten = '';
@@ -79,17 +114,29 @@ export class MarkSync {
   }
 
   /** Write this editor's changes since it last synced; returns the marks now stored. */
-  persist(current: readonly Mark[]): Promise<Mark[]> {
+  async persist(current: readonly Mark[]): Promise<Mark[]> {
     const hash = this.hash;
-    return withStorageLock(`pdfMarks:${hash}`, async () => {
-      const stored = await loadMarks(hash).catch(() => null);
-      const merged = reconcileMarks(stored ? (stored.marks as Mark[]) : this.baseline, this.baseline, current);
-      // Noted before writing: the storage event for this write can arrive before `setItem` returns.
-      this.lastWritten = canon(merged);
-      await saveMarks(hash, this.name, merged);
-      if (hash === this.hash) this.baseline = merged;
+    this.writing++;
+    try {
+      const merged = await persistChanges(hash, this.name, this.baseline, current, (m) => {
+        // Noted before writing: the storage event for this write can arrive before `setItem` returns.
+        this.lastWritten = canon(m);
+      });
+      if (hash === this.hash && !this.disposed) this.baseline = merged;
       return merged;
-    });
+    } finally {
+      this.writing--;
+    }
+  }
+
+  /**
+   * The tab is closing. A change still waiting for its write — or with its write under way — would
+   * be lost with the page: hand it to the background, which outlives the tab and applies it by the
+   * same rules. Null when there is nothing unwritten.
+   */
+  handoff(current: readonly Mark[], pending: boolean): MarksHandoff | null {
+    if (!pending && this.writing === 0) return null;
+    return { type: 'pdf-marks-handoff', hash: this.hash, name: this.name, baseline: [...this.baseline], current: [...current] };
   }
 
   /**
@@ -129,6 +176,7 @@ export class MarkSync {
   }
 
   dispose(): void {
+    this.disposed = true;
     this.stopWatching?.();
     this.stopWatching = null;
   }

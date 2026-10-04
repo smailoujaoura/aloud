@@ -33,6 +33,9 @@ import { createLockTable, useLockTable } from '@/shared/storage-lock';
 import { loadWorkerGpu } from '@/shared/backend-memory';
 import { replyLater } from '@/shared/reply';
 import { findOwnTab, isOwnTab } from '@/shared/own-tab';
+import { persistChanges, type MarksHandoff } from '@/pdf/annotations/sync';
+import type { Mark } from '@/pdf/annotations/model';
+import { normalizeStoredMarks } from '@/shared/record-shapes';
 
 const CONTENT_FILE = '/reader-inject.js';
 /** The media speed control (src/entrypoints/speed-inject.ts). */
@@ -265,6 +268,18 @@ export default defineBackground({
         // One writer at a time per stored value, across every context (shared/storage-lock.ts).
         const key = (m as { key?: string }).key;
         if (typeof key === 'string') return replyWith(locks.acquire(key).then((token) => ({ token })));
+      } else if (m?.type === 'pdf-marks-handoff') {
+        // A PDF tab closed with an edit not yet written (pdf/annotations/sync.ts: `handoff`). Taken
+        // only from Aloud's own pages, and the marks are checked like any stored record.
+        const h = m as Partial<MarksHandoff>;
+        const base = normalizeStoredMarks({ marks: h.baseline });
+        const now = normalizeStoredMarks({ marks: h.current });
+        const fromOwnPage = sender.url?.startsWith(browser.runtime.getURL('/')) === true && !sender.tab?.url?.startsWith('http');
+        if (fromOwnPage && typeof h.hash === 'string' && /^[0-9a-f]{64}$/.test(h.hash) && base && now) {
+          void persistChanges(h.hash, String(h.name ?? ''), base.marks as Mark[], now.marks as Mark[]).catch((err) =>
+            console.warn('[aloud] could not finish a closed tab’s PDF edit:', err),
+          );
+        }
       } else if (m?.type === 'storage-lock-renew') {
         const { key, token } = m as { key?: unknown; token?: unknown };
         if (typeof key === 'string' && typeof token === 'number') locks.renew(key, token);

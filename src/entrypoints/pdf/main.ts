@@ -338,8 +338,10 @@ async function present(
   }
 
   document.title = `${doc.title} — Aloud`;
-  editor?.dispose();
-  editor = null;
+  // The old document's last change is written, and its sync stopped, before anything of the new
+  // one exists: left running, the old watcher wrote another tab's edits of the old PDF into the
+  // marks of the new one.
+  await closeEditor();
   renderer?.destroy();
   renderer = doc.renderer;
   const bytes = new Uint8Array(data);
@@ -417,13 +419,18 @@ async function startEditor(
   const sync = new MarkSync(hash, name, stored ? marks : []);
   if (!stored && fileMarks.length) void sync.persist(fileMarks);
 
+  // Everything below belongs to *this* editor: once another document replaces it, a late timer,
+  // watcher or save continuation must not touch the new one.
+  let ed: MarkEditor | null = null;
+  const live = (): MarkEditor | null => (ed && editor === ed ? ed : null);
   let pending = 0;
   const flush = (): Promise<unknown> => {
     clearTimeout(pending);
-    pendingMarks = null;
-    return editor ? sync.persist(editor.marks) : Promise.resolve();
+    if (pendingWrite?.sync === sync) pendingWrite = null;
+    const current = live();
+    return current ? sync.persist(current.marks) : Promise.resolve();
   };
-  editor = new MarkEditor({
+  ed = new MarkEditor({
     pages,
     marks,
     savedMarks: fileMarks,
@@ -431,9 +438,9 @@ async function startEditor(
     fileName: name,
     onChange() {
       clearTimeout(pending);
-      // Held so a burst of edits is one write — but a close inside those 250 ms would have lost
-      // the last one, so the pending write is remembered and flushed on the way out.
-      pendingMarks = flush;
+      // Held so a burst of edits is one write. Should the tab close inside those 250 ms, the
+      // change is handed to the background on the way out (see `pagehide` below).
+      pendingWrite = { sync, flush };
       pending = window.setTimeout(() => void flush(), 250);
     },
     async onSave(next) {
@@ -454,11 +461,17 @@ async function startEditor(
         // being written used to stay behind under the old document, and was not there when the
         // saved file was opened again. Still unsaved in the file, it stays marked unsaved.
         await flush();
-        original = saved.bytes;
-        editor?.rebase(rebased);
-        await sync.moveTo(newHash, editor ? editor.marks : saved.marks);
-        sync.watch(() => editor?.marks ?? [], (shown) => editor?.adopt(shown));
         handle = result.handle;
+        const current = live();
+        if (current) {
+          original = saved.bytes;
+          current.rebase(rebased);
+          await sync.moveTo(newHash, current.marks);
+          if (live()) sync.watch(() => live()?.marks ?? [], (shown) => live()?.adopt(shown));
+        } else {
+          // Another document was opened while this one saved: its marks still follow the file.
+          await new MarkSync(newHash, name, []).persist(saved.marks);
+        }
         log.info(`[pdf] wrote ${next.length} mark(s) into ${result.name}`);
         return { message: `Saved into ${result.name}`, saveMode: saveMode(handle) };
       }
@@ -470,9 +483,24 @@ async function startEditor(
       };
     },
   });
+  editor = ed;
   // Another tab with the same PDF: its changes appear here, with this tab's own still on top.
-  sync.watch(() => editor?.marks ?? [], (shown) => editor?.adopt(shown));
+  sync.watch(() => live()?.marks ?? [], (shown) => live()?.adopt(shown));
   pdfSync = sync;
+  closeCurrent = async () => {
+    if (pendingWrite?.sync === sync) await flush();
+    sync.dispose();
+    ed?.dispose();
+  };
+}
+
+/** Finish with the open document: its last change written, its sync and editor stopped. */
+async function closeEditor(): Promise<void> {
+  const close = closeCurrent;
+  closeCurrent = null;
+  pdfSync = null;
+  editor = null;
+  await close?.();
 }
 
 /**
@@ -676,17 +704,24 @@ document.addEventListener('drop', (e) => {
 
 
 /** A mark edit inside its debounce, kept so closing the page still writes it. */
-/** A change still inside its debounce: written on `pagehide`, the last moment there is. */
-let pendingMarks: (() => Promise<unknown>) | null = null;
+/** A change still inside its debounce, and the document it belongs to. */
+let pendingWrite: { sync: MarkSync; flush: () => Promise<unknown> } | null = null;
 let pdfSync: MarkSync | null = null;
+let closeCurrent: (() => Promise<void>) | null = null;
+
+// Hidden (switched away, minimised, about to close): write now rather than in 250 ms.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && pendingWrite) void pendingWrite.flush();
+});
 
 window.addEventListener('pagehide', () => {
   // An edit still inside its debounce is written now: `pagehide` is the last moment there is.
-  if (pendingMarks) {
-    const write = pendingMarks;
-    pendingMarks = null;
-    void write();
-  }
+  // The page is going: an edit not yet written — still in its debounce, or with its write under
+  // way — would go with it. The background outlives the tab, and finishes the write by the same
+  // merge rules and lock. (Starting the write here could not finish: it was lost every time.)
+  const handoff = pdfSync && editor ? pdfSync.handoff(editor.marks, pendingWrite?.sync === pdfSync) : null;
+  if (handoff) void browser.runtime.sendMessage(handoff).catch(() => undefined);
+  pendingWrite = null;
   pdfSync?.dispose();
   editor?.dispose();
   void session?.dispose();

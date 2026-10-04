@@ -151,3 +151,30 @@ describe('a tab hearing its own write come back', () => {
     sync.dispose();
   });
 });
+
+describe('X02: the tab closes before its last edit is written', async () => {
+  const { persistChanges } = await import('@/pdf/annotations/sync');
+
+  it('hands over only when something is unwritten', async () => {
+    resetStorage();
+    const sync = new MarkSync('close', 'r.pdf', []);
+    await sync.persist([mark('a', 'Saved', 1)]);
+    expect(sync.handoff([mark('a', 'Saved', 1)], false)).toBeNull();
+    const h = sync.handoff([mark('a', 'Typed just before close', 2)], true)!;
+    expect(h).toMatchObject({ type: 'pdf-marks-handoff', hash: 'close', name: 'r.pdf' });
+    sync.dispose();
+  });
+
+  it('the background finishes it by the same rules, keeping another tab’s change', async () => {
+    resetStorage();
+    const sync = new MarkSync('close2', 'r.pdf', []);
+    await sync.persist([mark('a', 'A', 1), mark('b', 'B', 1)]);
+    const h = sync.handoff([mark('a', 'Typed just before close', 2), mark('b', 'B', 1)], true)!;
+    // Meanwhile another tab changed b.
+    await persistChanges('close2', 'r.pdf', [mark('a', 'A', 1), mark('b', 'B', 1)], [mark('a', 'A', 1), mark('b', 'B from the other tab', 3)]);
+    await persistChanges(h.hash, h.name, h.baseline, h.current);
+    const stored = ((await loadMarks('close2'))!.marks as Mark[]).map((m) => m.note);
+    expect(stored).toEqual(['Typed just before close', 'B from the other tab']);
+    sync.dispose();
+  });
+});

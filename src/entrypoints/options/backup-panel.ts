@@ -132,7 +132,10 @@ function showRestore(host: HTMLElement, backup: Backup, opts: BackupPanelOptions
     try {
       // Read, merge and write under the same locks every other writer takes: a note kept in a
       // reading tab between the read and the write would otherwise be overwritten by the merge.
-      const all = await withStorageLocks(RESTORE_LOCKS, async () => {
+      // PDF marks included: each document's key is the lock its open editors write under
+      // (pdf/annotations/sync.ts). Without it, an autosave in flight overwrote the restored marks.
+      const pdfLocks = parts.has('pdfMarks') ? Object.keys(backup.pdfMarks) : [];
+      const all = await withStorageLocks([...RESTORE_LOCKS, ...pdfLocks], async () => {
         const current = (await browser.storage.local.get(null)) as Record<string, unknown>;
         const plan = restorePlan(backup, current, parts);
         if (Object.keys(plan).length) await browser.storage.local.set(plan);
