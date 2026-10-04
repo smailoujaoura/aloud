@@ -55,6 +55,7 @@ import { renderVoiceSection, type PanelContext } from './voice-panels';
 import { initNav, onViewChange, setNavCount, showView } from './app-nav';
 import { renderRail } from './rail';
 import { initLibrary } from '@/library/app';
+import { answerTabQueries } from '@/shared/own-tab';
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -725,3 +726,6 @@ watchSettings((next) => {
 onViewChange((view) => renderRail($('rail'), view));
 initNav();
 void initLibrary({ show: (view) => showView(view, { push: true }), setCount: setNavCount });
+
+// Lets the background find this tab without the "tabs" permission (shared/own-tab.ts).
+answerTabQueries();

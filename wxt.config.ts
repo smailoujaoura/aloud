@@ -41,7 +41,9 @@ export default defineConfig({
       // The Chrome Web Store refuses an upload whose description is over 132 characters.
       'Reads any article or PDF aloud in a natural neural voice that runs on your device. Offline and private, it highlights every word.',
 
-    permissions: ['activeTab', 'scripting', 'storage', 'unlimitedStorage', 'contextMenus', 'tabs'],
+    // No "tabs": it shows users "Read your browsing history" at install, for one convenience —
+    // reusing a tab already open on a note's page. activeTab covers every page the user acts on.
+    permissions: ['activeTab', 'scripting', 'storage', 'unlimitedStorage', 'contextMenus'],
 
     // Model files are served with `Access-Control-Allow-Origin: *`, so downloads work without
     // these; declaring them removes CORS from the equation for the extension-origin worker and

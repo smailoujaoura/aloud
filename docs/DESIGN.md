@@ -636,10 +636,10 @@ Pinned dependency versions are chosen at Step 1 and recorded in `THIRD_PARTY.md`
 ```jsonc
 {
   "manifest_version": 3,
-  "name": "…", "version": "0.1.0",
+  "name": "…", "version": "1.0.0",
   "background": { "scripts": ["background.js"], "type": "module" },
   "permissions": ["activeTab", "scripting", "storage", "unlimitedStorage",
-                  "contextMenus", "tabs"],
+                  "contextMenus"],
   "optional_permissions": ["<all_urls>"],
   "host_permissions": ["https://huggingface.co/*", "https://*.hf.co/*",
                        "https://cdn-lfs*.huggingface.co/*"],

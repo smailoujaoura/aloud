@@ -547,9 +547,16 @@ export class ControlBar {
       return;
     }
 
+    // The bar is narrow: "Alba · medium" was cut to "Alba · mediu…". Just the name, then — with the
+    // quality or gender kept only where two voices on the list share a name (Alba medium and Alba
+    // high), and the whole label in the tooltip.
+    const nameOf = (v: EngineVoice): string => v.label.split(' · ')[0] ?? v.label;
+    const named = new Map<string, number>();
+    for (const v of voices) named.set(`${v.engine}:${nameOf(v)}`, (named.get(`${v.engine}:${nameOf(v)}`) ?? 0) + 1);
     const option = (v: EngineVoice): HTMLOptionElement => {
       const value = voiceValue(v.engine, v.id);
-      const o = this.make('option', { value }, v.label);
+      const shared = (named.get(`${v.engine}:${nameOf(v)}`) ?? 0) > 1;
+      const o = this.make('option', { value, title: v.label }, shared ? v.label : nameOf(v));
       if (value === current) o.selected = true;
       return o;
     };

@@ -23,6 +23,7 @@ import { probeGpu } from '@/shared/gpu-probe';
 import { loadWorkerGpu } from '@/shared/backend-memory';
 import { ReaderSession } from '@/content/session';
 import { log } from '@/shared/log';
+import { answerTabQueries } from '@/shared/own-tab';
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -351,3 +352,6 @@ void (async () => {
     .catch(() => undefined);
   buildEngineCards();
 })();
+
+// Lets the background find this tab without the "tabs" permission (shared/own-tab.ts).
+answerTabQueries();

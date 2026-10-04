@@ -32,6 +32,7 @@ import { getSettings, watchSettings } from '@/shared/settings';
 import { createLockTable, useLockTable } from '@/shared/storage-lock';
 import { loadWorkerGpu } from '@/shared/backend-memory';
 import { replyLater } from '@/shared/reply';
+import { findOwnTab } from '@/shared/own-tab';
 
 const CONTENT_FILE = '/reader-inject.js';
 /** The media speed control (src/entrypoints/speed-inject.ts). */
@@ -349,15 +350,12 @@ export default defineBackground({
  */
 async function openWalkthrough(): Promise<void> {
   const url = browser.runtime.getURL(WALKTHROUGH_PAGE);
-  try {
-    const [existing] = await browser.tabs.query({ url });
-    if (existing?.id != null) {
-      await browser.tabs.update(existing.id, { active: true });
-      return;
-    }
-  } catch {
-    // `tabs.query` by URL needs the tabs permission, which we have — but Android builds have
-    // been known to reject the filter. Falling through just opens a new tab.
+  // Asked of the page itself (shared/own-tab.ts): without the "tabs" permission no tab's address
+  // is visible, Aloud's own included.
+  const existing = await findOwnTab(WALKTHROUGH_PAGE);
+  if (existing) {
+    await browser.tabs.update(existing.id, { active: true }).catch(() => undefined);
+    return;
   }
   try {
     await browser.tabs.create({ url });
@@ -412,13 +410,14 @@ async function openSettingsInstead(tab: { id?: number; index?: number; url?: str
   const reason = tab?.url?.startsWith('file:') ? 'file' : 'page';
   const url = `${browser.runtime.getURL('/options.html')}#cant-read-${reason}`;
   try {
-    if (tab?.id != null && (!tab.url || EMPTY_PAGE.test(tab.url))) {
+    // Only a page known to be empty is replaced. Without the "tabs" permission most addresses are
+    // hidden, and an unknown one is someone's page: open beside it.
+    if (tab?.id != null && tab.url && EMPTY_PAGE.test(tab.url)) {
       await browser.tabs.update(tab.id, { url });
       return;
     }
-    const base = browser.runtime.getURL('/options.html');
-    const [existing] = await browser.tabs.query({ url: `${base}*` }).catch(() => []);
-    if (existing?.id != null) {
+    const existing = await findOwnTab('/options.html');
+    if (existing) {
       await browser.tabs.update(existing.id, { url, active: true });
       if (existing.windowId != null) await browser.windows.update(existing.windowId, { focused: true }).catch(() => undefined);
       return;
@@ -744,6 +743,8 @@ async function highlightSelection(tabId: number, _url: string, _title: string, q
  */
 async function openNote(id: string, url: string, fragmentUrl: string, canInject: boolean): Promise<void> {
   const target = documentKey(url);
+  // Without the "tabs" permission, only tabs on sites granted to Aloud show their address; for
+  // any other site this finds nothing, and the note opens in a new tab.
   let tab = (await browser.tabs.query({}).catch(() => [])).find((t) => t.url && documentKey(t.url) === target);
   if (!canInject) {
     if (tab?.id != null) await browser.tabs.update(tab.id, { active: true, url: fragmentUrl });
@@ -791,14 +792,15 @@ function waitForLoad(tabId: number): Promise<void> {
 async function openLibrary(tab: LibraryTab = 'continue'): Promise<void> {
   const base = browser.runtime.getURL(LIBRARY_PAGE);
   const url = `${base}#${tab}`;
-  try {
-    const [existing] = await browser.tabs.query({ url: `${base}*` });
-    if (existing?.id != null) {
+  const existing = await findOwnTab(LIBRARY_PAGE);
+  if (existing) {
+    try {
       await browser.tabs.update(existing.id, { active: true, url });
+      if (existing.windowId != null) await browser.windows.update(existing.windowId, { focused: true }).catch(() => undefined);
       return;
+    } catch {
+      /* closed in the meantime: open a new one */
     }
-  } catch {
-    /* fall through to a new tab */
   }
   await browser.tabs.create({ url });
 }
