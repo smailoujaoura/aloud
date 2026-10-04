@@ -24,7 +24,18 @@ import { normalizeStoredMarks } from '@/shared/record-shapes';
 import type { Mark } from './model';
 import { loadMarks, saveMarks } from './store';
 
-const same = (a: Mark, b: Mark): boolean => JSON.stringify(a) === JSON.stringify(b);
+/**
+ * Marks as text, field order aside: a mark that went through storage (and `normalizeStoredMarks`)
+ * must compare equal to the same mark in the editor, or a tab's own write looks like news.
+ */
+function canon(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) =>
+    v && typeof v === 'object' && !Array.isArray(v)
+      ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      : v,
+  );
+}
+const same = (a: Mark, b: Mark): boolean => canon(a) === canon(b);
 
 /** `current`'s changes since `baseline`, applied on top of `latest`. */
 export function reconcileMarks(latest: readonly Mark[], baseline: readonly Mark[], current: readonly Mark[]): Mark[] {
@@ -51,6 +62,8 @@ export function reconcileMarks(latest: readonly Mark[], baseline: readonly Mark[
 /** The stored marks of one document, for one editor. */
 export class MarkSync {
   private baseline: Mark[];
+  /** What this editor last wrote, to recognise its own write coming back through the watch. */
+  private lastWritten = '';
   private stopWatching: (() => void) | null = null;
 
   constructor(
@@ -71,6 +84,8 @@ export class MarkSync {
     return withStorageLock(`pdfMarks:${hash}`, async () => {
       const stored = await loadMarks(hash).catch(() => null);
       const merged = reconcileMarks(stored ? (stored.marks as Mark[]) : this.baseline, this.baseline, current);
+      // Noted before writing: the storage event for this write can arrive before `setItem` returns.
+      this.lastWritten = canon(merged);
       await saveMarks(hash, this.name, merged);
       if (hash === this.hash) this.baseline = merged;
       return merged;
@@ -89,10 +104,14 @@ export class MarkSync {
       const stored = normalizeStoredMarks(value);
       if (!stored) return;
       const theirs = stored.marks as Mark[];
-      if (JSON.stringify(theirs) === JSON.stringify(this.baseline)) return; // our own write
-      const shown = reconcileMarks(theirs, this.baseline, current());
+      const text = canon(theirs);
+      // This editor's own write coming back: nothing new.
+      if (text === this.lastWritten || text === canon(this.baseline)) return;
+      const now = current();
+      const shown = reconcileMarks(theirs, this.baseline, now);
       this.baseline = theirs;
-      onRemote(shown);
+      // Only when something on screen changes: taking marks in clears the undo history.
+      if (canon(shown) !== canon(now)) onRemote(shown);
     });
   }
 

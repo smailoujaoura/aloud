@@ -32,7 +32,7 @@ import { getSettings, watchSettings } from '@/shared/settings';
 import { createLockTable, useLockTable } from '@/shared/storage-lock';
 import { loadWorkerGpu } from '@/shared/backend-memory';
 import { replyLater } from '@/shared/reply';
-import { findOwnTab } from '@/shared/own-tab';
+import { findOwnTab, isOwnTab } from '@/shared/own-tab';
 
 const CONTENT_FILE = '/reader-inject.js';
 /** The media speed control (src/entrypoints/speed-inject.ts). */
@@ -375,8 +375,10 @@ async function activate(tabId: number, mode: ActivateMode, targetElementId?: num
   }
 
   // One of Aloud's own pages (the PDF reader, the Library's queue): its reader is already there,
-  // so the button plays or pauses it, as it does on any page that is being read.
-  if (tab?.url?.startsWith(browser.runtime.getURL('/')) && active && (active.tabId === tabId || active.tabId === null)) {
+  // so the button plays or pauses it, as it does on any page that is being read. Without the
+  // "tabs" permission the address is hidden, so the page is asked when it cannot be read.
+  const ownPage = tab?.url ? tab.url.startsWith(browser.runtime.getURL('/')) : await isOwnTab(tabId);
+  if (ownPage && active && (active.tabId === tabId || active.tabId === null)) {
     postToActive({ type: 'toggle' });
     return;
   }

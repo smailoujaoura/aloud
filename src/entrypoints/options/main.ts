@@ -57,6 +57,10 @@ import { renderRail } from './rail';
 import { initLibrary } from '@/library/app';
 import { answerTabQueries } from '@/shared/own-tab';
 
+// First, before anything here can fail: lets the background find this tab without the "tabs"
+// permission (shared/own-tab.ts). Registered late, an earlier error meant a new tab every time.
+answerTabQueries();
+
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
 let settings: Settings;
@@ -726,6 +730,3 @@ watchSettings((next) => {
 onViewChange((view) => renderRail($('rail'), view));
 initNav();
 void initLibrary({ show: (view) => showView(view, { push: true }), setCount: setNavCount });
-
-// Lets the background find this tab without the "tabs" permission (shared/own-tab.ts).
-answerTabQueries();

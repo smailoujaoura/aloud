@@ -71,6 +71,13 @@ export const storage = {
   async removeItem(key: string): Promise<void> {
     values.delete(key);
   },
+
+  watch<T>(key: string, cb: Watcher<T>): () => void {
+    const set = watchers.get(key) ?? new Set();
+    set.add(cb as Watcher<unknown>);
+    watchers.set(key, set);
+    return () => set.delete(cb as Watcher<unknown>);
+  },
 };
 
 /** Empty every item — for a test that wants to start from nothing. */

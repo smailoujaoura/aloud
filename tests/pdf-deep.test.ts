@@ -132,3 +132,22 @@ describe('W05: an edit typed while the file was being written', () => {
     expect(((await loadMarks('new-hash'))!.marks as Mark[]).map((m) => m.note)).toEqual(['Typed while saving']);
   });
 });
+
+describe('a tab hearing its own write come back', () => {
+  it('does not take it as another tab’s change (which would clear its undo history)', async () => {
+    resetStorage();
+    const { storage } = await import('wxt/utils/storage');
+    const sync = new MarkSync('echo', 'r.pdf', []);
+    let current: Mark[] = [mark('a', 'A', 1)];
+    let adopted = 0;
+    sync.watch(() => current, () => adopted++);
+    await sync.persist(current);
+    current = [mark('a', 'A edited', 2)];
+    await sync.persist(current);
+    expect(adopted).toBe(0);
+    // A genuine change from elsewhere still arrives.
+    await storage.setItem('local:pdfMarks:echo', { name: 'r.pdf', updated: 9, marks: [mark('a', 'A edited', 2), mark('b', 'From the other tab', 3)] });
+    expect(adopted).toBe(1);
+    sync.dispose();
+  });
+});

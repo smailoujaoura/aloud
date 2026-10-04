@@ -25,6 +25,10 @@ import { ReaderSession } from '@/content/session';
 import { log } from '@/shared/log';
 import { answerTabQueries } from '@/shared/own-tab';
 
+// First, before anything here can fail: lets the background find this tab without the "tabs"
+// permission (shared/own-tab.ts). Registered late, an earlier error meant a new tab every time.
+answerTabQueries();
+
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
 let theme: ThemeChoice = 'system';
@@ -352,6 +356,3 @@ void (async () => {
     .catch(() => undefined);
   buildEngineCards();
 })();
-
-// Lets the background find this tab without the "tabs" permission (shared/own-tab.ts).
-answerTabQueries();

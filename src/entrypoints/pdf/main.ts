@@ -34,6 +34,11 @@ import { titleIsInBody, type PdfBlock, type PdfLineBox } from '@/pdf/text-layout
 import { getSettings, watchSettings, type PdfView } from '@/shared/settings';
 import { applyTheme, watchSystemTheme } from '@/ui/theme';
 import { log } from '@/shared/log';
+import { answerTabQueries } from '@/shared/own-tab';
+
+// First, before anything here can fail: lets the background recognise this tab without the "tabs"
+// permission, so the toolbar button and Alt+R play and pause the reader here (shared/own-tab.ts).
+answerTabQueries();
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 

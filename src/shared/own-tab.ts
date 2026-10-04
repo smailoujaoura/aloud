@@ -13,17 +13,52 @@ interface WhichTab {
   type: 'aloud-which-tab';
   path: string;
 }
+interface IsTab {
+  type: 'aloud-is-tab';
+  tabId: number;
+}
 
-/** In an Aloud page: answer when the background looks for this page. */
+/**
+ * In an Aloud page: answer when the background looks for this page.
+ *
+ * Every Aloud page receives every question, and the first answer is the one that counts. So a
+ * page answers *only* about itself, at once, from its tab id learned at start-up — a page that
+ * said "not me" a moment later could beat the one that is.
+ */
 export function answerTabQueries(): void {
+  let mine: { id: number; windowId?: number } | null = null;
+  const known = browser.tabs
+    .getCurrent()
+    .then((tab) => (mine = tab?.id != null ? { id: tab.id, windowId: tab.windowId } : null))
+    .catch(() => null);
   browser.runtime.onMessage.addListener((msg: unknown, _sender, sendResponse: (reply: unknown) => void) => {
-    const m = msg as Partial<WhichTab> | null;
-    if (m?.type !== 'aloud-which-tab' || m.path !== location.pathname) return false;
-    return replyLater(
-      sendResponse,
-      browser.tabs.getCurrent().then((tab) => (tab ? { id: tab.id, windowId: tab.windowId } : null)),
-    );
+    const m = msg as { type?: string; path?: string; tabId?: number } | null;
+    if (m?.type === 'aloud-which-tab' && m.path === location.pathname) {
+      // Only pages showing that path get here, so whichever answers first is right.
+      if (mine) {
+        sendResponse(mine);
+        return false;
+      }
+      return replyLater(sendResponse, known);
+    }
+    if (m?.type === 'aloud-is-tab' && mine && m.tabId === mine.id) {
+      sendResponse(true);
+      return false;
+    }
+    return false; // not about this page: stay silent, so the page it is about can answer
   });
+}
+
+/**
+ * Is tab `tabId` one of Aloud's own pages? Its address would say, but without the "tabs"
+ * permission it is hidden; the page itself answers instead. False when nothing answers.
+ */
+export async function isOwnTab(tabId: number): Promise<boolean> {
+  try {
+    return (await browser.runtime.sendMessage({ type: 'aloud-is-tab', tabId } satisfies IsTab)) === true;
+  } catch {
+    return false;
+  }
 }
 
 /** In the background: the tab showing Aloud's page `path` (e.g. "/options.html"), if one is open. */
