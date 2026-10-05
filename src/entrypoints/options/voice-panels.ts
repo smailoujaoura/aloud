@@ -331,7 +331,7 @@ function anyInstalled(group: PiperGroup, ctx: PanelContext): boolean {
 
 /**
  * Best first, then by recording quality, then by name — alphabetical order buried the handful of
- * voices actually worth choosing among 175 of them (see ui/voice-quality.ts).
+ * voices actually worth choosing among 171 of them (see ui/voice-quality.ts).
  */
 function byQualityThenName(ctx: PanelContext) {
   const rank = (g: PiperGroup): number =>

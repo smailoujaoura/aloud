@@ -133,18 +133,6 @@
       "sample": "https://huggingface.co/rhasspy/piper-voices/resolve/39ab474be869e9181350af6a65e4953eef67aaa0/ca/ca_ES/upc_pau/x_low/samples/speaker_0.mp3",
       "numSpeakers": 1
     },
-    "zh_CN-chaowen-medium": {
-      "label": "Chaowen — Chinese (CN)",
-      "language": "zh-CN",
-      "languageName": "Chinese",
-      "quality": "medium",
-      "onnx": "https://huggingface.co/rhasspy/piper-voices/resolve/39ab474be869e9181350af6a65e4953eef67aaa0/zh/zh_CN/chaowen/medium/zh_CN-chaowen-medium.onnx",
-      "config": "https://huggingface.co/rhasspy/piper-voices/resolve/39ab474be869e9181350af6a65e4953eef67aaa0/zh/zh_CN/chaowen/medium/zh_CN-chaowen-medium.onnx.json",
-      "license": "see MODEL_CARD (per-voice; rhasspy/piper-voices)",
-      "sizeBytes": 63224911,
-      "sample": "https://huggingface.co/rhasspy/piper-voices/resolve/39ab474be869e9181350af6a65e4953eef67aaa0/zh/zh_CN/chaowen/medium/samples/speaker_0.mp3",
-      "numSpeakers": 1
-    },
     "zh_CN-huayan-medium": {
       "label": "Huayan — Chinese (CN)",
       "language": "zh-CN",
@@ -167,18 +155,6 @@
       "license": "see MODEL_CARD (per-voice; rhasspy/piper-voices)",
       "sizeBytes": 20632977,
       "sample": "https://huggingface.co/rhasspy/piper-voices/resolve/39ab474be869e9181350af6a65e4953eef67aaa0/zh/zh_CN/huayan/x_low/samples/speaker_0.mp3",
-      "numSpeakers": 1
-    },
-    "zh_CN-xiao_ya-medium": {
-      "label": "Xiao Ya — Chinese (CN)",
-      "language": "zh-CN",
-      "languageName": "Chinese",
-      "quality": "medium",
-      "onnx": "https://huggingface.co/rhasspy/piper-voices/resolve/39ab474be869e9181350af6a65e4953eef67aaa0/zh/zh_CN/xiao_ya/medium/zh_CN-xiao_ya-medium.onnx",
-      "config": "https://huggingface.co/rhasspy/piper-voices/resolve/39ab474be869e9181350af6a65e4953eef67aaa0/zh/zh_CN/xiao_ya/medium/zh_CN-xiao_ya-medium.onnx.json",
-      "license": "see MODEL_CARD (per-voice; rhasspy/piper-voices)",
-      "sizeBytes": 63224911,
-      "sample": "https://huggingface.co/rhasspy/piper-voices/resolve/39ab474be869e9181350af6a65e4953eef67aaa0/zh/zh_CN/xiao_ya/medium/samples/speaker_0.mp3",
       "numSpeakers": 1
     },
     "cs_CZ-jirka-low": {
@@ -1153,18 +1129,6 @@
       "sample": "https://huggingface.co/rhasspy/piper-voices/resolve/39ab474be869e9181350af6a65e4953eef67aaa0/el/el_GR/rapunzelina/medium/samples/speaker_0.mp3",
       "numSpeakers": 1
     },
-    "he_IL-saspeech-medium": {
-      "label": "Saspeech — Hebrew (IL)",
-      "language": "he-IL",
-      "languageName": "Hebrew",
-      "quality": "medium",
-      "onnx": "https://huggingface.co/rhasspy/piper-voices/resolve/39ab474be869e9181350af6a65e4953eef67aaa0/he/he_IL/saspeech/medium/he_IL-saspeech-medium.onnx",
-      "config": "https://huggingface.co/rhasspy/piper-voices/resolve/39ab474be869e9181350af6a65e4953eef67aaa0/he/he_IL/saspeech/medium/he_IL-saspeech-medium.onnx.json",
-      "license": "see MODEL_CARD (per-voice; rhasspy/piper-voices)",
-      "sizeBytes": 63227253,
-      "sample": "https://huggingface.co/rhasspy/piper-voices/resolve/39ab474be869e9181350af6a65e4953eef67aaa0/he/he_IL/saspeech/medium/samples/speaker_0.mp3",
-      "numSpeakers": 1
-    },
     "hi_IN-pratham-medium": {
       "label": "Pratham — Hindi (IN)",
       "language": "hi-IN",
@@ -1344,18 +1308,6 @@
       "sizeBytes": 63515996,
       "sample": "https://huggingface.co/rhasspy/piper-voices/resolve/39ab474be869e9181350af6a65e4953eef67aaa0/it/it_IT/serena/medium/samples/speaker_0.mp3",
       "numSpeakers": 1
-    },
-    "ja_JA-hi_fi_captain-medium": {
-      "label": "Hi Fi Captain — Japanese (JA)",
-      "language": "ja-JA",
-      "languageName": "Japanese",
-      "quality": "medium",
-      "onnx": "https://huggingface.co/rhasspy/piper-voices/resolve/39ab474be869e9181350af6a65e4953eef67aaa0/ja/ja_JA/hi_fi_captain/medium/ja_JA-hi_fi_captain-medium.onnx",
-      "config": "https://huggingface.co/rhasspy/piper-voices/resolve/39ab474be869e9181350af6a65e4953eef67aaa0/ja/ja_JA/hi_fi_captain/medium/ja_JA-hi_fi_captain-medium.onnx.json",
-      "license": "see MODEL_CARD (per-voice; rhasspy/piper-voices)",
-      "sizeBytes": 76759142,
-      "sample": "https://huggingface.co/rhasspy/piper-voices/resolve/39ab474be869e9181350af6a65e4953eef67aaa0/ja/ja_JA/hi_fi_captain/medium/samples/speaker_0.mp3",
-      "numSpeakers": 2
     },
     "kk_KZ-iseke-x_low": {
       "label": "Iseke — Kazakh (KZ)",
@@ -2269,7 +2221,7 @@
   "supertonic": {
     "modelId": "Supertone/supertonic-2",
     "license": "OpenRAIL-M (use-restricted model licence)",
-    "base": "https://huggingface.co/Supertone/supertonic-2/resolve/main",
+    "base": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4",
     "sampleRate": 44100,
     "files": {
       "textEncoder": "onnx/text_encoder.onnx",
@@ -2322,6 +2274,12 @@
         "label": "Male 5",
         "gender": "male"
       }
+    },
+    "sha256": {
+      "durationPredictor": "6d556b3691165c364be91dc0bd894656b5949f5acd2750d8ec2f954010845011",
+      "textEncoder": "dd5f535ed629f7df86071043e15f541ce1b2ab7f1bdbce4c7892b307bca79fa3",
+      "vectorEstimator": "105e9d66fd8756876b210a6b4aa03fc393b1eaca3a8dadcc8d9a3bc785c86a35",
+      "vocoder": "19bd51f47a186069c752403518a40f7ea4c647455056d2511f7249691ecddf7c"
     }
   }
 }

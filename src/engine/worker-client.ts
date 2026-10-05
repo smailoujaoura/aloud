@@ -57,6 +57,8 @@ function deferred(): Deferred {
 
 export class WorkerClient {
   private frame: HTMLIFrameElement | null = null;
+  /** The element holding the frame's closed shadow root; removed with it. */
+  private frameHost: HTMLElement | null = null;
   private port: MessagePort | null = null;
   private nextId = 1;
   private readonly wanted = new Set<number>();
@@ -125,7 +127,14 @@ export class WorkerClient {
       frame.contentWindow?.postMessage({ __aloud: 'port', ticket }, extOrigin, [channel.port2]);
     });
 
-    (document.documentElement ?? document.body).appendChild(frame);
+    // Inside a closed shadow root: the page's scripts cannot reach the frame, and so cannot read
+    // its address — in Firefox that address carries an ID unique to each installation, which a
+    // site could otherwise read and use to recognise the same person elsewhere.
+    const host = document.createElement('aloud-voice');
+    host.style.cssText = 'position:fixed!important;left:0!important;bottom:0!important;width:1px!important;height:1px!important;overflow:hidden!important;pointer-events:none!important;z-index:-2147483647!important;';
+    host.attachShadow({ mode: 'closed' }).appendChild(frame);
+    this.frameHost = host;
+    (document.documentElement ?? document.body).appendChild(host);
 
     try {
       await handshake.promise;
@@ -241,6 +250,8 @@ export class WorkerClient {
       }
     }
     this.port = null;
+    this.frameHost?.remove();
+    this.frameHost = null;
     if (this.frame) {
       this.frame.remove();
       this.frame = null;

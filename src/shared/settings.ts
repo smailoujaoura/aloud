@@ -170,7 +170,9 @@ export const DEFAULT_NOTE_COLORS: NoteColor[] = [
 export const DEFAULT_ANNOTATE: AnnotateSettings = {
   toolbar: true,
   alwaysOn: [],
-  pageKeys: { keep: 'k', panel: 'n' },
+  // No single key for the panel by default: a plain "n" took the site's own shortcut on every
+  // page Aloud had run on (Gmail, X and others). Alt+N opens it; a key can be set in Settings.
+  pageKeys: { keep: 'k', panel: '' },
   colors: DEFAULT_NOTE_COLORS,
   defaultColor: 'yellow',
   noteColor: 'blue',
@@ -284,11 +286,18 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 /** The stored settings' schema version; each step up has a migration below. */
-export const SETTINGS_VERSION = 6;
+export const SETTINGS_VERSION = 7;
 
 type Migration = (prev: Record<string, unknown>) => Record<string, unknown>;
 
 const MIGRATIONS: Record<number, Migration> = {
+    // v6 -> v7: the notes panel's single key is off by default (see DEFAULT_ANNOTATE). Only a
+    // profile still on the old default "n" changes; a key someone chose is theirs.
+    7(prev: Record<string, unknown>): Record<string, unknown> {
+      const annotate = prev.annotate as { pageKeys?: { keep?: string; panel?: string } } | undefined;
+      if (annotate?.pageKeys?.panel !== 'n') return prev;
+      return { ...prev, annotate: { ...annotate, pageKeys: { ...annotate.pageKeys, panel: '' } } };
+    },
     // v5 -> v6: the preset speeds became 0.25× to 4×, the range people actually jump between.
     // Only a profile still on the old default moves; presets someone typed are theirs.
     6(prev: Record<string, unknown>): Record<string, unknown> {

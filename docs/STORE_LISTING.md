@@ -18,7 +18,7 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 > voice is a neural network running inside your browser, so it works offline and nothing you read
 > is ever sent anywhere. No account, no subscription.
 >
-> • 213 natural voices in 51 languages, from three neural engines (Piper, Kokoro-82M, Supertonic-2)
+> • 209 natural voices in 49 languages, from three neural engines (Piper, Kokoro-82M, Supertonic-2)
 > • Reads the article, not the menus and ads, and highlights the sentence and the word in place
 > • PDFs too: real pages, highlighted where the text sits; mark them up and save the marks into the file
 > • Picks up at the sentence you stopped at; a reading queue for later; save any article as an MP3
@@ -60,7 +60,7 @@ search, shopping, new-tab or ad features).
 | contextMenus | Right-click items: read the selection or from a point, keep a highlight, show notes, add a page or link to the reading queue. |
 | Host: huggingface.co and its download hosts (hf.co, cdn-lfs*.huggingface.co) | Downloading the voice model the user picks. No other data is sent. |
 | Host: file:///* | Lets the PDF reader open PDFs saved on the user's computer, once they enable "Allow access to file URLs". |
-| Optional host: *://*/* | Requested one site at a time, only when the user adds a site where the media controls or highlights should start by themselves, or queues a page from that site. |
+| Optional host: *://*/* | Requested one site at a time, only when the user adds a site where the media controls or highlights should start by themselves, opens a PDF from that site, or queues a page from it. |
 
 **Remote code:** No. All JavaScript and WebAssembly ship in the package. Voice models
 downloaded at runtime are ONNX data files, not code.

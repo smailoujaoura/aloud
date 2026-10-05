@@ -95,19 +95,16 @@ export default defineConfig({
         // `synth-host.html` is the hidden iframe the content script loads to host the synthesis
         // Worker. `vendor/rt/*` holds the worker's lazily-imported engine chunks (Piper / Kokoro /
         // Supertonic / the ORT loader) produced by scripts/build-worker.mjs.
-        resources: [
-          'synth-host.html',
-          'synth-host.js',
-          'tts-worker.js',
-          'vendor/rt/*',
-          'vendor/ort/*',
-          // piper_phonemize's WASM and eSpeak data, loaded by the synthesis worker.
-          'vendor/piper/*',
-          'models.json',
-          // Artwork for the OS media overlay; loaded from the page, so it must be web-accessible.
-          'icon/128.png',
-        ],
+        // Only the voice frame's document. Everything it loads — its script, the worker, the
+        // runtime chunks, ONNX Runtime, eSpeak's data — is requested by that frame at the
+        // extension's own origin, which needs no listing here; models.json and the icon reach the
+        // reader through the background. Every file listed here is one any page can probe to
+        // recognise Aloud, so the list is as short as it can be.
+        resources: ['synth-host.html'],
         matches: ['<all_urls>'],
+        // Chromium: reachable only through an address that changes every session, so a page
+        // cannot probe a fixed address to learn Aloud is installed. (Firefox ignores this key.)
+        ...(browser === 'chrome' ? { use_dynamic_url: true } : {}),
       },
     ],
 

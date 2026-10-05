@@ -47,7 +47,7 @@ export const SAMPLES = [
   { file: 'kokoro-bm_fable', engine: 'kokoro', voice: 'bm_fable', text: "I'm Fable. No account, no subscription, and nothing you read is sent anywhere." },
   { file: 'kokoro-af_sarah', engine: 'kokoro', voice: 'af_sarah', text: "I'm Sarah. Slow me down, or speed me up. I'll tell you how many words a minute that is." },
   { file: 'kokoro-am_puck', engine: 'kokoro', voice: 'am_puck', text: "I'm Puck. Queue up a few articles, and I'll read them one after another." },
-  { file: 'piper-northern_english_male', engine: 'piper', voice: 'en_GB-northern_english_male-medium', text: "Now then. Piper has a hundred and seventy-five voices, in fifty-one languages." },
+  { file: 'piper-northern_english_male', engine: 'piper', voice: 'en_GB-northern_english_male-medium', text: "Now then. Piper has a hundred and seventy-one voices, in forty-nine languages." },
   { file: 'kokoro-af_kore', engine: 'kokoro', voice: 'af_kore', text: "I'm Kore. I run on your graphics card when your browser allows it, and on your processor when it doesn't." },
   { file: 'kokoro-af_aoede', engine: 'kokoro', voice: 'af_aoede', text: "I'm Aoede. Reading a dark website? I keep the highlight easy on the eyes." },
   { file: 'kokoro-am_fenrir', engine: 'kokoro', voice: 'am_fenrir', text: "I'm Fenrir. I can even stop videos from playing by themselves." },

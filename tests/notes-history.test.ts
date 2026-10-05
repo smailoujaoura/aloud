@@ -179,3 +179,15 @@ describe('note filters and tags', () => {
     expect(notesForPage(notes, 'https://developer.mozilla.org/x').map((n) => n.id)).toEqual(['3']);
   });
 });
+
+describe('note 5,001', async () => {
+  const { MAX_NOTES } = await import('@/shared/notes');
+  it('is refused, and every kept note stays', () => {
+    const full = Array.from({ length: MAX_NOTES }, (_, i) => note({ id: `old${i}`, createdAt: i, text: `t${i}` }));
+    const r = withNoteAdded(full, note({ id: 'new', createdAt: 1e12, text: 'new one' }));
+    expect(r.full).toBe(true);
+    expect(r.notes).toHaveLength(MAX_NOTES);
+    expect(r.notes.some((n) => n.id === 'new')).toBe(false);
+    expect(r.notes.some((n) => n.id === 'old0')).toBe(true);
+  });
+});

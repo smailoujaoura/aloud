@@ -49,7 +49,7 @@ import {
 } from '@/shared/reading-positions';
 import { PORT_NAME, type ActivateMode, type SessionState } from '@/shared/messages';
 import { siteOf, type DocSource } from '@/shared/doc-source';
-import { addNote } from '@/shared/notes';
+import { NOTES_FULL_MESSAGE, addNote } from '@/shared/notes';
 import { createAnchor, type TextAnchor } from '@/annotate/anchor';
 import { anchorForRange } from '@/annotate/page-anchoring';
 import { recordListening } from '@/shared/reading-history';
@@ -401,7 +401,7 @@ export class ReaderSession {
         previous: () => this.seekBy(-1),
         next: () => this.seekBy(1),
       },
-      browser.runtime.getURL('/icon/128.png'),
+      () => browser.runtime.sendMessage({ type: 'icon-data-url' }) as Promise<string | null>,
     );
 
     this.sleepTimer = new SleepTimer({
@@ -496,6 +496,8 @@ export class ReaderSession {
        // sentence in place of every address it contained ("Visit Visit https://…  now. now.").
       urlReplacement: this.settings.skipUrls ? 'link' : null,
       expandAbbreviations: this.settings.expandAbbreviations,
+      // The voice's language decides whether the English expansions apply at all.
+      language: (this.manifest && voiceLanguage(this.engine, this.voice, this.manifest)) || 'en',
     });
   };
 
@@ -779,8 +781,11 @@ export class ReaderSession {
 
   private async loadManifest(): Promise<ModelManifest | null> {
     try {
-      const res = await fetch(browser.runtime.getURL('/models.json'));
-      return (await res.json()) as ModelManifest;
+      // From the background: models.json is not web-accessible (pages could use it to recognise
+      // Aloud), and the reader runs in the page.
+      const manifest = (await browser.runtime.sendMessage({ type: 'models-manifest' })) as ModelManifest | null;
+      if (!manifest) throw new Error('the background had no models.json');
+      return manifest;
     } catch (err) {
       log.warn('could not load models.json:', err);
       return null;
@@ -817,7 +822,7 @@ export class ReaderSession {
   /**
    * The voices of the active engine that are downloaded, asked of the background.
    *
-   * The bar used to list all 175 Piper voices from the manifest, so switching voice mid-article
+   * The bar used to list all 171 Piper voices from the manifest, so switching voice mid-article
    * could silently start a 60 MB download and stall the reader. Only the background can answer
    * this: the model cache is IndexedDB at the *extension* origin, and this code runs in the page.
    */
@@ -1392,7 +1397,7 @@ export class ReaderSession {
     const onWebPage = location.protocol === 'http:' || location.protocol === 'https:';
 
     try {
-      const { duplicate } = await addNote({
+      const { duplicate, full } = await addNote({
         text,
         source: this.docSource(),
         at: { index, total: this.playlist.length, excerpt: excerptOf(this.playlist[index]?.spokenText ?? '') },
@@ -1400,6 +1405,10 @@ export class ReaderSession {
           ? { anchor, color: this.settings.annotate.defaultColor, style: this.settings.annotate.defaultStyle, tags: [] }
           : {}),
       });
+      if (full) {
+        this.bar?.flash(NOTES_FULL_MESSAGE);
+        return;
+      }
       this.bar?.flash(duplicate ? 'Already in your notes' : 'Saved to Notes', 'ok', {
         label: 'Open',
         run: () => this.port?.postMessage({ type: 'open-library', tab: 'notes' }),
@@ -1649,9 +1658,9 @@ export class ReaderSession {
 
   // ---- state / messaging ---------------------------------------------------
 
-  private connectPort(): void {
+  private connectPort(resume = false): void {
     try {
-      this.port = browser.runtime.connect({ name: PORT_NAME });
+      this.port = browser.runtime.connect({ name: resume ? `${PORT_NAME}:resume` : PORT_NAME });
       this.port.onMessage.addListener((msg: unknown) => {
         const m = msg as { type?: string };
         if (m.type === 'stop') this.stop('superseded');
@@ -1664,8 +1673,22 @@ export class ReaderSession {
           this.bar?.flash((m as { text: string }).text, 'ok');
         }
       });
-      this.port.onDisconnect.addListener(() => (this.port = null));
+      this.port.onDisconnect.addListener(() => {
+        this.port = null;
+        // Chromium stops an idle background service worker, and with it this connection. Left
+        // dropped, the reader was invisible to the background from then on: a reader started in
+        // another tab no longer stopped this one, settings changes stopped arriving, and the
+        // shortcuts could not find it. Reconnect, as a resume (background.ts decides who keeps
+        // the slot). Not after this reader ended, and not if the extension itself was reloaded.
+        if (this.disposed) return;
+        setTimeout(() => {
+          if (this.disposed || this.port) return;
+          this.connectPort(true);
+          if (this.port) this.pushState();
+        }, 150);
+      });
     } catch (err) {
+      // "Extension context invalidated": Aloud was updated or reloaded under this page.
       log.warn('could not connect to background:', err);
     }
   }

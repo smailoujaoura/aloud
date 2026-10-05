@@ -1,7 +1,7 @@
 /**
  * How good a voice sounds, for ordering the lists.
  *
- * A catalogue of 175 Piper voices in alphabetical order buries the handful anyone should actually
+ * A catalogue of 171 Piper voices in alphabetical order buries the handful anyone should actually
  * choose. So the lists lead with the voices judged best — the ones with a portrait, in a fixed
  * order — and everything after them is ranked by what the catalogue knows about quality: Piper's
  * recording tier (`high` beats `medium` beats `low`) and Kokoro's own published grades. Names only

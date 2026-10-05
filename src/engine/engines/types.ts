@@ -62,6 +62,8 @@ export interface SupertonicManifest {
   base: string;
   files: { textEncoder: string; durationPredictor: string; vectorEstimator: string; vocoder: string };
   config: { tts: string; unicodeIndexer: string };
+  /** SHA-256 of each network at the pinned commit in `base`, checked on download. */
+  sha256?: Partial<Record<'textEncoder' | 'durationPredictor' | 'vectorEstimator' | 'vocoder', string>>;
   /** voice-style key -> metadata; the style JSON is `${base}/voice_styles/${key}.json`. */
   voices: Record<string, { label: string; gender: string }>;
   sampleRate: number;

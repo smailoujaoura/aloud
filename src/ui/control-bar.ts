@@ -26,6 +26,7 @@ import { CONTROL_BAR_CSS } from './control-bar-styles';
 import { ICON_PATHS } from './icons';
 import { resolveTheme, watchSystemTheme } from './theme';
 import type { SleepChoice, SleepState } from '@/content/sleep-timer';
+import { containTyping } from './contain-typing';
 
 /** Where "Save as MP3" is, as the bar shows it. */
 export type ExportState =
@@ -174,6 +175,7 @@ export class ControlBar {
     this.host.id = CONTROL_HOST_ID;
     this.host.style.cssText = 'all: initial; position: static;';
     this.root = this.host.attachShadow({ mode: 'closed' });
+    containTyping(this.root); // removed with the host
     (doc.documentElement ?? doc.body).appendChild(this.host);
 
     this.build(opts.speed);

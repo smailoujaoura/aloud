@@ -16,7 +16,8 @@ const ABBREVIATIONS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\be\.g\./gi, 'for example'],
   [/\bi\.e\./gi, 'that is'],
   [/\betc\./gi, 'et cetera'],
-  [/\bvs\.?/gi, 'versus'],
+  // Only the lowercase word: "VS Code", "VS" in a product name, is not "versus".
+  [/\bvs\.(?=\s)|\bvs(?=\s+\S)/g, 'versus'],
   [/\bcf\./gi, 'compare'],
   [/\bapprox\./gi, 'approximately'],
   [/\best\.\s/gi, 'estimated '],
@@ -44,7 +45,9 @@ const SYMBOL_WORDS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\s@\s/g, ' at '],
   [/\+\/-|±/g, ' plus or minus '],
   [/(?<=\w)\s*\/\s*(?=\w)/g, ' slash '], // a/b -> "a slash b" (only between word chars)
-  [/(?<=\d)\s*[-–]\s*(?=\d)/g, ' to '], // numeric ranges: 5-10 -> "5 to 10"
+  // Numeric ranges: an en dash always ("5–10" -> "5 to 10"); a hyphen only between two plain
+  // numbers (`rangeWithHyphen`), never in a phone number, a date, a time or a code.
+  [/(?<=\d)\s*–\s*(?=\d)/g, ' to '],
   [/×/g, ' times '],
   [/°/g, ' degrees '],
   [/…/g, '… '],
@@ -57,7 +60,27 @@ const PICTOGRAPHIC =
 const URL_RE = /\b(?:https?:\/\/|www\.)[^\s<>()]+/gi;
 const EMAIL_RE = /\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b/gi;
 
+/**
+ * "5-10" -> "5 to 10", but not "555-1234" (a phone number), "2024-10-05" (a date), "9-05" (a
+ * time, or anything with a leading zero) or "1-2-3" (a code): a hyphen between numbers is a range
+ * only when it joins exactly two short numbers, neither starting with 0, with nothing more
+ * hyphenated on either side.
+ */
+function rangeWithHyphen(text: string): string {
+  return text.replace(/(?<![\d.,\-–])(\d{1,4})\s?-\s?(\d{1,4})(?![\d.,]?\d|\s?-\s?\d)/g, (whole, a: string, b: string) => {
+    if (/^0\d/.test(a) || /^0/.test(b)) return whole;
+    if (a.length === 3 && b.length === 4) return whole; // 555-1234
+    return `${a} to ${b}`;
+  });
+}
+
 export interface NormalizeOptions {
+  /**
+   * The language of the voice reading (BCP 47, e.g. "de-DE"). The word expansions here are
+   * English: for any other language they are skipped, and eSpeak says the symbols in that
+   * language's own words. (A German voice read "Müller & Söhne" as "Müller and Söhne".)
+   */
+  language?: string;
   /**
    * What to say in place of a URL. Empty string drops it entirely; `null` leaves the address in
    * the text to be read out as it stands.
@@ -69,7 +92,13 @@ export interface NormalizeOptions {
   expandAbbreviations?: boolean;
 }
 
-const DEFAULTS: { urlReplacement: string | null; emailReplacement: string; expandAbbreviations: boolean } = {
+const DEFAULTS: {
+  language: string;
+  urlReplacement: string | null;
+  emailReplacement: string;
+  expandAbbreviations: boolean;
+} = {
+  language: 'en',
   urlReplacement: 'link',
   emailReplacement: 'e-mail address',
   expandAbbreviations: true,
@@ -80,14 +109,18 @@ export function normalizeForSpeech(input: string, options: NormalizeOptions = {}
   // Strip glyphs that NFKC would otherwise expand into letters ("™" -> "TM").
   let text = input.replace(/[™®©℠]/g, '').normalize('NFKC');
 
-  if (opts.urlReplacement != null) text = text.replace(URL_RE, ` ${opts.urlReplacement} `);
-  text = text.replace(EMAIL_RE, ` ${opts.emailReplacement} `);
+  const english = /^en\b/i.test(opts.language);
+  // The stand-in words are English: in another language an address is simply left out.
+  if (opts.urlReplacement != null) text = text.replace(URL_RE, english ? ` ${opts.urlReplacement} ` : ' ');
+  text = text.replace(EMAIL_RE, english ? ` ${opts.emailReplacement} ` : ' ');
 
-  if (opts.expandAbbreviations) {
-    for (const [re, repl] of ABBREVIATIONS) text = text.replace(re, repl);
+  if (english) {
+    if (opts.expandAbbreviations) {
+      for (const [re, repl] of ABBREVIATIONS) text = text.replace(re, repl);
+    }
+    for (const [re, repl] of SYMBOL_WORDS) text = text.replace(re, repl);
+    text = rangeWithHyphen(text);
   }
-
-  for (const [re, repl] of SYMBOL_WORDS) text = text.replace(re, repl);
 
   text = text.replace(PICTOGRAPHIC, ' ');
 

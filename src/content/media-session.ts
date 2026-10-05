@@ -23,16 +23,25 @@ export class MediaControls {
   private readonly session: MediaSession | null;
   private readonly actions: Action[] = [];
   /**
-   * The icon as a `blob:` URL. Chromium refuses artwork from any scheme but http(s), data and
-   * blob — an extension URL is dropped with a console warning — so the packaged icon is read once
-   * and handed over as a blob, which every browser accepts.
+   * The icon as a `data:` URL. Chromium refuses artwork from any scheme but http(s), data and
+   * blob — an extension URL is dropped with a console warning — so the background reads the
+   * packaged icon once and hands it over as data, which every browser accepts.
    */
   private artwork: string | null = null;
   private lastMetadata: [string, string, string] | null = null;
+  /** What the page's media session showed before Aloud took it, to put back afterwards. */
+  private previous: { metadata: MediaMetadata | null; playbackState: MediaSessionPlaybackState } | null = null;
 
-  constructor(handlers: MediaHandlers, artworkUrl?: string) {
-    this.session = typeof navigator !== 'undefined' && 'mediaSession' in navigator ? navigator.mediaSession : null;
-    if (artworkUrl && this.session) void this.loadArtwork(artworkUrl);
+  constructor(handlers: MediaHandlers, artwork?: () => Promise<string | null>) {
+    const session = typeof navigator !== 'undefined' && 'mediaSession' in navigator ? navigator.mediaSession : null;
+    // A page that already uses its media session (YouTube, a podcast player, a music site) keeps
+    // it. Taking it over and letting go meant clearing its handlers and its "now playing" — and a
+    // page's own handlers cannot be read, so they cannot be put back: its media keys and lock
+    // screen stayed dead until a reload. Aloud's own keys and the bar work there as before.
+    const pageOwnsIt = !!session && (session.metadata != null || session.playbackState !== 'none');
+    this.session = pageOwnsIt ? null : session;
+    if (this.session) this.previous = { metadata: this.session.metadata, playbackState: this.session.playbackState };
+    if (artwork && this.session) void this.loadArtwork(artwork);
     // "Seek" on a headset is a double or triple tap, and to a listener that means "back a bit" or
     // "on a bit" — a sentence, the same step as the bar's own buttons. "Stop" pauses rather than
     // closing the reader: an OS overlay is too easy to hit by accident to throw away a session.
@@ -78,11 +87,15 @@ export class MediaControls {
     }
   }
 
-  /** Hand the media session back to the page. */
-  private async loadArtwork(url: string): Promise<void> {
+  /**
+   * The icon, as a data: URL from the background. Chromium refuses artwork from an extension URL,
+   * and the icon is not web-accessible anyway (pages could use it to recognise Aloud).
+   */
+  private async loadArtwork(load: () => Promise<string | null>): Promise<void> {
     try {
-      const blob = await (await fetch(url)).blob();
-      this.artwork = URL.createObjectURL(blob);
+      const url = await load();
+      if (!url) return;
+      this.artwork = url;
       if (this.lastMetadata) this.setMetadata(...this.lastMetadata);
     } catch {
       /* no artwork, then */
@@ -90,7 +103,6 @@ export class MediaControls {
   }
 
   dispose(): void {
-    if (this.artwork) URL.revokeObjectURL(this.artwork);
     this.artwork = null;
     if (!this.session) return;
     for (const action of this.actions) {
@@ -101,8 +113,8 @@ export class MediaControls {
       }
     }
     try {
-      this.session.metadata = null;
-      this.session.playbackState = 'none';
+      this.session.metadata = this.previous?.metadata ?? null;
+      this.session.playbackState = this.previous?.playbackState ?? 'none';
     } catch {
       /* noop */
     }

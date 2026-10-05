@@ -18,7 +18,7 @@
  */
 import { siteOf } from '@/shared/doc-source';
 import { documentKey } from '@/shared/position-match';
-import { addNote, loadNotes, notesForPage, parseTags, removeNote, restoreNote, updateNote, watchNotes, type Note } from '@/shared/notes';
+import { NOTES_FULL_MESSAGE, addNote, loadNotes, notesForPage, parseTags, removeNote, restoreNote, updateNote, watchNotes, type Note } from '@/shared/notes';
 import type { TextIndex } from '@/extract/text-index';
 import { DEFAULT_ANNOTATE, getSettings, watchSettings, type AnnotateSettings, type NoteStyle } from '@/shared/settings';
 import { anchorForRange, pageIndex, rangeForAnchor } from './page-anchoring';
@@ -26,6 +26,7 @@ import { isTypingEvent } from '@/media-speed/keys';
 import { NOTE_STYLES, colorFor, markCss, markName } from './palette';
 import { backgroundUnder, toneOf, type PageTone } from '@/highlight/contrast';
 import { PANEL_CSS, PageNotesPanel } from './notes-panel';
+import { containTyping } from '@/ui/contain-typing';
 
 const HOST_ID = 'aloud-annotate-host';
 const READER_HOST_ID = 'aloud-control-host';
@@ -248,7 +249,7 @@ export class PageAnnotator {
     }
     const found = anchorForRange(index, range);
     if (!found) return null;
-    const { note, duplicate } = await addNote({
+    const { note, duplicate, full } = await addNote({
       text: found.text,
       source: {
         key: this.key,
@@ -262,6 +263,10 @@ export class PageAnnotator {
       style: style ?? this.prefs.defaultStyle,
       tags: [],
     });
+    if (full) {
+      this.toast(NOTES_FULL_MESSAGE);
+      return null;
+    }
     document.getSelection()?.removeAllRanges();
     this.closeToolbar();
     this.toast(duplicate ? 'Already kept' : 'Kept in your Notes', duplicate ? undefined : { label: 'Undo', run: () => void removeNote(note.id) });
@@ -341,7 +346,7 @@ export class PageAnnotator {
     (document.body ?? document.documentElement).append(host);
     this.host = host;
     this.root = root;
-    this.cleanups.push(() => host.remove());
+    this.cleanups.push(() => host.remove(), containTyping(root));
     return root;
   }
 

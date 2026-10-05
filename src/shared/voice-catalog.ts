@@ -72,7 +72,7 @@ export function isEnglish(language: string): boolean {
 /**
  * Group voices for display, English first and the rest alphabetical.
  *
- * English leads because the Piper catalogue alone has 175 voices across dozens of languages, and
+ * English leads because the Piper catalogue alone has 171 voices across dozens of languages, and
  * burying the ones most readers want behind "Bengali… Catalan… Danish…" makes the picker
  * unusable. Within a group the manifest's own order is kept.
  */

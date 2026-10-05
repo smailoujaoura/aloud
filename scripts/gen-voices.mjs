@@ -1,5 +1,6 @@
 // Regenerates public/models.json:
-//   - `piper`  : the full rhasspy/piper-voices catalogue at PIPER_REV (175 voices / 56 locales),
+//   - `piper`  : the rhasspy/piper-voices catalogue at PIPER_REV, less the voices Aloud cannot
+//                phonemize (PIPER_UNSUPPORTED),
 //                each with its onnx + config URLs, download size and a hosted preview clip.
 //   - `kokoro` : the voice list from the onnx-community Kokoro repo, with derived language/gender.
 //   - `supertonic` and everything else: passed through verbatim from scripts/models.base.json.
@@ -37,9 +38,23 @@ const titleCase = (s) =>
     .map((w) => w[0].toUpperCase() + w.slice(1))
     .join(' ');
 
+/**
+ * Voices whose config asks for a phonemizer Aloud does not have (`phoneme_type` other than espeak
+ * or text). Fed eSpeak phonemes they cannot speak: the Chinese voices fail inside ONNX Runtime,
+ * and the others produce the wrong sounds. Left out until there is a phonemizer for them; the
+ * engine also refuses them at start-up (engines/piper.ts: SUPPORTED_PHONEME_TYPES).
+ */
+const PIPER_UNSUPPORTED = {
+  'zh_CN-chaowen-medium': 'pinyin',
+  'zh_CN-xiao_ya-medium': 'pinyin',
+  'ja_JA-hi_fi_captain-medium': 'japanese',
+  'he_IL-saspeech-medium': 'hebrew',
+};
+
 function buildPiper(voicesJson) {
   const out = {};
   for (const [key, v] of Object.entries(voicesJson)) {
+    if (key in PIPER_UNSUPPORTED) continue;
     const paths = Object.keys(v.files);
     const onnxPath = paths.find((p) => p.endsWith('.onnx'));
     const cfgPath = paths.find((p) => p.endsWith('.onnx.json'));

@@ -107,10 +107,11 @@ export class SupertonicEngine implements SynthEngine {
       fetchModelFile(url(m.config.tts), { label: 'config' }),
       fetchModelFile(url(m.config.unicodeIndexer), { label: 'tokenizer' }),
       fetchModelFile(`${m.base}/voice_styles/${ctx.voice}.json`, { label: `${ctx.voice} style` }),
-      fetchModelFile(url(m.files.durationPredictor), { label: 'duration predictor', onProgress: prog('duration predictor') }),
-      fetchModelFile(url(m.files.textEncoder), { label: 'text encoder', onProgress: prog('text encoder') }),
-      fetchModelFile(url(m.files.vectorEstimator), { label: 'vector estimator', onProgress: prog('vector estimator') }),
-      fetchModelFile(url(m.files.vocoder), { label: 'vocoder', onProgress: prog('vocoder') }),
+      // Each network checked against its SHA-256 at the pinned commit (models.base.json).
+      fetchModelFile(url(m.files.durationPredictor), { sha256: m.sha256?.durationPredictor, label: 'duration predictor', onProgress: prog('duration predictor') }),
+      fetchModelFile(url(m.files.textEncoder), { sha256: m.sha256?.textEncoder, label: 'text encoder', onProgress: prog('text encoder') }),
+      fetchModelFile(url(m.files.vectorEstimator), { sha256: m.sha256?.vectorEstimator, label: 'vector estimator', onProgress: prog('vector estimator') }),
+      fetchModelFile(url(m.files.vocoder), { sha256: m.sha256?.vocoder, label: 'vocoder', onProgress: prog('vocoder') }),
     ]);
 
     this.cfg = JSON.parse(new TextDecoder().decode(ttsJson)) as SupertonicCfg;

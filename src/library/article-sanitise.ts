@@ -14,7 +14,18 @@
  */
 
 /** Attributes that make the browser fetch something by themselves. */
-const LOADS = new Set(['src', 'href', 'xlink:href', 'poster', 'background', 'data', 'lowsrc', 'dynsrc']);
+const LOADS = new Set(['src', 'href', 'xlink:href', 'poster', 'background', 'data', 'lowsrc', 'dynsrc', 'action', 'formaction', 'icon', 'manifest', 'archive', 'codebase', 'longdesc', 'imagesrcset']);
+/**
+ * A CSS `url(…)` inside any attribute. SVG presentation attributes — fill, stroke, filter, mask,
+ * clip-path, marker-*, cursor — take them, and the browser fetches them like an image: holding
+ * attributes by *name* missed them, and a saved article made seven requests to its site before
+ * "Load images". So every attribute is looked at by its *content*.
+ */
+const CSS_URL = /url\(\s*(['"]?)(.*?)\1\s*\)/gi;
+function outsideCssUrl(value: string): boolean {
+  for (const [, , url] of value.matchAll(CSS_URL)) if (url && outside(url)) return true;
+  return false;
+}
 /**
  * Does `value` point anywhere but Aloud's own pages? Decided by the browser's own URL parser, not
  * a pattern: browsers also accept `http:/host`, and `h<tab>ttp://host`, and fetch them like any
@@ -22,7 +33,10 @@ const LOADS = new Set(['src', 'href', 'xlink:href', 'poster', 'background', 'dat
  */
 function outside(value: string): boolean {
   try {
-    return new URL(value, location.href).origin !== location.origin;
+    // Scheme and host, not `origin`: an extension page's origin can read as "null", and two
+    // nulls compare equal — an address on another host would have counted as Aloud's own.
+    const u = new URL(value, location.href);
+    return u.protocol !== location.protocol || u.host !== location.host;
   } catch {
     return false; // not an address anything can load
   }
@@ -57,6 +71,10 @@ export function sanitised(html: string): DocumentFragment {
       // `ping` reports a click to a third party; `srcset` is a second list of image addresses.
       if (name.startsWith('on') || name === 'style' || name === 'srcdoc' || name === 'srcset' || name === 'ping' || scriptUrl) {
         node.removeAttribute(attr.name);
+        continue;
+      }
+      if (outsideCssUrl(attr.value)) {
+        node.removeAttribute(attr.name); // a decoration, not content: nothing to hold for later
         continue;
       }
       if (isLink && name === 'href') continue;

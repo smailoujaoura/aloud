@@ -66,6 +66,10 @@ export function indexAtPoint(
 ): number | null {
   const caret = caretAt(doc, x, y);
   if (!caret) return null;
+  // On the text itself, not merely near it: the caret APIs return the nearest position to *any*
+  // point, so a click on blank space — a margin, the gap between paragraphs — used to land in
+  // some sentence and move the reading, often far from where the reader was.
+  if (!onGlyph(doc, caret, x, y)) return null;
 
   for (const item of playlist) {
     try {
@@ -78,6 +82,23 @@ export function indexAtPoint(
   // Between two sentences (a margin, a caption, a list bullet): snap by document order.
   const el = caret.node.nodeType === Node.ELEMENT_NODE ? (caret.node as Element) : caret.node.parentElement;
   return el ? indexNearElement(playlist, el) : null;
+}
+
+/** Is (x, y) on the character at the caret, or the one before it? A few pixels of slack. */
+function onGlyph(doc: Document, caret: { node: Node; offset: number }, x: number, y: number): boolean {
+  if (caret.node.nodeType !== Node.TEXT_NODE) return false;
+  const length = (caret.node as Text).length;
+  const range = doc.createRange();
+  const SLACK = 3;
+  for (const start of [caret.offset - 1, caret.offset]) {
+    if (start < 0 || start >= length) continue;
+    range.setStart(caret.node, start);
+    range.setEnd(caret.node, start + 1);
+    for (const r of range.getClientRects()) {
+      if (x >= r.left - SLACK && x <= r.right + SLACK && y >= r.top - SLACK && y <= r.bottom + SLACK) return true;
+    }
+  }
+  return false;
 }
 
 /**

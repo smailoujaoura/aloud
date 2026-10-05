@@ -21,6 +21,12 @@ import type { ModelManifest, SynthEngine, SynthResult, InitContext } from './typ
 interface PiperConfig {
   audio: { sample_rate: number };
   espeak: { voice: string };
+  /**
+   * What the model's symbols are: eSpeak phonemes (almost every voice), or the letters of the
+   * text itself ("text"). A few voices expect pinyin, Japanese or Hebrew phonemizers Aloud does
+   * not have; fed eSpeak phonemes they produced noise or failed inside ONNX Runtime.
+   */
+  phoneme_type?: string;
   inference: { noise_scale: number; length_scale: number; noise_w: number };
   phoneme_id_map: Record<string, number[]>;
   num_speakers?: number;
@@ -67,6 +73,12 @@ export class PiperEngine implements SynthEngine {
     ]);
 
     this.config = JSON.parse(new TextDecoder().decode(configBytes)) as PiperConfig;
+    const phonemeType = this.config.phoneme_type ?? 'espeak';
+    if (!(SUPPORTED_PHONEME_TYPES as readonly string[]).includes(phonemeType)) {
+      throw new Error(
+        `${ctx.voice} needs a "${phonemeType}" phonemizer, which Aloud does not have, so it cannot speak. Choose another voice.`,
+      );
+    }
     this.sampleRate = this.config.audio?.sample_rate ?? 22050;
 
     this.sortedKeys = Object.keys(this.config.phoneme_id_map).sort((a, b) => b.length - a.length);
@@ -149,9 +161,14 @@ export class PiperEngine implements SynthEngine {
     const voice = this.config.espeak?.voice ?? 'en-us';
 
     const words = this.durationsOutput ? splitWords(text) : [];
-    const phonemes = words.length
-      ? await phonemizeForPiper(text, voice, words.map((w) => w.token))
-      : { sentences: await phonemizeForPiper(text, voice), words: [] as string[] };
+    const phonemes =
+      this.config.phoneme_type === 'text'
+        ? // The letters themselves: lower case, accents split off as their own symbols, which is
+          // how the model's symbol table lists them (й is и plus a breve).
+          { sentences: [letters(text)], words: words.map((w) => letters(w.token)) }
+        : words.length
+          ? await phonemizeForPiper(text, voice, words.map((w) => w.token))
+          : { sentences: await phonemizeForPiper(text, voice), words: [] as string[] };
 
     const parts: Float32Array[] = [];
     const sounds: TimedSound[] = [];
@@ -255,3 +272,11 @@ function joinWithPauses(parts: Float32Array[], sampleRate: number): Float32Array
   });
   return out;
 }
+
+/** A "text" voice's symbols: the text in lower case, decomposed (NFD). */
+function letters(text: string): string {
+  return text.toLowerCase().normalize('NFD');
+}
+
+/** Phoneme types Aloud can produce. Anything else is refused at start-up, with a reason. */
+export const SUPPORTED_PHONEME_TYPES = ['espeak', 'text'] as const;

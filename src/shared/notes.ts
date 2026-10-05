@@ -51,14 +51,23 @@ export const MAX_NOTES = 5000;
 /** Pressing the shortcut twice on the same sentence keeps one note, not two. */
 const DUPLICATE_WINDOW_MS = 2 * 60_000;
 
-export function withNoteAdded(notes: readonly Note[], note: Note): { notes: Note[]; added: Note; duplicate: boolean } {
+export function withNoteAdded(
+  notes: readonly Note[],
+  note: Note,
+): { notes: Note[]; added: Note; duplicate: boolean; full: boolean } {
   const same = notes.find(
     (n) => n.source.key === note.source.key && n.text === note.text && Math.abs(note.createdAt - n.createdAt) < DUPLICATE_WINDOW_MS,
   );
-  if (same) return { notes: [...notes], added: same, duplicate: true };
-  // Newest first; the oldest fall off the end once the cap is reached.
-  return { notes: [note, ...notes].slice(0, MAX_NOTES), added: note, duplicate: false };
+  if (same) return { notes: [...notes], added: same, duplicate: true, full: false };
+  // At the cap a new note is refused, and the reader told: the oldest used to fall off the end,
+  // silently — a note kept years ago, gone for one kept today, while a restore was careful never
+  // to drop one.
+  if (notes.length >= MAX_NOTES) return { notes: [...notes], added: note, duplicate: false, full: true };
+  return { notes: [note, ...notes], added: note, duplicate: false, full: false };
 }
+
+/** What to say when a note could not be kept because the notebook is full. */
+export const NOTES_FULL_MESSAGE = `Notes are full (${MAX_NOTES.toLocaleString('en')}). Delete some in the Library to keep more.`;
 
 export type NotePatch = Partial<Pick<Note, 'text' | 'comment' | 'color' | 'style' | 'tags'>>;
 
@@ -312,12 +321,12 @@ export async function mergeInNotes(incoming: readonly Note[]): Promise<{ added: 
   });
 }
 
-export async function addNote(entry: NewNote, now = Date.now()): Promise<{ note: Note; duplicate: boolean }> {
+export async function addNote(entry: NewNote, now = Date.now()): Promise<{ note: Note; duplicate: boolean; full: boolean }> {
   return withStorageLock(LOCK_KEY, async () => {
     const note: Note = { comment: '', ...entry, id: newId(), createdAt: now, updatedAt: now };
     const result = withNoteAdded(await loadNotes(), note);
-    if (!result.duplicate) await item.setValue(result.notes);
-    return { note: result.added, duplicate: result.duplicate };
+    if (!result.duplicate && !result.full) await item.setValue(result.notes);
+    return { note: result.added, duplicate: result.duplicate, full: result.full };
   });
 }
 

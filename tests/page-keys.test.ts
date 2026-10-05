@@ -63,3 +63,17 @@ describe('typing inside a shadow root', () => {
     expect(pageKeyAction(event, { keep: 'k', panel: 'n' }, true)).toBeNull();
   });
 });
+
+describe('the notes panel key, by default', async () => {
+  const { DEFAULT_ANNOTATE, migrateSettings } = await import('@/shared/settings');
+  it('is off: a plain "n" belongs to the site (Gmail, X and others)', () => {
+    expect(DEFAULT_ANNOTATE.pageKeys.panel).toBe('');
+    expect(pageKeyAction(press('n'), DEFAULT_ANNOTATE.pageKeys, false)).toBeNull();
+  });
+  it('is switched off for profiles still on the old default, and kept where someone chose it', () => {
+    const old = migrateSettings({ annotate: { pageKeys: { keep: 'k', panel: 'n' } } }, 6) as { annotate: { pageKeys: { panel: string } } };
+    expect(old.annotate.pageKeys.panel).toBe('');
+    const chosen = migrateSettings({ annotate: { pageKeys: { keep: 'k', panel: 'j' } } }, 6) as { annotate: { pageKeys: { panel: string } } };
+    expect(chosen.annotate.pageKeys.panel).toBe('j');
+  });
+});

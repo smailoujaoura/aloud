@@ -19,7 +19,7 @@
 import { browser } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
 import { PORT_NAME, type ActivateMode, type LibraryTab, type ToBackgroundMessage } from '@/shared/messages';
-import { addNote } from '@/shared/notes';
+import { NOTES_FULL_MESSAGE, addNote } from '@/shared/notes';
 import { siteOf } from '@/shared/doc-source';
 import { documentKey } from '@/shared/position-match';
 import { putPdf, sweepPdfHandoffs } from '@/pdf/handoff';
@@ -268,6 +268,13 @@ export default defineBackground({
         // One writer at a time per stored value, across every context (shared/storage-lock.ts).
         const key = (m as { key?: string }).key;
         if (typeof key === 'string') return replyWith(locks.acquire(key).then((token) => ({ token })));
+      } else if (m?.type === 'models-manifest') {
+        // For the reader in a page: fetched here, so models.json need not be web-accessible —
+        // every file a page can reach is one it can use to recognise the extension.
+        return replyWith(loadManifest().catch(() => null));
+      } else if (m?.type === 'icon-data-url') {
+        // The media overlay's artwork, likewise handed over rather than exposed to pages.
+        return replyWith(iconDataUrl().catch(() => null));
       } else if (m?.type === 'pdf-marks-handoff') {
         // A PDF tab closed with an edit not yet written (pdf/annotations/sync.ts: `handoff`). Taken
         // only from Aloud's own pages, and the marks are checked like any stored record.
@@ -295,10 +302,23 @@ export default defineBackground({
     });
 
     browser.runtime.onConnect.addListener((port) => {
-      if (port.name !== PORT_NAME) return;
+      const resuming = port.name === `${PORT_NAME}:resume`;
+      if (port.name !== PORT_NAME && !resuming) return;
       // No tab id means the PDF reader page (an extension page, not a content script). It is a
       // real session and must supersede any other one; it simply has no toolbar badge.
       const tabId = port.sender?.tab?.id ?? null;
+
+      // A reader reconnecting after this background was stopped (Chromium stops an idle service
+      // worker) is not a new reader: it takes the slot back only if nobody else has it. A reader
+      // started meanwhile in another tab is the newer one, and the resuming one stops instead.
+      if (resuming && active && active.tabId !== tabId) {
+        try {
+          port.postMessage({ type: 'stop', reason: 'superseded' });
+        } catch {
+          /* gone already */
+        }
+        return;
+      }
 
       // Supersede any other active session.
       if (active && active.tabId !== tabId) {
@@ -436,7 +456,7 @@ async function openSettingsInstead(tab: { id?: number; index?: number; url?: str
     const existing = await findOwnTab('/options.html');
     if (existing) {
       await browser.tabs.update(existing.id, { url, active: true });
-      if (existing.windowId != null) await browser.windows.update(existing.windowId, { focused: true }).catch(() => undefined);
+      await focusWindow(existing.windowId);
       return;
     }
     await browser.tabs.create({ url, index: tab?.index != null ? tab.index + 1 : undefined });
@@ -566,13 +586,29 @@ function clearBadge(tabId: number): void {
  * The voices of `engine` whose files are on this device.
  *
  * The in-page reading bar offers only these: switching to a voice that is not downloaded used to
- * stall the reader behind a 60 MB fetch chosen by accident from a list of 175.
+ * stall the reader behind a 60 MB fetch chosen by accident from a list of 171.
  */
 let manifestCache: ModelManifest | null = null;
 
+async function loadManifest(): Promise<ModelManifest> {
+  manifestCache ??= (await (await fetch(browser.runtime.getURL('/models.json'))).json()) as ModelManifest;
+  return manifestCache;
+}
+
+let iconCache: string | null = null;
+/** The 128 px icon as a data: URL (accepted as media artwork everywhere, unlike extension URLs). */
+async function iconDataUrl(): Promise<string> {
+  if (iconCache) return iconCache;
+  const bytes = new Uint8Array(await (await fetch(browser.runtime.getURL('/icon/128.png'))).arrayBuffer());
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  iconCache = `data:image/png;base64,${btoa(binary)}`;
+  return iconCache;
+}
+
 async function installedVoices(engine: EngineId): Promise<VoiceOption[]> {
   try {
-    manifestCache ??= (await (await fetch(browser.runtime.getURL('/models.json'))).json()) as ModelManifest;
+    const manifest = await loadManifest();
     // Online, a missing voice file or GPU build is fetched on the first read, with the bar showing
     // it (engine-config.ts: a download takes the CPU build). Offline nothing can be fetched: only
     // voices whose files are all here, with the weights for where this machine runs the model.
@@ -580,7 +616,7 @@ async function installedVoices(engine: EngineId): Promise<VoiceOption[]> {
     const gpu = online
       ? null
       : readingOnGpu((await getSettings().catch(() => null))?.preferWebGPU, await loadWorkerGpu().catch(() => null));
-    return usableVoices(engine, manifestCache, await readCacheSizes(), { gpu, online });
+    return usableVoices(engine, manifest, await readCacheSizes(), { gpu, online });
   } catch (err) {
     // An empty list means "we do not know", and the bar keeps showing the active voice alone.
     console.warn('[aloud] could not list installed voices:', err);
@@ -770,7 +806,7 @@ async function openNote(id: string, url: string, fragmentUrl: string, canInject:
   }
   if (tab?.id != null) {
     await browser.tabs.update(tab.id, { active: true });
-    if (tab.windowId != null) await browser.windows.update(tab.windowId, { focused: true }).catch(() => undefined);
+    await focusWindow(tab.windowId);
   } else {
     tab = await browser.tabs.create({ url });
     await waitForLoad(tab.id!);
@@ -785,24 +821,55 @@ async function openNote(id: string, url: string, fragmentUrl: string, canInject:
   }
 }
 
+/**
+ * Until the tab has finished loading a real page.
+ *
+ * "Complete" alone is not that: Firefox reports a tab just created as complete while it still
+ * shows its empty about:blank placeholder, before the article has started loading. Taken at its
+ * word, the reader was started on the placeholder, failed, and a "cannot read this page" tab
+ * opened beside the article. So: complete *and* on the page asked for — the address is visible
+ * here, the site having been granted — or, where it is hidden, complete after loading was seen.
+ */
 function waitForLoad(tabId: number): Promise<void> {
   return new Promise((resolve) => {
+    let sawLoading = false;
+    const real = (url: string | undefined): boolean => !!url && !/^about:/i.test(url);
+    const ready = (t: { status?: string; url?: string }): boolean =>
+      t.status === 'complete' && (t.url ? real(t.url) : sawLoading);
     const done = (): void => {
       browser.tabs.onUpdated.removeListener(listener);
       clearTimeout(timer);
+      clearInterval(poll);
       resolve();
     };
-    const listener = (id: number, info: { status?: string }): void => {
-      if (id === tabId && info.status === 'complete') done();
+    const check = (): void => {
+      void browser.tabs.get(tabId).then((t) => {
+        if (t.status === 'loading' && (!t.url || real(t.url))) sawLoading = true;
+        if (ready(t)) done();
+      }, done);
+    };
+    const listener = (id: number, info: { status?: string; url?: string }): void => {
+      if (id !== tabId) return;
+      if (info.status === 'loading' && (!info.url || real(info.url))) sawLoading = true;
+      if (info.status === 'complete') check();
     };
     const timer = setTimeout(done, 20_000);
     browser.tabs.onUpdated.addListener(listener);
-    // A page that finished loading before the listener was attached (about:blank, a cached
-    // page) sends no further update; without this it waited out the whole timeout.
-    void browser.tabs.get(tabId).then((t) => {
-      if (t.status === 'complete') done();
-    }, done);
+    // A page that finished loading before the listener was attached sends no further update.
+    check();
+    const poll = setInterval(check, 500);
   });
+}
+
+/**
+ * Bring a window forward, where there are windows. Firefox for Android has no `windows` API at
+ * all: the call threw before its `.catch` could apply, which stopped a note being shown and made
+ * the Library open a second tab instead of reusing the first.
+ */
+async function focusWindow(windowId: number | undefined): Promise<void> {
+  const windows = (browser as { windows?: { update?: (id: number, info: { focused: boolean }) => Promise<unknown> } }).windows;
+  if (windowId == null || typeof windows?.update !== 'function') return;
+  await windows.update(windowId, { focused: true }).catch(() => undefined);
 }
 
 /** Show the Library at `tab`, reusing its tab if one is open. */
@@ -813,7 +880,7 @@ async function openLibrary(tab: LibraryTab = 'continue'): Promise<void> {
   if (existing) {
     try {
       await browser.tabs.update(existing.id, { active: true, url });
-      if (existing.windowId != null) await browser.windows.update(existing.windowId, { focused: true }).catch(() => undefined);
+      await focusWindow(existing.windowId);
       return;
     } catch {
       /* closed in the meantime: open a new one */
@@ -892,10 +959,11 @@ async function saveNoteCommand(tabId: number | null, url: string, title: string)
     if (!(await showNotesPanel(tabId, false))) tellTab(tabId, 'Select some text, or start reading, to save a note', '…');
     return;
   }
-  const { duplicate } = await addNote({
+  const { duplicate, full } = await addNote({
     text,
     source: { key: documentKey(url), title: title || url, site: siteOf(url), reopen: { kind: 'web', url } },
     at: null,
   });
-  tellTab(tabId, duplicate ? 'Already in your notes' : 'Saved to Notes', '✓');
+  if (full) tellTab(tabId, NOTES_FULL_MESSAGE, '!');
+  else tellTab(tabId, duplicate ? 'Already in your notes' : 'Saved to Notes', '✓');
 }

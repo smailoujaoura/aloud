@@ -42,12 +42,23 @@ type KokoroDtype = 'q8' | 'fp32';
  */
 const MODEL_FILES: Record<KokoroDtype, string> = { q8: 'model_quantized.onnx', fp32: 'model.onnx' };
 export const dtypeFor = (device: KokoroDevice): KokoroDtype => (device === 'webgpu' ? 'fp32' : 'q8');
-const onnxUrl = (file: string) => `https://huggingface.co/${MODEL_ID}/resolve/main/onnx/${file}`;
+/**
+ * The model at a fixed commit, not the moving `main` branch: a change upstream must not change,
+ * unannounced, what every user downloads and runs. Bump deliberately, with the hashes below.
+ */
+const KOKORO_REV = '1939ad2a8e416c0acfeecc08a694d14ef25f2231';
+/** SHA-256 of each weights file at KOKORO_REV, as Hugging Face records it (checked on download). */
+const MODEL_SHA256: Record<KokoroDtype, string> = {
+  q8: 'fbae9257e1e05ffc727e951ef9b9c98418e6d79f1c9b6b13bd59f5c9028a1478',
+  fp32: '8fbea51ea711f2af382e88c833d9e288c6dc82ce5e98421ea61c058ce21a34cb',
+};
+const onnxUrl = (file: string, rev = KOKORO_REV) => `https://huggingface.co/${MODEL_ID}/resolve/${rev}/onnx/${file}`;
 const modelUrl = (dtype: KokoroDtype) => onnxUrl(MODEL_FILES[dtype]);
 /** What the CPU path reads, and what the settings page counts as "Kokoro is on this device". */
 export const KOKORO_MODEL_URL = modelUrl('q8');
 /** Weights a version in between could download and nothing reads any more. */
-const RETIRED_MODEL_URLS = [onnxUrl('model_fp16.onnx')];
+// Earlier builds cached these: the fp16 weights, and the weights fetched from `main`.
+const RETIRED_MODEL_URLS = [onnxUrl('model_fp16.onnx', 'main'), onnxUrl('model_quantized.onnx', 'main'), onnxUrl('model.onnx', 'main')];
 
 /**
  * Kokoro, like Piper, decides how many audio frames each phoneme gets before it makes a sound —
@@ -77,6 +88,9 @@ async function configureTransformersEnv(): Promise<void> {
   hfEnv.useBrowserCache = false;
   hfEnv.useFSCache = false;
   hfEnv.useCustomCache = true;
+  // Config, tokeniser and weights all from the pinned commit (kokoro-js passes no revision on).
+  // Kokoro is the only model loaded through transformers.js, so the template can say so.
+  hfEnv.remotePathTemplate = `{model}/resolve/${KOKORO_REV}/`;
   hfEnv.customCache = TransformersCache;
   envConfigured = true;
 }
@@ -104,6 +118,7 @@ export class KokoroEngine implements SynthEngine {
       const url = modelUrl(dtypeFor(device));
       if (!(await cacheHas(url))) {
         await fetchModelFile(url, {
+          sha256: MODEL_SHA256[dtypeFor(device)],
           label: `Kokoro ${device === 'webgpu' ? 'GPU' : ''} model`.replace('  ', ' '),
           onProgress: (p) => ctx.onProgress({ ...p, phase: 'download' }),
         });

@@ -1,8 +1,12 @@
 {
   "name": "tts-reader",
   "version": "1.0.0",
-  "description": "Fast offline neural text-to-speech for Firefox: Readability extraction, Piper/Kokoro via ONNX Runtime Web, gapless Web Audio playback, in-place sentence highlighting.",
   "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oujaoura/aloud"
+  },
+  "description": "Fast offline neural text-to-speech for Firefox: Readability extraction, Piper/Kokoro via ONNX Runtime Web, gapless Web Audio playback, in-place sentence highlighting.",
   "type": "module",
   "engines": {
     "node": ">=22.12"

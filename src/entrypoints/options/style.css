@@ -56,6 +56,8 @@ main { width: 100%; max-width: 720px; margin: 0; padding: 28px 24px 96px; box-si
 }
 .nav-item[aria-current='page'] .count { background: var(--accent-solid); color: var(--accent-on); }
 .nav-help { margin-top: auto; align-self: flex-start; font-size: 12.5px; }
+.nav-legal { margin: 6px 0 0; font-size: 12px; color: var(--fg-muted); }
+.nav-legal a { color: inherit; }
 
 .view-head { margin: 0 0 18px; }
 .view-head h1 { font-size: 24px; margin: 0; line-height: 1.2; }
@@ -81,7 +83,7 @@ main { width: 100%; max-width: 720px; margin: 0; padding: 28px 24px 96px; box-si
     position: sticky; z-index: 20; height: auto; flex-direction: row; align-items: center;
     padding: 8px 10px; border-right: 0; border-bottom: 1px solid var(--border); overflow-x: auto;
   }
-  .app-nav .brand small, .nav-group, .nav-help { display: none; }
+  .app-nav .brand small, .nav-group, .nav-help, .nav-legal { display: none; }
   .app-nav .brand { padding: 0 6px 0 0; }
   .nav-items { flex-direction: row; }
   .nav-item { padding: 6px 10px; }

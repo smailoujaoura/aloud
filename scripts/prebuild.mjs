@@ -7,11 +7,13 @@ import { fileURLToPath } from 'node:url';
 import { buildWorker, buildSynthHost } from './build-worker.mjs';
 import { syncAssets } from './sync-assets.mjs';
 import { genVoices } from './gen-voices.mjs';
+import { writeNotices } from './notices.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 await genVoices();
 syncAssets();
+writeNotices();
 await buildWorker({ minify: true });
 await buildSynthHost({ minify: true });
 

@@ -67,3 +67,28 @@ describe('reading URLs aloud', () => {
     expect(normalizeForSpeech('See https://a.example and https://b.example.')).toBe('See link and link');
   });
 });
+
+describe('the independent review’s cases', async () => {
+  const { normalizeForSpeech } = await import('@/segment/normalize');
+  const say = (text: string, language = 'en-US') => normalizeForSpeech(text, { language });
+
+  it('"VS Code" is a name, "a vs b" is versus', () => {
+    expect(say('Open it in VS Code.')).toBe('Open it in VS Code.');
+    expect(say('Cats vs dogs, and cats vs. dogs.')).toBe('Cats versus dogs, and cats versus dogs.');
+  });
+
+  it('a hyphen between numbers is a range only when it looks like one', () => {
+    expect(say('Call 555-1234 today.')).toBe('Call 555-1234 today.');
+    expect(say('Due 2024-10-05.')).toBe('Due 2024-10-05.');
+    expect(say('Open 9-05 daily.')).toBe('Open 9-05 daily.');
+    expect(say('Code 1-2-3.')).toBe('Code 1-2-3.');
+    expect(say('Pages 5-10 and 1990-1995.')).toBe('Pages 5 to 10 and 1990 to 1995.');
+    expect(say('Between 20–25 people.')).toBe('Between 20 to 25 people.');
+  });
+
+  it('a German voice gets no English words', () => {
+    const de = say('Bei 20–25 °C kamen Müller & Söhne, siehe www.example.de.', 'de-DE');
+    expect(de).not.toMatch(/\b(and|to|degrees|link)\b/);
+    expect(de).toContain('Müller & Söhne');
+  });
+});

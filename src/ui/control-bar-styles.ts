@@ -360,7 +360,7 @@ select optgroup { color: var(--bar-muted); font-weight: 600; }
 /*
  * The controls wrap onto two rows: transport and options on top, the progress scrubber and
  * counter below, where the scrubber gets the full width it needs to be draggable with a thumb.
- * The voice picker is dropped here — a native <select> of 175 options is unusable on a phone,
+ * The voice picker is dropped here — a native <select> of 171 options is unusable on a phone,
  * and the gear button opens the settings page where voices are chosen properly.
  */
 @media (max-width: ${NARROW_BREAKPOINT_PX}px) {

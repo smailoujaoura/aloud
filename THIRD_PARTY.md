@@ -30,7 +30,7 @@ inline its ~33 MB of `.wasm` as base64.
 ### Piper — [`rhasspy/piper-voices`](https://huggingface.co/rhasspy/piper-voices) @ `v1.0.0`
 
 Model weights are Apache-2.0 (the Piper project). The catalogue in `public/models.json` lists
-**175 voices**, and each one's `license` field currently reads "see MODEL_CARD (per-voice;
+**171 voices** (four more in the upstream catalogue need phonemizers Aloud lacks, and are left out), and each one's `license` field currently reads "see MODEL_CARD (per-voice;
 rhasspy/piper-voices)" rather than the dataset's actual licence — the table that used to stand
 here named eight voices and read as though it were the whole list, which it never was.
 
@@ -38,7 +38,7 @@ Each voice's real dataset licence is in its own model card under
 [`rhasspy/piper-voices`](https://huggingface.co/rhasspy/piper-voices) (`@ v1.0.0`), beside the
 `.onnx` file Aloud downloads. Examples of the range: `en_US-ryan-high` and `en_US-amy-medium` are
 CC-BY-4.0, `de_DE-thorsten-medium` is CC0-1.0, `en_GB-alan-medium` is Open Government Licence
-v3.0, and `en_US-lessac-*` comes from Blizzard 2013 (research terms). Resolving all 175 into this
+v3.0, and `en_US-lessac-*` comes from Blizzard 2013 (research terms). Resolving all 171 into this
 file, from the model cards at build time, is outstanding work — until then, treat the model card
 as the authority for any voice you ship or redistribute.
 

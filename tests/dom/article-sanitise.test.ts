@@ -87,4 +87,14 @@ describe('a saved article, before "Load images"', () => {
     releaseHeld(doc);
     expect(doc.innerHTML).not.toContain('site.test');
   });
+
+  it('the independent review: SVG presentation attributes with url(…) to another site are removed', () => {
+    (window as unknown as { happyDOM: { setURL(url: string): void } }).happyDOM.setURL('chrome-extension://aloud/library.html');
+    const attrs = ['fill', 'stroke', 'filter', 'mask', 'clip-path', 'marker-start', 'cursor'];
+    const svg = `<svg>${attrs.map((a) => `<rect ${a}="url(https://site.test/${a}.svg#x)"/>`).join('')}<rect fill="url(#local)"/><rect fill='url("//site.test/q.svg")'/></svg>`;
+    const doc = document.createElement('div');
+    doc.append(sanitised(svg));
+    expect(doc.innerHTML).not.toContain('site.test');
+    expect(doc.querySelector('rect[fill="url(#local)"]')).not.toBeNull(); // a reference within the SVG stays
+  });
 });
