@@ -72,6 +72,7 @@ export async function persistChanges(
   baseline: readonly Mark[] | (() => readonly Mark[]),
   current: readonly Mark[] | (() => readonly Mark[]),
   onMerged?: (merged: Mark[]) => void,
+  onWritten?: (written: { mine: readonly Mark[]; merged: Mark[] }) => void,
 ): Promise<Mark[]> {
   return withStorageLock(`pdfMarks:${hash}`, async () => {
     // Both read *now*, inside the lock, and together: a write queued behind another from the same
@@ -85,6 +86,8 @@ export async function persistChanges(
     const merged = reconcileMarks(stored ? (stored.marks as Mark[]) : base, base, now);
     onMerged?.(merged);
     await saveMarks(hash, name, merged);
+    // Only now, with the write done and the lock still held, does the writer move on.
+    onWritten?.({ mine: now, merged });
     return merged;
   });
 }
@@ -139,13 +142,23 @@ export class MarkSync {
     this.writing++;
     unsettledSyncs.add(this);
     try {
-      return await persistChanges(hash, this.name, () => this.baseline, read, (merged) => {
-        // Both inside the lock, before the write: the next write queued from this editor runs
-        // as soon as the lock is free, and must already see this one as its baseline. And the
-        // storage event for this write can arrive before `setItem` returns.
-        this.lastWritten = canon(merged);
-        if (hash === this.hash) this.baseline = merged;
-      });
+      return await persistChanges(
+        hash,
+        this.name,
+        () => this.baseline,
+        read,
+        // Noted before writing: the storage event for this write can arrive before `setItem` returns.
+        (merged) => (this.lastWritten = canon(merged)),
+        ({ mine }) => {
+          // The baseline moves on only once the write has *succeeded* (a tab closed mid-write
+          // must still hand the change off), and it moves to the marks this editor wrote — not
+          // to the merged result, which may hold marks from elsewhere it has never shown. Taken
+          // as the baseline, those looked like this editor's deletions on its next write: a note
+          // restored meanwhile was removed by the second flush of an editor switched away from.
+          // Still inside the lock: the next write queued from this editor sees it.
+          if (hash === this.hash) this.baseline = [...mine];
+        },
+      );
     } finally {
       if (--this.writing === 0) unsettledSyncs.delete(this);
     }

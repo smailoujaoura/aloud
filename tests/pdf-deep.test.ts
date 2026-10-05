@@ -246,3 +246,50 @@ describe('the fifth recheck', async () => {
     expect((r.marks as Mark[]).map((m) => m.id)).toEqual(['ok']);
   });
 });
+
+describe('the sixth recheck', async () => {
+  const { vi } = await import('vitest');
+  const { storage } = await import('wxt/utils/storage');
+  const { persistChanges } = await import('@/pdf/annotations/sync');
+  const { withStorageLock } = await import('@/shared/storage-lock');
+  const { saveMarks } = await import('@/pdf/annotations/store');
+
+  it('Z01: an edit whose write did not finish is still in the handoff', async () => {
+    resetStorage();
+    const sync = new MarkSync('interrupted', 'a.pdf', []);
+    await sync.persist([mark('a', 'Original', 1)]);
+    let entered!: () => void;
+    let fail!: (err: Error) => void;
+    const started = new Promise<void>((r) => (entered = r));
+    const held = new Promise<void>((_, r) => (fail = r));
+    const spy = vi.spyOn(storage, 'setItem').mockImplementationOnce(async () => {
+      entered();
+      await held;
+    });
+    const write = sync.persist([mark('a', 'Edited', 2)]).catch(() => undefined);
+    await started;
+    const handoff = sync.handoff()!; // the tab closes here, mid-write
+    fail(new Error('the page went away'));
+    await write;
+    spy.mockRestore();
+    await persistChanges(handoff.hash, handoff.name, handoff.baseline, handoff.current);
+    expect(((await loadMarks('interrupted'))!.marks as Mark[]).map((m) => m.note)).toEqual(['Edited']);
+  });
+
+  it('Z02: a note restored meanwhile survives two flushes of an editor switched away from', async () => {
+    resetStorage();
+    const sync = new MarkSync('departed', 'a.pdf', []);
+    const original = mark('a', 'Original', 1);
+    await sync.persist([original]);
+    let release!: () => void;
+    const lock = withStorageLock('pdfMarks:departed', () => new Promise<void>((r) => (release = r)));
+    const shown = [mark('a', 'Local edit', 2)];
+    const first = sync.persist(() => shown); // its autosave, waiting
+    const final = sync.persist(() => shown); // the switch's final flush, waiting
+    sync.dispose();
+    await saveMarks('departed', 'a.pdf', [original, mark('remote', 'Restored note', 3)]); // the restore
+    release();
+    await Promise.all([lock, first, final]);
+    expect(((await loadMarks('departed'))!.marks as Mark[]).map((m) => m.note).sort()).toEqual(['Local edit', 'Restored note']);
+  });
+});
