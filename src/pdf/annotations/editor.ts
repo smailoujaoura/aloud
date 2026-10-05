@@ -175,7 +175,15 @@ export class MarkEditor {
       marks.replaceChildren();
       pins.replaceChildren();
     }
-    for (const mark of this.history.marks) this.draw(mark);
+    for (const mark of this.history.marks) {
+      // One damaged mark (from an edited backup, say) must not stop every other from showing,
+      // or the document from opening at all.
+      try {
+        this.draw(mark);
+      } catch (err) {
+        console.warn('[aloud] could not draw a mark; skipping it:', mark.id, err);
+      }
+    }
 
     this.undoBtn.disabled = !this.history.canUndo;
     this.redoBtn.disabled = !this.history.canRedo;
@@ -194,7 +202,7 @@ export class MarkEditor {
   private draw(mark: Mark): void {
     const page = this.pages.get(mark.page);
     const layers = page && this.layers.get(mark.page);
-    if (!page || !layers) return;
+    if (!page || !layers || mark.boxes.length === 0) return;
     const selected = this.popover?.id === mark.id;
 
     if (mark.kind === 'note') {

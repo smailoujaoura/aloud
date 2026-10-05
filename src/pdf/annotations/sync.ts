@@ -69,18 +69,32 @@ export function reconcileMarks(latest: readonly Mark[], baseline: readonly Mark[
 export async function persistChanges(
   hash: string,
   name: string,
-  baseline: readonly Mark[],
-  current: readonly Mark[],
+  baseline: readonly Mark[] | (() => readonly Mark[]),
+  current: readonly Mark[] | (() => readonly Mark[]),
   onMerged?: (merged: Mark[]) => void,
 ): Promise<Mark[]> {
   return withStorageLock(`pdfMarks:${hash}`, async () => {
+    // Both read *now*, inside the lock, and together: a write queued behind another from the same
+    // editor must compare the editor as it is against what that one stored. (An Undo queued
+    // behind its edit compared against the old baseline, looked like no change, and the undone
+    // edit was what stayed stored.) Marks captured at queueing time would not match a baseline
+    // moved on by another tab since — and that tab's change would look like this one's deletion.
+    const base = typeof baseline === 'function' ? baseline() : baseline;
+    const now = typeof current === 'function' ? current() : current;
     const stored = await loadMarks(hash).catch(() => null);
-    const merged = reconcileMarks(stored ? (stored.marks as Mark[]) : baseline, baseline, current);
+    const merged = reconcileMarks(stored ? (stored.marks as Mark[]) : base, base, now);
     onMerged?.(merged);
     await saveMarks(hash, name, merged);
     return merged;
   });
 }
+
+/**
+ * Every document with a write not yet finished, whichever document is on screen: when the page
+ * goes, each is handed to the background (`MarkSync.handoff`). Tracking only the open document
+ * lost the write of one just switched away from.
+ */
+export const unsettledSyncs = new Set<MarkSync>();
 
 /** What the background needs to finish an editor's write after its tab has gone. */
 export interface MarksHandoff {
@@ -95,7 +109,8 @@ export interface MarksHandoff {
 export class MarkSync {
   /** A write is under way (it may not finish if the tab closes now). */
   private writing = 0;
-  private disposed = false;
+  /** Where to read the marks a write — or a handoff — must deliver. */
+  private latest: (() => readonly Mark[]) | null = null;
   private baseline: Mark[];
   /** What this editor last wrote, to recognise its own write coming back through the watch. */
   private lastWritten = '';
@@ -113,19 +128,26 @@ export class MarkSync {
     return this.hash;
   }
 
-  /** Write this editor's changes since it last synced; returns the marks now stored. */
-  async persist(current: readonly Mark[]): Promise<Mark[]> {
+  /**
+   * Write this editor's changes since it last synced; returns the marks now stored. `current` is
+   * read when the write runs (pass the editor's marks as a function); an array is taken as it is.
+   */
+  async persist(current: readonly Mark[] | (() => readonly Mark[])): Promise<Mark[]> {
     const hash = this.hash;
+    const read = typeof current === 'function' ? current : () => current;
+    this.latest = read;
     this.writing++;
+    unsettledSyncs.add(this);
     try {
-      const merged = await persistChanges(hash, this.name, this.baseline, current, (m) => {
-        // Noted before writing: the storage event for this write can arrive before `setItem` returns.
-        this.lastWritten = canon(m);
+      return await persistChanges(hash, this.name, () => this.baseline, read, (merged) => {
+        // Both inside the lock, before the write: the next write queued from this editor runs
+        // as soon as the lock is free, and must already see this one as its baseline. And the
+        // storage event for this write can arrive before `setItem` returns.
+        this.lastWritten = canon(merged);
+        if (hash === this.hash) this.baseline = merged;
       });
-      if (hash === this.hash && !this.disposed) this.baseline = merged;
-      return merged;
     } finally {
-      this.writing--;
+      if (--this.writing === 0) unsettledSyncs.delete(this);
     }
   }
 
@@ -134,9 +156,11 @@ export class MarkSync {
    * be lost with the page: hand it to the background, which outlives the tab and applies it by the
    * same rules. Null when there is nothing unwritten.
    */
-  handoff(current: readonly Mark[], pending: boolean): MarksHandoff | null {
+  handoff(current?: readonly Mark[], pending = false): MarksHandoff | null {
     if (!pending && this.writing === 0) return null;
-    return { type: 'pdf-marks-handoff', hash: this.hash, name: this.name, baseline: [...this.baseline], current: [...current] };
+    const marks = current ?? this.latest?.();
+    if (!marks) return null;
+    return { type: 'pdf-marks-handoff', hash: this.hash, name: this.name, baseline: [...this.baseline], current: [...marks] };
   }
 
   /**
@@ -175,8 +199,8 @@ export class MarkSync {
     await this.persist(marks);
   }
 
+  /** Stop following other tabs. Writes already started still finish (and stay in `unsettledSyncs`). */
   dispose(): void {
-    this.disposed = true;
     this.stopWatching?.();
     this.stopWatching = null;
   }

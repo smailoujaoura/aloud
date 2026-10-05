@@ -79,7 +79,10 @@ export function normalizeStoredMarks(raw: unknown): { name: string; marks: unkno
       m.page >= 1 &&
       MARK_KINDS.includes(m.kind as MarkKind) &&
       typeof m.color === 'string' &&
+      // At least one box: a mark is drawn from its boxes, and a note from its first. `every` on an
+      // empty list is true, so `[]` used to pass — and the PDF it belonged to failed to open.
       Array.isArray(m.boxes) &&
+      m.boxes.length > 0 &&
       m.boxes.every((b) => Array.isArray(b) && b.length === 4 && b.every(finite))
     );
   }).map((m) => {

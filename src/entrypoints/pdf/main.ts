@@ -26,7 +26,7 @@ import { MarkEditor, type EditorPage } from '@/pdf/annotations/editor';
 import { importAnnotations, type Mark } from '@/pdf/annotations/model';
 import { withoutMarks, writeMarks } from '@/pdf/annotations/pdf-writer';
 import { hashBytes, loadMarks } from '@/pdf/annotations/store';
-import { MarkSync } from '@/pdf/annotations/sync';
+import { MarkSync, unsettledSyncs } from '@/pdf/annotations/sync';
 import { canOpenWithHandle, pickPdfWithHandle, saveFile, saveMode } from '@/pdf/annotations/save-file';
 import { takePdf } from '@/pdf/handoff';
 import { buildTextLayer } from '@/pdf/page-view';
@@ -424,11 +424,13 @@ async function startEditor(
   let ed: MarkEditor | null = null;
   const live = (): MarkEditor | null => (ed && editor === ed ? ed : null);
   let pending = 0;
+  // Writes always take *this* editor's marks, read when the write runs — not "whichever editor is
+  // on screen", which after a switch to another PDF is not this one (and the departing edit was
+  // silently dropped).
   const flush = (): Promise<unknown> => {
     clearTimeout(pending);
     if (pendingWrite?.sync === sync) pendingWrite = null;
-    const current = live();
-    return current ? sync.persist(current.marks) : Promise.resolve();
+    return ed ? sync.persist(() => ed!.marks) : Promise.resolve();
   };
   ed = new MarkEditor({
     pages,
@@ -462,15 +464,16 @@ async function startEditor(
         // saved file was opened again. Still unsaved in the file, it stays marked unsaved.
         await flush();
         handle = result.handle;
-        const current = live();
-        if (current) {
+        if (live()) {
           original = saved.bytes;
-          current.rebase(rebased);
-          await sync.moveTo(newHash, current.marks);
+          ed!.rebase(rebased);
+          await sync.moveTo(newHash, ed!.marks);
           if (live()) sync.watch(() => live()?.marks ?? [], (shown) => live()?.adopt(shown));
-        } else {
-          // Another document was opened while this one saved: its marks still follow the file.
-          await new MarkSync(newHash, name, []).persist(saved.marks);
+        } else if (ed) {
+          // Another document was opened while this one saved. The saved file still gets this
+          // editor's marks as they are *now* — including edits made after the save began — not
+          // the snapshot it started from.
+          await new MarkSync(newHash, name, []).persist(ed.marks.map(rebased));
         }
         log.info(`[pdf] wrote ${next.length} mark(s) into ${result.name}`);
         return { message: `Saved into ${result.name}`, saveMode: saveMode(handle) };
@@ -488,7 +491,11 @@ async function startEditor(
   sync.watch(() => live()?.marks ?? [], (shown) => live()?.adopt(shown));
   pdfSync = sync;
   closeCurrent = async () => {
-    if (pendingWrite?.sync === sync) await flush();
+    // Its final state, always: whether or not a change is waiting, and even if a write of it is
+    // already queued (the write reads the marks when it runs). Not awaited — a lock held elsewhere
+    // must not hold up opening the next PDF; the write stays in `unsettledSyncs` until it is done,
+    // and is handed to the background if the page goes first.
+    void flush();
     sync.dispose();
     ed?.dispose();
   };
@@ -719,8 +726,12 @@ window.addEventListener('pagehide', () => {
   // The page is going: an edit not yet written — still in its debounce, or with its write under
   // way — would go with it. The background outlives the tab, and finishes the write by the same
   // merge rules and lock. (Starting the write here could not finish: it was lost every time.)
-  const handoff = pdfSync && editor ? pdfSync.handoff(editor.marks, pendingWrite?.sync === pdfSync) : null;
-  if (handoff) void browser.runtime.sendMessage(handoff).catch(() => undefined);
+  // Every document with something unwritten: the open one, and any switched away from whose write
+  // has not finished.
+  const handoffs = new Map<MarkSync, ReturnType<MarkSync['handoff']>>();
+  if (pdfSync && editor) handoffs.set(pdfSync, pdfSync.handoff(editor.marks, pendingWrite?.sync === pdfSync));
+  for (const other of unsettledSyncs) if (!handoffs.has(other)) handoffs.set(other, other.handoff());
+  for (const handoff of handoffs.values()) if (handoff) void browser.runtime.sendMessage(handoff).catch(() => undefined);
   pendingWrite = null;
   pdfSync?.dispose();
   editor?.dispose();

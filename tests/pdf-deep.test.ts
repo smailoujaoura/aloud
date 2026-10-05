@@ -178,3 +178,71 @@ describe('X02: the tab closes before its last edit is written', async () => {
     sync.dispose();
   });
 });
+
+describe('the fifth recheck', async () => {
+  const { withStorageLock } = await import('@/shared/storage-lock');
+  const { unsettledSyncs } = await import('@/pdf/annotations/sync');
+  const { normalizeStoredMarks } = await import('@/shared/record-shapes');
+  /** Hold a document's lock, as another page writing it would. */
+  const holdLock = (hash: string) => {
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    const done = withStorageLock(`pdfMarks:${hash}`, () => held);
+    return { release, done };
+  };
+
+  it('Y02: an edit and its Undo, both queued behind a busy lock — the Undo is what stays stored', async () => {
+    resetStorage();
+    const sync = new MarkSync('undo', 'r.pdf', []);
+    let shown: Mark[] = [mark('a', 'Original', 1)];
+    await sync.persist(() => shown);
+    const lock = holdLock('undo');
+    shown = [mark('a', 'Edited', 2)];
+    const first = sync.persist(() => shown); // autosave of the edit, waiting
+    shown = [mark('a', 'Original', 1)]; // Undo
+    const second = sync.persist(() => shown); // autosave of the Undo, waiting
+    lock.release();
+    await Promise.all([lock.done, first, second]);
+    expect(((await loadMarks('undo'))!.marks as Mark[]).map((m) => m.note)).toEqual(['Original']);
+  });
+
+  it('a change from another tab arriving while this tab’s write waits is not taken as a deletion', async () => {
+    resetStorage();
+    const { storage } = await import('wxt/utils/storage');
+    const sync = new MarkSync('race', 'r.pdf', []);
+    let shown: Mark[] = [mark('a', 'A', 1)];
+    sync.watch(() => shown, (next) => (shown = next));
+    await sync.persist(() => shown);
+    const lock = holdLock('race');
+    shown = [mark('a', 'A edited here', 2)];
+    const write = sync.persist(() => shown);
+    // The other tab's write lands (its own lock, already released), and this editor takes it in.
+    await storage.setItem('local:pdfMarks:race', { name: 'r.pdf', updated: 3, marks: [mark('a', 'A', 1), mark('t', 'From the other tab', 3)] });
+    lock.release();
+    await Promise.all([lock.done, write]);
+    const stored = ((await loadMarks('race'))!.marks as Mark[]).map((m) => m.note).sort();
+    expect(stored).toEqual(['A edited here', 'From the other tab']);
+    sync.dispose();
+  });
+
+  it('Y01: a document with a write still waiting can be handed off after it is no longer on screen', async () => {
+    resetStorage();
+    const sync = new MarkSync('left', 'r.pdf', []);
+    await sync.persist([mark('a', 'Original A', 1)]);
+    const lock = holdLock('left');
+    let marks: Mark[] = [mark('a', 'Quick edit', 2)];
+    const write = sync.persist(() => marks);
+    sync.dispose(); // switched to another PDF
+    expect(unsettledSyncs.has(sync)).toBe(true);
+    expect(sync.handoff()?.current.map((m) => m.note)).toEqual(['Quick edit']);
+    lock.release();
+    await Promise.all([lock.done, write]);
+    expect(unsettledSyncs.has(sync)).toBe(false);
+    expect(((await loadMarks('left'))!.marks as Mark[]).map((m) => m.note)).toEqual(['Quick edit']);
+  });
+
+  it('Y04: a stored mark without geometry is refused', () => {
+    const r = normalizeStoredMarks({ name: 'r', updated: 1, marks: [{ ...mark('bad', 'x', 1), boxes: [] }, mark('ok', 'y', 1)] })!;
+    expect((r.marks as Mark[]).map((m) => m.id)).toEqual(['ok']);
+  });
+});
