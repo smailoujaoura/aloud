@@ -73,6 +73,8 @@ interface PendingLine {
   target: number;
   /** Characters to measure — the line's text without the separator that joins it to the next. */
   measured: number;
+  /** Where the span was placed, in CSS pixels from the left of the page. */
+  left: number;
 }
 
 /**
@@ -125,6 +127,9 @@ function addLine(parent: HTMLElement, view: PdfPageView, line: PdfLineBox): Pend
 
   const el = document.createElement('span');
   el.textContent = line.text;
+  // Laid out by the browser's own bidi rules from the right, as the page draws it: the highlight
+  // of a word is the box the browser gives it, so it must sit where the word is drawn.
+  if (line.rtl) el.dir = 'rtl';
   el.style.left = `${x}px`;
   el.style.fontSize = `${fontSize}px`;
   parent.append(el);
@@ -135,6 +140,7 @@ function addLine(parent: HTMLElement, view: PdfPageView, line: PdfLineBox): Pend
     fontSize,
     target: Math.abs(right - x),
     measured: line.text.replace(/\s+$/, '').length,
+    left: x,
   };
 }
 
@@ -154,7 +160,7 @@ function pageScale(view: PdfPageView, line: PdfLineBox): number {
  * make the lines concatenate into the spoken text, and including it in the measurement would
  * squeeze every line by about a character.
  */
-function place({ el, baseline, fontSize, target, measured }: PendingLine, ascent: number): void {
+function place({ el, baseline, fontSize, target, measured, left }: PendingLine, ascent: number): void {
   el.style.top = `${baseline - fontSize * ascent}px`;
 
   const node = el.firstChild;
@@ -166,5 +172,10 @@ function place({ el, baseline, fontSize, target, measured }: PendingLine, ascent
   const natural = range.getBoundingClientRect().width;
   if (natural <= 0) return;
 
-  el.style.transform = `scaleX(${target / natural})`;
+  const scale = target / natural;
+  el.style.transform = `scaleX(${scale})`;
+  // A right-to-left line's trailing separator is drawn at its *left*, before the text: move the
+  // span over by it, so the text itself starts where the PDF's does.
+  const lead = range.getBoundingClientRect().left - el.getBoundingClientRect().left;
+  if (lead > 0.5) el.style.left = `${left - lead}px`;
 }

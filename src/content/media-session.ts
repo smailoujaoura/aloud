@@ -29,6 +29,7 @@ export class MediaControls {
    */
   private artwork: string | null = null;
   private lastMetadata: [string, string, string] | null = null;
+  private disposed = false;
   /** What the page's media session showed before Aloud took it, to put back afterwards. */
   private previous: { metadata: MediaMetadata | null; playbackState: MediaSessionPlaybackState } | null = null;
 
@@ -38,7 +39,15 @@ export class MediaControls {
     // it. Taking it over and letting go meant clearing its handlers and its "now playing" — and a
     // page's own handlers cannot be read, so they cannot be put back: its media keys and lock
     // screen stayed dead until a reload. Aloud's own keys and the bar work there as before.
-    const pageOwnsIt = !!session && (session.metadata != null || session.playbackState !== 'none');
+    //
+    // Handlers cannot be read either, so a page that set only those looks unused. A page with
+    // media of its own (Aloud's audio element is never in the document) is taken to be using its
+    // media session too.
+    const pageOwnsIt =
+      !!session &&
+      (session.metadata != null ||
+        session.playbackState !== 'none' ||
+        (typeof document !== 'undefined' && document.querySelector('audio, video') != null));
     this.session = pageOwnsIt ? null : session;
     if (this.session) this.previous = { metadata: this.session.metadata, playbackState: this.session.playbackState };
     if (artwork && this.session) void this.loadArtwork(artwork);
@@ -65,6 +74,7 @@ export class MediaControls {
 
   /** What the OS overlay shows: the article, the voice, and the site it came from. */
   setMetadata(title: string, voice: string, site: string): void {
+    if (this.disposed) return;
     this.lastMetadata = [title, voice, site];
     if (!this.session || typeof MediaMetadata === 'undefined') return;
     try {
@@ -94,7 +104,9 @@ export class MediaControls {
   private async loadArtwork(load: () => Promise<string | null>): Promise<void> {
     try {
       const url = await load();
-      if (!url) return;
+      // Arriving after this reader closed: the media session is someone else's again, and
+      // writing this reader's title into it now overwrote theirs.
+      if (!url || this.disposed) return;
       this.artwork = url;
       if (this.lastMetadata) this.setMetadata(...this.lastMetadata);
     } catch {
@@ -103,6 +115,8 @@ export class MediaControls {
   }
 
   dispose(): void {
+    this.disposed = true;
+    this.lastMetadata = null;
     this.artwork = null;
     if (!this.session) return;
     for (const action of this.actions) {

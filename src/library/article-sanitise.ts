@@ -22,8 +22,35 @@ const LOADS = new Set(['src', 'href', 'xlink:href', 'poster', 'background', 'dat
  * "Load images". So every attribute is looked at by its *content*.
  */
 const CSS_URL = /url\(\s*(['"]?)(.*?)\1\s*\)/gi;
+/** CSS functions that fetch an image, besides url(). */
+const CSS_FETCHING = /\b(?:-webkit-)?image-set\(|\bimage\(|\bcross-fade\(|\belement\(/i;
+
+/**
+ * A CSS value as the browser reads it: escapes decoded. `\75rl(…)` and `u\000072l(…)` are both
+ * `url(…)` to CSS, and looking for the literal text "url(" let them through — the browser then
+ * fetched them before "Load images".
+ */
+function cssUnescape(value: string): string {
+  return value
+    .replace(/\\([0-9a-f]{1,6})[ \t\n\r\f]?/gi, (_, hex: string) => {
+      const code = Number.parseInt(hex, 16);
+      return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : '\ufffd';
+    })
+    .replace(/\\([^\n\r\f0-9a-f])/gi, '$1');
+}
+
+/**
+ * Would this attribute value make the browser fetch something from outside? Decoded first. A
+ * `url(#id)` pointing inside the SVG (a gradient, a clip path) is the one kind kept.
+ */
 function outsideCssUrl(value: string): boolean {
-  for (const [, , url] of value.matchAll(CSS_URL)) if (url && outside(url)) return true;
+  const css = cssUnescape(value);
+  if (CSS_FETCHING.test(css)) return true;
+  for (const [, , url] of css.matchAll(CSS_URL)) {
+    if (url && !url.trim().startsWith('#') && outside(url)) return true;
+  }
+  // Escapes that spell a function: nothing an article needs, and nothing to second-guess.
+  if (css !== value && /[a-z-]\s*\(/i.test(css)) return true;
   return false;
 }
 /**

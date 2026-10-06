@@ -95,6 +95,12 @@ interface BeginOptions {
   /** Called once the whole document has been read, so the queue page can move on. */
   onFinished?: () => void;
   /**
+   * Every status change, with the error when it is one. `begin` returns while the voice is still
+   * loading, and a voice that then fails says so on the bar, not by throwing: a page that waits
+   * for a voice to speak (the walkthrough's demo) follows this instead.
+   */
+  onStatus?: (status: SessionState['status'], error: string | undefined) => void;
+  /**
    * How to find this document again from the Library. A web page defaults to its own address;
    * the PDF reader and the queue page say what they are showing.
    */
@@ -278,6 +284,7 @@ export class ReaderSession {
     this.knownArticle = opts.knownArticle ?? null;
     this.tipsAllowed = opts.showTips ?? true;
     this.finishedHook = opts.onFinished ?? null;
+    this.statusHook = opts.onStatus ?? null;
     this.sourceHint = opts.source ?? null;
     this.keepHistory = opts.keepHistory ?? true;
     // Snapshot the page selection *now*, before any await or DOM work can disturb it.
@@ -318,6 +325,9 @@ export class ReaderSession {
     if (superseded()) return;
     await this.matchVoiceToPage();
     if (superseded()) return;
+    // The plan was built before the voice was settled: a German voice chosen for a German page
+    // was given "Doctor Müller and Söhne", expanded for the English default.
+    this.syncSpokenLanguage();
     this.tapToSeek?.setEnabled(this.settings.tapToSeek);
     await this.loadEngine();
   }
@@ -497,7 +507,7 @@ export class ReaderSession {
       urlReplacement: this.settings.skipUrls ? 'link' : null,
       expandAbbreviations: this.settings.expandAbbreviations,
       // The voice's language decides whether the English expansions apply at all.
-      language: (this.manifest && voiceLanguage(this.engine, this.voice, this.manifest)) || 'en',
+      language: (this.spokenLanguage = this.readingLanguage()),
     });
   };
 
@@ -506,6 +516,25 @@ export class ReaderSession {
    * from the next sentence on — the same seam a speed change uses, so the sentence playing now
    * finishes as it was and the change is heard straight after it.
    */
+  /** The language the spoken text was last prepared for (see `syncSpokenLanguage`). */
+  private spokenLanguage: string | null = null;
+
+  /** The language of the voice reading now, as the normaliser wants it. */
+  private readingLanguage(): string {
+    return (this.manifest && voiceLanguage(this.engine, this.voice, this.manifest)) || 'en';
+  }
+
+  /**
+   * Prepare the spoken text again if the reading voice's language has changed since it was last
+   * prepared — after a page-language voice is picked, or any voice change. The English expansions
+   * apply to English voices only (segment/normalize.ts).
+   */
+  private syncSpokenLanguage(): void {
+    const language = this.readingLanguage();
+    if (language === this.spokenLanguage) return;
+    for (const item of this.playlist) item.spokenText = this.normalize(item.sourceText);
+  }
+
   private respeak(): void {
     for (const item of this.playlist) item.spokenText = this.normalize(item.sourceText);
     this.cancelExport('How words are spoken changed, so the MP3 was stopped');
@@ -607,8 +636,8 @@ export class ReaderSession {
       onExportStart: () => void this.startExport(),
       onExportCancel: () => this.cancelExport(),
       onExportSave: () => this.saveExport(),
-      onOpenSettings: () => this.port?.postMessage({ type: 'open-options' }),
-      onOpenWalkthrough: () => this.port?.postMessage({ type: 'open-walkthrough' }),
+      onOpenSettings: () => this.background()?.postMessage({ type: 'open-options' }),
+      onOpenWalkthrough: () => this.background()?.postMessage({ type: 'open-walkthrough' }),
       onTipsDismissed: () => void setSettings({ tipsSeen: true }),
       onClose: () => this.stop('user'),
     };
@@ -878,6 +907,8 @@ export class ReaderSession {
     this.halted = false;
     this.failures = 0;
     this.settings = await getSettings();
+    // A voice in another language reads the plan prepared for it, from the next sentence on.
+    this.syncSpokenLanguage();
     this.cancelExport('The voice changed, so the MP3 was stopped');
     await this.refreshBarVoices();
     this.engineReady = false;
@@ -1073,7 +1104,7 @@ export class ReaderSession {
       log.info(`page language ${language}: no downloaded voice for it`);
       this.bar?.flash(`This page is in ${name}, and no ${name} voice is downloaded`, 'info', {
         label: 'Get one',
-        run: () => this.port?.postMessage({ type: 'open-options' }),
+        run: () => this.background()?.postMessage({ type: 'open-options' }),
       });
     }
   }
@@ -1264,7 +1295,7 @@ export class ReaderSession {
     this.pushState();
     this.bar?.flash(`${this.voiceLabel(this.voice)} is not producing any audio — pick another voice, or press play to retry`, 'info', {
       label: 'Settings',
-      run: () => this.port?.postMessage({ type: 'open-options' }),
+      run: () => this.background()?.postMessage({ type: 'open-options' }),
     });
   }
 
@@ -1411,7 +1442,7 @@ export class ReaderSession {
       }
       this.bar?.flash(duplicate ? 'Already in your notes' : 'Saved to Notes', 'ok', {
         label: 'Open',
-        run: () => this.port?.postMessage({ type: 'open-library', tab: 'notes' }),
+        run: () => this.background()?.postMessage({ type: 'open-library', tab: 'notes' }),
       });
     } catch (err) {
       log.warn('could not save the note:', err);
@@ -1503,6 +1534,7 @@ export class ReaderSession {
     if (prev.matchPageLanguage !== this.settings.matchPageLanguage) {
       if (this.settings.matchPageLanguage) await this.matchVoiceToPage();
       else this.languageVoice = null;
+      this.syncSpokenLanguage();
     }
 
     this.highlighter?.setOptions({
@@ -1674,18 +1706,12 @@ export class ReaderSession {
         }
       });
       this.port.onDisconnect.addListener(() => {
+        // Chromium stops an idle background service worker, and with it this connection. It is
+        // made again when this reader next needs the background (`background()`): reconnecting
+        // at once woke the worker again, and it was stopped and woken every thirty seconds for
+        // as long as a reader stayed open. Left dropped for good, the reader was invisible to the
+        // background: a reader started in another tab no longer stopped this one.
         this.port = null;
-        // Chromium stops an idle background service worker, and with it this connection. Left
-        // dropped, the reader was invisible to the background from then on: a reader started in
-        // another tab no longer stopped this one, settings changes stopped arriving, and the
-        // shortcuts could not find it. Reconnect, as a resume (background.ts decides who keeps
-        // the slot). Not after this reader ended, and not if the extension itself was reloaded.
-        if (this.disposed) return;
-        setTimeout(() => {
-          if (this.disposed || this.port) return;
-          this.connectPort(true);
-          if (this.port) this.pushState();
-        }, 150);
       });
     } catch (err) {
       // "Extension context invalidated": Aloud was updated or reloaded under this page.
@@ -1693,8 +1719,31 @@ export class ReaderSession {
     }
   }
 
+  /**
+   * The connection to the background, made again if Chromium stopped it while this reader sat
+   * idle. `claim` when the listener has just used this reader (pressed play, or a button that
+   * asks for a page): it becomes the one reading, and any other stops. Otherwise — a reader that
+   * was already playing, reconnecting to report its progress — it is a resume, and yields to a
+   * reader started meanwhile (background.ts). Settings changed while it was down are picked up.
+   */
+  private background(claim = true): Browser.runtime.Port | null {
+    if (this.port || this.disposed) return this.port;
+    this.connectPort(!claim);
+    if (this.port) void this.onSettingsChanged();
+    return this.port;
+  }
+
+  private statusHook: BeginOptions['onStatus'] | null = null;
+  /** Whether the last state pushed was one of reading (see `pushState`). */
+  private wasActive = false;
+
   private setStatus(status: SessionState['status']): void {
     this.state.status = status;
+    try {
+      this.statusHook?.(status, status === 'error' ? this.state.error : undefined);
+    } catch (err) {
+      log.warn('status hook failed:', err);
+    }
     this.pushState();
   }
 
@@ -1703,7 +1752,12 @@ export class ReaderSession {
     this.bar?.update(this.state);
     this.media?.setPlaying(this.state.status === 'playing' ? 'playing' : 'paused');
     try {
-      this.port?.postMessage({ type: 'state', state: this.state });
+      // An idle reader leaves the background asleep; one that reads (or is getting ready to)
+      // needs it, for the toolbar badge and to stop any other reader.
+      const active = ['playing', 'extracting', 'loading-model'].includes(this.state.status);
+      const started = active && !this.wasActive;
+      this.wasActive = active;
+      (active ? this.background(started) : this.port)?.postMessage({ type: 'state', state: this.state });
     } catch {
       /* port gone */
     }

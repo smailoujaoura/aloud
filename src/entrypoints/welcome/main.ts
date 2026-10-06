@@ -198,9 +198,25 @@ async function toggleDemo(): Promise<void> {
   status.textContent = 'Preparing the voice — the bar at the bottom shows how far along it is.';
 
   const root = $('demoText');
-  demo = new ReaderSession();
+  const session = new ReaderSession();
+  demo = session;
+  // Said once the voice is actually speaking, or once it has failed: `begin` returns before
+  // either, and used to be taken for success — "the real thing" over a bar saying the voice
+  // could not load.
+  let spoke = false;
+  const onStatus = (state: string, error: string | undefined): void => {
+    if (demo !== session) return;
+    if (state === 'playing' && !spoke) {
+      spoke = true;
+      status.textContent = 'That bar at the bottom is the real thing — try its buttons.';
+    } else if (state === 'error') {
+      status.textContent = `The voice could not start${error ? `: ${error}` : ''}. The settings page can download a voice by hand.`;
+      toast('The demo could not start — see the settings page', 'error');
+    }
+  };
   try {
-    await demo.begin('from-cursor', {
+    await session.begin('from-cursor', {
+      onStatus,
       keepHistory: false,
       targetElement: root,
       showTips: false,
@@ -213,7 +229,6 @@ async function toggleDemo(): Promise<void> {
     });
     button.classList.remove('busy');
     button.textContent = 'Stop';
-    status.textContent = 'That bar at the bottom is the real thing — try its buttons.';
   } catch (err) {
     log.error('[welcome] demo failed:', err);
     button.classList.remove('busy');

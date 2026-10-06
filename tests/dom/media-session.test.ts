@@ -50,3 +50,31 @@ describe('the page’s media session', () => {
     expect(session.handlers.size).toBe(0);
   });
 });
+
+describe('the seventh recheck and the second review', () => {
+  it('AA04: artwork arriving after the reader closed changes nothing', async () => {
+    const session = fakeSession();
+    vi.stubGlobal('navigator', { mediaSession: session });
+    vi.stubGlobal('MediaMetadata', class { constructor(public init: { title: string }) {} });
+    let deliver!: (url: string) => void;
+    const controls = new MediaControls(noop, () => new Promise((r) => (deliver = r)));
+    controls.setMetadata('First reader', 'Alba', 'site.test');
+    controls.dispose();
+    session.metadata = { init: { title: 'Page media after the reader closed' } };
+    deliver('data:image/png;base64,AAAA');
+    await new Promise((r) => setTimeout(r, 0));
+    expect(session.metadata).toEqual({ init: { title: 'Page media after the reader closed' } });
+  });
+
+  it('a page with media of its own keeps its media session, handlers included', () => {
+    document.body.innerHTML = '<video></video>';
+    const pageHandler = () => {};
+    const session = fakeSession(); // no metadata, state "none": only handlers set
+    session.setActionHandler('play', pageHandler);
+    vi.stubGlobal('navigator', { mediaSession: session });
+    const controls = new MediaControls(noop);
+    controls.dispose();
+    expect(session.handlers.get('play')).toBe(pageHandler);
+    document.body.innerHTML = '';
+  });
+});

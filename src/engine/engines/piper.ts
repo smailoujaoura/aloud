@@ -17,6 +17,7 @@ import { exposeNodeOutput } from '@/engine/onnx-outputs';
 import { soundsOf, splitWords, wordTimes, type TimedSound } from '@/engine/g2p/word-timing';
 import type { WordTiming } from '@/engine/protocol';
 import type { ModelManifest, SynthEngine, SynthResult, InitContext } from './types';
+import { ukrainianForTextVoice } from '@/engine/g2p/ukrainian-text';
 
 interface PiperConfig {
   audio: { sample_rate: number };
@@ -165,7 +166,7 @@ export class PiperEngine implements SynthEngine {
       this.config.phoneme_type === 'text'
         ? // The letters themselves: lower case, accents split off as their own symbols, which is
           // how the model's symbol table lists them (й is и plus a breve).
-          { sentences: [letters(text)], words: words.map((w) => letters(w.token)) }
+          { sentences: [letters(text, voice)], words: words.map((w) => letters(w.token, voice)) }
         : words.length
           ? await phonemizeForPiper(text, voice, words.map((w) => w.token))
           : { sentences: await phonemizeForPiper(text, voice), words: [] as string[] };
@@ -273,9 +274,14 @@ function joinWithPauses(parts: Float32Array[], sampleRate: number): Float32Array
   return out;
 }
 
-/** A "text" voice's symbols: the text in lower case, decomposed (NFD). */
-function letters(text: string): string {
-  return text.toLowerCase().normalize('NFD');
+/**
+ * A "text" voice's symbols: the text in lower case, decomposed (NFD). Its symbol table holds its
+ * own alphabet and nothing else, so for Ukrainian (the only such voices in the catalogue) numbers
+ * are written out and Latin words put in Cyrillic first; otherwise they had no sound at all.
+ */
+function letters(text: string, language: string): string {
+  const spelled = language.split(/[-_]/)[0] === 'uk' ? ukrainianForTextVoice(text) : text;
+  return spelled.toLowerCase().normalize('NFD');
 }
 
 /** Phoneme types Aloud can produce. Anything else is refused at start-up, with a reason. */

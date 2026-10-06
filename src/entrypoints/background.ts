@@ -763,6 +763,22 @@ async function syncRegistration(
       if (await browser.permissions.contains({ origins: matches }).catch(() => false)) wanted.push(...matches);
     }
     const existing = await browser.scripting.getRegisteredContentScripts({ ids: [id] }).catch(() => []);
+    // Already registered as wanted: leave it. This runs on every start of the background, which
+    // Chromium stops and starts again whenever it idles; unregistering and registering each time
+    // was work for nothing, and left a moment in which a page loading got no speed control.
+    const sameSet = (a: readonly string[] = [], b: readonly string[]) =>
+      a.length === b.length && [...a].sort().join('\n') === [...b].sort().join('\n');
+    const current = existing[0];
+    if (
+      current &&
+      wanted.length > 0 &&
+      sameSet(current.matches, [...new Set(wanted)]) &&
+      sameSet(current.js, [file.slice(1)]) &&
+      !!current.allFrames === allFrames &&
+      (current.runAt ?? 'document_idle') === runAt
+    ) {
+      return;
+    }
     if (existing.length > 0) await browser.scripting.unregisterContentScripts({ ids: [id] });
     if (wanted.length === 0) return;
     await browser.scripting.registerContentScripts([

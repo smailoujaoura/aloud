@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { sharedModelInstalled, usableVoices } from '@/engine/installed-voices';
 import type { CacheSizes } from '@/engine/installed-voices';
 import type { ModelManifest } from '@/engine/engines/types';
+import { KOKORO_REVISION, SUPERTONIC_REVISION } from '@/shared/engine-catalog';
 
 const manifest = {
   piper: {},
@@ -15,8 +16,11 @@ const manifest = {
 
 const cache = (entries: Record<string, number>): CacheSizes => new Map(Object.entries(entries));
 
-const KOKORO = 'https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main';
-const SUPERTONIC = 'https://huggingface.co/Supertone/supertonic-2/resolve/main';
+// Where the loaders fetch from: the models at their pinned commits, Kokoro's voices from main
+// (kokoro-js fetches those itself). Files from anywhere else are not the ones the loader asks for.
+const KOKORO = `https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/${KOKORO_REVISION}`;
+const KOKORO_VOICES = 'https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main';
+const SUPERTONIC = `https://huggingface.co/Supertone/supertonic-2/resolve/${SUPERTONIC_REVISION}`;
 
 describe('what counts as installed', () => {
   it('does not accept Kokoro’s config as Kokoro', () => {
@@ -80,7 +84,7 @@ describe('the recheck’s R09: what a voice needs to start', () => {
       ...manifest,
       kokoro: { voices: { af_heart: { label: 'Heart' }, bm_george: { label: 'George' } } },
     } as unknown as ModelManifest;
-    const sizes = cache({ ...kokoroBase, [`${KOKORO}/onnx/model_quantized.onnx`]: 1, [`${KOKORO}/voices/af_heart.bin`]: 1 });
+    const sizes = cache({ ...kokoroBase, [`${KOKORO}/onnx/model_quantized.onnx`]: 1, [`${KOKORO_VOICES}/voices/af_heart.bin`]: 1 });
     expect(usableVoices('kokoro', many, sizes, { online: false }).map((v) => v.id)).toEqual(['af_heart']);
     // Online, a voice file is a small download: every voice of the installed model is offered.
     expect(usableVoices('kokoro', many, sizes, { online: true })).toHaveLength(2);
@@ -109,7 +113,7 @@ describe('the second recheck’s V06: which weights reading will use', async () 
     [`${KOKORO}/tokenizer.json`]: 1,
     [`${KOKORO}/tokenizer_config.json`]: 1,
     [`${KOKORO}/onnx/model_quantized.onnx`]: 1,
-    [`${KOKORO}/voices/af_heart.bin`]: 1,
+    [`${KOKORO_VOICES}/voices/af_heart.bin`]: 1,
   });
 
   it('a machine with a GPU, set to read on the CPU, keeps its CPU voices offline', () => {

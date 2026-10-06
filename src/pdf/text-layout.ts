@@ -78,6 +78,8 @@ export interface PdfLineBox {
   y: number;
   /** Font size. */
   size: number;
+  /** A right-to-left line (Arabic, Persian, Urdu, Hebrew): drawn and highlighted as one. */
+  rtl?: boolean;
   /**
    * The line's text *including* whatever joins it to the next line — a trailing space, or
    * nothing at all where a hyphenated word was repaired. Assembling the lines is therefore a
@@ -103,6 +105,8 @@ interface Line {
   text: string;
   /** True when every run on the line came from a font whose name suggests bold. */
   bold: boolean;
+  /** Mostly right-to-left script: read from the right, and its paragraphs indent on the right. */
+  rtl: boolean;
 }
 
 /** Marker characters that start a list item. `-` only counts when followed by a space. */
@@ -111,7 +115,7 @@ const BULLET = /^([•·▪◦‣∙*]|[-–—]\s|\(?\d{1,3}[.)]\s|\(?[a-z][.)]
 /** A footnote/reference marker rather than words: superscript symbols and bare digits. */
 const MARKER_ONLY = /^[*∗†‡§¶#\d\s.,]{1,4}$/;
 
-const SENTENCE_END = /[.!?？。！]["'”’)\]]?\s*$/;
+const SENTENCE_END = /[.!?？。！؟۔]["'”’)\]]?\s*$/;
 
 /** Trailing hyphen that a line break split a word across. */
 const SOFT_HYPHEN_END = /([\p{L}\p{N}])[-‐­]$/u;
@@ -159,11 +163,7 @@ function linesOf(page: PdfPageInput): Line[] {
     .sort((a, b) => b.y - a.y || a.x - b.x);
   if (items.length === 0) return [];
 
-  const splits = findColumnSplits(
-    items.map((it) => [it.x, it.x + (it.width || 0)] as const),
-    0,
-    page.width,
-  );
+  const splits = findColumnSplits(chunks(items), 0, page.width);
   const bounds = [0, ...splits, page.width];
   /** Column index, or `null` for a run that crosses a gutter (a title, a spanning caption). */
   const columnOf = (item: PdfTextItem): number | null => {
@@ -211,6 +211,33 @@ function linesOf(page: PdfPageInput): Line[] {
   return out;
 }
 
+/**
+ * The page's runs joined into the stretches of text they form on each baseline, for finding
+ * columns. A gutter is a gap no *text* crosses — and a producer that draws one glyph per run
+ * (Chromium does, for Arabic) leaves a run-free gap between every two letters. Judged by its runs,
+ * such a page had a "gutter" in a word gap, and its lines were cut in two and read interleaved.
+ * Runs closer than most gutters (0.8 em) are one stretch; word spaces are a third of that.
+ */
+function chunks(items: readonly PdfTextItem[]): Array<readonly [number, number]> {
+  const out: Array<[number, number]> = [];
+  const byLine = [...items].sort((a, b) => b.y - a.y || a.x - b.x);
+  let last: { y: number; size: number; span: [number, number] } | null = null;
+  for (const it of byLine) {
+    const x0 = it.x;
+    const x1 = it.x + (it.width || 0);
+    const size = it.height || 10;
+    const sameLine = last && Math.abs(it.y - last.y) <= Math.max(1, 0.5 * Math.max(size, last.size));
+    if (last && sameLine && x0 - last.span[1] <= 0.8 * Math.max(size, last.size)) {
+      last.span[1] = Math.max(last.span[1], x1);
+      continue;
+    }
+    const span: [number, number] = [x0, x1];
+    out.push(span);
+    last = { y: it.y, size, span };
+  }
+  return out;
+}
+
 /** Group runs that already belong to one column into baseline-ordered lines. */
 function linesWithin(items: PdfTextItem[], page: number): Line[] {
   const lines: Line[] = [];
@@ -243,25 +270,30 @@ function linesWithin(items: PdfTextItem[], page: number): Line[] {
 }
 
 function buildLine(runs: PdfTextItem[], page: number): Line | null {
-  const ordered = [...runs].sort((a, b) => a.x - b.x);
+  const { ordered, rtl } = readingOrder(runs);
   const size = Math.max(...ordered.map((r) => r.height || 0), 0);
 
   let text = '';
-  let prevEnd: number | null = null;
+  let prev: PdfTextItem | null = null;
   for (const run of ordered) {
     // Footnote markers and reference superscripts are noise when spoken: "Vaswani∗" reads as
     // "Vaswani star". Drop the tiny marker-only runs, keep genuine small text.
     const tiny = size > 0 && (run.height || 0) <= 0.72 * size;
     if (tiny && MARKER_ONLY.test(run.str)) {
-      prevEnd = run.x + run.width;
+      prev = run;
       continue;
     }
-    const gap = prevEnd == null ? 0 : run.x - prevEnd;
+    // The space between two runs, whichever side of the other each sits on: reading order is
+    // right to left in an Arabic line, and jumps across an embedded English word or number.
+    const gap = prev == null ? 0 : Math.max(run.x, prev.x) - Math.min(run.x + run.width, prev.x + prev.width);
     if (text !== '' && gap > 0.18 * (run.height || size || 10) && !/\s$/.test(text)) text += ' ';
     text += run.str;
-    prevEnd = run.x + run.width;
+    prev = run;
   }
 
+  // Shaped Arabic as PDFs store it — presentation forms, one per glyph position — back to the
+  // letters it spells, which is what a voice (and a search, and a copy) understands.
+  text = text.replace(ARABIC_FORMS, (c) => c.normalize('NFKC'));
   text = text.replace(/\s+/g, ' ').trim();
   if (text === '') return null;
 
@@ -272,8 +304,68 @@ function buildLine(runs: PdfTextItem[], page: number): Line | null {
     x1: Math.max(...ordered.map((r) => r.x + (r.width || 0))),
     size: size || 10,
     bold: ordered.every((r) => /bold|black|heavy|semib/i.test(r.fontName ?? '')),
+    rtl,
     text,
   };
+}
+
+/** Letters of the right-to-left scripts: Hebrew, Arabic (and its presentation forms), Syriac, Thaana, N'Ko. */
+const RTL_LETTER = /[\u0590-\u07FF\u0860-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/u;
+const ARABIC_FORMS = /[\uFB50-\uFDFF\uFE70-\uFEFF]+/gu;
+
+/** A run's direction, from what it spells. Numbers read left to right in every script. */
+function runDirection(run: PdfTextItem): 'rtl' | 'ltr' | null {
+  for (const c of run.str) {
+    if (/\p{N}/u.test(c)) return 'ltr';
+    if (RTL_LETTER.test(c)) return 'rtl';
+    if (/\p{L}/u.test(c)) return 'ltr';
+  }
+  return null; // spaces, punctuation: they take the direction around them
+}
+
+/**
+ * A line's runs in the order they are read.
+ *
+ * A PDF draws a line left to right whatever its script, so sorting by position reads an Arabic
+ * line backwards, letter by letter when the producer draws one glyph per run. So the line's
+ * direction is taken from its letters, the runs are put in that direction, and any stretch in the
+ * other direction inside it — an English word, a number, in an Arabic sentence; an Arabic name
+ * in an English one — is turned back round. pdf.js has already put each run's own characters in
+ * reading order (`dir` on its items); only the order of the runs is left to do.
+ */
+function readingOrder(runs: readonly PdfTextItem[]): { ordered: PdfTextItem[]; rtl: boolean } {
+  const dirs = new Map(runs.map((r) => [r, runDirection(r)]));
+  let rtlChars = 0;
+  let ltrChars = 0;
+  for (const run of runs) {
+    for (const c of run.str) {
+      if (RTL_LETTER.test(c)) rtlChars++;
+      else if (/[\p{L}\p{N}]/u.test(c)) ltrChars++;
+    }
+  }
+  // Mostly right-to-left letters; on a tie, a line that begins and ends in them.
+  const byX = [...runs].filter((r) => dirs.get(r) != null).sort((a, b) => a.x - b.x);
+  const rtl =
+    rtlChars > ltrChars ||
+    (rtlChars === ltrChars && dirs.get(byX[0]!) === 'rtl' && dirs.get(byX[byX.length - 1]!) === 'rtl');
+  const ordered = [...runs].sort((a, b) => (rtl ? b.x - a.x : a.x - b.x));
+  if (rtlChars === 0) return { ordered, rtl: false };
+
+  // Reverse each embedded stretch: from a run in the other direction to the last one before the
+  // base direction resumes, with neutral runs between them going along.
+  const other = rtl ? 'ltr' : 'rtl';
+  for (let i = 0; i < ordered.length; i++) {
+    if (dirs.get(ordered[i]!) !== other) continue;
+    let end = i;
+    for (let j = i + 1; j < ordered.length; j++) {
+      const d = dirs.get(ordered[j]!);
+      if (d === other) end = j;
+      else if (d != null) break;
+    }
+    ordered.splice(i, end - i + 1, ...ordered.slice(i, end + 1).reverse());
+    i = end;
+  }
+  return { ordered, rtl };
 }
 
 // ---- 2. columns ------------------------------------------------------------
@@ -376,6 +468,9 @@ function startsNewBlock(group: Line[], line: Line, bodySize: number): boolean {
   // Moving up the page, or into another column, means the run of lines ended.
   const gap = prev.y - line.y;
   if (gap < 0) return true;
+  // Arabic and Hebrew paragraphs change direction too.
+  if (line.rtl !== prev.rtl) return true;
+  if (line.rtl) return startsNewRtlBlock(group, line, prev, gap, bodySize);
   if (Math.abs(line.x0 - prev.x0) > 6 && line.x0 < prev.x0 - 6 && gap > 2 * line.size) return true;
 
   // A vertical gap noticeably bigger than single line spacing separates paragraphs.
@@ -393,6 +488,19 @@ function startsNewBlock(group: Line[], line: Line, bodySize: number): boolean {
   // Headings are short and rarely wrap; a long line after a heading-sized short line is new.
   if (prev.size > 1.15 * bodySize && SENTENCE_END.test(prev.text)) return true;
 
+  return false;
+}
+
+/** `startsNewBlock` for a right-to-left paragraph: the same signals, mirrored — lines start on the right. */
+function startsNewRtlBlock(group: Line[], line: Line, prev: Line, gap: number, bodySize: number): boolean {
+  if (line.x1 > prev.x1 + 6 && gap > 2 * line.size) return true;
+  if (gap > 1.65 * Math.max(line.size, prev.size)) return true;
+  if (BULLET.test(line.text)) return true;
+  const left = Math.min(...group.map((l) => l.x0));
+  const right = Math.max(...group.map((l) => l.x1));
+  const shortLast = prev.x0 > left + 0.12 * (right - left);
+  if (SENTENCE_END.test(prev.text) && (shortLast || line.x1 < prev.x1 - 0.02 * right)) return true;
+  if (prev.size > 1.15 * bodySize && SENTENCE_END.test(prev.text)) return true;
   return false;
 }
 
@@ -451,6 +559,7 @@ function joinLines(group: Line[]): PdfLineBox[] {
       x1: line.x1,
       y: line.y,
       size: line.size,
+      ...(line.rtl ? { rtl: true } : {}),
       text: piece,
     });
 

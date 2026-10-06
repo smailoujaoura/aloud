@@ -97,4 +97,12 @@ describe('a saved article, before "Load images"', () => {
     expect(doc.innerHTML).not.toContain('site.test');
     expect(doc.querySelector('rect[fill="url(#local)"]')).not.toBeNull(); // a reference within the SVG stays
   });
+
+  it('the seventh recheck: url() spelled with CSS escapes is caught too', () => {
+    (window as unknown as { happyDOM: { setURL(url: string): void } }).happyDOM.setURL('chrome-extension://aloud/library.html');
+    const doc = document.createElement('div');
+    doc.append(sanitised(String.raw`<svg><rect fill="\75rl(https://site.test/a.svg#g)"/><rect stroke="u\000072l(https://site.test/b.svg#g)"/><rect filter="\u\r\l(//site.test/c.svg)"/><rect fill="image-set('https://site.test/d.png' 1x)"/><rect fill="url(#grad)"/></svg>`));
+    expect(doc.innerHTML).not.toContain('site.test');
+    expect(doc.querySelectorAll('rect')[4]!.getAttribute('fill')).toBe('url(#grad)');
+  });
 });

@@ -84,7 +84,8 @@ export function sharedModelInstalled(engine: EngineId, sizes: CacheSizes, where:
   const { cacheHint: hint, requiredFiles = [], weights } = engineInfo(engine);
   if (!hint) return false;
   if (!requiredFiles.length && !weights) return sharedModelBytes(sizes, hint) > 0;
-  const has = (file: string): boolean => cached(sizes, hint, file);
+  const { revision } = engineInfo(engine);
+  const has = (file: string): boolean => cached(sizes, hint, file, revision);
   // All of them: some bytes in the cache is not the same as a model that can speak.
   if (!requiredFiles.every(has)) return false;
   if (!weights) return true;
@@ -94,8 +95,12 @@ export function sharedModelInstalled(engine: EngineId, sizes: CacheSizes, where:
 }
 
 /** A file of the model `hint`, present with something in it. */
-function cached(sizes: CacheSizes, hint: string, file: string): boolean {
-  for (const [key, size] of sizes) if (size > 0 && key.includes(hint) && key.endsWith(file)) return true;
+/** A file of the model `hint` — from `revision`, when given — present with something in it. */
+function cached(sizes: CacheSizes, hint: string, file: string, revision?: string): boolean {
+  const at = revision ? `/resolve/${revision}/` : null;
+  for (const [key, size] of sizes) {
+    if (size > 0 && key.includes(hint) && key.endsWith(file) && (!at || key.includes(at))) return true;
+  }
   return false;
 }
 
@@ -118,8 +123,8 @@ export function usableVoices(
   }
   if (!sharedModelInstalled(engine, sizes, where)) return [];
   const voices = listVoices(engine, manifest);
-  const { cacheHint, voiceFile } = engineInfo(engine);
+  const { cacheHint, voiceFile, revision, voiceRevision } = engineInfo(engine);
   // Offline, a voice whose own file was never fetched cannot start.
   if (where.online !== false || !voiceFile || !cacheHint) return voices;
-  return voices.filter((v) => cached(sizes, cacheHint, voiceFile(v.id)));
+  return voices.filter((v) => cached(sizes, cacheHint, voiceFile(v.id), voiceRevision ?? revision));
 }

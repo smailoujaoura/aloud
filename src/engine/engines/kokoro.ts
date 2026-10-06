@@ -22,6 +22,7 @@ import { loadOrt } from '@/engine/ort-loader';
 import { chooseExecutionProviders } from '@/engine/runtime-env';
 import { log } from '@/shared/log';
 import type { SynthEngine, SynthResult, InitContext } from './types';
+import { KOKORO_REVISION } from '@/shared/engine-catalog';
 
 const MODEL_ID = 'onnx-community/Kokoro-82M-v1.0-ONNX';
 
@@ -46,7 +47,7 @@ export const dtypeFor = (device: KokoroDevice): KokoroDtype => (device === 'webg
  * The model at a fixed commit, not the moving `main` branch: a change upstream must not change,
  * unannounced, what every user downloads and runs. Bump deliberately, with the hashes below.
  */
-const KOKORO_REV = '1939ad2a8e416c0acfeecc08a694d14ef25f2231';
+const KOKORO_REV = KOKORO_REVISION;
 /** SHA-256 of each weights file at KOKORO_REV, as Hugging Face records it (checked on download). */
 const MODEL_SHA256: Record<KokoroDtype, string> = {
   q8: 'fbae9257e1e05ffc727e951ef9b9c98418e6d79f1c9b6b13bd59f5c9028a1478',

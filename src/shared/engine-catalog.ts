@@ -13,6 +13,11 @@
  */
 import type { EngineId } from '@/shared/settings';
 
+/** Kokoro-82M at a fixed commit of onnx-community/Kokoro-82M-v1.0-ONNX (engines/kokoro.ts). */
+export const KOKORO_REVISION = '1939ad2a8e416c0acfeecc08a694d14ef25f2231';
+/** Supertonic-2 at a fixed commit of Supertone/supertonic-2 (models.json `base`). */
+export const SUPERTONIC_REVISION = '75e6727618a02f323c720cba9478152d4bc16ca4';
+
 export interface EngineInfo {
   id: EngineId;
   name: string;
@@ -33,6 +38,14 @@ export interface EngineInfo {
    * holding only Kokoro's `config.json` used to offer all 28 of its voices as ready to read.
    */
   requiredFiles?: string[];
+  /**
+   * The commit the model is downloaded from (`/resolve/<revision>/`). A file cached from any
+   * other revision is not the file the loader asks for: counting it, a cache from before the
+   * models were pinned looked ready offline, and the engine then failed to start.
+   */
+  revision?: string;
+  /** Where the per-voice files come from, when not `revision` (kokoro-js fetches them itself). */
+  voiceRevision?: string;
   /**
    * The weights, which depend on where the engine runs: Kokoro loads full-precision weights on a
    * GPU and quantised ones on the CPU, and a cache holding only one of them cannot start the other.
@@ -71,6 +84,8 @@ const ENGINES: Record<EngineId, EngineInfo> = {
       'workers to keep up with playback. One 86 MB download unlocks all 28 English voices (US and UK).',
     approxSize: '~86 MB',
     cacheHint: 'Kokoro-82M',
+    revision: KOKORO_REVISION,
+    voiceRevision: 'main',
     // What kokoro-js loads besides the weights (seen in a real cache): config and tokeniser.
     requiredFiles: ['/config.json', '/tokenizer.json', '/tokenizer_config.json'],
     weights: { cpu: '/onnx/model_quantized.onnx', gpu: '/onnx/model.onnx' },
@@ -88,6 +103,8 @@ const ENGINES: Record<EngineId, EngineInfo> = {
       'download unlocks all 10 voices.',
     approxSize: '~262 MB',
     cacheHint: 'supertonic-2',
+    // Must match `base` in scripts/models.base.json (tests/engine-pins.test.ts).
+    revision: SUPERTONIC_REVISION,
     // Four separate networks, the config and the character table: any one missing and synthesis
     // cannot run (engines/supertonic.ts loads all of them before the first sentence).
     requiredFiles: [
