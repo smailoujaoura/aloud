@@ -9,7 +9,7 @@
  */
 import type { ModelManifest, PiperVoiceEntry } from '@/engine/engines/types';
 import type { EngineId } from '@/shared/settings';
-import { bestVoiceIndex, voicePortrait } from './voice-portraits';
+import { bestVoiceIndex } from './voice-portraits';
 
 /** Piper's quality tiers, best first. */
 const PIPER_TIERS = ['high', 'medium', 'low', 'x_low'];
@@ -39,7 +39,7 @@ function tierIndex(quality: string): number {
   return i < 0 ? PIPER_TIERS.length : i;
 }
 
-/** Whether this voice is one of the best — the ones with a portrait, listed first. */
+/** Whether this voice is one of the best — the ones listed first. (Not every face is one of them.) */
 export function isBestVoice(engine: EngineId, id: string): boolean {
-  return voicePortrait(engine, id) != null;
+  return bestVoiceIndex(engine, id) != null;
 }

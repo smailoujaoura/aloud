@@ -3,11 +3,13 @@
  *
  * None of these people exist: every portrait was generated (SDXL with the SDXL-Lightning UNet,
  * both openrail++) from a description of how the voice sounds — who it sounds like, how old,
- * from where. Only the voices worth coming back to get one; every other voice shows the one
- * stand-in avatar (see voice-avatar.ts). The files live in `public/portraits/`, 160 px WebP.
+ * from where. Every Kokoro voice has one, and the Piper speakers worth coming back to; every
+ * other voice shows the one stand-in avatar (see voice-avatar.ts). The files live in
+ * `public/portraits/`, 160 px WebP.
  *
- * The order of these two tables is also the order the voice lists lead with (voice-quality.ts):
- * best first.
+ * The order of the PIPER and KOKORO tables is also the order the voice lists lead with
+ * (voice-quality.ts): best first. KOKORO_REST has faces too, but no place at the front — those
+ * voices are ranked by their published grade like any other.
  *
  * Piper voices are matched by speaker (`en_US-lessac-high` → `lessac`), so every quality tier of
  * a voice shows the same face.
@@ -46,6 +48,26 @@ const KOKORO: Record<string, string> = {
   bm_fable: 'an Englishman in his thirties',
 };
 
+/** Kokoro's remaining voices: a face each, ranked by grade rather than listed first. */
+const KOKORO_REST: Record<string, string> = {
+  af_alloy: 'an American woman in her mid-thirties',
+  af_jessica: 'an American woman in her late twenties',
+  af_nova: 'an American woman of about thirty',
+  af_river: 'an American woman in her mid-thirties, speaking calmly',
+  af_sky: 'an American woman in her late twenties, with an airy voice',
+  am_adam: 'an American man in his late thirties',
+  am_echo: 'an American man in his early thirties, speaking softly',
+  am_eric: 'an American man in his late forties',
+  am_liam: 'an American man in his mid-twenties',
+  am_onyx: 'an American man in his forties with a deep voice',
+  am_santa: 'a jolly American man of about seventy',
+  bf_alice: 'an Englishwoman in her mid-twenties',
+  bf_isabella: 'an Englishwoman in her mid-thirties',
+  bf_lily: 'an Englishwoman in her early twenties',
+  bm_daniel: 'an Englishman in his late forties',
+  bm_lewis: 'an Englishman in his late thirties with a deep voice',
+};
+
 /** The portrait for a voice, or null when it keeps the drawn avatar. */
 export function voicePortrait(engine: EngineId, id: string): Portrait | null {
   if (engine === 'piper') {
@@ -54,7 +76,7 @@ export function voicePortrait(engine: EngineId, id: string): Portrait | null {
     return sounds ? { file: `/portraits/piper-${name}.webp`, sounds } : null;
   }
   if (engine === 'kokoro') {
-    const sounds = KOKORO[id];
+    const sounds = KOKORO[id] ?? KOKORO_REST[id];
     return sounds ? { file: `/portraits/kokoro-${id}.webp`, sounds } : null;
   }
   return null;
@@ -80,6 +102,6 @@ export function bestVoiceIndex(engine: EngineId, id: string): number | null {
 export function allPortraitFiles(): string[] {
   return [
     ...Object.keys(PIPER).map((name) => `/portraits/piper-${name}.webp`),
-    ...Object.keys(KOKORO).map((id) => `/portraits/kokoro-${id}.webp`),
+    ...[...Object.keys(KOKORO), ...Object.keys(KOKORO_REST)].map((id) => `/portraits/kokoro-${id}.webp`),
   ];
 }
