@@ -72,3 +72,37 @@ describe('right-to-left PDF text', () => {
     expect(texts).toEqual(['أولا نقرأ هذا.', 'ثم هذا بعده هنا أيضا']);
   });
 });
+
+/** The eighth recheck: a long number, and a two-column Arabic page. Chromium-printed, Arabic font embedded. */
+describe('the eighth recheck: numbers and columns', () => {
+  const read = async (file: string) => {
+    const doc = await getDocument({ data: new Uint8Array(readFileSync(file)) }).promise;
+    const p = await doc.getPage(1);
+    const { width, height } = p.getViewport({ scale: 1 });
+    const content = await p.getTextContent();
+    const items = content.items.flatMap((r) =>
+      'str' in r ? [{ str: r.str, x: r.transform[4], y: r.transform[5], width: r.width, height: r.height || Math.abs(r.transform[3]) }] : [],
+    );
+    return layoutPdfText([{ pageNumber: 1, width, height, items }]).blocks;
+  };
+
+  it('AB03: a long number does not turn its Arabic line round', async () => {
+    const blocks = await read('tests/fixtures/pdf/rtl-numeric.pdf');
+    const arabic = blocks.filter((b) => b.text.includes('العدد'));
+    expect(arabic.map((b) => b.text)).toEqual(['العدد 1234567890', 'العدد 2024', 'العدد 1234567890']);
+    expect(arabic.every((b) => b.lines.every((l) => l.rtl))).toBe(true);
+    // The English line keeps its own direction: a number there decides nothing either.
+    const english = blocks.find((b) => b.text.startsWith('Report'))!;
+    expect(english.text).toBe('Report 1234567890 total');
+    expect(english.lines.some((l) => l.rtl)).toBe(false);
+  });
+
+  it('AB04: a two-column Arabic page is read right column first', async () => {
+    const blocks = await read('tests/fixtures/pdf/rtl-columns.pdf');
+    expect(blocks.length).toBeGreaterThan(8);
+    const first = blocks[0]!.lines[0]!;
+    const last = blocks[blocks.length - 1]!.lines[0]!;
+    expect(first.rtl && last.rtl).toBe(true);
+    expect(first.x0).toBeGreaterThan(last.x0); // right column before left
+  });
+});

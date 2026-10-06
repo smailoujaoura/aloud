@@ -182,9 +182,13 @@ function linesOf(page: PdfPageInput): Line[] {
   let section = new Map<number, PdfTextItem[]>();
 
   const flushSection = (): void => {
-    for (const column of [...section.keys()].sort((a, b) => a - b)) {
-      out.push(...linesWithin(section.get(column)!, page.pageNumber));
-    }
+    const columns = [...section.keys()].sort((a, b) => a - b);
+    const built = columns.map((column) => linesWithin(section.get(column)!, page.pageNumber));
+    // A right-to-left page is read right column first — the lines within one were already in the
+    // right order, but a two-column Arabic page was still read left column first, start to end.
+    const lines = built.flat();
+    const rtl = lines.filter((l) => l.rtl).length * 2 > lines.length;
+    for (const column of rtl ? [...built].reverse() : built) out.push(...column);
     section = new Map();
   };
 
@@ -339,8 +343,11 @@ function readingOrder(runs: readonly PdfTextItem[]): { ordered: PdfTextItem[]; r
   let ltrChars = 0;
   for (const run of runs) {
     for (const c of run.str) {
+      // Letters only. Digits are *weak* in the Unicode bidi algorithm: they read left to right
+      // inside a right-to-left line without making the line one. Counted as votes, a long enough
+      // number turned its own Arabic sentence round — "العدد 1234567890" came out reversed.
       if (RTL_LETTER.test(c)) rtlChars++;
-      else if (/[\p{L}\p{N}]/u.test(c)) ltrChars++;
+      else if (/\p{L}/u.test(c)) ltrChars++;
     }
   }
   // Mostly right-to-left letters; on a tie, a line that begins and ends in them.

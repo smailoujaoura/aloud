@@ -26,3 +26,19 @@ describe('Ukrainian for a letter voice', () => {
     expect(ukrainianForTextVoice('Привіт 42 world!')).not.toMatch(/[0-9A-Za-z]/);
   });
 });
+
+describe('the eighth recheck (AB02): the zeros after the comma are part of the number', () => {
+  it('tells three doses apart', () => {
+    const said = (t: string) => ukrainianForTextVoice(t);
+    expect(said('Доза 0,5 мг.')).toBe("Доза нуль кома п'ять мг.");
+    expect(said('Доза 0,05 мг.')).toBe("Доза нуль кома нуль п'ять мг.");
+    expect(said('Доза 0,005 мг.')).toBe("Доза нуль кома нуль нуль п'ять мг.");
+    expect(new Set([said('Доза 0,5 мг.'), said('Доза 0,05 мг.'), said('Доза 0,005 мг.')]).size).toBe(3);
+  });
+
+  it('reads a dot the same way, and keeps a trailing zero', () => {
+    expect(ukrainianForTextVoice('3.5')).toBe("три кома п'ять");
+    expect(ukrainianForTextVoice('1,10')).toBe('один кома десять');
+    expect(ukrainianForTextVoice('1,01')).toBe('один кома нуль один');
+  });
+});

@@ -16,22 +16,28 @@
 /** Attributes that make the browser fetch something by themselves. */
 const LOADS = new Set(['src', 'href', 'xlink:href', 'poster', 'background', 'data', 'lowsrc', 'dynsrc', 'action', 'formaction', 'icon', 'manifest', 'archive', 'codebase', 'longdesc', 'imagesrcset']);
 /**
- * A CSS `url(…)` inside any attribute. SVG presentation attributes — fill, stroke, filter, mask,
- * clip-path, marker-*, cursor — take them, and the browser fetches them like an image: holding
- * attributes by *name* missed them, and a saved article made seven requests to its site before
- * "Load images". So every attribute is looked at by its *content*.
+ * SVG presentation attributes: the browser reads these as CSS, and a `url(…)` in one fetches like
+ * an image. Holding attributes by *name* missed them, and a saved article made seven requests to
+ * its site before "Load images". `src`, `background` and the rest of the address attributes are
+ * not here — those are HTML, and are held for later rather than dropped (LOADS).
  */
-const CSS_URL = /url\(\s*(['"]?)(.*?)\1\s*\)/gi;
-/** CSS functions that fetch an image, besides url(). */
-const CSS_FETCHING = /\b(?:-webkit-)?image-set\(|\bimage\(|\bcross-fade\(|\belement\(/i;
+const CSS_VALUED = new Set([
+  'fill', 'stroke', 'filter', 'mask', 'clip-path', 'cursor', 'color-profile',
+  'marker', 'marker-start', 'marker-mid', 'marker-end',
+  'background-image', 'mask-image', 'shape-outside', 'list-style-image', 'border-image-source',
+]);
 
 /**
- * A CSS value as the browser reads it: escapes decoded. `\75rl(…)` and `u\000072l(…)` are both
- * `url(…)` to CSS, and looking for the literal text "url(" let them through — the browser then
- * fetched them before "Load images".
+ * A CSS value as the *browser* reads it: escapes decoded and line continuations joined.
+ *
+ * Every spelling here is `url(…)` to CSS and fetches: `\75rl(…)`, `u\000072l(…)`, and a quoted
+ * address split over two lines by a backslash before the newline. Each one got past a reader
+ * looking for the literal text "url(".
  */
-function cssUnescape(value: string): string {
+function decodeCss(value: string): string {
   return value
+    // A backslash at the end of a line is a continuation: the browser joins the halves.
+    .replace(/\\(?:\r\n|[\n\r\f])/g, '')
     .replace(/\\([0-9a-f]{1,6})[ \t\n\r\f]?/gi, (_, hex: string) => {
       const code = Number.parseInt(hex, 16);
       return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : '\ufffd';
@@ -39,20 +45,41 @@ function cssUnescape(value: string): string {
     .replace(/\\([^\n\r\f0-9a-f])/gi, '$1');
 }
 
+/** `url(#gradient)`: a reference inside this same document, which fetches nothing. */
+const LOCAL_REF = /^url\(\s*(['"]?)#[\w:.-]+\1\s*\)/i;
+/** A colour or a plain keyword — `red`, `#1a2b3c`, `rgb(0 0 0 / 50%)`, `none`, `currentColor`. */
+const PLAIN_VALUE = /^(?:#[0-9a-f]{3,8}|(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\([\s\w%.,/+-]*\)|[a-z-]+)$/i;
+
 /**
- * Would this attribute value make the browser fetch something from outside? Decoded first. A
- * `url(#id)` pointing inside the SVG (a gradient, a clip path) is the one kind kept.
+ * Is this presentation attribute's value one the browser can read without fetching anything?
+ *
+ * An allowlist, not a search for the dangerous spellings: CSS has too many ways to write the same
+ * address — escapes, line continuations, `image-set()` — and each patch for one spelling left the
+ * next. A value is kept only when the whole of it is a local reference, a colour, or a keyword;
+ * anything else is dropped, because a decoration is not content and nothing is lost by it.
  */
+function safeCssValue(raw: string): boolean {
+  const value = decodeCss(raw).trim();
+  if (value === '') return true;
+  const rest = value.replace(LOCAL_REF, '').trim();
+  return rest === '' || PLAIN_VALUE.test(rest);
+}
+
+/** A `url(…)` anywhere in an attribute, as a last net over the attributes CSS_VALUED does not cover. */
+const CSS_URL = /url\(\s*(['"]?)([\s\S]*?)\1\s*\)/gi;
+/** CSS functions that fetch an image, besides url(). */
+const CSS_FETCHING = /\b(?:-webkit-)?image-set\(|\bimage\(|\bcross-fade\(|\belement\(/i;
+
+/** Would this attribute's value fetch from outside? For attributes that are not read as CSS. */
 function outsideCssUrl(value: string): boolean {
-  const css = cssUnescape(value);
+  const css = decodeCss(value);
   if (CSS_FETCHING.test(css)) return true;
   for (const [, , url] of css.matchAll(CSS_URL)) {
     if (url && !url.trim().startsWith('#') && outside(url)) return true;
   }
-  // Escapes that spell a function: nothing an article needs, and nothing to second-guess.
-  if (css !== value && /[a-z-]\s*\(/i.test(css)) return true;
   return false;
 }
+
 /**
  * Does `value` point anywhere but Aloud's own pages? Decided by the browser's own URL parser, not
  * a pattern: browsers also accept `http:/host`, and `h<tab>ttp://host`, and fetch them like any
@@ -100,8 +127,13 @@ export function sanitised(html: string): DocumentFragment {
         node.removeAttribute(attr.name);
         continue;
       }
+      // Read as CSS by the browser: kept only if the whole value is local (see safeCssValue).
+      if (CSS_VALUED.has(name)) {
+        if (!safeCssValue(attr.value)) node.removeAttribute(attr.name);
+        continue; // a decoration, not content: nothing to hold for later
+      }
       if (outsideCssUrl(attr.value)) {
-        node.removeAttribute(attr.name); // a decoration, not content: nothing to hold for later
+        node.removeAttribute(attr.name);
         continue;
       }
       if (isLink && name === 'href') continue;

@@ -904,17 +904,27 @@ export class ReaderSession {
 
   /** Re-initialise the worker for a new engine/voice, keeping the plan and position. */
   async reloadEngine(): Promise<void> {
+    // Every await below is a chance for this reader to be closed or replaced, exactly as in
+    // `begin`. Without this, closing the reader while a voice change waited on the background
+    // built a scheduler and a synthesis frame *after* disposal had run — nothing left to take
+    // them down, and a model download started for a reader nobody could see.
+    const generation = this.generation;
+    const stale = (): boolean => this.disposed || this.generation !== generation;
+
     this.halted = false;
     this.failures = 0;
     this.settings = await getSettings();
+    if (stale()) return;
     // A voice in another language reads the plan prepared for it, from the next sentence on.
     this.syncSpokenLanguage();
     this.cancelExport('The voice changed, so the MP3 was stopped');
     await this.refreshBarVoices();
+    if (stale()) return;
     this.engineReady = false;
     this.requested.clear();
     this.state.modelProgress = 0;
     await this.scheduler.dispose();
+    if (stale()) return;
     this.scheduler = this.createScheduler();
     this.sleepTimer?.onSeek();
     this.refreshMediaMetadata();

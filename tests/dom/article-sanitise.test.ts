@@ -106,3 +106,44 @@ describe('a saved article, before "Load images"', () => {
     expect(doc.querySelectorAll('rect')[4]!.getAttribute('fill')).toBe('url(#grad)');
   });
 });
+
+describe('the eighth recheck: CSS values are kept only when the whole value is local', () => {
+  const sanitiseIn = (html: string) => {
+    (window as unknown as { happyDOM: { setURL(url: string): void } }).happyDOM.setURL('chrome-extension://aloud/library.html');
+    const box = document.createElement('div');
+    box.append(sanitised(html));
+    return box;
+  };
+
+  it('AB01: a quoted address split across lines by a backslash is dropped', () => {
+    const box = sanitiseIn(
+      '<svg><rect fill=\'url("http://site.test/continued\\\n.svg#g")\'/>' +
+        '<rect stroke=\'url("http://site.test/crlf\\\r\n.svg#g")\'/></svg>',
+    );
+    expect(box.innerHTML).not.toContain('site.test');
+    expect(box.querySelectorAll('rect[fill], rect[stroke]')).toHaveLength(0);
+  });
+
+  it('keeps the decorations an article actually uses', () => {
+    const box = sanitiseIn(
+      '<svg><rect fill="url(#grad)"/><rect fill="#1a2b3c"/><rect stroke="rgb(0 0 0 / 50%)"/>' +
+        '<rect fill="none"/><rect fill="currentColor"/><rect fill="url(#g) red"/></svg>',
+    );
+    expect([...box.querySelectorAll('rect')].map((r) => r.getAttribute('fill') ?? r.getAttribute('stroke'))).toEqual([
+      'url(#grad)', '#1a2b3c', 'rgb(0 0 0 / 50%)', 'none', 'currentColor', 'url(#g) red',
+    ]);
+  });
+
+  it('drops every other way of naming an outside address', () => {
+    for (const value of [
+      'url(http://site.test/a.svg#g)',
+      "image-set('http://site.test/b.png' 1x)",
+      '\\75rl(http://site.test/c.svg#g)',
+      'url(//site.test/d.svg)',
+      'url( "http://site.test/e.svg" )',
+    ]) {
+      const box = sanitiseIn(`<svg><rect fill=${JSON.stringify(value)}/></svg>`);
+      expect(box.querySelector('rect')!.hasAttribute('fill'), value).toBe(false);
+    }
+  });
+});

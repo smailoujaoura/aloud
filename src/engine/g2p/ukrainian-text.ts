@@ -87,12 +87,25 @@ function latinWord(word: string): string {
   return out.replace(/[a-z]/g, (c) => LATIN[c] ?? '');
 }
 
+/**
+ * The part after the decimal comma. Not a whole number: `ukrainianNumber` drops leading zeros,
+ * which is right for 007 and wrong here — it made 0,5, 0,05 and 0,005 the same spoken dose. The
+ * zeros are said one by one, as a reader does: "нуль кома нуль нуль п'ять".
+ */
+function fraction(digits: string): string {
+  const zeros = /^0+/.exec(digits)?.[0].length ?? 0;
+  const rest = digits.slice(zeros);
+  const said = Array.from({ length: zeros }, () => ONES_M[0]!);
+  if (rest !== '') said.push(ukrainianNumber(rest));
+  return said.join(' ');
+}
+
 /** `text` with numbers in words and Latin letters in Cyrillic, ready for a Ukrainian letter voice. */
 export function ukrainianForTextVoice(text: string): string {
   return (
     text
       // A decimal: Ukrainian writes "3,5" and says "три кома п'ять". "3.5" reads the same.
-      .replace(/(\d+)[.,](\d+)/g, (_, whole: string, frac: string) => `${ukrainianNumber(whole)} кома ${ukrainianNumber(frac)}`)
+      .replace(/(\d+)[.,](\d+)/g, (_, whole: string, frac: string) => `${ukrainianNumber(whole)} кома ${fraction(frac)}`)
       .replace(/\d+/g, (d) => ` ${ukrainianNumber(d)} `)
       .replace(/%/g, ' відсотків')
       .replace(/&/g, ' і ')
