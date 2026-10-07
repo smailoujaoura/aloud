@@ -13,6 +13,13 @@
  * memory ("this site was last watched at 1.75×") is offered once and then left alone: re-applying
  * it on every `play`/`canplay` meant that dragging Facebook's progress bar — which fires those —
  * silently sped the video up again after the player had reset it to 1×.
+ *
+ * And a rate the *player* sets for its own reasons is not the viewer's choice at all. Facebook
+ * puts its own rate back after every seek, so one click on the progress bar was read as "the
+ * viewer wants 1×" — the speed dropped, and the site's remembered speed was overwritten with it.
+ * A change arriving right after a seek or a load is the player settling, never a choice: it is
+ * never remembered, and where a speed was actually chosen here it is put back (a few times; a
+ * player that insists keeps its own, rather than the two of them flickering turn by turn).
  */
 import { clampRate, formatRate, nextPreset, stepRate } from './rate';
 import { isTypingEvent, matchesBinding } from './keys';
@@ -22,6 +29,10 @@ import type { MediaSpeedSettings } from '@/shared/settings';
 const CONTROL_HOST_ID = 'aloud-control-host';
 const BADGE_HOST_ID = 'aloud-speed-badge';
 const BADGE_MS = 1400;
+/** A rate change this soon after a seek or a load is the player settling, not the viewer. */
+const SETTLE_MS = 1200;
+/** How often to put a chosen rate back before letting an insistent player keep its own. */
+const MAX_OVERRIDES = 3;
 
 export interface ControllerHost {
   settings: MediaSpeedSettings;
@@ -41,6 +52,12 @@ export class MediaSpeedController {
   private chosen = false;
   /** The rate we set last, to tell our own `ratechange` from the site's. */
   private applied = new WeakMap<Media, number>();
+  /** When each player last seeked or loaded — a rate change just after that is its own doing. */
+  private settled = new WeakMap<Media, number>();
+  /** How often the chosen rate has been put back since this player last seeked or loaded. */
+  private overrides = new WeakMap<Media, number>();
+  /** Players that have loaded a *different* video since the rate was last applied to them. */
+  private freshSource = new WeakSet<Media>();
   private readonly known = new Set<Media>();
   /** How to unhook each tracked element, so a removed one can be let go of entirely. */
   private readonly listeners = new Map<Media, () => void>();
@@ -111,6 +128,8 @@ export class MediaSpeedController {
 
   private applyRate(rate: number, show: boolean): void {
     this.rate = clampRate(rate);
+    // A fresh choice: this player has not overridden *this* one yet.
+    this.overrides = new WeakMap();
     for (const media of this.known) this.apply(media);
     if (show) this.showBadge(formatRate(this.rate));
     this.host.onRate(this.rate);
@@ -120,6 +139,7 @@ export class MediaSpeedController {
     if (this.rate == null) return;
     try {
       this.applied.set(media, this.rate);
+      this.freshSource.delete(media);
       if (media.playbackRate !== this.rate) media.playbackRate = this.rate;
     } catch {
       // Some players throw on a rate they consider out of range; the others still get it.
@@ -167,14 +187,52 @@ export class MediaSpeedController {
       media.addEventListener(event, reapply);
       off.push(() => media.removeEventListener(event, reapply));
     }
+    // When the player is busy with a seek or a new source: see `fromPlayer` below.
+    const settle = (): void => {
+      this.settled.set(media, Date.now());
+      // Each seek starts afresh: the limit is there to stop one seek turning into a tug of war,
+      // not to give up on a long video the viewer moves around in.
+      this.overrides.delete(media);
+    };
+    // A different video, as opposed to a move within this one: see `onRateChange`.
+    const newSource = (): void => void this.freshSource.add(media);
+    for (const event of ['emptied', 'loadstart']) {
+      media.addEventListener(event, newSource);
+      off.push(() => media.removeEventListener(event, newSource));
+    }
+    for (const event of ['seeking', 'seeked', 'loadstart', 'loadeddata', 'canplay', 'playing', 'emptied', 'durationchange']) {
+      media.addEventListener(event, settle);
+      off.push(() => media.removeEventListener(event, settle));
+    }
     const onRateChange = (): void => {
       if (this.rate == null) return;
       const ours = this.applied.get(media);
       if (media.playbackRate === ours) return;
-      // The site (or the user, through the site's menu) changed it: follow, and match the rest.
-      // A change made on a playing video is taken as a choice and kept through the next source;
-      // one that arrives while it is still loading or seeking is the player restoring itself.
-      if (!media.seeking && media.readyState >= 2) this.chosen = true;
+
+      // The player's own doing — it is mid-seek or mid-load, or has just finished one. Facebook
+      // restores its rate on every `seeked`, which read as a viewer asking for 1×.
+      const since = Date.now() - (this.settled.get(media) ?? -Infinity);
+      if (media.seeking || media.readyState < 2 || since < SETTLE_MS) {
+        // Put our speed back when this is still the same video — the viewer moved within it and
+        // the player reset the rate behind them. On a *different* video only a speed chosen here
+        // follows along; one that merely came from memory is offered once (see the top of file).
+        if (this.chosen || !this.freshSource.has(media)) {
+          const tries = (this.overrides.get(media) ?? 0) + 1;
+          this.overrides.set(media, tries);
+          // Put the chosen speed back — unless this player keeps taking it, in which case the two
+          // would flicker turn by turn for as long as the video ran.
+          if (tries <= MAX_OVERRIDES) {
+            this.apply(media);
+            return;
+          }
+        }
+        // Follow it on screen, but never remember it: a click must not rewrite the site's speed.
+        this.rate = clampRate(media.playbackRate);
+        return;
+      }
+
+      // The viewer changed it through the site's own speed menu: follow, and match the rest.
+      this.chosen = true;
       this.rate = clampRate(media.playbackRate);
       for (const other of this.known) if (other !== media) this.apply(other);
       this.host.onRate(this.rate);

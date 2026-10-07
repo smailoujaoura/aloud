@@ -104,6 +104,10 @@ function fraction(digits: string): string {
 export function ukrainianForTextVoice(text: string): string {
   return (
     text
+      // A sign before a number is a word, not a symbol: the voice has no glyph for "−" or "-",
+      // so they were dropped and −0,05 was spoken as 0,05 — the same dose, the other way round.
+      .replace(/(^|[\s(\[:;,])[-−–—](?=\d)/g, '$1мінус ')
+      .replace(/(^|[\s(\[:;,])\+(?=\d)/g, '$1плюс ')
       // A decimal: Ukrainian writes "3,5" and says "три кома п'ять". "3.5" reads the same.
       .replace(/(\d+)[.,](\d+)/g, (_, whole: string, frac: string) => `${ukrainianNumber(whole)} кома ${fraction(frac)}`)
       .replace(/\d+/g, (d) => ` ${ukrainianNumber(d)} `)

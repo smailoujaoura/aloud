@@ -28,13 +28,18 @@ describe('MediaSpeedController', () => {
     document.body.innerHTML = '';
   });
 
-  it('offers a remembered speed once, and does not put it back when the player resets it', () => {
-    const { controller, video } = setup(1.75);
+  // This used to leave the video at 1×. The speed a viewer set for a site is now put back when
+  // the *player* resets it mid-video, which it does on every seek on Facebook: one click on the
+  // progress bar dropped the speed and then overwrote the site's remembered speed with 1×.
+  // Telling the player's reset from the viewer's own speed menu is what makes that safe now.
+  it('puts a remembered speed back when the player resets it mid-video, and remembers nothing new', () => {
+    const { controller, video, rates } = setup(1.75);
     controller.setInitialRate(1.75);
     expect(video.playbackRate).toBe(1.75);
     scrub(video);
-    expect(video.playbackRate).toBe(1);
-    expect(controller.currentRate).toBe(1);
+    expect(video.playbackRate).toBe(1.75);
+    expect(controller.currentRate).toBe(1.75);
+    expect(rates).toEqual([1.75]); // 1× was the player's doing, never the viewer's choice
   });
 
   it('keeps a speed you chose here through a reset and a new source', () => {
@@ -59,12 +64,24 @@ describe('MediaSpeedController', () => {
   });
 
   it('does not take a reset during loading as a choice', () => {
-    const { controller, video } = setup(1.75);
+    const { controller, video, rates } = setup(1.75);
     controller.setInitialRate(1.75);
     Object.defineProperty(video, 'readyState', { value: 0, configurable: true });
     scrub(video);
+    expect(rates).toEqual([1.75]);
+    expect(controller.currentRate).toBe(1.75);
+  });
+
+  it('leaves the next video in the feed to the site, when the speed only came from memory', () => {
+    const { controller, video, rates } = setup(1.75);
+    controller.setInitialRate(1.75);
+    video.dispatchEvent(new Event('emptied')); // a different video, not a move within this one
+    video.dispatchEvent(new Event('loadstart'));
+    video.playbackRate = 1;
+    video.dispatchEvent(new Event('ratechange'));
     expect(video.playbackRate).toBe(1);
-    expect(controller.currentRate).toBe(1);
+    expect(rates).toEqual([1.75]);
+    controller.stop();
   });
 });
 

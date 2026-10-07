@@ -42,3 +42,21 @@ describe('the eighth recheck (AB02): the zeros after the comma are part of the n
     expect(ukrainianForTextVoice('1,01')).toBe('один кома нуль один');
   });
 });
+
+describe('the ninth recheck (AC02): a sign before a number is said', () => {
+  it('tells a negative dose from a positive one, however the minus is typed', () => {
+    for (const minus of ['-', '\u2212', '\u2013']) {
+      expect(ukrainianForTextVoice(`Зміна ${minus}0,05 мг.`)).toBe('Зміна мінус нуль кома нуль п\u2019ять мг.'.replace('\u2019', "'"));
+    }
+    expect(ukrainianForTextVoice('Зміна 0,05 мг.')).toBe("Зміна нуль кома нуль п'ять мг.");
+    expect(ukrainianForTextVoice('-5')).toBe("мінус п'ять");
+    expect(ukrainianForTextVoice('+5')).toBe("плюс п'ять");
+  });
+
+  it('leaves a hyphen that joins words alone', () => {
+    expect(ukrainianForTextVoice('синьо-жовтий')).toBe('синьо-жовтий');
+    // A range, not a negative year: the hyphen stays a hyphen between the two numbers.
+    expect(ukrainianForTextVoice('2024-2025')).not.toContain('мінус');
+    expect(ukrainianForTextVoice('о 10-15 хвилин')).not.toContain('мінус');
+  });
+});

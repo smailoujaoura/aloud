@@ -317,6 +317,19 @@ function buildLine(runs: PdfTextItem[], page: number): Line | null {
 const RTL_LETTER = /[\u0590-\u07FF\u0860-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/u;
 const ARABIC_FORMS = /[\uFB50-\uFDFF\uFE70-\uFEFF]+/gu;
 
+/**
+ * The run's direction for deciding the *line's*, or null when it has no say. Digits are weak in
+ * the Unicode bidi algorithm: they read left to right wherever they are without making the line
+ * theirs, so they are not counted (see `readingOrder`).
+ */
+function strongDirection(run: PdfTextItem): 'rtl' | 'ltr' | null {
+  for (const c of run.str) {
+    if (RTL_LETTER.test(c)) return 'rtl';
+    if (/\p{L}/u.test(c)) return 'ltr';
+  }
+  return null;
+}
+
 /** A run's direction, from what it spells. Numbers read left to right in every script. */
 function runDirection(run: PdfTextItem): 'rtl' | 'ltr' | null {
   for (const c of run.str) {
@@ -339,22 +352,32 @@ function runDirection(run: PdfTextItem): 'rtl' | 'ltr' | null {
  */
 function readingOrder(runs: readonly PdfTextItem[]): { ordered: PdfTextItem[]; rtl: boolean } {
   const dirs = new Map(runs.map((r) => [r, runDirection(r)]));
-  let rtlChars = 0;
-  let ltrChars = 0;
-  for (const run of runs) {
-    for (const c of run.str) {
-      // Letters only. Digits are *weak* in the Unicode bidi algorithm: they read left to right
-      // inside a right-to-left line without making the line one. Counted as votes, a long enough
-      // number turned its own Arabic sentence round — "العدد 1234567890" came out reversed.
-      if (RTL_LETTER.test(c)) rtlChars++;
-      else if (/\p{L}/u.test(c)) ltrChars++;
+
+  // A line's direction is decided by what it is made of, not by how long any one word is.
+  // Counting letters, a single long Latin name — "هذا هو ChromiumExtension هنا." — outvoted the
+  // Arabic around it and turned the sentence round. So each unbroken stretch of one direction
+  // counts once, however many letters or glyph-runs it was drawn as. Digits never count: they are
+  // weak in the Unicode bidi algorithm and read left to right inside a right-to-left line.
+  const byX = [...runs].sort((a, b) => a.x - b.x);
+  let rtlRuns = 0;
+  let ltrRuns = 0;
+  let previous: 'rtl' | 'ltr' | null = null;
+  const strong: Array<'rtl' | 'ltr'> = [];
+  for (const run of byX) {
+    const dir = strongDirection(run);
+    if (dir == null) continue; // digits, punctuation, spaces: they take the direction around them
+    strong.push(dir);
+    if (dir !== previous) {
+      if (dir === 'rtl') rtlRuns++;
+      else ltrRuns++;
+      previous = dir;
     }
   }
-  // Mostly right-to-left letters; on a tie, a line that begins and ends in them.
-  const byX = [...runs].filter((r) => dirs.get(r) != null).sort((a, b) => a.x - b.x);
   const rtl =
-    rtlChars > ltrChars ||
-    (rtlChars === ltrChars && dirs.get(byX[0]!) === 'rtl' && dirs.get(byX[byX.length - 1]!) === 'rtl');
+    rtlRuns > ltrRuns ||
+    // Evenly made of both: the line belongs to whichever direction holds both of its ends.
+    (rtlRuns === ltrRuns && strong[0] === 'rtl' && strong[strong.length - 1] === 'rtl');
+  const rtlChars = strong.filter((d) => d === 'rtl').length;
   const ordered = [...runs].sort((a, b) => (rtl ? b.x - a.x : a.x - b.x));
   if (rtlChars === 0) return { ordered, rtl: false };
 

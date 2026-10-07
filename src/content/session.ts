@@ -825,12 +825,14 @@ export class ReaderSession {
   private async refreshBarVoices(): Promise<void> {
     if (!this.bar || !this.manifest) return;
     const manifest = this.manifest;
-    const current = voiceValue(this.engine, this.voice);
     // Every engine's downloaded voices: switching from Piper to a Kokoro voice is one pick.
     const perEngine = await Promise.all(
       ENGINE_IDS.map(async (engine) => (await this.installedVoices(engine)).map((v): EngineVoice => ({ ...v, engine }))),
     );
     const installed = perEngine.flat();
+    // Read *after* the replies, never before: picking a second voice while the first was still
+    // being answered painted the older choice back over the newer one on the picker.
+    const current = voiceValue(this.engine, this.voice);
 
     const shown = [...installed];
     if (!shown.some((v) => voiceValue(v.engine, v.id) === current)) {
@@ -904,12 +906,14 @@ export class ReaderSession {
 
   /** Re-initialise the worker for a new engine/voice, keeping the plan and position. */
   async reloadEngine(): Promise<void> {
-    // Every await below is a chance for this reader to be closed or replaced, exactly as in
-    // `begin`. Without this, closing the reader while a voice change waited on the background
-    // built a scheduler and a synthesis frame *after* disposal had run — nothing left to take
-    // them down, and a model download started for a reader nobody could see.
+    // Every await below is a chance for this reader to be closed, replaced, or asked for another
+    // voice. Without this, closing the reader while a voice change waited on the background built
+    // a scheduler and a synthesis frame *after* disposal had run — nothing left to take them
+    // down, and a model download started for a reader nobody could see. A second voice picked
+    // while the first was still loading left the older one still working towards its engine.
     const generation = this.generation;
-    const stale = (): boolean => this.disposed || this.generation !== generation;
+    const reload = ++this.voiceReload;
+    const stale = (): boolean => this.disposed || this.generation !== generation || this.voiceReload !== reload;
 
     this.halted = false;
     this.failures = 0;
@@ -1744,6 +1748,8 @@ export class ReaderSession {
   }
 
   private statusHook: BeginOptions['onStatus'] | null = null;
+  /** Counts voice reloads, so an older one stops as soon as another is asked for. */
+  private voiceReload = 0;
   /** Whether the last state pushed was one of reading (see `pushState`). */
   private wasActive = false;
 
