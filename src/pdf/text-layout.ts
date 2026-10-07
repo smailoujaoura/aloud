@@ -222,10 +222,10 @@ function linesOf(page: PdfPageInput): Line[] {
  * such a page had a "gutter" in a word gap, and its lines were cut in two and read interleaved.
  * Runs closer than most gutters (0.8 em) are one stretch; word spaces are a third of that.
  */
-function chunks(items: readonly PdfTextItem[]): Array<readonly [number, number]> {
-  const out: Array<[number, number]> = [];
+function chunks(items: readonly PdfTextItem[]): Span[] {
+  const out: Array<[number, number, number, number]> = [];
   const byLine = [...items].sort((a, b) => b.y - a.y || a.x - b.x);
-  let last: { y: number; size: number; span: [number, number] } | null = null;
+  let last: { y: number; size: number; span: [number, number, number, number] } | null = null;
   for (const it of byLine) {
     const x0 = it.x;
     const x1 = it.x + (it.width || 0);
@@ -235,7 +235,7 @@ function chunks(items: readonly PdfTextItem[]): Array<readonly [number, number]>
       last.span[1] = Math.max(last.span[1], x1);
       continue;
     }
-    const span: [number, number] = [x0, x1];
+    const span: [number, number, number, number] = [x0, x1, it.y, size];
     out.push(span);
     last = { y: it.y, size, span };
   }
@@ -412,15 +412,24 @@ function readingOrder(runs: readonly PdfTextItem[]): { ordered: PdfTextItem[]; r
  * nothing crosses it (a few percent of runs may) and both sides carry a real share of the page.
  * Runs that do cross are treated as full-width, which is what they are.
  */
-function findColumnSplits(
-  spans: ReadonlyArray<readonly [number, number]>,
-  from: number,
-  to: number,
-  depth = 0,
-): number[] {
+/** A stretch of text on one line: left, right, baseline, font size. */
+type Span = readonly [number, number, number, number];
+
+/**
+ * How many stretches left of `x` have one right of it on the same line — text side by side,
+ * which is what columns are and what a sparse title page is not.
+ */
+function sideBySide(spans: readonly Span[], x: number): number {
+  const right = spans.filter((s) => s[0] >= x);
+  return spans.filter((l) => l[1] <= x && right.some((r) => Math.abs(r[2] - l[2]) < 1.5 * Math.max(l[3], r[3]))).length;
+}
+
+function findColumnSplits(spans: readonly Span[], from: number, to: number, depth = 0): number[] {
   const inside = spans.filter((s) => s[0] >= from - 0.5 && s[1] <= to + 0.5);
-  // Too few runs to tell a column from a coincidence — a title page or a mostly-empty page.
-  if (inside.length < 12 || depth > 1) return [];
+  // Too few stretches to tell a column from a coincidence — a title page or a mostly empty
+  // page. Under twelve, a split is still taken when text faces text across it on several lines
+  // (below): a short two-column page was read as one wide column, lines from both merged.
+  if (inside.length < 6 || depth > 1) return [];
 
   const width = to - from;
   let best: { x: number; crossing: number; balance: number } | null = null;
@@ -444,6 +453,7 @@ function findColumnSplits(
     }
   }
   if (!best) return [];
+  if (inside.length < 12 && sideBySide(inside, best.x) < 3) return [];
 
   // Newspapers and some reports run three or four columns; recurse once into each half.
   return [

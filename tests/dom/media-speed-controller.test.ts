@@ -114,4 +114,55 @@ describe('a rate change from the player, not the viewer', () => {
     expect(el.playbackRate).toBe(2);
     controller.stop();
   });
+
+  // The tenth pass: timing alone took real viewer choices for player resets.
+  describe('a new speed picked just after a seek is the viewer’s', () => {
+    it('follows a different rate chosen 400 ms after a seek', () => {
+      const el = player();
+      const { controller, remembered } = start(null);
+      controller.setRate(2, false);
+      el.dispatchEvent(new Event('seeking'));
+      el.dispatchEvent(new Event('seeked'));
+      vi.advanceTimersByTime(400);
+      el.playbackRate = 1.5; // Shift+< on the site, straight after an arrow-key seek
+      el.dispatchEvent(new Event('ratechange'));
+      expect(el.playbackRate).toBe(1.5);
+      expect(controller.currentRate).toBe(1.5);
+      expect(remembered.at(-1)).toBe(1.5);
+      controller.stop();
+    });
+
+    it('follows a different rate chosen 500 ms after pausing and resuming', () => {
+      const el = player();
+      const { controller } = start(null);
+      controller.setRate(2, false);
+      el.dispatchEvent(new Event('pause'));
+      el.dispatchEvent(new Event('play'));
+      el.dispatchEvent(new Event('playing'));
+      vi.advanceTimersByTime(500);
+      el.playbackRate = 1.25;
+      el.dispatchEvent(new Event('ratechange'));
+      expect(el.playbackRate).toBe(1.25);
+      controller.stop();
+    });
+
+    it('still puts the speed back when the player returns to its own rate', () => {
+      const el = player();
+      const { controller } = start(null);
+      controller.setRate(2, false);
+      seekAndRestore(el, 1); // Facebook: back to the rate it had before ours
+      expect(el.playbackRate).toBe(2);
+      controller.stop();
+    });
+
+    it('treats a return to a player’s own non-1× default as a reset too', () => {
+      const el = player();
+      el.defaultPlaybackRate = 1.1;
+      const { controller } = start(null);
+      controller.setRate(2, false);
+      seekAndRestore(el, 1.1);
+      expect(el.playbackRate).toBe(2);
+      controller.stop();
+    });
+  });
 });

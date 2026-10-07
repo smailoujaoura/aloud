@@ -60,3 +60,30 @@ describe('the ninth recheck (AC02): a sign before a number is said', () => {
     expect(ukrainianForTextVoice('о 10-15 хвилин')).not.toContain('мінус');
   });
 });
+
+describe('the tenth pass: dates and thousands', () => {
+  it('reads a date as a date', () => {
+    expect(ukrainianForTextVoice('05.10.2026')).toBe("п'яте жовтня дві тисячі двадцять шостого року");
+    expect(ukrainianForTextVoice('Сталося 24.08.1991.')).toBe("Сталося двадцять четверте серпня тисяча дев'ятсот дев'яносто першого року.");
+    expect(ukrainianForTextVoice('01.01.2000')).toBe('перше січня двохтисячного року');
+    expect(ukrainianForTextVoice('31.12.2010')).toBe('тридцять перше грудня дві тисячі десятого року');
+  });
+
+  it('leaves something that only looks like a date as numbers', () => {
+    expect(ukrainianForTextVoice('45.13.2026')).not.toContain('року');
+  });
+
+  it('reads grouped thousands as one number', () => {
+    expect(ukrainianForTextVoice('1,000')).toBe('тисяча');
+    expect(ukrainianForTextVoice('1,000,000')).toBe('один мільйон');
+    expect(ukrainianForTextVoice('1 000')).toBe('тисяча');
+    expect(ukrainianForTextVoice('25 000 гривень')).toBe("двадцять п'ять тисяч гривень");
+    expect(ukrainianForTextVoice('3 500')).toBe("три тисячі п'ятсот");
+  });
+
+  it('keeps a Ukrainian decimal a decimal, and a phone number a phone number', () => {
+    expect(ukrainianForTextVoice('3,500')).toBe("три кома п'ятсот");
+    expect(ukrainianForTextVoice('0,005')).toBe("нуль кома нуль нуль п'ять");
+    expect(ukrainianForTextVoice('067 123 45 67')).not.toContain('тисяч');
+  });
+});

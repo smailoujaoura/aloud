@@ -481,6 +481,7 @@ export class ReaderSession {
   }
 
   private async loadEngine(): Promise<void> {
+    const reload = this.voiceReload;
     this.setStatus('loading-model');
     try {
       await this.worker.init(this.engineConfig());
@@ -489,6 +490,9 @@ export class ReaderSession {
       // rejects this init. That is the user's choice, not a failure — logging it as one only
       // buried the real errors.
       if (this.disposed) return;
+      // Another voice was picked while this one loaded. Its load replaced this one — and is
+      // under way now: "Failed to load the voice model" showed on the bar until it was ready.
+      if (this.voiceReload !== reload) return;
       this.fail(`Failed to load the voice model: ${err instanceof Error ? err.message : String(err)}`);
     }
   }

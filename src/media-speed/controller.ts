@@ -17,9 +17,11 @@
  * And a rate the *player* sets for its own reasons is not the viewer's choice at all. Facebook
  * puts its own rate back after every seek, so one click on the progress bar was read as "the
  * viewer wants 1×" — the speed dropped, and the site's remembered speed was overwritten with it.
- * A change arriving right after a seek or a load is the player settling, never a choice: it is
- * never remembered, and where a speed was actually chosen here it is put back (a few times; a
- * player that insists keeps its own, rather than the two of them flickering turn by turn).
+ * A change arriving right after a seek or a load *that goes back to the player's own rate* is
+ * the player settling, never a choice: it is never remembered, and the speed is put back (a few
+ * times; a player that insists keeps its own, rather than the two flickering turn by turn).
+ * Both conditions, not just the timing: a viewer who seeks with an arrow key and then presses
+ * YouTube's Shift+> picks a *new* rate within the same second, and that is theirs to keep.
  */
 import { clampRate, formatRate, nextPreset, stepRate } from './rate';
 import { isTypingEvent, matchesBinding } from './keys';
@@ -56,6 +58,8 @@ export class MediaSpeedController {
   private settled = new WeakMap<Media, number>();
   /** How often the chosen rate has been put back since this player last seeked or loaded. */
   private overrides = new WeakMap<Media, number>();
+  /** The rate each player had of its own before we first set ours — what it resets *to*. */
+  private native = new WeakMap<Media, number>();
   /** Players that have loaded a *different* video since the rate was last applied to them. */
   private freshSource = new WeakSet<Media>();
   private readonly known = new Set<Media>();
@@ -175,6 +179,7 @@ export class MediaSpeedController {
   private track(media: Media): void {
     if (this.known.has(media)) return;
     this.known.add(media);
+    this.native.set(media, media.playbackRate);
 
     // A new source resets the rate to 1; put ours back. `ratechange` tells the site's own speed
     // menu from our own writes, and follows the site when it was not us.
@@ -212,7 +217,13 @@ export class MediaSpeedController {
       // The player's own doing — it is mid-seek or mid-load, or has just finished one. Facebook
       // restores its rate on every `seeked`, which read as a viewer asking for 1×.
       const since = Date.now() - (this.settled.get(media) ?? -Infinity);
-      if (media.seeking || media.readyState < 2 || since < SETTLE_MS) {
+      const settling = media.seeking || media.readyState < 2 || since < SETTLE_MS;
+      // What a player resets to: the rate it had before ours, its default, or plain 1×. Any other
+      // value is somebody choosing a speed, however soon after a seek it comes.
+      const now = media.playbackRate;
+      const reset =
+        now === 1 || now === media.defaultPlaybackRate || now === this.native.get(media);
+      if (settling && reset) {
         // Put our speed back when this is still the same video — the viewer moved within it and
         // the player reset the rate behind them. On a *different* video only a speed chosen here
         // follows along; one that merely came from memory is offered once (see the top of file).
@@ -234,6 +245,7 @@ export class MediaSpeedController {
       // The viewer changed it through the site's own speed menu: follow, and match the rest.
       this.chosen = true;
       this.rate = clampRate(media.playbackRate);
+      this.applied.set(media, this.rate); // ours now too: the player restoring it later is no news
       for (const other of this.known) if (other !== media) this.apply(other);
       this.host.onRate(this.rate);
     };

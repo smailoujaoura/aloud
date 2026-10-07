@@ -100,6 +100,68 @@ function fraction(digits: string): string {
   return said.join(' ');
 }
 
+// ---- dates ------------------------------------------------------------------
+
+/** The day as Ukrainians say it in a date: "п'яте", "двадцять перше" (neuter, nominative). */
+const DAY_ORD = [
+  '', 'перше', 'друге', 'третє', 'четверте', "п'яте", 'шосте', 'сьоме', 'восьме', "дев'яте",
+  'десяте', 'одинадцяте', 'дванадцяте', 'тринадцяте', 'чотирнадцяте', "п'ятнадцяте",
+  'шістнадцяте', 'сімнадцяте', 'вісімнадцяте', "дев'ятнадцяте", 'двадцяте',
+];
+const MONTH_GEN = [
+  '', 'січня', 'лютого', 'березня', 'квітня', 'травня', 'червня',
+  'липня', 'серпня', 'вересня', 'жовтня', 'листопада', 'грудня',
+];
+/** Ordinals in the genitive — "of the year two thousand and twenty-*sixth*". */
+const UNIT_ORD_GEN = ['', 'першого', 'другого', 'третього', 'четвертого', "п'ятого", 'шостого', 'сьомого', 'восьмого', "дев'ятого"];
+const TEEN_ORD_GEN = [
+  'десятого', 'одинадцятого', 'дванадцятого', 'тринадцятого', 'чотирнадцятого',
+  "п'ятнадцятого", 'шістнадцятого', 'сімнадцятого', 'вісімнадцятого', "дев'ятнадцятого",
+];
+const TEN_ORD_GEN = ['', '', 'двадцятого', 'тридцятого', 'сорокового', "п'ятдесятого", 'шістдесятого', 'сімдесятого', 'вісімдесятого', "дев'яностого"];
+const HUNDRED_ORD_GEN = ['', 'сотого', 'двохсотого', 'трьохсотого', 'чотирьохсотого', "п'ятисотого", 'шестисотого', 'семисотого', 'восьмисотого', "дев'ятисотого"];
+const THOUSAND_PREFIX = ['', '', 'двох', 'трьох', 'чотирьох', "п'яти", 'шести', 'семи', 'восьми', "дев'яти"];
+
+function dayOrdinal(day: number): string {
+  if (day <= 20) return DAY_ORD[day]!;
+  if (day % 10 === 0) return day === 30 ? 'тридцяте' : DAY_ORD[day]!;
+  return `${TENS[Math.floor(day / 10)]} ${DAY_ORD[day % 10]}`;
+}
+
+/** 1–999 as a genitive ordinal: only the last word takes the ordinal form, as in speech. */
+function ordinalGenitive(n: number): string {
+  const h = Math.floor(n / 100);
+  const r = n % 100;
+  if (r === 0) return HUNDRED_ORD_GEN[h]!;
+  const words: string[] = h ? [HUNDREDS[h]!] : [];
+  if (r < 10) words.push(UNIT_ORD_GEN[r]!);
+  else if (r < 20) words.push(TEEN_ORD_GEN[r - 10]!);
+  else if (r % 10 === 0) words.push(TEN_ORD_GEN[r / 10]!);
+  else words.push(TENS[Math.floor(r / 10)]!, UNIT_ORD_GEN[r % 10]!);
+  return words.join(' ');
+}
+
+/** A year as it is said in a date: "дві тисячі двадцять шостого року". */
+function yearGenitive(year: number): string {
+  const th = Math.floor(year / 1000);
+  const rest = year % 1000;
+  if (rest === 0) return th === 1 ? 'тисячного' : `${THOUSAND_PREFIX[th]}тисячного`;
+  const lead = th ? `${ukrainianNumber(String(th * 1000))} ` : '';
+  return `${lead}${ordinalGenitive(rest)}`;
+}
+
+/**
+ * "05.10.2026" as a date — "п'яте жовтня дві тисячі двадцять шостого року". Read as numbers it
+ * was "п'ять кома десять…", the dots taken for decimal points.
+ */
+function ukrainianDate(d: string, m: string, y: string): string | null {
+  const day = Number(d);
+  const month = Number(m);
+  const year = Number(y);
+  if (day < 1 || day > 31 || month < 1 || month > 12 || year < 1000 || year > 9999) return null;
+  return `${dayOrdinal(day)} ${MONTH_GEN[month]} ${yearGenitive(year)} року`;
+}
+
 /** `text` with numbers in words and Latin letters in Cyrillic, ready for a Ukrainian letter voice. */
 export function ukrainianForTextVoice(text: string): string {
   return (
@@ -108,6 +170,16 @@ export function ukrainianForTextVoice(text: string): string {
       // so they were dropped and −0,05 was spoken as 0,05 — the same dose, the other way round.
       .replace(/(^|[\s(\[:;,])[-−–—](?=\d)/g, '$1мінус ')
       .replace(/(^|[\s(\[:;,])\+(?=\d)/g, '$1плюс ')
+      // Dates first: their dots are not decimal points.
+      .replace(/\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b/g, (all: string, d: string, m: string, y: string) => ukrainianDate(d, m, y) ?? all)
+      // Thousands grouped the Ukrainian way, with a space ("1 000", often a no-break space), or
+      // the English way in more than one group ("1,000,000" can be nothing else). A single group
+      // after a comma is a decimal in Ukrainian ("3,500" is three and a half) — except ",000",
+      // which no one writes as a decimal: "1,000" read "один кома нуль нуль нуль".
+      // Not from a leading zero: "067 123 45 67" is a phone number, not sixty-seven thousand.
+      .replace(/\b(?!0)\d{1,3}(?:[ \u00A0\u202F]\d{3})+\b/g, (n: string) => n.replace(/\D/g, ''))
+      .replace(/\b\d{1,3}(?:([,.])\d{3})(?:\1\d{3})+\b/g, (n: string) => n.replace(/\D/g, ''))
+      .replace(/\b(\d{1,3}),000\b(?![,.]\d)/g, '$1000')
       // A decimal: Ukrainian writes "3,5" and says "три кома п'ять". "3.5" reads the same.
       .replace(/(\d+)[.,](\d+)/g, (_, whole: string, frac: string) => `${ukrainianNumber(whole)} кома ${fraction(frac)}`)
       .replace(/\d+/g, (d) => ` ${ukrainianNumber(d)} `)
