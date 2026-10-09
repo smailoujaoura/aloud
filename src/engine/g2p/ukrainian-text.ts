@@ -174,12 +174,12 @@ export function ukrainianForTextVoice(text: string): string {
       .replace(/\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b/g, (all: string, d: string, m: string, y: string) => ukrainianDate(d, m, y) ?? all)
       // Thousands grouped the Ukrainian way, with a space ("1 000", often a no-break space), or
       // the English way in more than one group ("1,000,000" can be nothing else). A single group
-      // after a comma is a decimal in Ukrainian ("3,500" is three and a half) — except ",000",
-      // which no one writes as a decimal: "1,000" read "один кома нуль нуль нуль".
+      // after a comma is a decimal in Ukrainian, always: "3,500" is three and a half, and "1,000"
+      // is one to three places. Guessing a thousand from the zeros turned a measured 1,000 kg
+      // into 1000 kg — reading a number awkwardly is better than reading the wrong number.
       // Not from a leading zero: "067 123 45 67" is a phone number, not sixty-seven thousand.
       .replace(/\b(?!0)\d{1,3}(?:[ \u00A0\u202F]\d{3})+\b/g, (n: string) => n.replace(/\D/g, ''))
       .replace(/\b\d{1,3}(?:([,.])\d{3})(?:\1\d{3})+\b/g, (n: string) => n.replace(/\D/g, ''))
-      .replace(/\b(\d{1,3}),000\b(?![,.]\d)/g, '$1000')
       // A decimal: Ukrainian writes "3,5" and says "три кома п'ять". "3.5" reads the same.
       .replace(/(\d+)[.,](\d+)/g, (_, whole: string, frac: string) => `${ukrainianNumber(whole)} кома ${fraction(frac)}`)
       .replace(/\d+/g, (d) => ` ${ukrainianNumber(d)} `)

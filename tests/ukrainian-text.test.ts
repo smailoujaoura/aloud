@@ -74,7 +74,11 @@ describe('the tenth pass: dates and thousands', () => {
   });
 
   it('reads grouped thousands as one number', () => {
-    expect(ukrainianForTextVoice('1,000')).toBe('тисяча');
+    // A single comma group is a Ukrainian decimal, zeros or not: 1,000 kg is a measurement to three
+    // places, and must not become 1000 kg (the eleventh pass).
+    expect(ukrainianForTextVoice('Маса 1,000 кг.')).toBe('Маса один кома нуль нуль нуль кг.');
+    expect(ukrainianForTextVoice('Маса 1,000 кг.')).not.toBe(ukrainianForTextVoice('Маса 1000 кг.'));
+    expect(ukrainianForTextVoice('Маса 1.000 кг.')).toBe(ukrainianForTextVoice('Маса 1,000 кг.'));
     expect(ukrainianForTextVoice('1,000,000')).toBe('один мільйон');
     expect(ukrainianForTextVoice('1 000')).toBe('тисяча');
     expect(ukrainianForTextVoice('25 000 гривень')).toBe("двадцять п'ять тисяч гривень");

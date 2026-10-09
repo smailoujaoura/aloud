@@ -244,13 +244,11 @@ function chunks(items: readonly PdfTextItem[]): Span[] {
 
 /** Group runs that already belong to one column into baseline-ordered lines. */
 function linesWithin(items: PdfTextItem[], page: number): Line[] {
-  const lines: Line[] = [];
+  const groups: PdfTextItem[][] = [];
   let current: PdfTextItem[] = [];
 
   const flush = (): void => {
-    if (current.length === 0) return;
-    const line = buildLine(current, page);
-    if (line) lines.push(line);
+    if (current.length > 0) groups.push(current);
     current = [];
   };
 
@@ -270,29 +268,54 @@ function linesWithin(items: PdfTextItem[], page: number): Line[] {
     }
   }
   flush();
-  return lines;
+
+  // The column's own direction, from all its lines together: what a line that is evenly made of
+  // both directions falls back on (see `readingOrder`). Over a whole column, one long name is
+  // just one stretch among many.
+  let rtlStretches = 0;
+  let ltrStretches = 0;
+  for (const group of groups) {
+    const { rtl, ltr } = stretches(group);
+    rtlStretches += rtl;
+    ltrStretches += ltr;
+  }
+  const hint = rtlStretches === ltrStretches ? null : rtlStretches > ltrStretches;
+  return groups.map((group) => buildLine(group, page, hint)).filter((l): l is Line => l !== null);
 }
 
-function buildLine(runs: PdfTextItem[], page: number): Line | null {
-  const { ordered, rtl } = readingOrder(runs);
+function buildLine(runs: PdfTextItem[], page: number, hint: boolean | null = null): Line | null {
+  const { ordered, rtl } = readingOrder(runs, hint);
   const size = Math.max(...ordered.map((r) => r.height || 0), 0);
+
+  // Both directions on one line: reading order jumps across the page (see below).
+  const dirsHere = new Set(runs.map(strongDirection).filter((d) => d != null));
+  const mixed = dirsHere.size > 1;
+  const between = (a: PdfTextItem, b: PdfTextItem): number =>
+    Math.max(a.x, b.x) - Math.min(a.x + a.width, b.x + b.width);
 
   let text = '';
   let prev: PdfTextItem | null = null;
+  const read: PdfTextItem[] = [];
   for (const run of ordered) {
     // Footnote markers and reference superscripts are noise when spoken: "Vaswani∗" reads as
     // "Vaswani star". Drop the tiny marker-only runs, keep genuine small text.
     const tiny = size > 0 && (run.height || 0) <= 0.72 * size;
     if (tiny && MARKER_ONLY.test(run.str)) {
       prev = run;
+      read.push(run);
       continue;
     }
-    // The space between two runs, whichever side of the other each sits on: reading order is
-    // right to left in an Arabic line, and jumps across an embedded English word or number.
-    const gap = prev == null ? 0 : Math.max(run.x, prev.x) - Math.min(run.x + run.width, prev.x + prev.width);
+    // The space before a run: the gap to what was read before it, whichever side that sits on.
+    // On a line in both directions the run read last can be at the far end of an embedded
+    // stretch — after "محمد سعيد" in an English sentence, the full stop's reading neighbour is the
+    // *left* end of the Arabic — so the gap is taken to the nearest run already read instead.
+    // Measured to the last one, it put a space before the full stop.
+    let gap = 0;
+    if (prev != null) gap = mixed ? Math.min(...read.map((r) => between(run, r))) : between(run, prev);
     if (text !== '' && gap > 0.18 * (run.height || size || 10) && !/\s$/.test(text)) text += ' ';
     text += run.str;
     prev = run;
+    read.push(run);
   }
 
   // Shaped Arabic as PDFs store it — presentation forms, one per glyph position — back to the
@@ -341,42 +364,70 @@ function runDirection(run: PdfTextItem): 'rtl' | 'ltr' | null {
 }
 
 /**
- * A line's runs in the order they are read.
- *
- * A PDF draws a line left to right whatever its script, so sorting by position reads an Arabic
- * line backwards, letter by letter when the producer draws one glyph per run. So the line's
- * direction is taken from its letters, the runs are put in that direction, and any stretch in the
- * other direction inside it — an English word, a number, in an Arabic sentence; an Arabic name
- * in an English one — is turned back round. pdf.js has already put each run's own characters in
- * reading order (`dir` on its items); only the order of the runs is left to do.
+ * The stretches a line is made of: each unbroken run of one direction counts once, however many
+ * letters or glyph-runs it was drawn as. Counting letters, one long Latin name — "هذا هو
+ * ChromiumExtension هنا." — outvoted the Arabic around it and turned the sentence round. Digits
+ * never count: they are weak in the Unicode bidi algorithm and read left to right anywhere.
  */
-function readingOrder(runs: readonly PdfTextItem[]): { ordered: PdfTextItem[]; rtl: boolean } {
-  const dirs = new Map(runs.map((r) => [r, runDirection(r)]));
-
-  // A line's direction is decided by what it is made of, not by how long any one word is.
-  // Counting letters, a single long Latin name — "هذا هو ChromiumExtension هنا." — outvoted the
-  // Arabic around it and turned the sentence round. So each unbroken stretch of one direction
-  // counts once, however many letters or glyph-runs it was drawn as. Digits never count: they are
-  // weak in the Unicode bidi algorithm and read left to right inside a right-to-left line.
-  const byX = [...runs].sort((a, b) => a.x - b.x);
-  let rtlRuns = 0;
-  let ltrRuns = 0;
+function stretches(runs: readonly PdfTextItem[]): { rtl: number; ltr: number; strong: Array<'rtl' | 'ltr'> } {
+  let rtl = 0;
+  let ltr = 0;
   let previous: 'rtl' | 'ltr' | null = null;
   const strong: Array<'rtl' | 'ltr'> = [];
-  for (const run of byX) {
+  for (const run of [...runs].sort((a, b) => a.x - b.x)) {
     const dir = strongDirection(run);
     if (dir == null) continue; // digits, punctuation, spaces: they take the direction around them
     strong.push(dir);
     if (dir !== previous) {
-      if (dir === 'rtl') rtlRuns++;
-      else ltrRuns++;
+      if (dir === 'rtl') rtl++;
+      else ltr++;
       previous = dir;
     }
   }
-  const rtl =
-    rtlRuns > ltrRuns ||
-    // Evenly made of both: the line belongs to whichever direction holds both of its ends.
-    (rtlRuns === ltrRuns && strong[0] === 'rtl' && strong[strong.length - 1] === 'rtl');
+  return { rtl, ltr, strong };
+}
+
+/** Sentence-ending punctuation, on its own. */
+const TERMINAL = /^[.!?\u061F\u06D4\u2026:;\u060C]+$/u;
+
+/**
+ * Which end of the drawn line its closing punctuation sits at, or null. Punctuation at the end of
+ * a sentence takes the paragraph's direction: an Arabic sentence's full stop is drawn at the
+ * *left*, an English one's at the right — whatever the last word was written in.
+ */
+function closingSide(runs: readonly PdfTextItem[]): 'left' | 'right' | null {
+  const byX = runs.filter((r) => r.str.trim() !== '').sort((a, b) => a.x - b.x);
+  const left = TERMINAL.test(byX[0]?.str.trim() ?? '');
+  const right = TERMINAL.test(byX[byX.length - 1]?.str.trim() ?? '');
+  if (left === right) return null;
+  return left ? 'left' : 'right';
+}
+
+/**
+ * A line's runs in the order they are read.
+ *
+ * A PDF draws a line left to right whatever its script, so sorting by position reads an Arabic
+ * line backwards, letter by letter when the producer draws one glyph per run. So the line's
+ * direction is taken from what it is made of (`stretches`), the runs are put in that direction,
+ * and any stretch in the other direction inside it — an English word, a number, in an Arabic
+ * sentence; an Arabic name in an English one — is turned back round. pdf.js has already put each
+ * run's own characters in reading order; only the order of the runs is left to do.
+ *
+ * An even split — Arabic words then one Latin one, "هذا هو اسم التطبيق Aloud." — says nothing by
+ * itself, so a tie goes to the side the full stop is drawn on, then to the direction of the
+ * column the line is in (`hint`), and only then to the ends of the line.
+ */
+function readingOrder(runs: readonly PdfTextItem[], hint: boolean | null = null): { ordered: PdfTextItem[]; rtl: boolean } {
+  const dirs = new Map(runs.map((r) => [r, runDirection(r)]));
+  const { rtl: rtlRuns, ltr: ltrRuns, strong } = stretches(runs);
+  let rtl: boolean;
+  if (rtlRuns !== ltrRuns) rtl = rtlRuns > ltrRuns;
+  else {
+    const closing = closingSide(runs);
+    if (closing) rtl = closing === 'left';
+    else if (hint != null) rtl = hint;
+    else rtl = strong[0] === 'rtl' && strong[strong.length - 1] === 'rtl';
+  }
   const rtlChars = strong.filter((d) => d === 'rtl').length;
   const ordered = [...runs].sort((a, b) => (rtl ? b.x - a.x : a.x - b.x));
   if (rtlChars === 0) return { ordered, rtl: false };

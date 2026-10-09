@@ -225,15 +225,34 @@ try {
   const logs = [];
   page.on('console', (m) => logs.push(m.text()));
   page.on('pageerror', (e) => logs.push(`pageerror: ${e.message}`));
-  const waitFor = async (re, ms, what) => {
+  const waitFor = async (re, ms, what, diagnose) => {
     const start = Date.now();
     while (Date.now() - start < ms) {
       const hit = logs.find((l) => re.test(l));
       if (hit) return hit;
       await page.waitForTimeout(250);
     }
-    await fail(`${what} (waited ${Math.round(ms / 1000)} s)\n  last logs:\n  ${logs.slice(-8).join('\n  ')}`);
+    const more = diagnose ? `\n  state: ${await diagnose().catch((e) => `could not inspect: ${e}`)}` : '';
+    await fail(`${what} (waited ${Math.round(ms / 1000)} s)\n  last logs:\n  ${logs.slice(-8).join('\n  ')}${more}`);
   };
+
+  // What a stuck voice load is waiting on, seen from the extension's own origin: the locks it
+  // holds or waits for (one per model download), and which model files reached the cache.
+  const inspectLoad = async () =>
+    JSON.stringify(
+      await evaluate(
+        rdp,
+        consoles.background,
+        `const locks = await navigator.locks.query();
+         const db = await new Promise((ok, no) => { const r = indexedDB.open('aloud-models'); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); });
+         const names = [...db.objectStoreNames];
+         const keys = names.length
+           ? await new Promise((ok) => { const r = db.transaction(names[0], 'readonly').objectStore(names[0]).getAllKeys(); r.onsuccess = () => ok(r.result); r.onerror = () => ok(['(unreadable)']); })
+           : [];
+         db.close();
+         return { held: locks.held.map((l) => l.name), pending: locks.pending.map((l) => l.name), cached: keys.map((k) => String(k).split('/').pop()) };`,
+      ),
+    );
 
   await page.goto(articleUrl);
   await evaluate(
@@ -246,7 +265,16 @@ try {
   );
 
   step((await waitFor(/planned \d+ sentences/, 30_000, 'the reader did not plan the article')).replace(/^\[aloud\]\s*/, ''));
-  await waitFor(/engine ready/, 300_000, 'the voice did not load');
+  // Every run starts from a fresh profile, so the voice (~60 MB) is downloaded from Hugging Face
+  // each time. Over a slow line that alone took over four minutes, and the old five-minute limit
+  // failed runs whose only fault was the network. E2E_VOICE_TIMEOUT (seconds) overrides it.
+  const voiceTimeout = Number(process.env.E2E_VOICE_TIMEOUT) * 1000 || 900_000;
+  await waitFor(
+    /engine ready/,
+    voiceTimeout,
+    'the voice did not load — a cold run downloads ~60 MB from Hugging Face; check the line before the app',
+    inspectLoad,
+  );
   step('voice loaded');
   const chunk = await waitFor(/→ chunk \d+ in [\d.]+s → [\d.]+s audio/, 120_000, 'no audio came back from the engine');
   step(`audio: ${chunk.replace(/^\[aloud\]\s*/, '')}`);

@@ -58,6 +58,8 @@ export class MediaSpeedController {
   private settled = new WeakMap<Media, number>();
   /** How often the chosen rate has been put back since this player last seeked or loaded. */
   private overrides = new WeakMap<Media, number>();
+  /** When the viewer last clicked, tapped or pressed a key. */
+  private lastInput = -Infinity;
   /** The rate each player had of its own before we first set ours — what it resets *to*. */
   private native = new WeakMap<Media, number>();
   /** Players that have loaded a *different* video since the rate was last applied to them. */
@@ -89,6 +91,11 @@ export class MediaSpeedController {
     // `document`, not its root element: started with the page, there may not be one yet.
     this.observer.observe(document, { childList: true, subtree: true });
     this.listen(window, 'keydown', (e) => this.onKey(e as KeyboardEvent), true);
+    // The viewer's own input, seen before the page handles it (capture): a rate change with a
+    // fresh click or key behind it is a choice, even straight after a seek (see `onRateChange`).
+    for (const type of ['pointerdown', 'keydown', 'touchstart']) {
+      this.listen(window, type, () => void (this.lastInput = Date.now()), true);
+    }
   }
 
   stop(): void {
@@ -216,8 +223,13 @@ export class MediaSpeedController {
 
       // The player's own doing — it is mid-seek or mid-load, or has just finished one. Facebook
       // restores its rate on every `seeked`, which read as a viewer asking for 1×.
-      const since = Date.now() - (this.settled.get(media) ?? -Infinity);
-      const settling = media.seeking || media.readyState < 2 || since < SETTLE_MS;
+      const settledAt = this.settled.get(media) ?? -Infinity;
+      const since = Date.now() - settledAt;
+      // A click or key *after* the player finished seeking means somebody chose this rate — the
+      // normal-speed button pressed 260 ms after a seek was put back to 1.75×. The player's own
+      // reset comes out of the seek itself, with no new input between.
+      const chosenSince = this.lastInput > settledAt;
+      const settling = !chosenSince && (media.seeking || media.readyState < 2 || since < SETTLE_MS);
       // What a player resets to: the rate it had before ours, its default, or plain 1×. Any other
       // value is somebody choosing a speed, however soon after a seek it comes.
       const now = media.playbackRate;
@@ -239,6 +251,10 @@ export class MediaSpeedController {
         }
         // Follow it on screen, but never remember it: a click must not rewrite the site's speed.
         this.rate = clampRate(media.playbackRate);
+        // And it is the rate on this player now. Left at our earlier write, a later choice of
+        // that same rate looked like our own echo and was ignored — then "faster" stepped from
+        // the stale 1× and turned 1.75× into 1.1×.
+        this.applied.set(media, media.playbackRate);
         return;
       }
 

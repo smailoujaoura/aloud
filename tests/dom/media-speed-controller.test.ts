@@ -165,4 +165,57 @@ describe('a rate change from the player, not the viewer', () => {
       controller.stop();
     });
   });
+
+  // The eleventh pass: neither timing nor value alone tells a player's reset from a choice.
+  describe('a choice has input behind it; a reset does not', () => {
+    it('AD03: keeps 1× chosen with a click straight after a seek', () => {
+      const el = player();
+      const { controller, remembered } = start(null);
+      controller.setRate(1.75, false);
+      el.dispatchEvent(new Event('seeking'));
+      el.dispatchEvent(new Event('seeked'));
+      vi.advanceTimersByTime(260);
+      window.dispatchEvent(new Event('pointerdown')); // the normal-speed button
+      el.playbackRate = 1;
+      el.dispatchEvent(new Event('ratechange'));
+      expect(el.playbackRate).toBe(1);
+      expect(controller.currentRate).toBe(1);
+      expect(remembered.at(-1)).toBe(1);
+      controller.stop();
+    });
+
+    it('still puts the speed back when the reset comes out of the seek itself', () => {
+      const el = player();
+      const { controller } = start(null);
+      controller.setRate(1.75, false);
+      window.dispatchEvent(new Event('pointerdown')); // the click that seeks…
+      vi.advanceTimersByTime(5);
+      seekAndRestore(el, 1); // …and the player's reset after it, with no new input
+      expect(el.playbackRate).toBe(1.75);
+      controller.stop();
+    });
+
+    it('AD04: after yielding to an insistent player, a later 1.75× is the viewer’s, and “faster” goes up', () => {
+      const el = player();
+      const { controller } = start(null);
+      controller.setRate(1.75, false);
+      let insist = true;
+      el.addEventListener('ratechange', () => {
+        if (insist && el.playbackRate !== 1) {
+          el.playbackRate = 1;
+          el.dispatchEvent(new Event('ratechange'));
+        }
+      });
+      seekAndRestore(el, 1);
+      expect(controller.currentRate).toBe(1); // Aloud yielded
+      insist = false;
+      vi.advanceTimersByTime(1500);
+      el.playbackRate = 1.75; // the viewer, through the page's own control
+      el.dispatchEvent(new Event('ratechange'));
+      expect(controller.currentRate).toBe(1.75);
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'd', bubbles: true }));
+      expect(el.playbackRate).toBe(1.85);
+      controller.stop();
+    });
+  });
 });
