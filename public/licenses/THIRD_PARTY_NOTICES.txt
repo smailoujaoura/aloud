@@ -6,7 +6,7 @@ eSpeak-NG (GPL-3.0-or-later), compiled to WebAssembly, as the phonemizer for its
 includes lamejs (LGPL-3.0, full text in LGPL-3.0.txt beside this file) for MP3 export.
 
 The complete corresponding source code is available at:
-  https://github.com/oujaoura/aloud
+  https://github.com/smailoujaoura/aloud
 
 Below are the licences and notices of the open-source packages Aloud is built from, as each
 package states them. Voice models are not part of this package; they are downloaded on first use

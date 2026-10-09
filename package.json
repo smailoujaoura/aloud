@@ -4,7 +4,7 @@
   "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
-    "url": "https://github.com/oujaoura/aloud"
+    "url": "https://github.com/smailoujaoura/aloud"
   },
   "description": "Fast offline neural text-to-speech for Firefox: Readability extraction, Piper/Kokoro via ONNX Runtime Web, gapless Web Audio playback, in-place sentence highlighting.",
   "type": "module",
