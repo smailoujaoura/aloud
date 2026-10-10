@@ -91,3 +91,25 @@ describe('the tenth pass: dates and thousands', () => {
     expect(ukrainianForTextVoice('067 123 45 67')).not.toContain('тисяч');
   });
 });
+
+describe('the twelfth pass: phone numbers and versions', () => {
+  it('reads a spaced phone number group by group', () => {
+    const said = ukrainianForTextVoice('+380 44 123 45 67');
+    expect(said).toBe("плюс триста вісімдесят сорок чотири сто двадцять три сорок п'ять шістдесят сім");
+    expect(said).not.toContain('тисяч');
+    expect(ukrainianForTextVoice('Тел. 044 123 45 67')).not.toContain('тисяч');
+  });
+
+  it('still reads real grouped thousands as one number', () => {
+    expect(ukrainianForTextVoice('Сума 25 000 гривень')).toBe("Сума двадцять п'ять тисяч гривень");
+    expect(ukrainianForTextVoice('у 2024 році 100 000 людей')).toContain('сто тисяч людей');
+    expect(ukrainianForTextVoice('1 000 000')).toBe('один мільйон');
+  });
+
+  it('reads a version or an address part by part', () => {
+    expect(ukrainianForTextVoice('версія 1.2.3')).toBe('версія один крапка два крапка три');
+    expect(ukrainianForTextVoice('192.168.0.1')).toBe("сто дев'яносто два крапка сто шістдесят вісім крапка нуль крапка один");
+    expect(ukrainianForTextVoice('05.10.2026')).toBe("п'яте жовтня дві тисячі двадцять шостого року"); // a date stays a date
+    expect(ukrainianForTextVoice('3.5')).toBe("три кома п'ять"); // one dot is still a decimal
+  });
+});

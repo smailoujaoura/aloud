@@ -223,21 +223,40 @@ function linesOf(page: PdfPageInput): Line[] {
  * Runs closer than most gutters (0.8 em) are one stretch; word spaces are a third of that.
  */
 function chunks(items: readonly PdfTextItem[]): Span[] {
-  const out: Array<[number, number, number, number]> = [];
-  const byLine = [...items].sort((a, b) => b.y - a.y || a.x - b.x);
-  let last: { y: number; size: number; span: [number, number, number, number] } | null = null;
-  for (const it of byLine) {
-    const x0 = it.x;
-    const x1 = it.x + (it.width || 0);
-    const size = it.height || 10;
-    const sameLine = last && Math.abs(it.y - last.y) <= Math.max(1, 0.5 * Math.max(size, last.size));
-    if (last && sameLine && x0 - last.span[1] <= 0.8 * Math.max(size, last.size)) {
-      last.span[1] = Math.max(last.span[1], x1);
-      continue;
+  // Baselines first, then left to right within each. Sorting everything by baseline and reading
+  // runs in that order joined runs that were not neighbours: two columns whose lines sit a couple
+  // of points apart (any font but the one a page was tested with) interleave in that order, and a
+  // left-column run following a right-column one has a *negative* gap to it, which passed for
+  // "close". Every left-column line was glued to the right-column line beside it, the stretch
+  // crossed the gutter, and the page was read as one column with its lines merged.
+  const bands: PdfTextItem[][] = [];
+  // Marks drawn on their own — an Arabic hamza or dot set a few points above the line, often with
+  // no width — say nothing about where a column runs, and as stretches of their own they skewed
+  // the count of each side and pulled lines into the wrong band. They still count as text.
+  const body = items.filter((it) => (it.width || 0) >= 0.5 && !/^[\p{M}\s]*$/u.test(it.str));
+  for (const it of body.sort((a, b) => b.y - a.y)) {
+    // Measured from the band's first run, not its last: stepping run to run, marks set a little
+    // above the line bridged one line to the next, and a whole column became one band.
+    const band = bands[bands.length - 1];
+    const first = band?.[0];
+    if (band && first && Math.abs(it.y - first.y) <= Math.max(1, 0.5 * Math.max(it.height || 10, first.height || 10))) band.push(it);
+    else bands.push([it]);
+  }
+  const out: Span[] = [];
+  for (const band of bands) {
+    let span: [number, number, number, number] | null = null;
+    for (const it of band.sort((a, b) => a.x - b.x)) {
+      const x0 = it.x;
+      const x1 = it.x + (it.width || 0);
+      const size = it.height || 10;
+      if (span && x0 - span[1] <= 0.8 * Math.max(size, span[3])) {
+        span[1] = Math.max(span[1], x1);
+        span[3] = Math.max(span[3], size);
+        continue;
+      }
+      span = [x0, x1, it.y, size];
+      out.push(span);
     }
-    const span: [number, number, number, number] = [x0, x1, it.y, size];
-    out.push(span);
-    last = { y: it.y, size, span };
   }
   return out;
 }
@@ -467,20 +486,28 @@ function readingOrder(runs: readonly PdfTextItem[], hint: boolean | null = null)
 type Span = readonly [number, number, number, number];
 
 /**
- * How many stretches left of `x` have one right of it on the same line — text side by side,
- * which is what columns are and what a sparse title page is not.
+ * Text on both sides of `x` *side by side*, not stacked: some line on the left sits closer to a
+ * line on the right than lines of one column ever sit to each other. Two columns interleave like
+ * that; a single column whose lines happen to be set left or right — an English sentence between
+ * Arabic ones — has each line a full line apart from the next, on whichever side it is.
  */
-function sideBySide(spans: readonly Span[], x: number): number {
-  const right = spans.filter((s) => s[0] >= x);
-  return spans.filter((l) => l[1] <= x && right.some((r) => Math.abs(r[2] - l[2]) < 1.5 * Math.max(l[3], r[3]))).length;
+function sideBySide(spans: readonly Span[], x: number): boolean {
+  const left = spans.filter((s) => s[1] <= x).map((s) => s[2]).sort((a, b) => b - a);
+  const right = spans.filter((s) => s[0] >= x).map((s) => s[2]).sort((a, b) => b - a);
+  if (left.length < 2 || right.length < 2) return false;
+  const gaps = [left, right].flatMap((ys) => ys.slice(1).map((y, i) => ys[i]! - y)).sort((a, b) => a - b);
+  const pitch = gaps[Math.floor(gaps.length / 2)] ?? 0;
+  let closest = Infinity;
+  for (const l of left) for (const r of right) closest = Math.min(closest, Math.abs(l - r));
+  return pitch > 0 && closest < 0.75 * pitch;
 }
 
 function findColumnSplits(spans: readonly Span[], from: number, to: number, depth = 0): number[] {
   const inside = spans.filter((s) => s[0] >= from - 0.5 && s[1] <= to + 0.5);
   // Too few stretches to tell a column from a coincidence — a title page or a mostly empty
-  // page. Under twelve, a split is still taken when text faces text across it on several lines
-  // (below): a short two-column page was read as one wide column, lines from both merged.
-  if (inside.length < 6 || depth > 1) return [];
+  // page. Under twelve, a split is still taken when the two sides interleave (below): a short
+  // two-column page was read as one wide column, the lines of both merged.
+  if (inside.length < 4 || depth > 1) return [];
 
   const width = to - from;
   let best: { x: number; crossing: number; balance: number } | null = null;
@@ -504,7 +531,8 @@ function findColumnSplits(spans: readonly Span[], from: number, to: number, dept
     }
   }
   if (!best) return [];
-  if (inside.length < 12 && sideBySide(inside, best.x) < 3) return [];
+  // Short pages: nothing may cross the gutter, and the two sides must be side by side.
+  if (inside.length < 12 && (best.crossing > 0 || !sideBySide(inside, best.x))) return [];
 
   // Newspapers and some reports run three or four columns; recurse once into each half.
   return [

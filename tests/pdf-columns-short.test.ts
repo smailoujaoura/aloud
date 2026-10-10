@@ -44,4 +44,18 @@ describe('a short two-column page', () => {
     expect(right).toBe(0);
     expect(all.slice(left).every((l) => l.x1 < 210)).toBe(true); // once left, it stays left
   });
+
+  // The twelfth pass: Arabic printed with the font Chromium falls back to, not the one embedded
+  // in the other fixtures. Its two columns' lines sit a couple of points apart, and the runs of
+  // the left line were glued to the right line beside it — one stretch across the gutter.
+  for (const file of ['ar-cols-system-font.pdf', 'ar-cols-system-font-long.pdf', 'ar-cols-narrow-gap.pdf']) {
+    it(`Arabic, ${file}: right column first, no line across the gutter`, async () => {
+      const all = await lines(file);
+      expect(oneColumnEach(all, 210)).toBe(true);
+      expect(all[0]!.x0).toBeGreaterThan(210);
+      const left = all.findIndex((l) => l.x1 < 210);
+      expect(left).toBeGreaterThan(0);
+      expect(all.slice(left).every((l) => l.x1 < 210)).toBe(true);
+    });
+  }
 });

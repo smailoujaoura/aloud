@@ -177,9 +177,17 @@ export function ukrainianForTextVoice(text: string): string {
       // after a comma is a decimal in Ukrainian, always: "3,500" is three and a half, and "1,000"
       // is one to three places. Guessing a thousand from the zeros turned a measured 1,000 kg
       // into 1000 kg — reading a number awkwardly is better than reading the wrong number.
-      // Not from a leading zero: "067 123 45 67" is a phone number, not sixty-seven thousand.
-      .replace(/\b(?!0)\d{1,3}(?:[ \u00A0\u202F]\d{3})+\b/g, (n: string) => n.replace(/\D/g, ''))
+      // Not from a leading zero ("067 123 45 67"), and not where the groups run on into other
+      // digit groups: "+380 44 123 45 67" is a phone number, and "44 123" in it is not forty-four
+      // thousand. A phone number's groups are read one by one, as they are said.
+      .replace(
+        /(?<![\d+][ \u00A0\u202F-]?)\b(?!0)\d{1,3}(?:[ \u00A0\u202F]\d{3})+\b(?![ \u00A0\u202F-]?\d)/g,
+        (n: string) => n.replace(/\D/g, ''),
+      )
       .replace(/\b\d{1,3}(?:([,.])\d{3})(?:\1\d{3})+\b/g, (n: string) => n.replace(/\D/g, ''))
+      // Two dots or more is a version or an address, read part by part: "версія 1.2.3" is
+      // "один крапка два крапка три", not one-point-two and a stray three.
+      .replace(/\b\d+(?:\.\d+){2,}\b/g, (v: string) => v.split('.').map((part) => ukrainianNumber(part)).join(' крапка '))
       // A decimal: Ukrainian writes "3,5" and says "три кома п'ять". "3.5" reads the same.
       .replace(/(\d+)[.,](\d+)/g, (_, whole: string, frac: string) => `${ukrainianNumber(whole)} кома ${fraction(frac)}`)
       .replace(/\d+/g, (d) => ` ${ukrainianNumber(d)} `)

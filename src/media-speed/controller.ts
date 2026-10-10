@@ -33,6 +33,8 @@ const BADGE_HOST_ID = 'aloud-speed-badge';
 const BADGE_MS = 1400;
 /** A rate change this soon after a seek or a load is the player settling, not the viewer. */
 const SETTLE_MS = 1200;
+/** How soon after a click or key a rate change must come to be that input's doing. */
+const INPUT_MS = 120;
 /** How often to put a chosen rate back before letting an insistent player keep its own. */
 const MAX_OVERRIDES = 3;
 
@@ -91,9 +93,10 @@ export class MediaSpeedController {
     // `document`, not its root element: started with the page, there may not be one yet.
     this.observer.observe(document, { childList: true, subtree: true });
     this.listen(window, 'keydown', (e) => this.onKey(e as KeyboardEvent), true);
-    // The viewer's own input, seen before the page handles it (capture): a rate change with a
-    // fresh click or key behind it is a choice, even straight after a seek (see `onRateChange`).
-    for (const type of ['pointerdown', 'keydown', 'touchstart']) {
+    // The viewer's own input, seen before the page handles it (capture): a rate change that
+    // follows a click or key at once is a choice, even straight after a seek (see `onRateChange`).
+    // `click` and `pointerup` too: a site's speed menu acts on the click, not the press.
+    for (const type of ['pointerdown', 'pointerup', 'click', 'keydown', 'touchstart', 'touchend']) {
       this.listen(window, type, () => void (this.lastInput = Date.now()), true);
     }
   }
@@ -225,10 +228,12 @@ export class MediaSpeedController {
       // restores its rate on every `seeked`, which read as a viewer asking for 1×.
       const settledAt = this.settled.get(media) ?? -Infinity;
       const since = Date.now() - settledAt;
-      // A click or key *after* the player finished seeking means somebody chose this rate — the
-      // normal-speed button pressed 260 ms after a seek was put back to 1.75×. The player's own
-      // reset comes out of the seek itself, with no new input between.
-      const chosenSince = this.lastInput > settledAt;
+      // Somebody chose this rate if a click or key came after the player finished seeking *and*
+      // the change follows that input at once: a site sets the speed you picked inside the click
+      // or key handler, so the change lands within milliseconds of it. Any input after the seek
+      // was not enough — a stray click 150 ms after a seek let a reset arriving 400 ms after it
+      // pass for a choice, and Facebook's 1× was taken and remembered again.
+      const chosenSince = this.lastInput > settledAt && Date.now() - this.lastInput <= INPUT_MS;
       const settling = !chosenSince && (media.seeking || media.readyState < 2 || since < SETTLE_MS);
       // What a player resets to: the rate it had before ours, its default, or plain 1×. Any other
       // value is somebody choosing a speed, however soon after a seek it comes.

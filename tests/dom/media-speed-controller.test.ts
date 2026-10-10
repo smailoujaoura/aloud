@@ -218,4 +218,39 @@ describe('a rate change from the player, not the viewer', () => {
       controller.stop();
     });
   });
+
+  // The twelfth pass: any input after a seek was taken as the viewer choosing.
+  describe('input counts only when the change follows it at once', () => {
+    it('a stray click between a seek and a slow reset does not make the reset a choice', () => {
+      const el = player();
+      const { controller, remembered } = start(null);
+      controller.setRate(1.9, false);
+      window.dispatchEvent(new Event('pointerdown')); // the progress bar
+      el.dispatchEvent(new Event('seeking'));
+      el.dispatchEvent(new Event('seeked'));
+      vi.advanceTimersByTime(150);
+      // Somewhere else on the page — a real click is all three.
+      for (const type of ['pointerdown', 'pointerup', 'click']) window.dispatchEvent(new Event(type));
+      vi.advanceTimersByTime(250);
+      el.playbackRate = 1; // the player's reset, 400 ms after the seek
+      el.dispatchEvent(new Event('ratechange'));
+      expect(el.playbackRate).toBe(1.9);
+      expect(remembered.at(-1)).toBe(1.9);
+      controller.stop();
+    });
+
+    it('a change made inside a click handler still counts as the viewer’s', () => {
+      const el = player();
+      const { controller } = start(null);
+      controller.setRate(1.9, false);
+      el.dispatchEvent(new Event('seeking'));
+      el.dispatchEvent(new Event('seeked'));
+      vi.advanceTimersByTime(300);
+      window.dispatchEvent(new Event('click')); // the site's 1× button…
+      el.playbackRate = 1; // …setting the rate in its handler
+      el.dispatchEvent(new Event('ratechange'));
+      expect(el.playbackRate).toBe(1);
+      controller.stop();
+    });
+  });
 });
