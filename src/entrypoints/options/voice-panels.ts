@@ -27,7 +27,8 @@ import { cacheClear, cacheDelete } from '@/engine/model-cache';
 import { activeVoice, type EngineId, type Settings } from '@/shared/settings';
 import type { ModelManifest, PiperVoiceEntry } from '@/engine/engines/types';
 
-import { RowProgress, downloadPiperVoice, downloadViaWorker } from './downloads';
+import { RowProgress, downloadPiperVoice, downloadTray, downloadViaWorker, followDownload } from './downloads';
+import { DownloadCancelled, downloads } from './download-queue';
 import { previewFor } from './preview-button';
 import { engineConfigFor } from './engine-config';
 import {
@@ -131,7 +132,9 @@ function renderBrowser(hosts: VoiceHosts, ctx: PanelContext): void {
       }),
     ),
   );
-  hosts.panel.replaceChildren(engine === 'piper' ? piperPanel(ctx, again) : sharedPanel(engine, ctx, again));
+  // The download line sits above whichever engine is open: one started on the Piper tab is still
+  // worth seeing from the Kokoro one.
+  hosts.panel.replaceChildren(downloadTray(), engine === 'piper' ? piperPanel(ctx, again) : sharedPanel(engine, ctx, again));
 }
 
 // ---- reading with ----------------------------------------------------------
@@ -520,20 +523,20 @@ function piperItem(group: PiperGroup, ctx: PanelContext): HTMLElement {
     actions.append(remove);
   } else {
     const download = el(document, 'button', { class: 'btn-sm', type: 'button' }, 'Download');
+    const key = `piper:${id}`;
     download.addEventListener('click', () => {
-      void runModelAction(download, async () => {
-        try {
-          progress.start(`Downloading ${group.name}…`);
-          await downloadPiperVoice(entry, progress);
-          progress.done();
+      // Queued behind any download already running; the row says so (followDownload).
+      downloads.enqueue(key, group.name, (p) => downloadPiperVoice(entry, p)).then(
+        async () => {
           ctx.flashSaved(inUse ? `${group.name} is ready` : `${group.name} downloaded — press Use to read with it`);
           await ctx.refresh();
-        } catch (err) {
-          progress.fail(err instanceof Error ? err.message : String(err));
-          download.disabled = false;
-        }
-      });
+        },
+        (err: unknown) => {
+          if (err instanceof DownloadCancelled) ctx.flashSaved(`${group.name} taken out of the download line`);
+        },
+      );
     });
+    followDownload(key, progress, download, 'Download');
     actions.append(download);
   }
 
@@ -690,18 +693,28 @@ function modelCard(
     isDelete ? 'Delete model' : `Download ${info.approxSize.replace(/\s*\(.*\)/, '')}`,
   );
 
+  const idle = btn.textContent ?? '';
+  const key = `model:${engine}`;
   btn.addEventListener('click', () => {
+    if (!isDelete) {
+      // Queued behind any download already running; the card says so (followDownload).
+      downloads.enqueue(key, `${info.name} model`, (p) =>
+        downloadViaWorker(engineConfigFor(ctx.settings, { engine, purpose: 'download' }), p),
+      ).then(
+        async () => {
+          ctx.flashSaved(`${info.name} is ready — pick a voice below`);
+          await ctx.refresh();
+        },
+        (err: unknown) => {
+          if (err instanceof DownloadCancelled) ctx.flashSaved(`${info.name} taken out of the download line`);
+        },
+      );
+      return;
+    }
     void runModelAction(btn, async () => {
       try {
-        if (isDelete) {
-          await cacheClear(info.cacheHint);
-          ctx.flashSaved(`${info.name} deleted`);
-        } else {
-          progress.start(`Downloading ${info.name}…`);
-          await downloadViaWorker(engineConfigFor(ctx.settings, { engine, purpose: 'download' }), progress);
-          progress.done();
-          ctx.flashSaved(`${info.name} is ready — pick a voice below`);
-        }
+        await cacheClear(info.cacheHint);
+        ctx.flashSaved(`${info.name} deleted`);
         await ctx.refresh();
       } catch (err) {
         progress.fail(err instanceof Error ? err.message : String(err));
@@ -709,6 +722,7 @@ function modelCard(
       }
     });
   });
+  if (!isDelete) followDownload(key, progress, btn, idle);
 
   card.append(text, btn, progress.wrap, progress.msg);
   return card;

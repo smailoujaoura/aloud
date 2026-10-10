@@ -429,6 +429,18 @@ code {
 .progress-wrap > i { display: block; height: 100%; width: 0%; background: var(--accent-solid); transition: width 0.15s linear; }
 .progress-msg { font-size: 12.5px; color: var(--fg-muted); }
 .progress-msg.error { color: var(--danger); }
+/* In line behind another download: plainly waiting, with a way out. */
+.progress-msg.is-waiting { color: var(--fg); }
+.progress-msg .link-btn {
+  background: none; border: 0; padding: 0; margin-left: 4px; font: inherit; font-weight: 600;
+  color: var(--accent-text, var(--fg)); text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
+}
+/* The download line at the top of the voice section. */
+.download-tray {
+  margin: 0 0 12px; padding: 9px 12px; border-radius: 10px; font-size: 13px; line-height: 1.45;
+  background: var(--accent-soft, rgba(255, 214, 10, 0.16)); color: var(--fg);
+}
+.download-tray[hidden] { display: none; }
 
 .preview-btn { min-width: 112px; text-align: center; font-variant-numeric: tabular-nums; }
 .preview-btn.busy { border-color: color-mix(in srgb, var(--accent-solid) 55%, var(--border)); color: var(--accent); }

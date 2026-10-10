@@ -24,6 +24,7 @@ import type { ModelManifest } from '@/engine/engines/types';
 import { getSettings, type Settings } from '@/shared/settings';
 import { engineConfigFor } from './engine-config';
 import { RowProgress, downloadPiperVoice, downloadViaWorker } from './downloads';
+import { downloads, type ProgressSink } from './download-queue';
 
 export interface BackupPanelOptions {
   manifest: ModelManifest;
@@ -211,19 +212,39 @@ function downloadStep(piper: string[], shared: Array<'kokoro' | 'supertonic'>, s
   box.append(progress.wrap, progress.msg);
   btn.addEventListener('click', async () => {
     btn.disabled = true;
+    // Into the same line as the Download buttons, one after another — and this step says where
+    // the line is while it waits, instead of standing still.
+    type Job = [key: string, label: string, run: (p: ProgressSink) => Promise<void>];
+    const jobs: Job[] = [
+      ...piper.map((id): Job => [
+        `piper:${id}`,
+        opts.manifest.piper[id]?.label ?? id,
+        (p) => downloadPiperVoice(opts.manifest.piper[id]!, p),
+      ]),
+      ...shared.map((engine): Job => [
+        `model:${engine}`,
+        `${engine === 'kokoro' ? 'Kokoro-82M' : 'Supertonic-2'} model`,
+        (p) => downloadViaWorker(engineConfigFor(settings, { engine, purpose: 'download' }), p),
+      ]),
+    ];
+    const show = (): void => {
+      const mine = downloads.all().filter((v) => jobs.some(([key]) => key === v.key));
+      const now = mine[0];
+      if (!now) return;
+      const left = mine.length;
+      if (now.phase === 'waiting') progress.note(`${now.text} · ${left} of ${jobs.length} to go`);
+      else progress.show(`${now.text.replace(/ \d+%$/, '')} ${Math.floor(now.ratio * 100)}% · ${left} of ${jobs.length} to go`, now.ratio);
+    };
+    const stop = downloads.subscribe(show);
     try {
-      for (const id of piper) {
-        progress.start(`Downloading ${opts.manifest.piper[id]?.label ?? id}…`);
-        await downloadPiperVoice(opts.manifest.piper[id]!, progress);
-      }
-      for (const engine of shared) {
-        progress.start(`Downloading ${engine === 'kokoro' ? 'Kokoro' : 'Supertonic'}…`);
-        await downloadViaWorker(engineConfigFor(settings, { engine, purpose: 'download' }), progress);
-      }
+      progress.start('Starting…');
+      await Promise.all(jobs.map(([key, label, run]) => downloads.enqueue(key, label, run)));
+      stop();
       progress.done();
       btn.textContent = 'Downloaded';
       await opts.onRestored();
     } catch (err) {
+      stop();
       progress.fail(err instanceof Error ? err.message : String(err));
       btn.disabled = false;
     }

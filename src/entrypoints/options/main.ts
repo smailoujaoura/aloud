@@ -56,6 +56,7 @@ import { initNav, onViewChange, setNavCount, showView } from './app-nav';
 import { renderRail } from './rail';
 import { initLibrary } from '@/library/app';
 import { answerTabQueries } from '@/shared/own-tab';
+import { downloads } from './download-queue';
 
 // First, before anything here can fail: lets the background find this tab without the "tabs"
 // permission (shared/own-tab.ts). Registered late, an earlier error meant a new tab every time.
@@ -588,6 +589,12 @@ function wire(): void {
   });
 
   $('clearModels').addEventListener('click', (e) => {
+    // Not under a download: it would delete what is being written, and the download would then
+    // finish into an empty cache. Say why instead of doing nothing.
+    if (downloads.busy) {
+      toast('Some voices are still downloading — wait for them to finish, or cancel the ones waiting, then delete.', 'error');
+      return;
+    }
     if (!confirm('Delete every cached model file? They will re-download next time.')) return;
     stopPreview();
     void withBusy(
