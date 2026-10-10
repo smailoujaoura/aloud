@@ -86,6 +86,8 @@ function accentName(tag: string): string {
 
 let openTab: EngineId | null = null;
 let openLanguage: string | null = null;
+/** The language open in the Kokoro list — its own, so switching tabs does not cross them. */
+let kokoroLanguage: string | null = null;
 let piperShow: 'all' | 'installed' = 'all';
 /** Which quality of a multi-quality Piper voice each row is showing, by voice label. */
 const variantChoice = new Map<string, string>();
@@ -129,7 +131,7 @@ function renderBrowser(hosts: VoiceHosts, ctx: PanelContext): void {
       }),
     ),
   );
-  hosts.panel.replaceChildren(engine === 'piper' ? piperPanel(ctx, again) : sharedPanel(engine, ctx));
+  hosts.panel.replaceChildren(engine === 'piper' ? piperPanel(ctx, again) : sharedPanel(engine, ctx, again));
 }
 
 // ---- reading with ----------------------------------------------------------
@@ -546,7 +548,7 @@ interface SharedVoice {
   name: string;
   meta: string;
   rank: number;
-  /** The language heading it is listed under, or '' for English, which leads the list. */
+  /** The language it is listed under: "English" for both accents, "Italian", … */
   group: string;
 }
 
@@ -562,28 +564,61 @@ function sharedVoices(engine: 'kokoro' | 'supertonic', manifest: ModelManifest):
           .filter(Boolean)
           .join(' · '),
         rank: voiceRank('kokoro', id, manifest),
-        group: v.language.startsWith('en') ? '' : accentName(v.language),
+        group: v.language.startsWith('en') ? 'English' : accentName(v.language),
       }))
-      .sort((a, b) => a.group.localeCompare(b.group) || a.rank - b.rank || a.name.localeCompare(b.name));
+      .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
   }
   return Object.entries(manifest.supertonic?.voices ?? {}).map(([id, v]) => ({
     id,
     name: v.label,
     meta: v.gender,
     rank: 0,
-    group: '',
+    group: 'English',
   }));
 }
 
-function sharedPanel(engine: 'kokoro' | 'supertonic', ctx: PanelContext): HTMLElement {
+function sharedPanel(engine: 'kokoro' | 'supertonic', ctx: PanelContext, again: () => void): HTMLElement {
   const panel = el(document, 'div', { class: 'panel-body' });
   const info = engineInfo(engine);
   const bytes = info.cacheHint ? sharedModelBytes(ctx.sizes, info.cacheHint) : 0;
   const downloaded = sharedModelInstalled(engine, ctx.sizes);
   panel.append(engineIntro(info), modelCard(engine, { downloaded, bytes }, ctx));
 
-  const voices = sharedVoices(engine, ctx.manifest).filter(
-    (v) => !ctx.filter || `${v.id} ${v.name} ${v.meta}`.toLowerCase().includes(ctx.filter),
+  const all = sharedVoices(engine, ctx.manifest);
+
+  // ---- language, as Piper's list has it: one language at a time ----
+  const counts = new Map<string, number>();
+  for (const v of all) counts.set(v.group, (counts.get(v.group) ?? 0) + 1);
+  const languages = [...counts.keys()].sort((a, b) => (a === 'English' ? -1 : b === 'English' ? 1 : a.localeCompare(b)));
+  const current = all.find((v) => engine === 'kokoro' && v.id === ctx.settings.kokoroVoice)?.group ?? 'English';
+  const language =
+    (kokoroLanguage !== null && languages.includes(kokoroLanguage) ? kokoroLanguage : null) ??
+    (languages.includes(current) ? current : (languages[0] ?? 'English'));
+  if (engine === 'kokoro') kokoroLanguage = language;
+  // A search means "find this name wherever it is", so it looks across every language.
+  const picking = languages.length > 1 && !ctx.filter;
+  if (picking) {
+    const controls = el(document, 'div', { class: 'panel-controls' });
+    const picker = el(document, 'label', { class: 'lang-picker' });
+    const select = el(document, 'select', { 'aria-label': 'Language' });
+    select.append(
+      ...languages.map((lang) => {
+        const option = el(document, 'option', { value: lang }, `${lang} · ${counts.get(lang)}`);
+        if (lang === language) option.selected = true;
+        return option;
+      }),
+    );
+    select.addEventListener('change', () => {
+      kokoroLanguage = select.value;
+      again();
+    });
+    picker.append(el(document, 'span', { class: 'muted small' }, 'Language'), select);
+    controls.append(picker);
+    panel.append(controls);
+  }
+
+  const voices = all.filter(
+    (v) => (picking ? v.group === language : true) && (!ctx.filter || `${v.id} ${v.name} ${v.meta}`.toLowerCase().includes(ctx.filter)),
   );
   const list = el(document, 'div', { class: `voice-list${downloaded ? '' : ' is-locked'}` });
   panel.append(list);
@@ -593,7 +628,9 @@ function sharedPanel(engine: 'kokoro' | 'supertonic', ctx: PanelContext): HTMLEl
     return panel;
   }
   if (!downloaded) {
-    list.append(el(document, 'p', { class: 'list-note' }, `Download the model above to use these ${voices.length} voices.`));
+    list.append(el(document, 'p', { class: 'list-note' }, all.length === voices.length
+        ? `Download the model above to use these ${voices.length} voices.`
+        : `Download the model above to use these voices — one download for all ${all.length}, in every language.`));
   }
 
   const item = (v: SharedVoice): HTMLElement => {
@@ -609,13 +646,10 @@ function sharedPanel(engine: 'kokoro' | 'supertonic', ctx: PanelContext): HTMLEl
     row.append(avatar(engine, v.id, ctx), main, actions);
     return row;
   };
-  // English first, best voices leading; then each other language under its own heading.
-  withQualityHeadings(list, voices.filter((v) => !v.group), (v) => isBestVoice(engine, v.id), item);
-  let heading = '';
-  for (const v of voices.filter((x) => x.group)) {
-    if (v.group !== heading) list.append(el(document, 'p', { class: 'voice-group-title' }, (heading = v.group)));
-    list.append(item(v));
+  if (ctx.filter && languages.length > 1) {
+    list.append(el(document, 'p', { class: 'list-note' }, `Matches from every language · ${voices.length}`));
   }
+  withQualityHeadings(list, voices, (v) => isBestVoice(engine, v.id), item);
   return panel;
 }
 
