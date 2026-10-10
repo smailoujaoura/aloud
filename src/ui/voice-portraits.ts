@@ -66,6 +66,19 @@ const KOKORO_REST: Record<string, string> = {
   bf_lily: 'an Englishwoman in her early twenties',
   bm_daniel: 'an Englishman in his late forties',
   bm_lewis: 'an Englishman in his late thirties with a deep voice',
+  ef_dora: 'a Spanish woman of about thirty',
+  em_alex: 'a Spanish man in his mid-thirties',
+  em_santa: 'a jolly Spanish man of about seventy',
+  ff_siwis: 'a Frenchwoman of about thirty',
+  hf_alpha: 'an Indian woman in her mid-twenties',
+  hf_beta: 'an Indian woman in her mid-thirties',
+  hm_omega: 'an Indian man in his mid-forties',
+  hm_psi: 'an Indian man in his mid-twenties',
+  if_sara: 'an Italian woman in her late twenties',
+  im_nicola: 'an Italian man in his early forties',
+  pf_dora: 'a Brazilian woman in her late twenties',
+  pm_alex: 'a Brazilian man in his early thirties',
+  pm_santa: 'a jolly Brazilian man of about seventy',
 };
 
 /** The portrait for a voice, or null when it keeps the drawn avatar. */

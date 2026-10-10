@@ -26,6 +26,20 @@ import type { EngineConfig, WorkerResponse } from '@/engine/protocol';
 /** Kept short on purpose — every extra word is ~0.4 s more synthesis on the WASM path. */
 export const PREVIEW_SENTENCE = 'This is a short sample of how the voice sounds.';
 
+/** The same sentence in the languages synthesised on device, so a voice previews in its own. */
+const PREVIEW_BY_LANGUAGE: Record<string, string> = {
+  es: 'Este es un breve ejemplo de cómo suena la voz.',
+  fr: 'Voici un court exemple de la façon dont sonne la voix.',
+  hi: 'यह एक छोटा सा नमूना है कि आवाज़ कैसी सुनाई देती है।',
+  it: 'Questo è un breve esempio di come suona la voce.',
+  pt: 'Este é um pequeno exemplo de como a voz soa.',
+};
+
+/** The preview sentence for a voice speaking `language` (a tag like "pt-BR"); English otherwise. */
+export function previewSentence(language: string | undefined): string {
+  return PREVIEW_BY_LANGUAGE[(language ?? '').toLowerCase().split(/[-_]/)[0]!] ?? PREVIEW_SENTENCE;
+}
+
 export type PreviewPhase = 'idle' | 'loading' | 'synthesizing' | 'playing';
 
 export interface PreviewStatus {

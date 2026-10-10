@@ -12,7 +12,8 @@
  */
 import { el } from '@/shared/dom';
 import { engineInfo } from '@/shared/engine-catalog';
-import { playClip, playSynthesized, stopPreview, type PreviewStatus } from '@/ui/voice-preview';
+import { playClip, playSynthesized, previewSentence, stopPreview, type PreviewStatus } from '@/ui/voice-preview';
+import { voiceLanguage } from '@/shared/language-voice';
 import type { EngineId, Settings } from '@/shared/settings';
 import type { ModelManifest } from '@/engine/engines/types';
 import { engineConfigFor } from './engine-config';
@@ -114,6 +115,9 @@ export function previewFor(
       playSynthesized(
         engineConfigFor(ctx.settings, { engine, voice: voiceId, purpose: 'preview' }),
         onStatus,
+        // An Italian voice previews in Italian: the English sentence read with Italian rules is
+        // no sample of anything.
+        previewSentence(voiceLanguage(engine, voiceId, ctx.manifest)),
       ),
     { disabledReason: ready ? undefined : `Download ${info.name} first to preview` },
   );

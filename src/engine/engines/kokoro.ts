@@ -18,6 +18,7 @@ import { exposeNodeOutput } from '@/engine/onnx-outputs';
 import { soundsOf, splitWords, wordTimes, type TextWord, type TimedSound } from '@/engine/g2p/word-timing';
 import type { WordTiming } from '@/engine/protocol';
 import { phonemize } from 'phonemizer';
+import { phonemizeForPiper } from '@/engine/g2p/piper-phonemize';
 import { loadOrt } from '@/engine/ort-loader';
 import { chooseExecutionProviders } from '@/engine/runtime-env';
 import { log } from '@/shared/log';
@@ -229,7 +230,12 @@ export class KokoroEngine implements SynthEngine {
    * way as for Piper. The words are phonemised in one call, separated by commas, which eSpeak keeps
    * apart: one call per word costs ~15 ms each, far too much per sentence.
    */
-  private async wordTimings(text: string, seconds: number, voice: string): Promise<WordTiming[] | undefined> {
+  private async wordTimings(
+    text: string,
+    seconds: number,
+    voice: string,
+    phonemized?: readonly string[],
+  ): Promise<WordTiming[] | undefined> {
     const run = this.lastRun;
     const words = splitWords(text);
     if (!run?.durations || words.length === 0 || seconds <= 0) return undefined;
@@ -249,7 +255,8 @@ export class KokoroEngine implements SynthEngine {
     });
 
     const language = voice.startsWith('b') ? 'en' : 'en-us';
-    const perWord = await phonemizeWords(words, language);
+    // The other languages' words come phonemised already, by the same eSpeak call as the sentence.
+    const perWord = phonemized ?? (await phonemizeWords(words, language));
     if (!perWord) return undefined;
     const times = wordTimes(sounds, perWord.map(soundsOf));
     const timed: WordTiming[] = [];
@@ -319,6 +326,8 @@ export class KokoroEngine implements SynthEngine {
     if (voice) this.voice = voice;
     this.lastRun = null;
     const usable = this.usableVoice();
+    const espeakLanguage = ESPEAK_LANGUAGE[usable[0]!];
+    if (espeakLanguage) return this.synthesizeWithEspeak(text, speed, usable, espeakLanguage);
     const audio = await this.tts.generate(text, { voice: usable as never, speed });
     const anyAudio = audio as unknown as { audio?: Float32Array; sampling_rate?: number };
     const pcm = anyAudio.audio ?? new Float32Array(0);
@@ -335,6 +344,31 @@ export class KokoroEngine implements SynthEngine {
   }
 
   /**
+   * A voice in one of Kokoro's other languages. kokoro-js turns only English text into Kokoro's
+   * phoneme symbols, and refuses any voice its English table does not list — but its model takes
+   * symbols in any language, and the voices' style vectors are published with it. So the text is
+   * phonemised by eSpeak-NG, as Kokoro's own reference implementation does for these languages
+   * (misaki's EspeakG2P), and handed to the model as tokens.
+   */
+  private async synthesizeWithEspeak(text: string, speed: number, voice: string, language: string): Promise<SynthResult> {
+    const tts = this.tts!;
+    const words = splitWords(text);
+    const said = await phonemizeForPiper(text, language, words.map((w) => w.token));
+    const phonemes = toKokoroSymbols(said.sentences.join(' '));
+    const { input_ids } = tts.tokenizer(phonemes, { truncation: true }) as unknown as { input_ids: Parameters<KokoroTTS['generate_from_ids']>[0] };
+    const audio = await tts.generate_from_ids(input_ids, { voice: voice as never, speed });
+    const anyAudio = audio as unknown as { audio?: Float32Array; sampling_rate?: number };
+    const pcm = anyAudio.audio ?? new Float32Array(0);
+    const sampleRate = anyAudio.sampling_rate ?? this.sampleRate;
+    const perWord = said.words.map(toKokoroSymbols);
+    const timed = await this.wordTimings(text, pcm.length / sampleRate, voice, perWord).catch((err) => {
+      log.warn('[kokoro] word timing failed:', err);
+      return undefined;
+    });
+    return timed?.length ? { pcm, sampleRate, words: timed } : { pcm, sampleRate };
+  }
+
+  /**
    * The selected voice if the runtime has it, otherwise the default.
    *
    * Earlier manifests listed Kokoro voices in nine languages although kokoro-js only ships the
@@ -344,7 +378,7 @@ export class KokoroEngine implements SynthEngine {
    */
   private usableVoice(): string {
     const known = (this.tts as unknown as { voices?: Record<string, unknown> } | null)?.voices;
-    if (!known || this.voice in known) return this.voice;
+    if (!known || this.voice in known || ESPEAK_LANGUAGE[this.voice[0]!]) return this.voice;
     log.warn(`[kokoro] voice "${this.voice}" is not available in this runtime — using ${DEFAULT_VOICE}`);
     this.voice = DEFAULT_VOICE;
     return this.voice;
@@ -358,6 +392,38 @@ export class KokoroEngine implements SynthEngine {
 
 /** Always present in kokoro-js's voice table, and the best-graded voice in it. */
 const DEFAULT_VOICE = 'af_heart';
+
+/**
+ * Kokoro's other languages, by voice-id letter, and the eSpeak-NG voice that phonemises each —
+ * the languages Kokoro's reference implementation gives to eSpeak. Japanese and Mandarin are not
+ * here: Kokoro reads them through dedicated phonemisers (pyopenjtalk, pypinyin) with no browser
+ * equivalent, and eSpeak's readings of them are not what its voices were trained on.
+ */
+export const ESPEAK_LANGUAGE: Record<string, string> = { e: 'es', f: 'fr', h: 'hi', i: 'it', p: 'pt-br' };
+
+/**
+ * eSpeak's IPA as Kokoro's symbols: the replacements misaki's EspeakG2P makes, which fold
+ * affricates and diphthongs into the single symbols Kokoro was trained on. Longest first; the
+ * tie mark eSpeak may put between the two halves goes either way.
+ */
+const ESPEAK_TO_KOKORO: Array<[RegExp, string]> = [
+  [/a͡?ɪ/g, 'I'],
+  [/a͡?ʊ/g, 'W'],
+  [/d͡?z/g, 'ʣ'],
+  [/d͡?ʒ/g, 'ʤ'],
+  [/e͡?ɪ/g, 'A'],
+  [/o͡?ʊ/g, 'O'],
+  [/ə͡?ʊ/g, 'Q'],
+  [/t͡?s/g, 'ʦ'],
+  [/t͡?ʃ/g, 'ʧ'],
+  [/ɔ͡?ɪ/g, 'Y'],
+];
+
+export function toKokoroSymbols(ipa: string): string {
+  let out = ipa;
+  for (const [from, to] of ESPEAK_TO_KOKORO) out = out.replace(from, to);
+  return out.replace(/[͡^‿-]/g, '');
+}
 
 /**
  * Does this failure look like the network rather than the model?

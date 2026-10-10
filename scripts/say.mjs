@@ -32,8 +32,11 @@ const text = flag('text', 'The quick brown fox jumps over the lazy dog.');
 const gpu = args.includes('--gpu');
 const out = flag('out', `${engine}-${voice}-${gpu ? 'gpu' : 'cpu'}.wav`);
 const extension = flag('extension', new URL('../.output/chrome-mv3', import.meta.url).pathname);
+// A profile kept between runs keeps the downloaded models too: one download, then every voice of
+// that engine is seconds away. A fresh temporary profile by default.
+const profile = flag('profile', null);
 
-const ctx = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), 'aloud-say-')), {
+const ctx = await chromium.launchPersistentContext(profile ?? mkdtempSync(join(tmpdir(), 'aloud-say-')), {
   channel: 'chromium',
   headless: true,
   args: [
@@ -78,13 +81,19 @@ try {
       synth.postMessage({ kind: 'synthesize', id: 2, chunkIndex: 0, text, speed: 1 });
       const audio = await reply((m) => m.kind === 'audio');
       synth.terminate();
-      return { provider: ready.executionProvider, sampleRate: audio.sampleRate, pcm: Array.from(new Float32Array(audio.pcm)) };
+      return { provider: ready.executionProvider, sampleRate: audio.sampleRate, pcm: Array.from(new Float32Array(audio.pcm)), words: audio.words ?? [] };
     },
     [engine, voice, text, gpu],
   );
 
   writeFileSync(out, wav(said.pcm, said.sampleRate));
   console.log(`${engine}/${voice} on ${said.provider}: ${(said.pcm.length / said.sampleRate).toFixed(1)}s → ${out}`);
+  // The word timings the reader highlights by: each word, and when it is spoken.
+  if (said.words.length) {
+    console.log(`  word timing: ${said.words.map((w) => `${text.slice(w.from, w.to)}@${w.start.toFixed(2)}`).join(' ')}`);
+  } else {
+    console.log('  word timing: none');
+  }
 } finally {
   await ctx.close();
 }

@@ -22,6 +22,7 @@ import { humanBytes } from '@/shared/log';
 import { capabilities } from '@/shared/browser-env';
 import { engineInfo, listEngines, type EngineInfo } from '@/shared/engine-catalog';
 import { isEnglish, shortPiperLabel } from '@/shared/voice-catalog';
+import { languageName } from '@/shared/language-voice';
 import { cacheClear, cacheDelete } from '@/engine/model-cache';
 import { activeVoice, type EngineId, type Settings } from '@/shared/settings';
 import type { ModelManifest, PiperVoiceEntry } from '@/engine/engines/types';
@@ -66,7 +67,17 @@ const QUALITY_ORDER = ['x_low', 'low', 'medium', 'high'];
 const ACCENT_NAME: Record<string, string> = {
   'en-US': 'American English',
   'en-GB': 'British English',
+  es: 'Spanish',
+  'fr-FR': 'French',
+  hi: 'Hindi',
+  it: 'Italian',
+  'pt-BR': 'Brazilian Portuguese',
 };
+
+/** A voice's language as the lists say it: "Italian", not "it". */
+function accentName(tag: string): string {
+  return ACCENT_NAME[tag] ?? languageName(tag);
+}
 
 // ---- browsing state --------------------------------------------------------
 //
@@ -144,7 +155,7 @@ function renderNowReading(host: HTMLElement, ctx: PanelContext): void {
     const v = manifest.kokoro.voices[id];
     if (v) {
       name = v.label;
-      meta = `${info.name} · ${ACCENT_NAME[v.language] ?? v.language} · ${v.gender}`;
+      meta = `${info.name} · ${accentName(v.language)} · ${v.gender}`;
     }
     installed = sharedModelInstalled(engine, sizes);
   } else {
@@ -535,6 +546,8 @@ interface SharedVoice {
   name: string;
   meta: string;
   rank: number;
+  /** The language heading it is listed under, or '' for English, which leads the list. */
+  group: string;
 }
 
 function sharedVoices(engine: 'kokoro' | 'supertonic', manifest: ModelManifest): SharedVoice[] {
@@ -545,18 +558,20 @@ function sharedVoices(engine: 'kokoro' | 'supertonic', manifest: ModelManifest):
       .map(([id, v]) => ({
         id,
         name: v.label,
-        meta: [ACCENT_NAME[v.language] ?? v.language, v.gender, v.grade ? `grade ${v.grade}` : '']
+        meta: [accentName(v.language), v.gender, v.grade ? `grade ${v.grade}` : '']
           .filter(Boolean)
           .join(' · '),
         rank: voiceRank('kokoro', id, manifest),
+        group: v.language.startsWith('en') ? '' : accentName(v.language),
       }))
-      .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
+      .sort((a, b) => a.group.localeCompare(b.group) || a.rank - b.rank || a.name.localeCompare(b.name));
   }
   return Object.entries(manifest.supertonic?.voices ?? {}).map(([id, v]) => ({
     id,
     name: v.label,
     meta: v.gender,
     rank: 0,
+    group: '',
   }));
 }
 
@@ -594,7 +609,13 @@ function sharedPanel(engine: 'kokoro' | 'supertonic', ctx: PanelContext): HTMLEl
     row.append(avatar(engine, v.id, ctx), main, actions);
     return row;
   };
-  withQualityHeadings(list, voices, (v) => isBestVoice(engine, v.id), item);
+  // English first, best voices leading; then each other language under its own heading.
+  withQualityHeadings(list, voices.filter((v) => !v.group), (v) => isBestVoice(engine, v.id), item);
+  let heading = '';
+  for (const v of voices.filter((x) => x.group)) {
+    if (v.group !== heading) list.append(el(document, 'p', { class: 'voice-group-title' }, (heading = v.group)));
+    list.append(item(v));
+  }
   return panel;
 }
 

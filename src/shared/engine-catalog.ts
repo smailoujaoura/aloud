@@ -81,7 +81,7 @@ const ENGINES: Record<EngineId, EngineInfo> = {
     blurb:
       'The most natural and expressive of the three. With GPU acceleration it is comfortably faster ' +
       'than real time; without one it runs around 3× slower than real time and leans on parallel ' +
-      'workers to keep up with playback. One 86 MB download unlocks all 28 English voices (US and UK).',
+      'workers to keep up with playback. One 86 MB download unlocks all 41 voices: English (US and UK), Spanish, French, Italian, Brazilian Portuguese and Hindi.',
     approxSize: '~86 MB',
     cacheHint: 'Kokoro-82M',
     revision: KOKORO_REVISION,

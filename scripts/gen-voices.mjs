@@ -95,16 +95,19 @@ const KOKORO_LANG = {
   z: { code: 'zh', name: 'Mandarin' },
 };
 /**
- * Voice-id prefixes (the language letter) that the pinned kokoro-js can synthesise: US and UK
- * English. Revisit when upgrading kokoro-js — its `voices` table in dist/kokoro.js is the source.
+ * Voice-id prefixes (the language letter) Aloud can synthesise: US and UK English through
+ * kokoro-js, and Spanish, French, Hindi, Italian and Brazilian Portuguese through eSpeak-NG
+ * (engines/kokoro.ts: ESPEAK_LANGUAGE). Not Japanese or Mandarin: Kokoro reads those through
+ * phonemisers with no browser equivalent.
  */
-const KOKORO_SUPPORTED_PREFIXES = new Set(['a', 'b']);
+const KOKORO_SUPPORTED_PREFIXES = new Set(['a', 'b', 'e', 'f', 'h', 'i', 'p']);
 
 // Quality grades from the Kokoro-82M voice table, where published.
 const KOKORO_GRADE = {
   af_heart: 'A', af_bella: 'A-', af_nicole: 'B-', bf_emma: 'B-', af_kore: 'C+', af_sarah: 'C+',
   af_aoede: 'C+', am_fenrir: 'C+', am_michael: 'C+', am_puck: 'C+', bf_isabella: 'C', bm_george: 'C',
   bm_fable: 'C', af_sky: 'C-', am_echo: 'D', am_eric: 'D', am_liam: 'D', am_onyx: 'D',
+  ff_siwis: 'B-', hf_alpha: 'C', hf_beta: 'C', hm_omega: 'C', hm_psi: 'C', if_sara: 'C', im_nicola: 'C',
 };
 
 function buildKokoro(hfInfo) {
@@ -116,10 +119,8 @@ function buildKokoro(hfInfo) {
     .sort();
   for (const id of bins) {
     if (!id.includes('_')) continue; // skip the blended base vectors ("af", "am")
-    // The Hugging Face repo carries style vectors for nine languages, but kokoro-js only ships a
-    // phonemiser and a voice table for English: any other voice fails at synthesis time with
-    // `Voice "ff_siwis" not found`. Listing them would offer 26 voices that cannot speak, so the
-    // manifest only includes what the bundled runtime can actually use.
+    // The Hugging Face repo carries style vectors for nine languages. Only those Aloud can
+    // phonemise are listed: a voice that cannot speak is worse than no voice.
     if (!KOKORO_SUPPORTED_PREFIXES.has(id[0])) continue;
     const lang = KOKORO_LANG[id[0]] ?? { code: 'en-US', name: 'English (US)' };
     const gender = id[1] === 'm' ? 'male' : 'female';

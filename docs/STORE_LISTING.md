@@ -18,7 +18,7 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 > voice is a neural network running inside your browser, so it works offline and nothing you read
 > is ever sent anywhere. No account, no subscription.
 >
-> • 209 natural voices in 49 languages, from three neural engines (Piper, Kokoro-82M, Supertonic-2)
+> • 222 natural voices in 49 languages, from three neural engines (Piper, Kokoro-82M, Supertonic-2)
 > • Reads the article, not the menus and ads, and highlights the sentence and the word in place
 > • PDFs too: real pages, highlighted where the text sits; mark them up and save the marks into the file
 > • Picks up at the sentence you stopped at; a reading queue for later; save any article as an MP3

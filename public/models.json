@@ -2215,6 +2215,78 @@
         "label": "Lewis",
         "language": "en-GB",
         "gender": "male"
+      },
+      "ef_dora": {
+        "label": "Dora",
+        "language": "es",
+        "gender": "female"
+      },
+      "em_alex": {
+        "label": "Alex",
+        "language": "es",
+        "gender": "male"
+      },
+      "em_santa": {
+        "label": "Santa",
+        "language": "es",
+        "gender": "male"
+      },
+      "ff_siwis": {
+        "label": "Siwis",
+        "language": "fr-FR",
+        "gender": "female",
+        "grade": "B-"
+      },
+      "hf_alpha": {
+        "label": "Alpha",
+        "language": "hi",
+        "gender": "female",
+        "grade": "C"
+      },
+      "hf_beta": {
+        "label": "Beta",
+        "language": "hi",
+        "gender": "female",
+        "grade": "C"
+      },
+      "hm_omega": {
+        "label": "Omega",
+        "language": "hi",
+        "gender": "male",
+        "grade": "C"
+      },
+      "hm_psi": {
+        "label": "Psi",
+        "language": "hi",
+        "gender": "male",
+        "grade": "C"
+      },
+      "if_sara": {
+        "label": "Sara",
+        "language": "it",
+        "gender": "female",
+        "grade": "C"
+      },
+      "im_nicola": {
+        "label": "Nicola",
+        "language": "it",
+        "gender": "male",
+        "grade": "C"
+      },
+      "pf_dora": {
+        "label": "Dora",
+        "language": "pt-BR",
+        "gender": "female"
+      },
+      "pm_alex": {
+        "label": "Alex",
+        "language": "pt-BR",
+        "gender": "male"
+      },
+      "pm_santa": {
+        "label": "Santa",
+        "language": "pt-BR",
+        "gender": "male"
       }
     }
   },
