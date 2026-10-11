@@ -211,6 +211,41 @@ async function cacheStoreBytes(names: readonly string[]): Promise<number> {
  * dependencies write to. With a `prefix`, only the IndexedDB entries whose key contains it, plus
  * any external store belonging to that model.
  */
+/**
+ * One lock over the model cache for every Aloud page and worker. Writers — a download, a voice
+ * loading — hold it shared while they work; a deletion takes it exclusively, or not at all.
+ *
+ * The download queue only knows its own settings tab, but the cache is shared by all of them and
+ * by every reader: "Delete all downloads" in one tab reported success while another tab's
+ * download carried on and wrote its files back.
+ */
+const STORE_LOCK = 'aloud-model-store';
+
+/** Run `fn` as a writer of the model cache: alongside other writers, never during a deletion. */
+export function asModelWriter<T>(fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (typeof navigator === 'undefined' || !navigator.locks) return fn();
+  return navigator.locks.request(STORE_LOCK, { mode: 'shared', ...(signal ? { signal } : {}) }, fn);
+}
+
+/** Thrown by `deleteModels` while something, in any Aloud page, is downloading or loading a voice. */
+export class ModelsInUse extends Error {
+  constructor() {
+    super('A voice is still downloading or loading — in this tab, another Aloud tab or a page being read. Try again when it has finished.');
+    this.name = 'ModelsInUse';
+  }
+}
+
+/** Delete from the model cache, but only when nothing is writing to it anywhere; `ModelsInUse` if something is. */
+export async function deleteModels(fn: () => Promise<void>): Promise<void> {
+  if (typeof navigator === 'undefined' || !navigator.locks) return fn();
+  const done = await navigator.locks.request(STORE_LOCK, { mode: 'exclusive', ifAvailable: true }, async (lock) => {
+    if (!lock) return false;
+    await fn();
+    return true;
+  });
+  if (!done) throw new ModelsInUse();
+}
+
 export async function cacheClear(prefix?: string): Promise<void> {
   const entries = await cacheEntries();
   await Promise.all(
@@ -276,7 +311,8 @@ export async function fetchModelFile(
   }
 
   const signal = opts.signal;
-  return navigator.locks.request(`aloud-dl:${url}`, signal ? { signal } : {}, async () => {
+  // A writer of the cache from here to the write itself (see STORE_LOCK).
+  return asModelWriter(() => navigator.locks.request(`aloud-dl:${url}`, signal ? { signal } : {}, async () => {
     const again = await cacheGet(url);
     if (again) return new Uint8Array(again.buf);
 
@@ -325,7 +361,7 @@ export async function fetchModelFile(
       throw new Error('The download could not be saved on this device — its storage may be full or blocked');
     }
     return bytes;
-  });
+  }), signal);
 }
 
 /**

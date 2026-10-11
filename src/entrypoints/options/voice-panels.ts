@@ -23,11 +23,19 @@ import { capabilities } from '@/shared/browser-env';
 import { engineInfo, listEngines, type EngineInfo } from '@/shared/engine-catalog';
 import { isEnglish, shortPiperLabel } from '@/shared/voice-catalog';
 import { languageName } from '@/shared/language-voice';
-import { cacheClear, cacheDelete } from '@/engine/model-cache';
+import { cacheClear, cacheDelete, deleteModels } from '@/engine/model-cache';
 import { activeVoice, type EngineId, type Settings } from '@/shared/settings';
 import type { ModelManifest, PiperVoiceEntry } from '@/engine/engines/types';
 
-import { RowProgress, downloadPiperVoice, downloadTray, downloadViaWorker, followDownload, newDownloadScope } from './downloads';
+import {
+  RowProgress,
+  announceModelsChanged,
+  downloadPiperVoice,
+  downloadTray,
+  downloadViaWorker,
+  followDownload,
+  newDownloadScope,
+} from './downloads';
 import { DownloadCancelled, downloads } from './download-queue';
 import { previewFor } from './preview-button';
 import { engineConfigFor } from './engine-config';
@@ -50,6 +58,8 @@ export interface PanelContext {
   /** Make (engine, voiceId) the active voice, then redraw. */
   useVoice(engine: EngineId, voiceId: string): Promise<void>;
   flashSaved(message?: string): void;
+  /** Say what went wrong. */
+  flashError(message: string): void;
 }
 
 export interface VoiceHosts {
@@ -469,6 +479,8 @@ function piperLanguages(groups: PiperGroup[]): Array<[string, number]> {
 
 function piperItem(group: PiperGroup, ctx: PanelContext): HTMLElement {
   const [id, entry] = chosenVariant(group, ctx);
+  /** Ends this row's following of the download queue (an installed row follows nothing). */
+  let stopFollowing: () => void = () => undefined;
   const installed = piperDownloaded(entry, ctx.sizes);
   const inUse = ctx.settings.engine === 'piper' && ctx.settings.piperVoice === id;
 
@@ -501,6 +513,9 @@ function piperItem(group: PiperGroup, ctx: PanelContext): HTMLElement {
       chip.title = have ? `${v.quality} — on this device` : `${v.quality} — ${v.sizeBytes ? humanBytes(v.sizeBytes) : ''}`;
       chip.addEventListener('click', () => {
         variantChoice.set(group.key, vid);
+        // This row is replaced on its own: it stops following the download queue now, not at
+        // the next whole-list redraw (sixty quality changes kept sixty dead rows alive).
+        stopFollowing();
         item.replaceWith(piperItem(group, ctx));
       });
       chips.append(chip);
@@ -517,9 +532,16 @@ function piperItem(group: PiperGroup, ctx: PanelContext): HTMLElement {
     const remove = el(document, 'button', { class: 'ghost btn-sm remove', type: 'button', title: 'Delete from this device' }, 'Remove');
     remove.addEventListener('click', () => {
       void runModelAction(remove, async () => {
-        await Promise.all([cacheDelete(entry.config), cacheDelete(entry.onnx)]);
-        ctx.flashSaved(`${group.name} removed from this device`);
-        await ctx.refresh();
+        try {
+          // Not while a download or a voice loading anywhere could write it back (deleteModels).
+          await deleteModels(() => Promise.all([cacheDelete(entry.config), cacheDelete(entry.onnx)]).then(() => undefined));
+          announceModelsChanged();
+          ctx.flashSaved(`${group.name} removed from this device`);
+          await ctx.refresh();
+        } catch (err) {
+          ctx.flashError(err instanceof Error ? err.message : String(err));
+          remove.disabled = false;
+        }
       });
     });
     actions.append(remove);
@@ -530,6 +552,7 @@ function piperItem(group: PiperGroup, ctx: PanelContext): HTMLElement {
       // Queued behind any download already running; the row says so (followDownload).
       downloads.enqueue(key, group.name, (p) => downloadPiperVoice(entry, p)).then(
         async () => {
+          announceModelsChanged();
           ctx.flashSaved(inUse ? `${group.name} is ready` : `${group.name} downloaded — press Use to read with it`);
           await ctx.refresh();
         },
@@ -538,7 +561,7 @@ function piperItem(group: PiperGroup, ctx: PanelContext): HTMLElement {
         },
       );
     });
-    followDownload(key, progress, download, 'Download');
+    stopFollowing = followDownload(key, progress, download, 'Download');
     actions.append(download);
   }
 
@@ -704,6 +727,7 @@ function modelCard(
         downloadViaWorker(engineConfigFor(ctx.settings, { engine, purpose: 'download' }), p),
       ).then(
         async () => {
+          announceModelsChanged();
           ctx.flashSaved(`${info.name} is ready — pick a voice below`);
           await ctx.refresh();
         },
@@ -715,11 +739,12 @@ function modelCard(
     }
     void runModelAction(btn, async () => {
       try {
-        await cacheClear(info.cacheHint);
+        await deleteModels(() => cacheClear(info.cacheHint));
+        announceModelsChanged();
         ctx.flashSaved(`${info.name} deleted`);
         await ctx.refresh();
       } catch (err) {
-        progress.fail(err instanceof Error ? err.message : String(err));
+        ctx.flashError(err instanceof Error ? err.message : String(err));
         btn.disabled = false;
       }
     });

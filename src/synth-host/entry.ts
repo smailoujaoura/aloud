@@ -139,6 +139,8 @@ function preview(text: string): string {
 
 let readyForwarded = false;
 let maxProgress = 0;
+/** The largest download total reported so far (see the `model-progress` relay). */
+let maxTotal = 0;
 /**
  * Replacement workers that died before they were ever ready, since the pool last made progress
  * (a worker became ready, or a sentence came back). A replacement that fails the same way every
@@ -271,9 +273,13 @@ function onWorkerMessage(w: Worker, data: WorkerResponse | undefined): void {
       return;
 
     case 'model-progress':
-      // Each file downloads once (navigator.locks); forward a monotonic max so the bar is smooth.
-      if (data.progress >= maxProgress) {
+      // Each file downloads once (navigator.locks); forward a monotonic max so the bar is smooth —
+      // unless more is now known to be coming. A small file finishing before a big one has said
+      // its size reads as nearly done; held as the maximum, that froze the bar at 96% for the
+      // whole of the big file. A larger total is news, and the bar starts again from it.
+      if (data.progress >= maxProgress || data.total > maxTotal) {
         maxProgress = data.progress;
+        maxTotal = Math.max(maxTotal, data.total);
         relay(data);
       }
       return;
@@ -513,6 +519,7 @@ function handleFromContent(msg: WorkerRequest): void {
     disposed = false;
     readyForwarded = false;
     maxProgress = 0;
+    maxTotal = 0;
     restartFailures = 0;
     initMsg = null;
     preStartRequests.length = 0;

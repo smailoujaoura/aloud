@@ -16,6 +16,7 @@ import type { EngineConfig, WorkerRequest, WorkerResponse } from './protocol';
 import type { SynthEngine, InitContext, ModelManifest } from './engines/types';
 import { assetUrl } from './runtime-env';
 import { probeGpu } from '@/shared/gpu-probe';
+import { asModelWriter } from '@/engine/model-cache';
 
 interface Job {
   id: number;
@@ -164,13 +165,18 @@ async function handleInit(req: Extract<WorkerRequest, { kind: 'init' }>): Promis
     };
 
     phase = `initialising ${req.config.engine} engine (voice "${req.config.voice}")`;
-    await engine.init({
-      voice: req.config.voice,
-      steps: req.config.steps,
-      preferWebGPU: req.config.preferWebGPU,
-      onProgress,
-      onNotice,
-    });
+    // A writer of the model cache while it loads (model-cache.ts: STORE_LOCK): a deletion in a
+    // settings tab waits for it, or says why it cannot run, instead of being undone by it.
+    const loading = engine;
+    await asModelWriter(() =>
+      loading.init({
+        voice: req.config.voice,
+        steps: req.config.steps,
+        preferWebGPU: req.config.preferWebGPU,
+        onProgress,
+        onNotice,
+      }),
+    );
 
     post({
       kind: 'ready',

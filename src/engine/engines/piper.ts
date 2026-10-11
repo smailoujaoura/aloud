@@ -60,6 +60,10 @@ export class PiperEngine implements SynthEngine {
     const entry = this.manifest.piper[ctx.voice];
     if (!entry) throw new Error(`Unknown Piper voice "${ctx.voice}"`);
 
+    // The voice's whole size, said before anything arrives: the small config finishes first, and
+    // with only it counted the bar read 96% — then held there, since the bar never goes back, for
+    // the minutes the voice itself took (synth-host/entry.ts). The catalogue knows the size.
+    if (entry.sizeBytes) ctx.onProgress({ file: `${ctx.voice} voice`, loaded: 0, total: entry.sizeBytes, phase: 'download' });
     const [configBytes, onnxBytes] = await Promise.all([
       fetchModelFile(entry.config, {
         sha256: entry.sha256?.config,

@@ -176,6 +176,31 @@ function linesOf(page: PdfPageInput): Line[] {
     return null;
   };
 
+  // A run that carries on a full-width run on the same line is part of it. A line of text is
+  // drawn as several runs where the producer breaks it — Chromium does at an "fi" ligature — and
+  // the piece after the break ("first would." of "standfirst") could fit inside one column, and
+  // was read as that column's text: "stand" in the intro, "first would." in column two.
+  const fullWidth = new Set<PdfTextItem>();
+  if (splits.length) {
+    const sameLine = (a: PdfTextItem, b: PdfTextItem): boolean =>
+      Math.abs(a.y - b.y) <= Math.max(1, 0.5 * Math.max(a.height || 10, b.height || 10));
+    const touching = (a: PdfTextItem, b: PdfTextItem): boolean => {
+      const gap = Math.max(a.x, b.x) - Math.min(a.x + (a.width || 0), b.x + (b.width || 0));
+      return gap <= 0.8 * Math.max(a.height || 10, b.height || 10);
+    };
+    const queue = items.filter((it) => columnOf(it) == null);
+    for (const it of queue) fullWidth.add(it);
+    while (queue.length) {
+      const from = queue.pop()!;
+      for (const it of items) {
+        if (!fullWidth.has(it) && sameLine(from, it) && touching(from, it)) {
+          fullWidth.add(it);
+          queue.push(it);
+        }
+      }
+    }
+  }
+
   // Sections are bounded by full-width runs: a two-column article can have a one-column
   // abstract above it, and each part is read in its own order.
   const out: Line[] = [];
@@ -200,7 +225,7 @@ function linesOf(page: PdfPageInput): Line[] {
   };
 
   for (const item of items) {
-    const column = columnOf(item);
+    const column = fullWidth.has(item) ? null : columnOf(item);
     if (column == null) {
       // A run that crosses the gutter ends whatever columns were running above it.
       flushSection();
@@ -503,7 +528,11 @@ function sideBySide(spans: readonly Span[], x: number): boolean {
 }
 
 function findColumnSplits(spans: readonly Span[], from: number, to: number, depth = 0): number[] {
-  const inside = spans.filter((s) => s[0] >= from - 0.5 && s[1] <= to + 0.5);
+  // Not lines that span most of the region: a title, an abstract above the columns. They cannot
+  // be column lines, and they are read as full-width text anyway (`linesOf`). Counted as runs
+  // crossing the gutter, a title and a two-line intro over a short two-column section were a
+  // fifth of its runs — far past the few percent allowed — and its columns were read as one.
+  const inside = spans.filter((s) => s[0] >= from - 0.5 && s[1] <= to + 0.5 && s[1] - s[0] <= 0.6 * (to - from));
   // Too few stretches to tell a column from a coincidence — a title page or a mostly empty
   // page. Under twelve, a split is still taken when the two sides interleave (below): a short
   // two-column page was read as one wide column, the lines of both merged.

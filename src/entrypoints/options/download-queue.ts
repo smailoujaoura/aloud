@@ -117,7 +117,11 @@ export class DownloadQueue {
   subscribe(fn: () => void, signal?: AbortSignal): () => void {
     if (signal?.aborted) return () => undefined;
     this.listeners.add(fn);
-    const stop = (): void => void this.listeners.delete(fn);
+    const stop = (): void => {
+      this.listeners.delete(fn);
+      // And the hook on the scope: left there, the scope kept every stopped row alive.
+      signal?.removeEventListener('abort', stop);
+    };
     signal?.addEventListener('abort', stop, { once: true });
     return stop;
   }

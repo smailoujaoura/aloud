@@ -16,7 +16,7 @@ import { probeGpu, gpuProbeIfKnown } from '@/shared/gpu-probe';
 import { loadWorkerGpu } from '@/shared/backend-memory';
 import { probeWorkerGpu, type WorkerGpuResult } from './gpu-check';
 import { listVoices } from '@/shared/voice-catalog';
-import { cacheClear, cacheEntries, cacheUsageBytes } from '@/engine/model-cache';
+import { cacheClear, cacheEntries, cacheUsageBytes, deleteModels } from '@/engine/model-cache';
 import {
   DEFAULT_SETTINGS,
   getSettings,
@@ -57,6 +57,7 @@ import { renderRail } from './rail';
 import { initLibrary } from '@/library/app';
 import { answerTabQueries } from '@/shared/own-tab';
 import { downloads } from './download-queue';
+import { announceModelsChanged, onModelsChanged } from './downloads';
 
 // First, before anything here can fail: lets the background find this tab without the "tabs"
 // permission (shared/own-tab.ts). Registered late, an earlier error meant a new tab every time.
@@ -424,6 +425,7 @@ async function renderNow(): Promise<void> {
     refresh: render,
     useVoice,
     flashSaved,
+    flashError: (message: string) => toast(message, 'error'),
   };
   renderVoiceSection({ nowReading: $('nowReading'), tabs: $('engineTabs'), panel: $('enginePanels') }, ctx);
 
@@ -588,6 +590,9 @@ function wire(): void {
     filterTimer = window.setTimeout(() => void render(), 180);
   });
 
+  // Another settings tab downloaded or deleted a model: show the cache as it is now.
+  onModelsChanged(() => void render());
+
   $('clearModels').addEventListener('click', (e) => {
     // Not under a download: it would delete what is being written, and the download would then
     // finish into an empty cache. Say why instead of doing nothing.
@@ -601,7 +606,11 @@ function wire(): void {
       e.currentTarget as HTMLButtonElement,
       'Deleting…',
       async () => {
-        await cacheClear();
+        // Only with nothing downloading or loading anywhere — another settings tab, a page being
+        // read (deleteModels). Otherwise it says so, rather than report a deletion that a
+        // download then undoes.
+        await deleteModels(() => cacheClear());
+        announceModelsChanged();
         await render();
       },
       'Every cached model file has been deleted',

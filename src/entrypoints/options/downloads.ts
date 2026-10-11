@@ -80,6 +80,21 @@ export class RowProgress {
 }
 
 /**
+ * Tell every other open settings page that the model cache changed — a download finished or a
+ * deletion ran — so none goes on showing a Download button for a voice that is there, or the
+ * reverse. A page does not hear its own message.
+ */
+const modelsChannel = typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel('aloud-models');
+
+export function announceModelsChanged(): void {
+  modelsChannel?.postMessage('changed');
+}
+
+export function onModelsChanged(fn: () => void): void {
+  modelsChannel?.addEventListener('message', () => fn());
+}
+
+/**
  * The rows drawn now. Each redraw of the voice list starts a new scope and ends the last one, so
  * the rows it replaced stop listening to the queue at once. Waiting for a queue update to find
  * them detached left every row of every redraw subscribed while nothing was downloading: thirty
@@ -97,7 +112,7 @@ export function newDownloadScope(): void {
  * row reads the queue rather than holding the state, so a redrawn list loses nothing. Stops
  * following once the row has left the page.
  */
-export function followDownload(key: string, progress: RowProgress, button: HTMLButtonElement, idleLabel: string): void {
+export function followDownload(key: string, progress: RowProgress, button: HTMLButtonElement, idleLabel: string): () => void {
   let seen = false;
   let drawn: string | null = null;
   const render = (): void => {
@@ -139,6 +154,8 @@ export function followDownload(key: string, progress: RowProgress, button: HTMLB
   };
   const stop = downloads.subscribe(render, scope.signal);
   render();
+  // For a row replaced on its own, between whole-list redraws (a quality chip).
+  return stop;
 }
 
 /**
