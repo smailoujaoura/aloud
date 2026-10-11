@@ -43,7 +43,9 @@ export function splitWords(text: string): TextWord[] {
       continue;
     }
     let tail = token.length;
-    while (tail > lead && !/[\p{L}\p{N}]/u.test(token[tail - 1]!)) tail--;
+    // Marks belong to the letter before them: a Hindi word ends in a vowel sign ("नमस्ते" in "े"),
+    // Arabic in a vowel mark. Trimmed as punctuation, the highlight stopped a sound short.
+    while (tail > lead && !/[\p{L}\p{N}\p{M}]/u.test(token[tail - 1]!)) tail--;
     words.push({ from: at + lead, to: at + tail, token });
   }
   return words;

@@ -27,7 +27,7 @@ import { cacheClear, cacheDelete } from '@/engine/model-cache';
 import { activeVoice, type EngineId, type Settings } from '@/shared/settings';
 import type { ModelManifest, PiperVoiceEntry } from '@/engine/engines/types';
 
-import { RowProgress, downloadPiperVoice, downloadTray, downloadViaWorker, followDownload } from './downloads';
+import { RowProgress, downloadPiperVoice, downloadTray, downloadViaWorker, followDownload, newDownloadScope } from './downloads';
 import { DownloadCancelled, downloads } from './download-queue';
 import { previewFor } from './preview-button';
 import { engineConfigFor } from './engine-config';
@@ -120,6 +120,8 @@ export function renderVoiceSection(hosts: VoiceHosts, ctx: PanelContext): void {
 
 /** The tabs and the list under them — everything that changes while browsing. */
 function renderBrowser(hosts: VoiceHosts, ctx: PanelContext): void {
+  // The rows about to be replaced stop following the download queue now (downloads.ts).
+  newDownloadScope();
   const engine = openTab ?? ctx.settings.engine;
   openTab = engine;
   const again = (): void => renderBrowser(hosts, ctx);

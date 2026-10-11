@@ -81,8 +81,12 @@ function tx<T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBReque
         t.onerror = () => reject(t.error ?? new Error('IndexedDB transaction error'));
         const store = t.objectStore(STORE);
         const req = fn(store);
-        req.onsuccess = () => resolve(req.result);
+        // Settled by the *transaction*, not the request: a write whose request succeeded can still
+        // be aborted before it commits, and resolving early reported a file saved that never was.
+        let result: T;
+        req.onsuccess = () => (result = req.result);
         req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
+        t.oncomplete = () => resolve(result);
       }),
   );
 }
@@ -95,10 +99,15 @@ export async function cacheGet(key: string): Promise<FileRecord | undefined> {
   }
 }
 
-export async function cachePut(key: string, buf: ArrayBuffer, contentType: string): Promise<void> {
+/**
+ * Store a file; resolves whether it was stored. Playback tolerates a failed write — it has the
+ * bytes in memory already — but a Download button must not (see `fetchModelFile`'s `mustStore`).
+ */
+export async function cachePut(key: string, buf: ArrayBuffer, contentType: string): Promise<boolean> {
   const rec: FileRecord = { key, buf, size: buf.byteLength, contentType, storedAt: Date.now() };
   try {
     await tx('readwrite', (s) => s.put(rec));
+    return true;
   } catch (err) {
     // QuotaExceededError etc. — try evicting the oldest entry once, then give up quietly.
     try {
@@ -107,12 +116,13 @@ export async function cachePut(key: string, buf: ArrayBuffer, contentType: strin
       if (oldest && oldest.key !== key) {
         await cacheDelete(oldest.key);
         await tx('readwrite', (s) => s.put(rec));
-        return;
+        return true;
       }
     } catch {
       /* noop */
     }
     console.warn('[aloud] model cache put failed:', err);
+    return false;
   }
 }
 
@@ -247,7 +257,15 @@ async function sha256Hex(buf: ArrayBuffer): Promise<string> {
  */
 export async function fetchModelFile(
   url: string,
-  opts: { sha256?: string; onProgress?: (p: DownloadProgress) => void; label?: string } = {},
+  opts: {
+    sha256?: string;
+    onProgress?: (p: DownloadProgress) => void;
+    label?: string;
+    /** Stops the download — and keeps it from writing anything afterwards. */
+    signal?: AbortSignal;
+    /** An explicit download for offline use: not storing the file is a failure, not a shrug. */
+    mustStore?: boolean;
+  } = {},
 ): Promise<Uint8Array> {
   const label = opts.label ?? url.split('/').pop() ?? url;
 
@@ -257,11 +275,12 @@ export async function fetchModelFile(
     return new Uint8Array(cached.buf);
   }
 
-  return navigator.locks.request(`aloud-dl:${url}`, async () => {
+  const signal = opts.signal;
+  return navigator.locks.request(`aloud-dl:${url}`, signal ? { signal } : {}, async () => {
     const again = await cacheGet(url);
     if (again) return new Uint8Array(again.buf);
 
-    const res = await fetch(url, { credentials: 'omit', redirect: 'follow' });
+    const res = await fetch(url, { credentials: 'omit', redirect: 'follow', signal });
     if (!res.ok) throw new Error(`Download failed (${res.status}) for ${url}`);
 
     const total = Number(res.headers.get('content-length')) || 0;
@@ -297,8 +316,14 @@ export async function fetchModelFile(
       }
     }
 
+    // Cancelled while the bytes were arriving or being checked: write nothing. A download its
+    // owner had given up on finished later and put a file back after "Delete all downloads".
+    signal?.throwIfAborted();
     opts.onProgress?.({ file: label, loaded: bytes.byteLength, total: bytes.byteLength, phase: 'cache' });
-    await cachePut(url, bytes.buffer.slice(0), contentType);
+    const stored = await cachePut(url, bytes.buffer.slice(0), contentType);
+    if (!stored && opts.mustStore) {
+      throw new Error('The download could not be saved on this device — its storage may be full or blocked');
+    }
     return bytes;
   });
 }

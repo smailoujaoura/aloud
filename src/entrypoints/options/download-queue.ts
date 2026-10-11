@@ -113,10 +113,18 @@ export class DownloadQueue {
     return this.jobs.length > 0;
   }
 
-  /** Called on every change; returns the way to stop listening. */
-  subscribe(fn: () => void): () => void {
+  /** Called on every change, until `signal` aborts; returns the way to stop listening sooner. */
+  subscribe(fn: () => void, signal?: AbortSignal): () => void {
+    if (signal?.aborted) return () => undefined;
     this.listeners.add(fn);
-    return () => this.listeners.delete(fn);
+    const stop = (): void => void this.listeners.delete(fn);
+    signal?.addEventListener('abort', stop, { once: true });
+    return stop;
+  }
+
+  /** How many are listening — for the test that nothing is left behind. */
+  get listenerCount(): number {
+    return this.listeners.size;
   }
 
   private changed(): void {

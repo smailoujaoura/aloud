@@ -25,12 +25,13 @@ function tokens(text: string): Token[] {
     const raw = m[0];
     const lead = raw.search(/[\p{L}\p{N}]/u);
     let tail = raw.length;
-    while (tail > Math.max(0, lead) && !/[\p{L}\p{N}]/u.test(raw[tail - 1]!)) tail--;
+    // Marks end words too — Hindi vowel signs, Arabic vowel marks (see engine/g2p/word-timing.ts).
+    while (tail > Math.max(0, lead) && !/[\p{L}\p{N}\p{M}]/u.test(raw[tail - 1]!)) tail--;
     const inner = lead < 0 ? raw : raw.slice(lead, tail);
     out.push({
       from: at + Math.max(0, lead),
       to: lead < 0 ? at + raw.length : at + tail,
-      key: inner.toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu, ''),
+      key: inner.toLocaleLowerCase().replace(/[^\p{L}\p{N}\p{M}]/gu, ''),
     });
   }
   return out;

@@ -12,7 +12,8 @@
  * a content script, which has to go through the synth-host iframe (see engine/worker-client.ts).
  */
 import { browser } from 'wxt/browser';
-import { fetchModelFile } from '@/engine/model-cache';
+import { cacheHas, fetchModelFile } from '@/engine/model-cache';
+import { readCacheSizes, sharedModelInstalled } from '@/engine/installed-voices';
 import { el } from '@/shared/dom';
 import type { EngineConfig, WorkerResponse } from '@/engine/protocol';
 import type { PiperVoiceEntry } from '@/engine/engines/types';
@@ -79,6 +80,19 @@ export class RowProgress {
 }
 
 /**
+ * The rows drawn now. Each redraw of the voice list starts a new scope and ends the last one, so
+ * the rows it replaced stop listening to the queue at once. Waiting for a queue update to find
+ * them detached left every row of every redraw subscribed while nothing was downloading: thirty
+ * tab switches kept a thousand rows alive.
+ */
+let scope = new AbortController();
+
+export function newDownloadScope(): void {
+  scope.abort();
+  scope = new AbortController();
+}
+
+/**
  * Keep a row's progress and its Download button in step with that download in the queue — the
  * row reads the queue rather than holding the state, so a redrawn list loses nothing. Stops
  * following once the row has left the page.
@@ -123,7 +137,7 @@ export function followDownload(key: string, progress: RowProgress, button: HTMLB
       progress.show(`${view.text.replace(/ \d+%$/, '')} ${Math.floor(view.ratio * 100)}%`, view.ratio);
     }
   };
-  const stop = downloads.subscribe(render);
+  const stop = downloads.subscribe(render, scope.signal);
   render();
 }
 
@@ -152,7 +166,7 @@ export function downloadTray(): HTMLElement {
       : '';
     tray.textContent = now + then;
   };
-  const stop = downloads.subscribe(render);
+  const stop = downloads.subscribe(render, scope.signal);
   render();
   return tray;
 }
@@ -176,10 +190,29 @@ export async function downloadPiperVoice(entry: PiperVoiceEntry, progress: Progr
     progress.set(total > 0 ? loaded / total : 0);
   };
 
-  await Promise.all([
-    fetchModelFile(entry.config, { label: 'config', sha256: entry.sha256?.config, onProgress }),
-    fetchModelFile(entry.onnx, { label: 'voice', sha256: entry.sha256?.onnx, onProgress }),
+  // Both files are this download's until both have stopped. With Promise.all, a failed config
+  // ended the job while the voice file kept streaming: the queue moved on to the next voice, and
+  // that orphan wrote its file after "Delete all downloads" had cleared everything. So the first
+  // failure cancels the other, and the job ends only once both have settled.
+  const stop = new AbortController();
+  const fetchOne = (url: string, label: string, sha256?: string) =>
+    fetchModelFile(url, { label, sha256, onProgress, signal: stop.signal, mustStore: true }).catch((err: unknown) => {
+      stop.abort();
+      throw err;
+    });
+  const results = await Promise.allSettled([
+    fetchOne(entry.config, 'config', entry.sha256?.config),
+    fetchOne(entry.onnx, 'voice', entry.sha256?.onnx),
   ]);
+  const failures = results.flatMap((r) => (r.status === 'rejected' ? [r.reason as unknown] : []));
+  if (failures.length) {
+    // The cause, not the cancellation it led to.
+    const cause = failures.find((e) => !(e instanceof DOMException && e.name === 'AbortError')) ?? failures[0];
+    throw cause instanceof Error ? cause : new Error(String(cause));
+  }
+  // Both said they were stored; make sure the cache agrees before the row says "ready".
+  const [config, voice] = await Promise.all([cacheHas(entry.config), cacheHas(entry.onnx)]);
+  if (!config || !voice) throw new Error('The voice downloaded but could not be saved on this device — its storage may be full or blocked');
 }
 
 /**
@@ -233,7 +266,17 @@ export function downloadViaWorker(config: EngineConfig, progress: ProgressSink):
           progress.note(`Downloading… ${Math.floor(ratio * 100)}%`);
         }
       } else if (m.kind === 'ready') {
-        finish();
+        // Ready means the engine loaded — from memory if need be. A Download is for offline use,
+        // so it is done only once the model is really in the cache.
+        void readCacheSizes()
+          .then((sizes) =>
+            finish(
+              sharedModelInstalled(config.engine, sizes)
+                ? undefined
+                : new Error('The model downloaded but could not be saved on this device — its storage may be full or blocked'),
+            ),
+          )
+          .catch((err: unknown) => finish(err instanceof Error ? err : new Error(String(err))));
       } else if (m.kind === 'error' && m.fatal) {
         finish(new Error(m.phase ? `[${m.phase}] ${m.message}` : m.message));
       }
