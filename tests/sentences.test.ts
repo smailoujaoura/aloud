@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { segmentSentences } from '@/segment/sentences';
 
 describe('segmentSentences', () => {
@@ -169,5 +170,62 @@ describe('short quoted replies', () => {
     const chunks = segmentSentences(long, { maxChars: 80 });
     expect(chunks.length).toBeGreaterThan(20);
     expect(chunks.every(c => c.text.length <= 80)).toBe(true);
+  });
+});
+
+describe('utterances: dialogue said the way people say it', () => {
+  const utter = (text: string, locale = 'en') => segmentSentences(text, { locale, maxChars: 160, utterances: true });
+  const said = (text: string, locale = 'en') => utter(text, locale).map((c) => c.text);
+
+  it('keeps every group a verbatim slice, so highlights and seeking stay exact', () => {
+    const corpus = JSON.parse(readFileSync('tests/fixtures/dialogue.json', 'utf8')) as Record<string, string[]>;
+    for (const [lang, texts] of Object.entries(corpus)) {
+      for (const text of texts) {
+        for (const c of utter(text, lang)) {
+          expect(text.slice(c.start, c.end)).toBe(c.text);
+          expect(c.text.length).toBeLessThanOrEqual(160);
+        }
+      }
+    }
+  });
+
+  it('a reply and its attribution are one utterance, with or without a colon', () => {
+    expect(said('"No!" he said. "Go away!"')).toEqual(['"No!" he said. "Go away!"']);
+    expect(said('"Is that you?" asked Tom. "It\'s me," Mary answered.')).toEqual(['"Is that you?" asked Tom.', '"It\'s me," Mary answered.']);
+    expect(said('«No!» disse il pollo. «Vattene!»', 'it')).toEqual(['«No!» disse il pollo. «Vattene!»']);
+    expect(said('—¡No! —gritó el pollo—. ¡Vete! El zorro se fue.', 'es')).toEqual(['—¡No! —gritó el pollo—. ¡Vete!', 'El zorro se fue.']);
+  });
+
+  it('narration up to "rispose:" and then the whole reply', () => {
+    expect(said('La volpe chiese che cosa fosse successo, e il pollo rispose: «No! No! No! Vattene! Vattene!»', 'it')).toEqual([
+      'La volpe chiese che cosa fosse successo, e il pollo rispose:',
+      '«No! No! No! Vattene! Vattene!»',
+    ]);
+  });
+
+  it('French: the closing guillemet stays with its reply', () => {
+    expect(said('« Non ! » dit le poulet. « Va-t\'en ! » Le renard recula.', 'fr')).toEqual([
+      '« Non ! » dit le poulet. « Va-t\'en ! »',
+      'Le renard recula.',
+    ]);
+  });
+
+  it('very short sentences are said with a neighbour; ordinary short sentences are not', () => {
+    expect(said('Yes. No. Maybe. It depends on the weather tomorrow morning.')).toEqual(['Yes. No. Maybe.', 'It depends on the weather tomorrow morning.']);
+    expect(said('Well... I don\'t know. It is late.')).toEqual(['Well... I don\'t know.', 'It is late.']);
+    expect(said('This is Aloud. It reads the page.')).toEqual(['This is Aloud.', 'It reads the page.']);
+  });
+
+  it('abbreviations in other languages do not end a sentence', () => {
+    expect(said('Il Sig. Rossi arrivò alle cinque in punto.', 'it')).toEqual(['Il Sig. Rossi arrivò alle cinque in punto.']);
+    expect(said('La Sra. García llegó tarde a la reunión.', 'es')).toEqual(['La Sra. García llegó tarde a la reunión.']);
+    expect(said('Er kam z. B. um fünf Uhr nach Hause.', 'de')).toEqual(['Er kam z. B. um fünf Uhr nach Hause.']);
+  });
+
+  it('never joins across a blank line or past the length bound', () => {
+    expect(said('No!\n\nYes!')).toEqual(['No!', 'Yes!']);
+    const long = 'This sentence is long enough to fill most of the budget on its own, really it is, honestly.';
+    const parts = segmentSentences(`${long} No!`, { maxChars: long.length + 1, utterances: true });
+    expect(parts.map((c) => c.text)).toEqual([long, 'No!']);
   });
 });

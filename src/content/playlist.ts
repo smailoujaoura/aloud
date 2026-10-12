@@ -128,7 +128,7 @@ export function buildArticlePlaylist(
     const isHeading = block.role === 'heading' || block.role === 'title';
     let first = true;
 
-    for (const chunk of segmentSentences(blockText, { locale: lang, maxChars })) {
+    for (const chunk of segmentSentences(blockText, { locale: lang, maxChars, utterances: true })) {
       const spoken = normalize(chunk.text);
       if (!isSpeakable(spoken)) continue;
       const at = block.start + chunk.start;
@@ -160,7 +160,7 @@ export function buildSelectionPlaylist(opts: PlanOptions & { sourceText: string 
   const aligner = new Aligner(index.fullText);
   const playlist: PlaylistItem[] = [];
 
-  for (const chunk of segmentSentences(sourceText, { locale: lang, maxChars })) {
+  for (const chunk of segmentSentences(sourceText, { locale: lang, maxChars, utterances: true })) {
     const spoken = normalize(chunk.text);
     if (!isSpeakable(spoken)) continue;
     const found = aligner.locate(chunk.text, chunk.index);

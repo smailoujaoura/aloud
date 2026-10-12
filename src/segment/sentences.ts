@@ -5,6 +5,8 @@
  *   - hides reference markers ("[3]") from the segmenter, which otherwise breaks *inside* them,
  *   - treats a newline that merely wraps the markup as a space rather than a sentence end,
  *   - re-joins fragments left dangling after an abbreviation that Intl split on,
+ *   - groups sentences that are one utterance when spoken — a reply and its attribution, a run of
+ *     short exclamations — so the voice says them in one breath (see `groupUtterances`),
  *   - splits sentences longer than `maxChars` at clause boundaries so that first-audio latency
  *     and re-synthesis after a seek stay bounded.
  *
@@ -29,18 +31,26 @@ export interface SegmentOptions {
   maxChars?: number;
   /** Chunks shorter than this are merged into the previous chunk. */
   minChars?: number;
+  /**
+   * Plan utterances, not just sentences: a very short sentence is said with its neighbour
+   * ("Yes. No. Maybe."). What the reader synthesises; sentence-level callers leave it off.
+   */
+  utterances?: boolean;
 }
 
 const DEFAULTS: Required<SegmentOptions> = {
   locale: 'en',
   maxChars: 240,
   minChars: 2,
+  utterances: false,
 };
 
 // A trailing token like these means Intl probably broke mid-sentence: a lone initial ("J.")
 // or a known abbreviation that is not itself sentence-final.
+// Titles in the other languages Aloud reads ("Il Sig. Rossi", "La Sra. García", "Mme. Dupont"), and
+// a single letter of either case — German writes "z. B." and "d. h." with a space inside.
 const DANGLING_ABBR =
-  /(?:^|\s)(?:[A-Z]|e\.g|i\.e|etc|vs|Dr|Mr|Mrs|Ms|Prof|Sr|Jr|St|Mt|Ft|No|Fig|al|Inc|Ltd|Co|Corp|Rev|Gen|Sen|Rep|Gov|Col|Sgt|Lt|Capt|Sept?|Oct|Nov|Dec|Jan|Feb|Mar|Apr|Jun|Jul|Aug)\.$/;
+  /(?:^|\s)(?:[A-Za-z]|e\.g|i\.e|etc|vs|Dr|Mr|Mrs|Ms|Prof|Sr|Jr|St|Mt|Ft|No|Fig|al|Inc|Ltd|Co|Corp|Rev|Gen|Sen|Rep|Gov|Col|Sgt|Lt|Capt|Sept?|Oct|Nov|Dec|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sig|Sigg|Sig\.ra|Dott|Avv|Ing|Mons|Mme|Mlle|Mgr|Hr|Hrn|Fr|Frl|Sra|Srta|Sres|Dña|Ud|Uds|Sto|Sta|Nr|bzw|vgl|usw|ca)\.$/;
 
 /**
  * Wikipedia-style reference markers: "[3]", "[34]", "[a]", "[3, 4]".
@@ -243,6 +253,66 @@ function clauseSplit(
   return out;
 }
 
+/** Closing quotes that cannot open anything: a span starting with one has been cut too early. */
+const LEADING_CLOSER = /^[»”’]+/;
+
+function wordCount(text: string): number {
+  return text.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
+}
+
+/** A sentence this short (in words) is said with its neighbour: "No!", "Yes.", "Well…". */
+const SHORT_UTTERANCE_WORDS = 2;
+
+/**
+ * Join sentences that are one utterance when spoken, within one paragraph and never past
+ * `maxChars` (the latency bound). Each group is a contiguous slice of `text`, so it is located,
+ * highlighted and sought exactly as a sentence is — the word highlight still steps through it.
+ *
+ *  - A closing quote cut off at the start of a span goes back to the sentence it closes: French
+ *    puts a space before "!" and "»", and `Intl.Segmenter` broke "« Non ! » dit le poulet." into
+ *    "« Non !" and "» dit le poulet.".
+ *  - A span starting with a lowercase letter continues the one before: the attribution after a
+ *    reply ("No!" | he said.), never a sentence of its own. Scripts without case never match.
+ *  - With `utterances`: a very short sentence is said with its neighbour ("Yes. No. Maybe.",
+ *    "Well... I don't know."), rather than as a request of its own with a pause either side.
+ *
+ * Nothing is joined across a blank line, and the narration before a colon-introduced reply stays
+ * apart from it unless it is itself a short attribution ("He said: «No!»").
+ */
+function groupUtterances(
+  text: string,
+  forBreaking: string,
+  spans: Array<{ start: number; end: number; reply?: boolean }>,
+  maxChars: number,
+  joinShort: boolean,
+): Array<{ start: number; end: number; reply?: boolean }> {
+  const out: Array<{ start: number; end: number; reply?: boolean }> = [];
+  for (const span of spans) {
+    let cur = { ...span };
+    const prev = out[out.length - 1];
+    if (prev && !HARD_BREAK.test(forBreaking.slice(prev.end, cur.start))) {
+      const closer = LEADING_CLOSER.exec(text.slice(cur.start, cur.end));
+      if (closer) {
+        prev.end = cur.start + closer[0].length;
+        cur = { ...cur, ...trimmedSpan(text, cur.start + closer[0].length, cur.end) };
+        if (cur.end <= cur.start) continue;
+      }
+      const prevText = text.slice(prev.start, prev.end);
+      const curText = text.slice(cur.start, cur.end);
+      const fits = cur.end - prev.start <= maxChars;
+      const continues = /^[\s"'“”«»„‚‘’\-–—(]*\p{Ll}/u.test(curText);
+      const short = joinShort && (wordCount(prevText) <= SHORT_UTTERANCE_WORDS || wordCount(curText) <= SHORT_UTTERANCE_WORDS);
+      if (fits && (continues || short)) {
+        prev.end = cur.end;
+        prev.reply = prev.reply || cur.reply;
+        continue;
+      }
+    }
+    out.push(cur);
+  }
+  return out;
+}
+
 export function segmentSentences(text: string, options: SegmentOptions = {}): Chunk[] {
   const opts = { ...DEFAULTS, ...options };
   const raw: Array<{ start: number; end: number; reply?: boolean }> = [];
@@ -300,7 +370,7 @@ export function segmentSentences(text: string, options: SegmentOptions = {}): Ch
 
   // Clause-split long chunks, then materialise.
   const chunks: Chunk[] = [];
-  for (const { start, end } of merged) {
+  for (const { start, end } of groupUtterances(text, forBreaking, merged, opts.maxChars, opts.utterances)) {
     for (const [ps, pe] of clauseSplit(text, start, end, opts.maxChars)) {
       const span = trimmedSpan(text, ps, pe);
       if (span.end <= span.start) continue;

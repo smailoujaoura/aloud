@@ -62,6 +62,9 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
   a passage to make it that language's voice on every page, lock a page to one voice, or correct
   a passage's language, from the language button on the bar. A language with no voice is said to
   have none — with a link to its voices, or a way to skip it — never quietly read as another.
+- **Said the way people say it** — a reply and its attribution (*"No!" he said.*), a run of short
+  exclamations, a French reply with its closing guillemet, are each spoken as one utterance, and
+  abbreviations such as *Sig.*, *Sra.* or *z. B.* no longer end a sentence.
 - **Live words a minute** — the bar follows the audio being heard, updating five times a second
   from the last two seconds of word timings. Voices without timings use the current sentence's
   audio duration. Pausing or waiting for audio shows zero; the speed slider shows the multiplier.
