@@ -7,6 +7,26 @@
  * resolved separately against the live DOM (see live-container.ts + fuzzy-align.ts).
  */
 import { Readability, isProbablyReaderable } from '@mozilla/readability';
+import { Eligibility } from './eligibility';
+
+/**
+ * Prune Readability's copy of the page using what the *live* page shows. The copy has lost the
+ * site's stylesheets, so it cannot tell a collapsed translation from prose, or a styled "Translate?"
+ * div from a paragraph. Controls always go. Hidden content goes when the copy is what is kept
+ * (`forSaving`): read live, it stays a candidate, read when revealed (content/playlist.ts).
+ * Elements are paired by document order, which `cloneNode` preserves.
+ */
+function pruneCopy(live: Document, copy: Document, forSaving: boolean): void {
+  const liveEls = live.documentElement.querySelectorAll('*');
+  const copyEls = copy.documentElement.querySelectorAll('*');
+  if (liveEls.length !== copyEls.length) return; // the page changed under us: prune nothing
+  const check = new Eligibility();
+  const drop: Element[] = [];
+  liveEls.forEach((el, i) => {
+    if (check.control(el) || (forSaving && el.ownerDocument.defaultView && check.hidden(el))) drop.push(copyEls[i]!);
+  });
+  for (const el of drop) el.remove();
+}
 
 export interface ExtractedArticle {
   title: string;
@@ -29,7 +49,7 @@ const BLOCK_TAGS = new Set([
 ]);
 
 /** Flatten an element's visible text, inserting "\n" at block boundaries. Mirrors text-index. */
-export function elementToText(root: Element): string {
+export function elementToText(root: Element, check?: Eligibility): string {
   const parts: string[] = [];
   const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
   let node: Node | null = walker.currentNode;
@@ -38,6 +58,11 @@ export function elementToText(root: Element): string {
     if (node.nodeType === Node.ELEMENT_NODE) {
       const tag = (node as Element).tagName;
       if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'NOSCRIPT' || tag === 'TEMPLATE') {
+        node = skipSubtree(walker);
+        continue;
+      }
+      // On a live page: not hidden text, not a control's label.
+      if (check && (check.control(node as Element) || ((node as Element).ownerDocument.defaultView && check.hidden(node as Element)))) {
         node = skipSubtree(walker);
         continue;
       }
@@ -66,7 +91,7 @@ function skipSubtree(walker: TreeWalker): Node | null {
   return n;
 }
 
-export function extractArticle(doc: Document = document): ExtractedArticle {
+export function extractArticle(doc: Document = document, opts: { forSaving?: boolean } = {}): ExtractedArticle {
   const readerable = safeIsReaderable(doc);
   const lang =
     doc.documentElement.getAttribute('lang')?.trim().split('-')[0] ||
@@ -80,6 +105,7 @@ export function extractArticle(doc: Document = document): ExtractedArticle {
 
   try {
     const clone = doc.cloneNode(true) as Document;
+    pruneCopy(doc, clone, opts.forSaving === true);
     const article = new Readability(clone, {
       charThreshold: 250,
       keepClasses: false,
@@ -97,7 +123,7 @@ export function extractArticle(doc: Document = document): ExtractedArticle {
   if (!text || text.length < 200) {
     // Readability bailed (docs pages, wikis, forums). Fall back to the largest sensible block.
     const container = pickLargestTextBlock(doc);
-    if (container) text = elementToText(container);
+    if (container) text = elementToText(container, new Eligibility());
   }
 
   return { title: title.trim(), text, lang, byline, html, readerable };

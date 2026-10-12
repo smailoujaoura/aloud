@@ -19,7 +19,7 @@ import { browser } from 'wxt/browser';
 
 import { extractArticle, type ExtractedArticle } from '@/extract/readability';
 import { resolveLiveRoot } from '@/extract/live-container';
-import { buildTextIndex, rangeForSpan, type TextIndex } from '@/extract/text-index';
+import { buildTextIndex, refreshEligibility, spanEligible, rangeForSpan, type TextIndex } from '@/extract/text-index';
 import { spokenToSource } from '@/highlight/word-map';
 import { normalizeForSpeech } from '@/segment/normalize';
 import { applyPronunciations } from '@/segment/pronunciations';
@@ -560,7 +560,7 @@ export class ReaderSession {
     const useSelection = this.mode === 'selection' && this.selection.text.length > MIN_SELECTION_CHARS;
     if (useSelection) {
       this.state.title = 'Selection';
-      this.textIndex = buildTextIndex(selectionRoot(this.selection));
+      this.textIndex = buildTextIndex(selectionRoot(this.selection), { forReader: true });
       this.playlist = buildSelectionPlaylist({
         index: this.textIndex,
         lang: article.lang,
@@ -574,7 +574,7 @@ export class ReaderSession {
         throw new Error("This page doesn't look like an article.");
       }
       const liveRoot = known ? known.root : resolveLiveRoot(article, document);
-      this.textIndex = buildTextIndex(liveRoot);
+      this.textIndex = buildTextIndex(liveRoot, { forReader: true });
       this.playlist = buildArticlePlaylist({
         index: this.textIndex,
         lang: article.lang,
@@ -590,8 +590,14 @@ export class ReaderSession {
 
     this.state.totalChunks = this.playlist.length;
     if (this.mode === 'from-cursor') this.startFromCursor();
+    // Not on a sentence hidden on the page.
+    if (this.playlist.length && !this.playlist[this.currentPlayId]?.eligible) {
+      this.currentPlayId = this.readableNear(this.currentPlayId, 1);
+      this.state.currentIndex = this.currentPlayId;
+    }
     this.logPlan();
     this.refreshMediaMetadata();
+    this.watchEligibility();
   }
 
   /** "Read from here": start at the clicked element, or at the first sentence on screen. */
@@ -608,8 +614,10 @@ export class ReaderSession {
   private logPlan(): void {
     const located = this.playlist.filter((p) => p.range).length;
     const missing = this.playlist.length - located;
+    const hidden = this.playlist.filter((p) => !p.eligible).length;
     log.info(
       `planned ${this.playlist.length} sentences; ${located} located in DOM` +
+        (hidden > 0 ? `; ${hidden} hidden on the page` : '') +
         (missing > 0 ? ` (${missing} not located)` : '') +
         (this.currentPlayId ? `; starting at ${this.currentPlayId}` : ''),
     );
@@ -723,12 +731,14 @@ export class ReaderSession {
     this.seekTo(this.currentPlayId + delta);
   }
 
-  seekTo(playId: number): void {
+  seekTo(playId: number, opts: { quiet?: boolean } = {}): void {
     if (this.exporter) {
       this.bar?.flash('Reading carries on once the MP3 is made', 'info');
       return;
     }
-    const target = Math.max(0, Math.min(playId, this.playlist.length - 1));
+    const wanted = Math.max(0, Math.min(playId, this.playlist.length - 1));
+    // Onto something that is read: forward for a move forward, back for a move back.
+    const target = this.readableNear(wanted, wanted >= this.currentPlayId ? 1 : -1);
     // Moving anywhere means this is no longer "sitting at the end of the document".
     this.finishedAtEnd = false;
     this.currentPlayId = target;
@@ -749,8 +759,76 @@ export class ReaderSession {
     // Playback has to wait for the new sentence to synthesise; show that.
     this.state.busy = this.engineReady && this.scheduler.isPlaying();
     this.pushState();
-    this.bar?.flash(`Sentence ${target + 1} of ${this.playlist.length}`);
+    if (!opts.quiet) this.bar?.flash(`Sentence ${target + 1} of ${this.playlist.length}`);
     this.refreshOffScreen();
+  }
+
+  /** The readable item nearest `from` in `direction`, then the other way; `from` itself if none is. */
+  private readableNear(from: number, direction: 1 | -1): number {
+    for (const dir of [direction, -direction as 1 | -1]) {
+      for (let i = from; i >= 0 && i < this.playlist.length; i += dir) if (this.playlist[i]!.eligible) return i;
+    }
+    return from;
+  }
+
+  // ---- the page changing while it is read -------------------------------------
+
+  private eligibilityObserver: MutationObserver | null = null;
+  private eligibilityTimer = 0;
+
+  /**
+   * Follow the page while it is read. A translation revealed ahead is read when reached; one
+   * hidden is passed over — and its audio, if already made, dropped. Revealing text behind the
+   * playhead does not rewind: it is there for a seek or "read from here". The current sentence
+   * hidden stops, and reading carries on at the next one.
+   */
+  private watchEligibility(): void {
+    this.eligibilityObserver?.disconnect();
+    if (!this.textIndex?.forReader || typeof MutationObserver === 'undefined') return;
+    this.eligibilityObserver = new MutationObserver(() => {
+      clearTimeout(this.eligibilityTimer);
+      this.eligibilityTimer = window.setTimeout(() => this.onEligibilityChanged(), 200);
+    });
+    this.eligibilityObserver.observe(document.documentElement, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['style', 'class', 'hidden', 'open', 'aria-hidden', 'inert'],
+    });
+  }
+
+  private onEligibilityChanged(): void {
+    if (this.disposed || !this.textIndex || !refreshEligibility(this.textIndex)) return;
+    const index = this.textIndex;
+    const current = this.currentPlayId;
+    let ahead = false;
+    let here = false;
+    for (const item of this.playlist) {
+      if (!item.span) continue;
+      const now = spanEligible(index, item.span.start, item.span.end);
+      if (now === item.eligible) continue;
+      item.eligible = now;
+      if (item.playId > current) ahead = true;
+      else if (item.playId === current) here = true;
+    }
+    if (!ahead && !here) return;
+    log.info(`[eligibility] the page changed: ${this.playlist.filter((p) => p.eligible).length} of ${this.playlist.length} sentences readable`);
+    if (this.exporter) {
+      this.cancelExport('The page changed, so the MP3 was stopped');
+      return;
+    }
+    if (!this.engineReady) return;
+    if (here && !this.playlist[current]!.eligible) {
+      // The sentence being read was hidden: on to the next one that is not.
+      this.seekTo(this.readableNear(current + 1, 1), { quiet: true });
+      return;
+    }
+    // Upcoming sentences changed: what was prepared for them is dropped and asked for again.
+    const keepFrom = current + 1;
+    this.requested.clear();
+    this.worker.cancelFrom(keepFrom, 0);
+    this.scheduler.reprimeForSpeed();
+    this.ensureSynth(keepFrom);
+    this.pushState();
   }
 
   /** The pace of the audio being heard, never of the synthesis queue or a previous sentence. */
@@ -999,7 +1077,9 @@ export class ReaderSession {
       count: this.playlist.length,
       // Deep enough to keep every worker in the pool busy, which is all that decides the pace.
       lookahead: Math.max(4, this.tuning.lookahead),
-      request: (id) => this.worker.request(id, this.playlist[id]!.spokenText, this.settings.speed),
+      // Hidden text is not in the file, as it is not read (content/audio-export.ts: skip).
+      request: (id) =>
+        this.playlist[id]!.eligible ? this.worker.request(id, this.playlist[id]!.spokenText, this.settings.speed) : exporter.skip(id),
       leadSilenceSec: (id) => (id === 0 ? 0 : leadSilenceSec(this.playlist[id], this.settings)),
       onProgress: (done, total) => {
         if (this.exporter === exporter) this.setExport({ phase: 'running', done, total });
@@ -1140,7 +1220,9 @@ export class ReaderSession {
    * templates ship `lang="en"` on pages in every language.
    */
   private async detectPageLanguage(): Promise<string> {
+    // What is read, not what is on the page: a hidden translation is another language entirely.
     const sample = this.playlist
+      .filter((p) => p.eligible)
       .slice(0, 60)
       .map((p) => p.sourceText)
       .join(' ')
@@ -1174,6 +1256,11 @@ export class ReaderSession {
       const item = this.playlist[i];
       if (!item) continue;
       this.requested.add(i);
+      // Hidden on the page now (a collapsed translation): passed over in silence, with no pause.
+      if (!item.eligible) {
+        this.scheduler.provide(i, new Float32Array(0), this.sampleRate, 0);
+        continue;
+      }
       this.worker.request(i, item.spokenText, this.settings.speed);
     }
   }
@@ -1190,6 +1277,12 @@ export class ReaderSession {
     this.state.busy = false;
     this.state.hint = undefined;
     if (this.wantsPlayback && this.state.status !== 'playing') this.state.status = 'playing';
+
+    // A sentence passed over because it is hidden on the page: nothing to show or count.
+    if (this.playlist[playId] && !this.playlist[playId]!.eligible) {
+      this.ensureSynth(playId + 1);
+      return;
+    }
 
     if (this.settings.highlight) {
       // Never blank the highlight while audio is playing: fall back to the enclosing block, then
@@ -1816,6 +1909,9 @@ export class ReaderSession {
 
     clearTimeout(this.readingRateTimer);
     this.readingRateTimer = 0;
+    this.eligibilityObserver?.disconnect();
+    this.eligibilityObserver = null;
+    clearTimeout(this.eligibilityTimer);
     this.stopFollowingWords(false);
     this.tapToSeek?.dispose();
     this.sleepTimer?.dispose();

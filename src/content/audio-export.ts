@@ -29,7 +29,7 @@ export class Mp3Export {
   /** Sentences that arrived as empty audio: silence in the file, and worth saying so. */
   private readonly missing = new Set<number>();
   private requestedUpTo = -1;
-  private readonly waiting = new Map<number, { pcm: Float32Array; sampleRate: number }>();
+  private readonly waiting = new Map<number, { pcm: Float32Array; sampleRate: number; skipped?: boolean }>();
   private writer: Mp3Writer | null = null;
   private stopped = false;
 
@@ -64,6 +64,17 @@ export class Mp3Export {
     this.topUp();
   }
 
+  /**
+   * Sentence `id` is not in the file at all — text hidden on the page (a collapsed translation).
+   * Not "missing": nothing failed, and it brings no pause of its own.
+   */
+  skip(id: number): void {
+    if (this.stopped || id < this.next || this.waiting.has(id)) return;
+    this.waiting.set(id, { pcm: new Float32Array(0), sampleRate: 0, skipped: true });
+    this.drain();
+    this.topUp();
+  }
+
   cancel(): void {
     this.stopped = true;
     this.waiting.clear();
@@ -75,8 +86,13 @@ export class Mp3Export {
 
   private drain(): void {
     while (!this.stopped && this.waiting.has(this.next)) {
-      const { pcm, sampleRate } = this.waiting.get(this.next)!;
+      const { pcm, sampleRate, skipped } = this.waiting.get(this.next)!;
       this.waiting.delete(this.next);
+      if (skipped) {
+        this.next++;
+        this.host.onProgress(this.next, this.host.count);
+        continue;
+      }
       // The first sentence with real audio fixes the file's sample rate; every engine produces
       // one rate throughout, so later sentences always match it.
       this.writer ??= pcm.length > 0 ? new Mp3Writer(sampleRate) : null;

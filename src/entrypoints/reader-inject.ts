@@ -85,7 +85,8 @@ export default defineUnlistedScript(() => {
 /** This page as a queue entry, or why it cannot be one. */
 function extractForQueue(): NewQueueItem | { error: string } {
   if (document.contentType === 'application/pdf') return { error: 'PDFs cannot be queued yet' };
-  const article = extractArticle(document);
+  // A saved copy keeps what the reader sees: no collapsed translations, no "Translate?" buttons.
+  const article = extractArticle(document, { forSaving: true });
   if (!article.html && article.text.length < 200) return { error: "This page doesn't look like an article" };
   return {
     url: location.href,

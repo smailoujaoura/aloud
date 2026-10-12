@@ -7,6 +7,8 @@
  * to a `Range` — this is what lets us highlight a sentence in place without touching the DOM.
  */
 
+import { Eligibility } from './eligibility';
+
 export const BLOCK_TAGS = new Set([
   'P', 'DIV', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'PRE',
   'ARTICLE', 'SECTION', 'FIGCAPTION', 'DD', 'DT', 'TD', 'TH', 'TR', 'CAPTION',
@@ -23,6 +25,12 @@ const SKIP_TAGS = new Set([
 
 export interface Piece {
   node: Text;
+  /**
+   * In a reader index: whether this text is read *now* — rendered and not part of a control.
+   * Kept per piece because it changes while reading (a translation revealed, a section hidden)
+   * and is checked again when the page changes (see `refreshEligibility`).
+   */
+  eligible?: boolean;
   /** Offset into fullText where this node's text begins. */
   at: number;
   /** node.data.length at build time. */
@@ -33,6 +41,8 @@ export interface TextIndex {
   root: Element;
   fullText: string;
   pieces: Piece[];
+  /** Built for the reader (see `buildTextIndex`'s `forReader`). */
+  forReader?: boolean;
 }
 
 export function isHidden(el: Element): boolean {
@@ -54,11 +64,20 @@ export function nearestBlock(node: Node, root: Element): Element {
   return root;
 }
 
-export function buildTextIndex(root: Element): TextIndex {
+/**
+ * Index the text under `root`.
+ *
+ * By default, the visible text — what page annotations anchor to, unchanged so saved highlights
+ * keep their places. With `forReader`, the reader's view: controls are left out entirely ("Translate?"
+ * is never prose), and text that is not rendered *now* is kept but marked ineligible, so revealing
+ * a translation while reading makes it readable in place, without rebuilding the plan.
+ */
+export function buildTextIndex(root: Element, opts: { forReader?: boolean } = {}): TextIndex {
   const doc = root.ownerDocument;
   const pieces: Piece[] = [];
   let full = '';
   let prevBlock: Element | null = null;
+  const reader = opts.forReader ? new Eligibility() : null;
 
   const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode(node: Node): number {
@@ -67,7 +86,10 @@ export function buildTextIndex(root: Element): TextIndex {
       for (let el = node.parentElement; el && el !== root.parentElement; el = el.parentElement) {
         if (SKIP_TAGS.has(el.tagName)) return NodeFilter.FILTER_REJECT;
         if (el.getAttribute('aria-hidden') === 'true') return NodeFilter.FILTER_REJECT;
-        if (el.hasAttribute('hidden')) return NodeFilter.FILTER_REJECT;
+        if (!reader && el.hasAttribute('hidden')) return NodeFilter.FILTER_REJECT;
+      }
+      if (reader) {
+        return node.parentElement && reader.inControl(node.parentElement, root) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
       }
       // Visibility check only on the direct parent — cheap and catches the common cases.
       if (node.parentElement && isHidden(node.parentElement)) return NodeFilter.FILTER_REJECT;
@@ -84,13 +106,50 @@ export function buildTextIndex(root: Element): TextIndex {
     prevBlock = block;
 
     const data = node.data;
-    pieces.push({ node, at: full.length, len: data.length });
+    pieces.push({ node, at: full.length, len: data.length, ...(reader ? { eligible: reader.rendered(node) } : {}) });
     full += data;
 
     node = walker.nextNode() as Text | null;
   }
 
-  return { root, fullText: full, pieces };
+  return { root, fullText: full, pieces, ...(reader ? { forReader: true } : {}) };
+}
+
+/**
+ * Re-read which pieces are rendered now; true when any changed. A translation revealed or a
+ * section collapsed while reading.
+ */
+export function refreshEligibility(index: TextIndex): boolean {
+  if (!index.forReader) return false;
+  const check = new Eligibility();
+  let changed = false;
+  for (const piece of index.pieces) {
+    const now = piece.node.isConnected && check.rendered(piece.node);
+    if (now !== piece.eligible) {
+      piece.eligible = now;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+/**
+ * Is the text in `[start, end)` read? In a reader index, true when most of its characters are
+ * in eligible pieces — a sentence is spoken or not as a whole. Always true in a plain index.
+ */
+export function spanEligible(index: TextIndex, start: number, end: number): boolean {
+  if (!index.forReader || end <= start) return true;
+  let yes = 0;
+  let no = 0;
+  for (let i = pieceIndexAt(index.pieces, start); i < index.pieces.length; i++) {
+    const p = index.pieces[i]!;
+    if (p.at >= end) break;
+    const overlap = Math.min(end, p.at + p.len) - Math.max(start, p.at);
+    if (overlap <= 0) continue;
+    if (p.eligible === false) no += overlap;
+    else yes += overlap;
+  }
+  return yes > no;
 }
 
 /** Binary search for the piece containing `offset` (or the first piece starting at/after it). */

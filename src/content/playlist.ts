@@ -13,7 +13,7 @@
  *    arbitrary nodes), so it segments the selected string and fuzzy-locates each sentence.
  */
 import { buildBlockModel, type BlockRole } from '@/extract/block-model';
-import { rangeForSpan, type TextIndex } from '@/extract/text-index';
+import { rangeForSpan, spanEligible, type TextIndex } from '@/extract/text-index';
 import { segmentSentences } from '@/segment/sentences';
 import { isSpeakable } from '@/segment/normalize';
 import { Aligner } from '@/align/fuzzy-align';
@@ -40,6 +40,13 @@ export interface PlaylistItem {
   sourceAt: number | null;
   /** Highlight range for the whole enclosing block — the fallback when `range` is null. */
   blockRange: Range | null;
+  /** Where the sentence lies in the text index, when it was located there. */
+  span: { start: number; end: number } | null;
+  /**
+   * Whether it is read *now*: its text is rendered and not hidden (a collapsed translation).
+   * Re-evaluated when the page changes while reading (session.ts), so it is not fixed at planning.
+   */
+  eligible: boolean;
   /** Structural role of the block this sentence belongs to. */
   role: BlockRole;
   /** True when this sentence is the first of a new block (paragraph / list item / heading). */
@@ -97,6 +104,8 @@ export function buildArticlePlaylist(
           range: null,
           sourceAt: null,
           blockRange: null,
+          span: null,
+          eligible: true,
           role: block.role,
           startsBlock: true,
           isHeading: true,
@@ -121,6 +130,8 @@ export function buildArticlePlaylist(
         range: range ?? blockRange,
         sourceAt: range && index.fullText.startsWith(chunk.text, at) ? at : null,
         blockRange,
+        span: { start: at, end: block.start + chunk.end },
+        eligible: spanEligible(index, at, block.start + chunk.end),
         role: block.role,
         startsBlock: first,
         isHeading,
@@ -151,6 +162,9 @@ export function buildSelectionPlaylist(opts: PlanOptions & { sourceText: string 
       range: found ? rangeForSpan(index, found.start, found.end) : null,
       sourceAt: found && index.fullText.startsWith(chunk.text, found.start) ? found.start : null,
       blockRange: null,
+      span: found ? { start: found.start, end: found.end } : null,
+      // A selection dragged across a collapsed translation: its hidden text is not read.
+      eligible: found ? spanEligible(index, found.start, found.end) : true,
       role: 'paragraph',
       startsBlock: false,
       isHeading: false,

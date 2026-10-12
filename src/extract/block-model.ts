@@ -119,7 +119,9 @@ export function buildBlockModel(index: TextIndex, opts: BlockModelOptions = {}):
     const { role, level } = roleFor(g.el);
 
     if (g.el.closest(BOILERPLATE_ANCESTOR) && role !== 'heading') continue;
-    if (isHidden(g.el)) continue;
+    // The reader keeps blocks hidden *now* as candidates — a translation revealed while reading is
+    // read in place — and marks each sentence eligible or not (content/playlist.ts).
+    if (!index.forReader && isHidden(g.el)) continue;
     if (role !== 'heading' && text.length > 40 && linkTextRatio(g.el) > 0.7) continue;
 
     if (useRef) {
