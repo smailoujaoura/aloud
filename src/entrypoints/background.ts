@@ -335,7 +335,8 @@ export default defineBackground({
         if (msg.type === 'state') {
           if (tabId != null) setBadge(tabId, badgeFor(msg.state.status));
         } else if (msg.type === 'open-options') {
-          void browser.runtime.openOptionsPage();
+          if (msg.language && /^[a-z]{2,3}$/.test(msg.language)) void openVoicesFor(msg.language);
+          else void browser.runtime.openOptionsPage();
         } else if (msg.type === 'open-walkthrough') {
           void openWalkthrough();
         } else if (msg.type === 'open-library') {
@@ -889,6 +890,22 @@ async function focusWindow(windowId: number | undefined): Promise<void> {
 }
 
 /** Show the Library at `tab`, reusing its tab if one is open. */
+/** The Voice settings, showing the voices for one language (`it`). */
+async function openVoicesFor(language: string): Promise<void> {
+  const url = `${browser.runtime.getURL(LIBRARY_PAGE)}?language=${language}#voice`;
+  const existing = await findOwnTab(LIBRARY_PAGE);
+  if (existing) {
+    try {
+      await browser.tabs.update(existing.id, { active: true, url });
+      await focusWindow(existing.windowId);
+      return;
+    } catch {
+      /* closed in the meantime: open a new one */
+    }
+  }
+  await browser.tabs.create({ url });
+}
+
 async function openLibrary(tab: LibraryTab = 'continue'): Promise<void> {
   const base = browser.runtime.getURL(LIBRARY_PAGE);
   const url = `${base}#${tab}`;

@@ -52,6 +52,16 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
   black or white letters, and everything else keeps the page's colours. While Aloud reads, your
   saved highlights turn into underlines, so the only wash is the sentence being read, and the
   reading bar slides out of the way when you scroll down and keeps the sentence clear of itself.
+- **Reads what you see** — only the prose the page shows: a translation collapsed out of sight, a
+  styled "Translate?" button or a closed `<details>` is not read, and a passage you reveal while
+  listening is read when it is reached — hidden again, it is passed over.
+- **Each language in its own voice** — the language of every paragraph is told apart (the page's
+  own `lang` markup, the browser's language detector, and the paragraphs around a short reply or
+  a name), and each is read by a downloaded voice that speaks it: an Italian story with English
+  translations switches between an Italian and an English voice. Pick a voice on the bar during
+  a passage to make it that language's voice on every page, lock a page to one voice, or correct
+  a passage's language, from the language button on the bar. A language with no voice is said to
+  have none — with a link to its voices, or a way to skip it — never quietly read as another.
 - **Live words a minute** — the bar follows the audio being heard, updating five times a second
   from the last two seconds of word timings. Voices without timings use the current sentence's
   audio duration. Pausing or waiting for audio shows zero; the speed slider shows the multiplier.

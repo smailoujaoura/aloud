@@ -276,6 +276,21 @@ select option, select optgroup { background: var(--bar-solid); color: var(--bar-
 select optgroup { color: var(--bar-muted); font-weight: 600; }
 .voice[hidden] { display: none; }
 
+/* The passage's language: two letters, quiet until there is something to say. */
+.lang {
+  width: auto; min-width: 32px; padding: 0 7px;
+  font: var(--font); font-size: 11px; font-weight: 700; letter-spacing: .04em;
+}
+.lang[hidden] { display: none; }
+.lang.missing { box-shadow: inset 0 -2px 0 var(--accent); }
+.lang.manual { background: var(--accent-soft); }
+.lang-menu { width: min(300px, 100%); }
+.lang-menu .menu-field {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 2px 10px 6px; font-size: 12.5px;
+}
+.lang-menu .menu-field select { max-width: 170px; }
+
 /* ---- floated status ------------------------------------------------------ */
 
 .toast {

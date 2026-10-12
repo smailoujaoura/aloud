@@ -35,6 +35,30 @@ export type ExportState =
   | { phase: 'done'; seconds: number; bytes: number }
   | { phase: 'error'; message: string };
 
+/** The passage being read: its language, the voice reading it, and what can be changed. */
+export interface LanguageInfo {
+  /** Primary language code, or '' when it is not known. */
+  language: string;
+  /** "Italian". */
+  name: string;
+  /** How the language was decided, for the menu: "detected", "set by the page", … */
+  how: string;
+  voiceLabel: string;
+  /** No downloaded voice speaks it: it is read by `voiceLabel`, or skipped. */
+  missing: boolean;
+  skipped: boolean;
+  /** The page is locked to one voice. */
+  manual: boolean;
+  /** Voices follow the language (the setting). */
+  auto: boolean;
+  /** Languages offered for correcting this passage. */
+  languages: Array<{ code: string; name: string }>;
+  /** Downloaded voices that speak `language`, as `engine:voice` values. */
+  voices: Array<{ value: string; label: string }>;
+  /** The voice remembered for `language`, or ''. */
+  preferred: string;
+}
+
 export interface ControlBarCallbacks {
   onPlay(): void;
   onPause(): void;
@@ -64,6 +88,14 @@ export interface ControlBarCallbacks {
   /** The tips card was dismissed; it should never be shown again. */
   onTipsDismissed(): void;
   onClose(): void;
+  /** "This passage is in …" — a correction of the detected language. */
+  onPassageLanguage?(code: string): void;
+  /** Lock this page to the voice reading now (true), or back to Auto (false). */
+  onVoiceLock?(locked: boolean): void;
+  /** Remember `value` as the voice for `code`, on every page. */
+  onLanguageVoice?(code: string, value: string): void;
+  /** No voice for `code`: get one, skip its passages, or read them with the usual voice. */
+  onMissingVoice?(code: string, choice: 'get' | 'skip' | 'read'): void;
 }
 
 export interface ControlBarOptions {
@@ -138,6 +170,9 @@ export class ControlBar {
   /** Live words a minute, beside the speed multiplier. */
   private rateEl!: HTMLElement;
   private voiceEl!: HTMLSelectElement;
+  /** The language of the passage being read, and the menu to change how it is read. */
+  private langBtn!: HTMLButtonElement;
+  private languageInfo: LanguageInfo | null = null;
 
   private playing = false;
   /** Slid out of the way while you scroll down the page (see `watchScrolling`). */
@@ -282,8 +317,16 @@ export class ControlBar {
     // The four secondary buttons travel together in a group. On a phone the row cannot hold
     // every control, and a group is what stops the wrap from stranding a lone ✕ on a line of
     // its own: either they all fit beside the transport controls, or they all move down.
+    this.langBtn = this.make('button', {
+      class: 'lang',
+      'aria-haspopup': 'dialog',
+      'aria-expanded': 'false',
+      'aria-label': 'Language and voice',
+      hidden: '',
+    });
+    this.langBtn.addEventListener('click', () => this.toggleLanguageMenu());
     const side = this.make('div', { class: 'side' });
-    side.append(noteBtn, this.snapBtn, this.tapBtn, this.sleepBtn, this.saveBtn, gearBtn, closeBtn);
+    side.append(this.langBtn, noteBtn, this.snapBtn, this.tapBtn, this.sleepBtn, this.saveBtn, gearBtn, closeBtn);
 
     this.bar.append(
       this.playBtn,
@@ -592,6 +635,11 @@ export class ControlBar {
   }
 
   /** Sync the in-bar toggle when the setting was changed elsewhere (e.g. the options page). */
+  /** Show `value` as the voice reading now, when it is one of the picker's options. */
+  selectVoice(value: string): void {
+    if ([...this.voiceEl.options].some((o) => o.value === value)) this.voiceEl.value = value;
+  }
+
   setTapToSeek(on: boolean): void {
     if (this.tapToSeek === on) return;
     this.tapToSeek = on;
@@ -697,6 +745,106 @@ export class ControlBar {
     this.closePopover();
     this.unwatchTheme();
     this.host.remove();
+  }
+
+  // ---- language and voice --------------------------------------------------
+
+  /** Show the language of the passage being read and the voice reading it; null hides it. */
+  setLanguage(info: LanguageInfo | null): void {
+    this.languageInfo = info;
+    this.langBtn.hidden = !info;
+    if (!info) {
+      if (this.popover?.button === this.langBtn) this.closePopover();
+      return;
+    }
+    this.langBtn.textContent = (info.language || '?').toUpperCase();
+    this.langBtn.classList.toggle('missing', info.missing && !info.manual);
+    this.langBtn.classList.toggle('manual', info.manual);
+    const state = info.manual
+      ? ' · one voice for this page'
+      : info.skipped
+        ? ' · skipped, no voice downloaded'
+        : info.missing
+          ? ` · no ${info.name} voice downloaded`
+          : '';
+    this.langBtn.title = `${info.name || 'Language unknown'} · ${info.voiceLabel}${state}`;
+    const body = this.popover?.button === this.langBtn ? this.popover.menu : null;
+    if (body) this.renderLanguageMenu(body);
+  }
+
+  /** Open the language menu — from a flash that points at it. */
+  openLanguageMenu(): void {
+    if (this.languageInfo && this.popover?.button !== this.langBtn) this.toggleLanguageMenu();
+  }
+
+  private toggleLanguageMenu(): void {
+    if (this.popover?.button === this.langBtn) {
+      this.closePopover();
+      return;
+    }
+    const menu = this.make('div', { class: 'pop-menu export-menu lang-menu', role: 'dialog', 'aria-label': 'Language and voice' });
+    this.renderLanguageMenu(menu);
+    this.openPopover(this.langBtn, menu);
+    menu.querySelector<HTMLElement>('select, button')?.focus({ preventScroll: true });
+  }
+
+  private renderLanguageMenu(menu: HTMLElement): void {
+    const info = this.languageInfo;
+    if (!info) return;
+    const hadFocus = this.root.activeElement instanceof HTMLElement && menu.contains(this.root.activeElement);
+    menu.replaceChildren(this.make('div', { class: 'menu-title' }, 'Language and voice'));
+    const text = (t: string): void => void menu.appendChild(this.make('p', { class: 'menu-text' }, t));
+    const action = (label: string, run: () => void, primary = false): void => {
+      const b = this.make('button', { type: 'button', class: primary ? 'primary' : '' }, label);
+      b.addEventListener('click', run);
+      menu.appendChild(b);
+    };
+    const picker = (label: string, options: Array<{ value: string; label: string }>, value: string, change: (v: string) => void): void => {
+      const row = this.make('label', { class: 'menu-field' });
+      const select = this.make('select', { 'aria-label': label });
+      for (const o of options) {
+        const option = this.make('option', { value: o.value }, o.label);
+        if (o.value === value) option.selected = true;
+        select.appendChild(option);
+      }
+      select.addEventListener('change', () => change(select.value));
+      row.append(this.make('span', {}, label), select);
+      menu.appendChild(row);
+    };
+
+    const name = info.name || 'an unknown language';
+    text(`This passage is in ${name} (${info.how}), read by ${info.voiceLabel}.`);
+    const languages = info.languages.some((l) => l.code === info.language)
+      ? info.languages
+      : [{ code: info.language, name: info.name || 'Unknown' }, ...info.languages];
+    picker('It is in', languages.map((l) => ({ value: l.code, label: l.name })), info.language, (code) => this.cb.onPassageLanguage?.(code));
+
+    if (info.manual) {
+      text(`Every passage on this page is read by ${info.voiceLabel}, whatever its language.`);
+      action('Follow the language again', () => this.cb.onVoiceLock?.(false), true);
+      return this.refocus(menu, hadFocus);
+    }
+    if (info.language && info.missing) {
+      text(
+        info.skipped
+          ? `No ${info.name} voice is downloaded, so ${info.name} passages are skipped.`
+          : `No ${info.name} voice is downloaded, so ${info.voiceLabel} reads ${info.name} with its own pronunciation.`,
+      );
+      action(`Get a ${info.name} voice`, () => this.cb.onMissingVoice?.(info.language, 'get'), true);
+      if (info.skipped) action(`Read ${info.name} passages anyway`, () => this.cb.onMissingVoice?.(info.language, 'read'));
+      else action(`Skip ${info.name} passages`, () => this.cb.onMissingVoice?.(info.language, 'skip'));
+    } else if (info.language && info.voices.length > 1 && info.auto) {
+      picker(`${info.name} voice`, info.voices, info.preferred || info.voices[0]!.value, (value) =>
+        this.cb.onLanguageVoice?.(info.language, value),
+      );
+    }
+    if (info.auto) action(`Read this whole page with ${info.voiceLabel}`, () => this.cb.onVoiceLock?.(true));
+    else text('Voices do not follow the language: that is turned off in the settings.');
+    this.refocus(menu, hadFocus);
+  }
+
+  private refocus(menu: HTMLElement, hadFocus: boolean): void {
+    if (hadFocus) menu.querySelector<HTMLElement>('button.primary, select, button')?.focus({ preventScroll: true });
   }
 
   // ---- sleep timer ---------------------------------------------------------

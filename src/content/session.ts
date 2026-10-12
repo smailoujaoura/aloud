@@ -19,25 +19,21 @@ import { browser } from 'wxt/browser';
 
 import { extractArticle, type ExtractedArticle } from '@/extract/readability';
 import { resolveLiveRoot } from '@/extract/live-container';
-import { buildTextIndex, refreshEligibility, spanEligible, rangeForSpan, type TextIndex } from '@/extract/text-index';
+import { buildTextIndex, nearestBlock, refreshEligibility, spanEligible, rangeForSpan, type TextIndex } from '@/extract/text-index';
 import { spokenToSource } from '@/highlight/word-map';
 import { normalizeForSpeech } from '@/segment/normalize';
 import { applyPronunciations } from '@/segment/pronunciations';
 import { GaplessScheduler } from '@/audio/scheduler';
 import { Highlighter } from '@/highlight/highlighter';
-import { ControlBar, type ExportState } from '@/ui/control-bar';
-import { WorkerClient } from '@/engine/worker-client';
+import { ControlBar, type ExportState, type LanguageInfo } from '@/ui/control-bar';
 import type { EngineConfig, WordTiming } from '@/engine/protocol';
 import type { ModelManifest } from '@/engine/engines/types';
-import { getSettings, setSettings, activeVoice, voiceKeyFor, type EngineId, type Settings } from '@/shared/settings';
+import { getSettings, setSettings, activeVoice, voiceKeyFor, type EngineId, type Settings, type VoiceRef } from '@/shared/settings';
 import { ENGINE_IDS, engineInfo } from '@/shared/engine-catalog';
-import {
-  languageName,
-  pickVoiceForLanguage,
-  primaryLanguage,
-  voiceLanguage,
-  type CandidateVoice,
-} from '@/shared/language-voice';
+import { languageName, primaryLanguage, voiceLanguage, type CandidateVoice } from '@/shared/language-voice';
+import { planLanguages, type Detection, type Detector, type PassageInput, type PassageLanguage } from './language-plan';
+import { routeFor, voiceKey, type Route, type RouteContext } from './voice-routing';
+import { VoiceLanes } from './voice-lanes';
 import { listVoices, parseVoiceValue, voiceValue, type EngineVoice, type VoiceOption } from '@/shared/voice-catalog';
 import {
   clearPosition,
@@ -155,7 +151,8 @@ export class ReaderSession {
   // ---- subsystems (built in begin()) --------------------------------------
   private settings!: Settings;
   private scheduler!: GaplessScheduler;
-  private worker!: WorkerClient;
+  /** Synthesis: the page's main voice, and the voices of its other languages beside it. */
+  private worker!: VoiceLanes;
   private highlighter: Highlighter | null = null;
   private bar: ControlBar | null = null;
   private tapToSeek: TapToSeek | null = null;
@@ -241,6 +238,22 @@ export class ReaderSession {
   private languageVoice: CandidateVoice | null = null;
   /** The language the page declares (`<html lang>`), as a hint for detection. */
   private declaredLanguage = '';
+  /** The voice this page is locked to by the reader ("one voice for this page"), or null in Auto. */
+  private manualVoice: CandidateVoice | null = null;
+  /** Every downloaded voice, with its language. */
+  private installedVoiceList: CandidateVoice[] = [];
+  /** The detector's answers, by text — asked once per passage, however often the plan changes. */
+  private readonly languageCache = new Map<string, Detection | null>();
+  /** Each passage's language as planned, by passage number. */
+  private passageLanguages: PassageLanguage[] = [];
+  /** The reader's corrections ("this passage is in …"), by passage number. */
+  private readonly correctedPassages = new Map<number, string>();
+  /** Languages with no voice whose passages the reader chose to skip on this page. */
+  private readonly skipLanguages = new Set<string>();
+  /** Languages already reported as having no voice, so it is said once. */
+  private readonly missingTold = new Set<string>();
+  /** What the bar's language chip last showed, to update it only on a change. */
+  private shownLanguageKey = '';
 
   private state: SessionState = {
     status: 'idle',
@@ -327,14 +340,23 @@ export class ReaderSession {
     // The plan was built before the voice was settled: a German voice chosen for a German page
     // was given "Doctor Müller and Söhne", expanded for the English default.
     this.syncSpokenLanguage();
+    this.showLanguage(this.currentPlayId);
     this.tapToSeek?.setEnabled(this.settings.tapToSeek);
+    // Back from another tab — perhaps the one where the missing voice was just downloaded.
+    const onVisible = (): void => {
+      if (document.visibilityState === 'visible') void this.refreshVoicesAvailable();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    this.stopVisibilityWatch = () => document.removeEventListener('visibilitychange', onVisible);
     await this.loadEngine();
   }
+
+  private stopVisibilityWatch: (() => void) | null = null;
 
   private buildSubsystems(): void {
     this.scheduler = this.createScheduler();
 
-    this.worker = new WorkerClient({
+    this.worker = new VoiceLanes({
       onReady: ({ sampleRate, executionProvider }) => this.onEngineReady(executionProvider, sampleRate),
       onProgress: ({ progress }) => {
         this.state.modelProgress = progress;
@@ -375,6 +397,19 @@ export class ReaderSession {
         else if (this.halted) return;
         else if (playId != null && ++this.failures >= MAX_CONSECUTIVE_FAILURES && !this.exporter) void this.stopOnFailures(message);
         else if (playId != null) this.skipSentence(playId);
+      },
+      onLaneState: (voice, ready) => {
+        if (!ready) this.bar?.flash(`Loading ${this.voiceLabel(voice.voice, voice.engine)} for the ${this.languageOfVoice(voice)} passages…`);
+      },
+      onLaneFailed: (voice, message, playIds) => {
+        for (const id of playIds) this.requested.delete(id);
+        const label = this.voiceLabel(voice.voice, voice.engine);
+        this.bar?.flash(`${label} could not be loaded (${message}) — its passages are read by another voice`);
+        void this.reroute();
+      },
+      onLaneClosed: (playIds) => {
+        for (const id of playIds) this.requested.delete(id);
+        this.ensureSynth(this.currentPlayId);
       },
     });
 
@@ -474,11 +509,16 @@ export class ReaderSession {
     else this.ensureSynth(this.currentPlayId);
   }
 
+  /** What the main voice was last loaded as (`engineIdentity`), to tell when it must change. */
+  private loadedIdentity = '';
+
   private async loadEngine(): Promise<void> {
     const reload = this.voiceReload;
     this.setStatus('loading-model');
+    const config = this.engineConfig();
+    this.loadedIdentity = engineIdentity(config);
     try {
-      await this.worker.init(this.engineConfig());
+      await this.worker.init(config);
     } catch (err) {
       // Closing the tab, pressing ✕ or starting another reader mid-load disposes the worker, which
       // rejects this init. That is the user's choice, not a failure — logging it as one only
@@ -497,7 +537,10 @@ export class ReaderSession {
    * Page text → spoken text. The reader's own pronunciation rules run first, on the text as
    * written, so "e.g." or "GPU" can be given a reading before the built-in expansions see them.
    */
-  private normalize = (text: string): string => {
+  private normalize = (text: string): string => this.normalizeAs(text, (this.spokenLanguage = this.readingLanguage()));
+
+  /** Page text → spoken text for a voice speaking `language`. */
+  private normalizeAs(text: string, language: string): string {
     const fixed = applyPronunciations(text, this.settings.pronunciations);
     return normalizeForSpeech(fixed, {
       // Not "read URLs" as a replacement *string*: passing the sentence itself put the whole
@@ -505,9 +548,9 @@ export class ReaderSession {
       urlReplacement: this.settings.skipUrls ? 'link' : null,
       expandAbbreviations: this.settings.expandAbbreviations,
       // The voice's language decides whether the English expansions apply at all.
-      language: (this.spokenLanguage = this.readingLanguage()),
+      language,
     });
-  };
+  }
 
   /**
    * Rebuild every sentence's spoken text after a change to how text is spoken, and re-synthesise
@@ -528,13 +571,14 @@ export class ReaderSession {
    * apply to English voices only (segment/normalize.ts).
    */
   private syncSpokenLanguage(): void {
-    const language = this.readingLanguage();
-    if (language === this.spokenLanguage) return;
-    for (const item of this.playlist) item.spokenText = this.normalize(item.sourceText);
+    this.routeItems(this.currentPlayId);
   }
 
   private respeak(): void {
-    for (const item of this.playlist) item.spokenText = this.normalize(item.sourceText);
+    for (const item of this.playlist) {
+      item.spokenAs = this.spokenLanguageOf(item);
+      item.spokenText = this.normalizeAs(item.sourceText, item.spokenAs);
+    }
     this.cancelExport('How words are spoken changed, so the MP3 was stopped');
     if (!this.engineReady) return;
     const keepFrom = this.currentPlayId + 1;
@@ -591,7 +635,7 @@ export class ReaderSession {
     this.state.totalChunks = this.playlist.length;
     if (this.mode === 'from-cursor') this.startFromCursor();
     // Not on a sentence hidden on the page.
-    if (this.playlist.length && !this.playlist[this.currentPlayId]?.eligible) {
+    if (this.playlist.length && !this.readable(this.playlist[this.currentPlayId])) {
       this.currentPlayId = this.readableNear(this.currentPlayId, 1);
       this.state.currentIndex = this.currentPlayId;
     }
@@ -646,6 +690,10 @@ export class ReaderSession {
       onOpenWalkthrough: () => this.background()?.postMessage({ type: 'open-walkthrough' }),
       onTipsDismissed: () => void setSettings({ tipsSeen: true }),
       onClose: () => this.stop('user'),
+      onPassageLanguage: (code: string) => void this.setPassageLanguage(code),
+      onVoiceLock: (locked: boolean) => void this.setVoiceLock(locked),
+      onLanguageVoice: (code: string, value: string) => void this.setLanguageVoice(code, value),
+      onMissingVoice: (code: string, choice: 'get' | 'skip' | 'read') => void this.onMissingVoice(code, choice),
     };
   }
 
@@ -759,6 +807,7 @@ export class ReaderSession {
     // Playback has to wait for the new sentence to synthesise; show that.
     this.state.busy = this.engineReady && this.scheduler.isPlaying();
     this.pushState();
+    this.showLanguage(target);
     if (!opts.quiet) this.bar?.flash(`Sentence ${target + 1} of ${this.playlist.length}`);
     this.refreshOffScreen();
   }
@@ -766,7 +815,7 @@ export class ReaderSession {
   /** The readable item nearest `from` in `direction`, then the other way; `from` itself if none is. */
   private readableNear(from: number, direction: 1 | -1): number {
     for (const dir of [direction, -direction as 1 | -1]) {
-      for (let i = from; i >= 0 && i < this.playlist.length; i += dir) if (this.playlist[i]!.eligible) return i;
+      for (let i = from; i >= 0 && i < this.playlist.length; i += dir) if (this.readable(this.playlist[i])) return i;
     }
     return from;
   }
@@ -937,6 +986,9 @@ export class ReaderSession {
     }
 
     this.bar.setVoices(shown, current, { downloadedOnly: installed.length > 0 });
+    // The picker shows the voice reading the passage now, which may not be the main one.
+    const route = this.playlist[this.currentPlayId]?.route;
+    if (route?.kind === 'voice') this.bar.selectVoice(voiceValue(route.voice.engine, route.voice.id));
   }
 
   /**
@@ -957,34 +1009,55 @@ export class ReaderSession {
   }
 
   /** Switch voice from the in-page bar, keeping the plan and position. */
-  /** A voice picked on the bar: `engine:voice`, so it may be another engine's. */
+  /**
+   * A voice picked on the bar: `engine:voice`, so it may be another engine's. What it changes
+   * depends on what is being read, and the bar says which:
+   *  - the page is locked to one voice: that voice, for this page;
+   *  - a voice that does not speak the passage's language: the page is locked to it (Auto would
+   *    otherwise switch straight back at the next passage);
+   *  - a voice for a passage in another language than the saved voice's, or one with a voice
+   *    already chosen: remembered as that language's voice, on every page;
+   *  - otherwise: the saved voice, as before languages were told apart.
+   */
   private async changeVoice(value: string): Promise<void> {
     const picked = parseVoiceValue(value, this.engine);
-    if (!picked || (picked.engine === this.engine && picked.id === this.voice)) return;
+    if (!picked) return;
     const { engine, id: voice } = picked;
-    // Named, not just "switching": the picker collapses the moment it is used, so the
-    // confirmation is the only thing left saying which voice was chosen.
-    this.pendingVoiceLabel = this.voiceLabel(voice, engine);
-    this.bar?.flash(
-      engine === this.engine
-        ? `Switching to ${this.pendingVoiceLabel}…`
-        : `Switching to ${this.pendingVoiceLabel} (${engineInfo(engine).name})…`,
-    );
-    if (this.languageVoice) {
-      // Picked while a page-language voice is reading: another voice for *this page*, not a new
-      // default — reading one French article must not make every page French.
-      this.languageVoice = {
-        engine,
-        id: voice,
-        label: this.pendingVoiceLabel,
-        language: this.manifest ? voiceLanguage(engine, voice, this.manifest) : this.languageVoice.language,
-      };
+    const label = this.voiceLabel(voice, engine);
+    const candidate: CandidateVoice = {
+      engine,
+      id: voice,
+      label,
+      language: this.manifest ? voiceLanguage(engine, voice, this.manifest) : '',
+    };
+    const item = this.playlist[this.currentPlayId];
+    const language = item?.language ?? '';
+    const reading = item?.route?.kind === 'voice' ? item.route.voice : this.savedVoice();
+    if (voiceKey(reading) === voiceKey(candidate) && !this.manualVoice) return;
+    const auto = this.settings.matchPageLanguage;
+    const speaksIt = !language || primaryLanguage(candidate.language) === language;
+
+    if (this.manualVoice) {
+      this.manualVoice = candidate;
+      this.bar?.flash(`Reading this whole page with ${label}`, 'ok');
+    } else if (auto && !speaksIt) {
+      this.manualVoice = candidate;
+      this.bar?.flash(`Reading this whole page with ${label} — voices no longer follow the language here`, 'ok', {
+        label: 'Undo',
+        run: () => void this.setVoiceLock(false),
+      });
+    } else if (auto && (primaryLanguage(this.savedVoice().language) !== language || this.settings.languageVoices[language])) {
+      this.settings = await setSettings({
+        languageVoices: { ...this.settings.languageVoices, [language]: { engine, voice } },
+      });
+      this.bar?.flash(`${languageName(language)} is read by ${label} from now on`, 'ok');
     } else {
       this.settings = await setSettings({ engine, [voiceKeyFor(engine)]: voice });
+      this.bar?.flash(engine === this.settings.engine ? `Switching to ${label}…` : `Switching to ${label} (${engineInfo(engine).name})…`);
     }
     this.failures = 0;
     this.halted = false;
-    await this.reloadEngine();
+    await this.reroute();
   }
 
   /** The human name of a voice id, falling back to the id itself. */
@@ -1078,8 +1151,11 @@ export class ReaderSession {
       // Deep enough to keep every worker in the pool busy, which is all that decides the pace.
       lookahead: Math.max(4, this.tuning.lookahead),
       // Hidden text is not in the file, as it is not read (content/audio-export.ts: skip).
+      // Each passage in the voice that reads it, as playback would.
       request: (id) =>
-        this.playlist[id]!.eligible ? this.worker.request(id, this.playlist[id]!.spokenText, this.settings.speed) : exporter.skip(id),
+        this.readable(this.playlist[id])
+          ? this.worker.request(id, this.playlist[id]!.spokenText, this.settings.speed, this.voiceFor(this.playlist[id]!))
+          : exporter.skip(id),
       leadSilenceSec: (id) => (id === 0 ? 0 : leadSilenceSec(this.playlist[id], this.settings)),
       onProgress: (done, total) => {
         if (this.exporter === exporter) this.setExport({ phase: 'running', done, total });
@@ -1161,57 +1237,374 @@ export class ReaderSession {
   // ---- the page's language -------------------------------------------------
 
   /**
-   * Read this page with a downloaded voice in its language, if the current voice speaks another.
+   * Decide the language of every passage and the voice that reads it (content/language-plan.ts,
+   * content/voice-routing.ts), and which voice is loaded first: the one reading most of the page.
    *
-   * Only for this page, never saved. When no downloaded voice fits, say so once and offer the way
-   * to get one, rather than reading French with English pronunciation in silence.
+   * Replaces the per-page choice, which read a bilingual page entirely in one language. Nothing
+   * here is saved: reading one French page never turns someone's voice French.
    */
   private async matchVoiceToPage(): Promise<void> {
-    this.languageVoice = null;
+    await this.loadInstalledVoices();
+    await this.planPassageLanguages();
+    this.routeItems(0);
+    this.languageVoice = this.pickPrimary();
+    this.reportLanguages();
+  }
+
+  /** Every downloaded voice of every engine, with the language it speaks. */
+  private async loadInstalledVoices(): Promise<void> {
     const manifest = this.manifest;
-    if (!this.settings.matchPageLanguage || !manifest || this.playlist.length === 0) return;
-
-    const language = await this.detectPageLanguage();
-    if (!language) return;
-
-    const savedEngine = this.settings.engine;
-    const savedId = activeVoice(this.settings);
-    const saved: CandidateVoice = {
-      engine: savedEngine,
-      id: savedId,
-      label: this.voiceLabel(savedId),
-      language: voiceLanguage(savedEngine, savedId, manifest),
-    };
-    if (primaryLanguage(saved.language) === primaryLanguage(language)) return;
-
-    const installed = (
+    if (!manifest) {
+      this.installedVoiceList = [];
+      return;
+    }
+    this.installedVoiceList = (
       await Promise.all(
         ENGINE_IDS.map(async (engine) =>
-          (await this.installedVoices(engine)).map((v) => ({
-            engine,
-            id: v.id,
-            label: v.label,
-            language: voiceLanguage(engine, v.id, manifest),
-          })),
+          (await this.installedVoices(engine)).map(
+            (v): CandidateVoice => ({ engine, id: v.id, label: v.label, language: voiceLanguage(engine, v.id, manifest) }),
+          ),
         ),
       )
     ).flat();
+  }
 
-    const pick = pickVoiceForLanguage(language, saved, installed);
-    const name = languageName(primaryLanguage(language));
-    if (pick) {
-      this.languageVoice = pick;
-      log.info(`page language ${language}: reading with ${pick.engine}/${pick.id} instead of ${saved.id}`);
-      this.bar?.flash(`This page is in ${name} — reading it with ${pick.label}`, 'ok');
-      void this.refreshBarVoices();
-      this.refreshMediaMetadata();
+  /** The saved voice, as a candidate. */
+  private savedVoice(): CandidateVoice {
+    const engine = this.settings.engine;
+    const id = activeVoice(this.settings);
+    return { engine, id, label: this.voiceLabel(id, engine), language: this.manifest ? voiceLanguage(engine, id, this.manifest) : 'en' };
+  }
+
+  private routeContext(): RouteContext {
+    return {
+      auto: this.settings.matchPageLanguage,
+      manual: this.manualVoice,
+      saved: this.savedVoice(),
+      preferences: this.settings.languageVoices,
+      // A voice that failed to load on this page is not offered again.
+      installed: this.installedVoiceList.filter((v) => !this.worker || this.worker.usable({ engine: v.engine, voice: v.id })),
+      skip: this.skipLanguages,
+    };
+  }
+
+  /** The browser's language detector, in the shape the plan wants. */
+  private detect: Detector = async (text) => {
+    const result = await browser.i18n.detectLanguage(text);
+    const top = result.languages?.[0];
+    return top ? { language: top.language, reliable: Boolean(result.isReliable) } : null;
+  };
+
+  /** Group the plan into passages (blocks of the page) and decide each one's language. */
+  private async planPassageLanguages(): Promise<void> {
+    const index = this.textIndex;
+    const passages: PassageInput[] = [];
+    let prevBlock: Element | null = null;
+    for (const item of this.playlist) {
+      const node = item.range?.startContainer ?? null;
+      const block = node && index ? nearestBlock(node, index.root) : null;
+      if (passages.length === 0 || item.startsBlock || !block || block !== prevBlock) {
+        passages.push({ text: '', markup: markupLanguage(node, index?.root ?? null) });
+      }
+      prevBlock = block;
+      const passage = passages[passages.length - 1]!;
+      passage.text += (passage.text ? ' ' : '') + item.sourceText;
+      item.passage = passages.length - 1;
+    }
+    let page = '';
+    try {
+      page = await this.detectPageLanguage();
+    } catch {
+      /* no detector: the page language stays unknown */
+    }
+    try {
+      this.passageLanguages = await planLanguages(passages, this.detect, page, this.languageCache);
+    } catch (err) {
+      log.warn('could not plan languages:', err);
+      this.passageLanguages = passages.map(() => ({ language: primaryLanguage(page), source: 'page' as const }));
+    }
+    this.applyLanguages();
+  }
+
+  /** Each item takes its passage's language, or the reader's correction of it. */
+  private applyLanguages(): void {
+    for (const item of this.playlist) {
+      const passage = item.passage ?? -1;
+      item.language = this.correctedPassages.get(passage) ?? this.passageLanguages[passage]?.language ?? '';
+    }
+  }
+
+  /**
+   * Route every item to its voice, and prepare its spoken text for that voice's language.
+   * Reports whether the current item, or any after it, now sounds different.
+   */
+  private routeItems(from: number): { current: boolean; upcoming: boolean } {
+    const ctx = this.routeContext();
+    const changed = { current: false, upcoming: false };
+    for (const item of this.playlist) {
+      const before = item.route;
+      item.route = routeFor(item.language ?? '', ctx);
+      const language = this.spokenLanguageOf(item);
+      let differs = !sameRoute(before, item.route);
+      if (item.spokenAs !== language) {
+        item.spokenText = this.normalizeAs(item.sourceText, language);
+        item.spokenAs = language;
+        differs = true;
+      }
+      if (!differs) continue;
+      if (item.playId === from) changed.current = true;
+      else if (item.playId > from) changed.upcoming = true;
+    }
+    return changed;
+  }
+
+  /** The language the voice reading `item` speaks — what its spoken text is prepared for. */
+  private spokenLanguageOf(item: PlaylistItem): string {
+    return item.route?.kind === 'voice' ? item.route.voice.language || 'en' : this.readingLanguage();
+  }
+
+  /** The voice to synthesise `item` with; undefined for the primary voice. */
+  private voiceFor(item: PlaylistItem): VoiceRef | undefined {
+    return item.route?.kind === 'voice' ? { engine: item.route.voice.engine, voice: item.route.voice.id } : undefined;
+  }
+
+  /** Spoken at all: shown on the page, and not in a language the reader chose to skip. */
+  private readable(item: PlaylistItem | undefined): boolean {
+    return !!item && item.eligible && item.route?.kind !== 'skip';
+  }
+
+  /** The voice reading the most of the page, when it is not the saved one. */
+  private pickPrimary(): CandidateVoice | null {
+    const weight = new Map<string, { voice: CandidateVoice; chars: number }>();
+    for (const item of this.playlist) {
+      if (!item.eligible || item.route?.kind !== 'voice') continue;
+      const key = voiceKey(item.route.voice);
+      const entry = weight.get(key) ?? { voice: item.route.voice, chars: 0 };
+      entry.chars += item.sourceText.length;
+      weight.set(key, entry);
+    }
+    let best: { voice: CandidateVoice; chars: number } | null = null;
+    for (const entry of weight.values()) if (!best || entry.chars > best.chars) best = entry;
+    if (!best || voiceKey(best.voice) === voiceKey(this.savedVoice())) return null;
+    return best.voice;
+  }
+
+  /** One line on how the page will be read, when that is not simply "in your voice". */
+  private reportLanguages(): void {
+    const byLanguage = new Map<string, { chars: number; route: Route }>();
+    for (const item of this.playlist) {
+      if (!item.eligible || !item.route || !item.language) continue;
+      const entry = byLanguage.get(item.language) ?? { chars: 0, route: item.route };
+      entry.chars += item.sourceText.length;
+      byLanguage.set(item.language, entry);
+    }
+    const summary = [...byLanguage].sort((a, b) => b[1].chars - a[1].chars);
+    log.info(
+      `[languages] ${summary
+        .map(([lang, e]) => `${lang} ${e.chars} chars → ${e.route.kind === 'voice' ? `${e.route.voice.engine}/${e.route.voice.id} (${e.route.reason})` : 'skipped'}`)
+        .join('; ')}`,
+    );
+    if (!this.settings.matchPageLanguage || this.manualVoice || summary.length === 0) return;
+    const name = (lang: string): string => languageName(lang);
+    const missing = summary.filter(([, e]) => e.route.kind === 'voice' && e.route.reason === 'missing').map(([l]) => l);
+    if (summary.length === 1) {
+      const [lang, { route }] = summary[0]!;
+      if (route.kind !== 'voice') return;
+      if (route.reason === 'match' || route.reason === 'preference') {
+        if (voiceKey(route.voice) === voiceKey(this.savedVoice())) return;
+        this.bar?.flash(`This page is in ${name(lang)} — reading it with ${route.voice.label}`, 'ok');
+      } else if (route.reason === 'missing') {
+        this.missingTold.add(lang);
+        this.bar?.flash(`This page is in ${name(lang)}, and no ${name(lang)} voice is downloaded`, 'info', {
+          label: 'Get one',
+          run: () => this.background()?.postMessage({ type: 'open-options', language: lang }),
+        });
+      }
+      return;
+    }
+    const voices = summary
+      .slice(0, 3)
+      .map(([lang, e]) => (e.route.kind === 'voice' ? `${name(lang)} by ${e.route.voice.label}` : `${name(lang)} skipped`));
+    if (missing.length) {
+      for (const lang of missing) this.missingTold.add(lang);
+      this.bar?.flash(`No ${missing.map(name).join(' or ')} voice is downloaded — reading ${voices.join(', ')}`, 'info', {
+        label: 'Choose',
+        run: () => this.bar?.openLanguageMenu(),
+      });
     } else {
-      log.info(`page language ${language}: no downloaded voice for it`);
-      this.bar?.flash(`This page is in ${name}, and no ${name} voice is downloaded`, 'info', {
-        label: 'Get one',
-        run: () => this.background()?.postMessage({ type: 'open-options' }),
+      this.bar?.flash(`Reading ${voices.join(', ')}`, 'ok');
+    }
+  }
+
+  /**
+   * Show the language and voice of the passage at `playId` on the bar — and the first time a
+   * passage with no voice of its own is reached, say so, once per language.
+   */
+  private showLanguage(playId: number): void {
+    const item = this.playlist[playId];
+    if (!item || !this.bar) return;
+    const info = this.languageInfo(item);
+    const key = JSON.stringify(info);
+    if (key !== this.shownLanguageKey) {
+      this.shownLanguageKey = key;
+      this.bar.setLanguage(info);
+      if (item.route?.kind === 'voice') this.bar.selectVoice(voiceValue(item.route.voice.engine, item.route.voice.id));
+    }
+    if (info.missing && !info.manual && info.auto && info.language && !this.missingTold.has(info.language)) {
+      this.missingTold.add(info.language);
+      this.bar.flash(`No ${info.name} voice is downloaded — ${info.voiceLabel} reads this ${info.name} passage`, 'info', {
+        label: 'Choose',
+        run: () => this.bar?.openLanguageMenu(),
       });
     }
+  }
+
+  private languageInfo(item: PlaylistItem): LanguageInfo {
+    const language = item.language ?? '';
+    const route = item.route;
+    const voice = route?.kind === 'voice' ? route.voice : this.savedVoice();
+    const corrected = this.correctedPassages.has(item.passage ?? -1);
+    const source = corrected ? 'corrected' : (this.passageLanguages[item.passage ?? -1]?.source ?? 'page');
+    const how: Record<string, string> = {
+      corrected: 'as you set it',
+      markup: 'marked by the page',
+      detected: 'detected',
+      script: 'from its script',
+      context: 'from the passages around it',
+      page: 'the page’s language',
+    };
+    const codes = new Set<string>();
+    for (const p of this.playlist) if (p.language) codes.add(p.language);
+    for (const v of this.installedVoiceList) if (primaryLanguage(v.language)) codes.add(primaryLanguage(v.language));
+    const speaking = this.installedVoiceList.filter((v) => primaryLanguage(v.language) === language);
+    const preferred = this.settings.languageVoices[language];
+    return {
+      language,
+      name: language ? languageName(language) : '',
+      how: how[source] ?? 'detected',
+      voiceLabel: voice.label,
+      missing: route?.kind === 'skip' || (route?.kind === 'voice' && route.reason === 'missing'),
+      skipped: route?.kind === 'skip',
+      manual: !!this.manualVoice,
+      auto: this.settings.matchPageLanguage,
+      languages: [...codes].map((code) => ({ code, name: languageName(code) })).sort((a, b) => a.name.localeCompare(b.name)),
+      voices: speaking.map((v) => ({ value: voiceValue(v.engine, v.id), label: v.label })),
+      preferred: preferred ? voiceValue(preferred.engine, preferred.voice) : '',
+    };
+  }
+
+  /** "Italian", for a lane's voice. */
+  private languageOfVoice(voice: VoiceRef): string {
+    const tag = this.manifest ? voiceLanguage(voice.engine, voice.voice, this.manifest) : '';
+    return tag ? languageName(primaryLanguage(tag)) : 'other';
+  }
+
+  /**
+   * The voices changed — a correction, a lock, a remembered voice, one that failed to load.
+   * Apply it without losing the place: a new main voice reloads (keeping the position, as a voice
+   * change always has); otherwise only the sentences that now sound different are made again.
+   */
+  private async reroute(): Promise<void> {
+    if (this.disposed || this.playlist.length === 0) return;
+    const current = this.currentPlayId;
+    const changed = this.routeItems(current);
+    this.languageVoice = this.pickPrimary();
+    this.shownLanguageKey = '';
+    this.showLanguage(current);
+    this.refreshMediaMetadata();
+    // Not until the first load: then the voice is simply loaded as planned.
+    if (this.loadedIdentity && engineIdentity(this.engineConfig()) !== this.loadedIdentity) {
+      this.pendingVoiceLabel = this.voiceLabel(this.voice);
+      await this.reloadEngine();
+      return;
+    }
+    if (!changed.current && !changed.upcoming) return;
+    this.cancelExport('The voices changed, so the MP3 was stopped');
+    if (!this.engineReady) return;
+    if (changed.current) {
+      this.seekTo(current, { quiet: true });
+      return;
+    }
+    this.resynthesizeUpcoming();
+  }
+
+  /** Everything after the sentence playing is made again; the sentence playing finishes as it was. */
+  private resynthesizeUpcoming(): void {
+    const keepFrom = this.currentPlayId + 1;
+    this.requested.clear();
+    this.worker.cancelFrom(keepFrom, 0);
+    this.scheduler.reprimeForSpeed();
+    this.ensureSynth(keepFrom);
+    this.pushState();
+  }
+
+  /** "This passage is in …": the reader's correction, for this page. */
+  private async setPassageLanguage(code: string): Promise<void> {
+    const item = this.playlist[this.currentPlayId];
+    if (!item || item.passage == null || !code) return;
+    this.correctedPassages.set(item.passage, primaryLanguage(code));
+    this.applyLanguages();
+    this.bar?.flash(`Reading this passage as ${languageName(code)}`, 'ok');
+    await this.reroute();
+  }
+
+  /** Lock this page to the voice reading now, or let voices follow the language again. */
+  private async setVoiceLock(locked: boolean): Promise<void> {
+    if (locked) {
+      const item = this.playlist[this.currentPlayId];
+      this.manualVoice = item?.route?.kind === 'voice' ? item.route.voice : this.savedVoice();
+      this.bar?.flash(`Reading this whole page with ${this.manualVoice.label}`, 'ok', {
+        label: 'Undo',
+        run: () => void this.setVoiceLock(false),
+      });
+    } else {
+      this.manualVoice = null;
+      this.bar?.flash('Voices follow the language again', 'ok');
+    }
+    await this.reroute();
+  }
+
+  /** Remember `value` as the voice for `code`, on every page. */
+  private async setLanguageVoice(code: string, value: string): Promise<void> {
+    const picked = parseVoiceValue(value, this.engine);
+    if (!picked || !code) return;
+    this.settings = await setSettings({
+      languageVoices: { ...this.settings.languageVoices, [code]: { engine: picked.engine, voice: picked.id } },
+    });
+    this.bar?.flash(`${languageName(code)} is read by ${this.voiceLabel(picked.id, picked.engine)} from now on`, 'ok');
+    await this.reroute();
+  }
+
+  /** A language with no voice: get one, skip its passages, or read them with the usual voice. */
+  private async onMissingVoice(code: string, choice: 'get' | 'skip' | 'read'): Promise<void> {
+    if (choice === 'get') {
+      this.background()?.postMessage({ type: 'open-options', language: code });
+      return;
+    }
+    if (choice === 'skip') this.skipLanguages.add(code);
+    else this.skipLanguages.delete(code);
+    this.bar?.flash(
+      choice === 'skip' ? `Skipping ${languageName(code)} passages on this page` : `Reading ${languageName(code)} passages again`,
+      'ok',
+    );
+    await this.reroute();
+    // Skipping the passage playing now: on to the next one that is read.
+    if (choice === 'skip' && !this.readable(this.playlist[this.currentPlayId]) && this.engineReady) {
+      this.seekTo(this.readableNear(this.currentPlayId + 1, 1), { quiet: true });
+    }
+  }
+
+  /**
+   * A voice may have been downloaded in another tab (the "Get one" button): look again when the
+   * reader comes back to this one, and use it from the next sentence.
+   */
+  private async refreshVoicesAvailable(): Promise<void> {
+    if (this.disposed || this.playlist.length === 0 || !this.manifest) return;
+    const before = this.installedVoiceList.map(voiceKey).sort().join();
+    await this.loadInstalledVoices();
+    if (this.installedVoiceList.map(voiceKey).sort().join() === before) return;
+    void this.refreshBarVoices();
+    await this.reroute();
   }
 
   /**
@@ -1256,12 +1649,13 @@ export class ReaderSession {
       const item = this.playlist[i];
       if (!item) continue;
       this.requested.add(i);
-      // Hidden on the page now (a collapsed translation): passed over in silence, with no pause.
-      if (!item.eligible) {
+      // Hidden on the page now (a collapsed translation), or in a language the reader skips:
+      // passed over in silence, with no pause.
+      if (!this.readable(item)) {
         this.scheduler.provide(i, new Float32Array(0), this.sampleRate, 0);
         continue;
       }
-      this.worker.request(i, item.spokenText, this.settings.speed);
+      this.worker.request(i, item.spokenText, this.settings.speed, this.voiceFor(item));
     }
   }
 
@@ -1278,11 +1672,12 @@ export class ReaderSession {
     this.state.hint = undefined;
     if (this.wantsPlayback && this.state.status !== 'playing') this.state.status = 'playing';
 
-    // A sentence passed over because it is hidden on the page: nothing to show or count.
-    if (this.playlist[playId] && !this.playlist[playId]!.eligible) {
+    // A sentence passed over (hidden on the page, or skipped): nothing to show or count.
+    if (this.playlist[playId] && !this.readable(this.playlist[playId])) {
       this.ensureSynth(playId + 1);
       return;
     }
+    this.showLanguage(playId);
 
     if (this.settings.highlight) {
       // Never blank the highlight while audio is playing: fall back to the enclosing block, then
@@ -1649,10 +2044,26 @@ export class ReaderSession {
     const prevEngine = engineIdentity(this.engineConfig());
     this.settings = await getSettings();
 
-    if (prev.matchPageLanguage !== this.settings.matchPageLanguage) {
-      if (this.settings.matchPageLanguage) await this.matchVoiceToPage();
-      else this.languageVoice = null;
-      this.syncSpokenLanguage();
+    // Which voice reads which passage: Auto, the voices chosen per language, the saved voice.
+    const next = this.settings;
+    if (
+      prev.matchPageLanguage !== next.matchPageLanguage ||
+      !sameValue(prev.languageVoices, next.languageVoices) ||
+      prev.engine !== next.engine ||
+      activeVoice(prev) !== activeVoice(next)
+    ) {
+      const changed = this.routeItems(this.currentPlayId);
+      this.languageVoice = this.pickPrimary();
+      this.shownLanguageKey = '';
+      this.showLanguage(this.currentPlayId);
+      // A new main voice reloads below; otherwise only what now sounds different is made again.
+      if (engineIdentity(this.engineConfig()) === prevEngine && (changed.current || changed.upcoming)) {
+        this.cancelExport('The voices changed, so the MP3 was stopped');
+        if (this.engineReady) {
+          if (changed.current) this.seekTo(this.currentPlayId, { quiet: true });
+          else this.resynthesizeUpcoming();
+        }
+      }
     }
 
     this.highlighter?.setOptions({
@@ -1919,6 +2330,7 @@ export class ReaderSession {
     this.exporter = null;
     this.media?.dispose();
     this.stopViewportWatch?.();
+    this.stopVisibilityWatch?.();
     try {
       this.port?.postMessage({ type: 'session-ended' });
       this.port?.disconnect();
@@ -2004,4 +2416,24 @@ function sameRange(a: Range, b: Range): boolean {
     a.endContainer === b.endContainer &&
     a.endOffset === b.endOffset
   );
+}
+
+/** The same voice, or both skipped, or both unset. */
+function sameRoute(a: Route | undefined, b: Route | undefined): boolean {
+  if (!a || !b) return a === b;
+  if (a.kind === 'skip' || b.kind === 'skip') return a.kind === b.kind;
+  return voiceKey(a.voice) === voiceKey(b.voice);
+}
+
+/**
+ * The language a passage is marked with by the page itself: the nearest `lang` attribute, unless
+ * it is page-wide — on `<html>`, `<body>`, or anything wrapping the whole text being read, which
+ * is where CMS templates put a language that is often wrong.
+ */
+function markupLanguage(node: Node | null, root: Element | null): string {
+  const el = node instanceof Element ? node : (node?.parentElement ?? null);
+  const tagged = el?.closest('[lang]');
+  if (!tagged || tagged === document.documentElement || tagged === document.body) return '';
+  if (root && tagged.contains(root)) return '';
+  return tagged.getAttribute('lang') ?? '';
 }

@@ -14,6 +14,7 @@
  */
 import { buildBlockModel, type BlockRole } from '@/extract/block-model';
 import { rangeForSpan, spanEligible, type TextIndex } from '@/extract/text-index';
+import type { Route } from './voice-routing';
 import { segmentSentences } from '@/segment/sentences';
 import { isSpeakable } from '@/segment/normalize';
 import { Aligner } from '@/align/fuzzy-align';
@@ -47,6 +48,14 @@ export interface PlaylistItem {
    * Re-evaluated when the page changes while reading (session.ts), so it is not fixed at planning.
    */
   eligible: boolean;
+  /** Which passage (block) of the page it is in — set by the reader when it plans languages. */
+  passage?: number;
+  /** Its passage's primary language (`it`), or '' when nothing could tell. */
+  language?: string;
+  /** The voice that reads it, or that it is skipped (content/voice-routing.ts). */
+  route?: Route;
+  /** The language `spokenText` was prepared for: English expansions are for English voices. */
+  spokenAs?: string;
   /** Structural role of the block this sentence belongs to. */
   role: BlockRole;
   /** True when this sentence is the first of a new block (paragraph / list item / heading). */

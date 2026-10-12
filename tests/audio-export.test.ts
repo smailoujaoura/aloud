@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Mp3Export, audioFileName } from '@/content/audio-export';
+import { Mp3Export, audioFileName, resample } from '@/content/audio-export';
 
 function tone(seconds: number, sampleRate = 22050): Float32Array {
   const pcm = new Float32Array(Math.round(seconds * sampleRate));
@@ -35,6 +35,25 @@ function harness(count: number, lookahead = 2) {
 }
 
 describe('Mp3Export', () => {
+  it('leaves hidden or skipped sentences out entirely: no pause, not counted as missing', () => {
+    const h = harness(3, 5);
+    h.exp.start();
+    h.exp.accept(0, tone(0.5), 22050);
+    h.exp.skip(1);
+    h.exp.accept(2, tone(0.5), 22050);
+    expect(h.result.missing).toEqual([]);
+    // 1 s of speech and one 0.25 s pause (before sentence 2), none for the skipped one.
+    expect(h.result.seconds).toBeCloseTo(1.25, 1);
+  });
+
+  it('one file from voices at different rates: each part keeps its length', () => {
+    const h = harness(2, 5);
+    h.exp.start();
+    h.exp.accept(0, tone(0.5, 22050), 22050); // Piper
+    h.exp.accept(1, tone(0.5, 24000), 24000); // Kokoro
+    expect(h.result.seconds).toBeCloseTo(1.25, 1);
+  });
+
   it('requests a window of sentences ahead, then more as they are encoded', () => {
     const h = harness(6, 2);
     h.exp.start();
@@ -100,5 +119,15 @@ describe('audioFileName', () => {
     expect(audioFileName('   ')).toBe('Aloud.mp3');
     const long = audioFileName('First paragraph opens with this sentence here. It closes with this second sentence for testing.');
     expect(long).toBe('First paragraph opens with this sentence here. It closes with this second.mp3');
+  });
+});
+
+describe('resample', () => {
+  it('keeps the duration and the shape', () => {
+    const up = resample(new Float32Array([0, 1, 0, -1]), 2, 4);
+    expect(up.length).toBe(8);
+    expect(up[0]).toBe(0);
+    expect(up[2]).toBeCloseTo(1);
+    expect(resample(new Float32Array(24000), 24000, 22050).length).toBe(22050);
   });
 });

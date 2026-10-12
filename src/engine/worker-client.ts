@@ -208,11 +208,19 @@ export class WorkerClient {
     }
   }
 
-  /** Ask the worker to synthesise `playId` if it isn't already pending. */
-  request(playId: number, text: string, speed: number): void {
+  /**
+   * Ask the worker to synthesise `playId` if it isn't already pending. `voice` reads it with
+   * another voice of the loaded model (Kokoro's voices share one); other engines ignore it.
+   */
+  request(playId: number, text: string, speed: number, voice?: string): void {
     if (this.wanted.has(playId) || !this.port) return;
     this.wanted.add(playId);
-    this.send({ kind: 'synthesize', id: this.nextId++, chunkIndex: playId, text, speed });
+    this.send({ kind: 'synthesize', id: this.nextId++, chunkIndex: playId, text, speed, ...(voice ? { voice } : {}) });
+  }
+
+  /** Forget `playId` without cancelling anything: its audio, if it comes, is dropped. */
+  forget(playId: number): void {
+    this.wanted.delete(playId);
   }
 
   /** Seek / speed change: the worker drops its whole queue, so forget every pending request. */

@@ -16,6 +16,7 @@ import { probeGpu, gpuProbeIfKnown } from '@/shared/gpu-probe';
 import { loadWorkerGpu } from '@/shared/backend-memory';
 import { probeWorkerGpu, type WorkerGpuResult } from './gpu-check';
 import { listVoices } from '@/shared/voice-catalog';
+import { languageName } from '@/shared/language-voice';
 import { cacheClear, cacheEntries, cacheUsageBytes, deleteModels } from '@/engine/model-cache';
 import {
   DEFAULT_SETTINGS,
@@ -158,6 +159,33 @@ async function useVoice(engine: EngineId, voiceId: string): Promise<void> {
 function voiceLabel(engine: EngineId, voiceId: string): string {
   if (!manifestCache) return voiceId;
   return listVoices(engine, manifestCache).find((v) => v.id === voiceId)?.label ?? voiceId;
+}
+
+/**
+ * The voices chosen per language from the reading bar ("Italian is read by Paola from now on"),
+ * each with a way to forget it. Nothing to show until one has been chosen.
+ */
+function renderLanguageVoices(): void {
+  const host = $('languageVoices');
+  const entries = Object.entries(settings.languageVoices).sort(([a], [b]) => languageName(a).localeCompare(languageName(b)));
+  host.hidden = entries.length === 0;
+  host.replaceChildren();
+  if (!entries.length) return;
+  host.append(el(document, 'p', { class: 'sub-label' }, 'Voices chosen for a language from the reading bar, on every page'));
+  const list = el(document, 'div', { class: 'site-chips' });
+  for (const [code, ref] of entries) {
+    const label = `${languageName(code)}: ${voiceLabel(ref.engine, ref.voice)}`;
+    const chip = el(document, 'span', { class: 'site-chip' }, label);
+    const forget = el(document, 'button', { type: 'button', class: 'chip-x', title: `Forget ${label}`, 'aria-label': `Forget ${label}` }, '✕');
+    forget.addEventListener('click', () => {
+      const next = { ...settings.languageVoices };
+      delete next[code];
+      void save({ languageVoices: next }).then(renderLanguageVoices);
+    });
+    chip.append(forget);
+    list.append(chip);
+  }
+  host.append(list);
 }
 
 // ---- render ----------------------------------------------------------------
@@ -403,6 +431,7 @@ async function renderNow(): Promise<void> {
   $('sentencePauseOut').textContent = `${(settings.sentencePauseMs / 1000).toFixed(2)}s`;
   $<HTMLInputElement>('tapToSeek').checked = settings.tapToSeek;
   $<HTMLInputElement>('matchPageLanguage').checked = settings.matchPageLanguage;
+  renderLanguageVoices();
   $<HTMLInputElement>('skipUrls').checked = settings.skipUrls;
   $<HTMLInputElement>('expandAbbreviations').checked = settings.expandAbbreviations;
   for (const [id, key] of SKIP_SWITCHES) $<HTMLInputElement>(id).checked = settings.skip[key];

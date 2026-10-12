@@ -10,6 +10,12 @@ import { withStorageLock } from './storage-lock';
 
 export type EngineId = 'piper' | 'kokoro' | 'supertonic';
 
+/** One voice of one engine. */
+export interface VoiceRef {
+  engine: EngineId;
+  voice: string;
+}
+
 /** How the page scrolls to follow the sentence being read. */
 /** How the word being spoken is marked (see `Settings.wordHighlight`). */
 export type WordHighlightStyle = 'darker' | 'underline' | 'off';
@@ -242,8 +248,16 @@ export interface Settings {
   pronunciations: PronunciationRule[];
   /** Parts of an article to pass over when reading the whole page. */
   skip: SkipSettings;
-  /** Read a page with a downloaded voice in its language, when the current voice speaks another. */
+  /**
+   * Auto: each passage is read by a downloaded voice in its language, when the saved voice
+   * speaks another. (Named for what it did first, per page; it now decides per passage.)
+   */
   matchPageLanguage: boolean;
+  /**
+   * The voice chosen for a language, by primary language (`it`, `en`): "Italian with Paola,
+   * English with Alba", set once. Used by Auto; a voice no longer downloaded is passed over.
+   */
+  languageVoices: Record<string, VoiceRef>;
   /** Colour theme for every surface Aloud draws. */
   theme: ThemeChoice;
   /**
@@ -280,6 +294,7 @@ export const DEFAULT_SETTINGS: Settings = {
   pronunciations: [],
   skip: DEFAULT_SKIP,
   matchPageLanguage: true,
+  languageVoices: {},
   theme: 'system',
   tipsSeen: false,
   debug: false,
@@ -419,6 +434,7 @@ export function sanitizeSettings(raw: Settings): Settings {
     pdfView: oneOf(raw.pdfView, ['pages', 'reflow'] as const, DEFAULT_SETTINGS.pdfView),
     wordHighlight: oneOf(raw.wordHighlight, ['darker', 'underline', 'off'] as const, DEFAULT_SETTINGS.wordHighlight),
     highlightColor: typeof raw.highlightColor === 'string' && raw.highlightColor ? raw.highlightColor : DEFAULT_SETTINGS.highlightColor,
+    languageVoices: languageVoices(raw.languageVoices),
     pronunciations: Array.isArray(raw.pronunciations)
       ? raw.pronunciations.filter((r) => !!r && typeof r.from === 'string' && typeof r.to === 'string')
       : [],
@@ -443,6 +459,20 @@ export function sanitizeSettings(raw: Settings): Settings {
       keys: mediaKeys(raw.mediaSpeed?.keys),
     },
   };
+}
+
+/** Per-language voices from storage or a backup: well-formed entries only. */
+function languageVoices(value: unknown): Record<string, VoiceRef> {
+  const out: Record<string, VoiceRef> = {};
+  if (!value || typeof value !== 'object') return out;
+  for (const [language, ref] of Object.entries(value as Record<string, unknown>)) {
+    const r = ref as Partial<VoiceRef> | null;
+    if (!/^[a-z]{2,3}$/.test(language) || !r || typeof r !== 'object') continue;
+    if (r.engine !== 'piper' && r.engine !== 'kokoro' && r.engine !== 'supertonic') continue;
+    if (typeof r.voice !== 'string' || !r.voice || r.voice.length > 80) continue;
+    out[language] = { engine: r.engine, voice: r.voice };
+  }
+  return out;
 }
 
 /**

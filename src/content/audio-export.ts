@@ -98,7 +98,8 @@ export class Mp3Export {
       this.writer ??= pcm.length > 0 ? new Mp3Writer(sampleRate) : null;
       if (this.writer) {
         this.writer.silence(this.host.leadSilenceSec(this.next));
-        this.writer.write(pcm);
+        // A page read by more than one voice may mix engines, and engines differ in rate.
+        this.writer.write(pcm.length && sampleRate !== this.writer.sampleRate ? resample(pcm, sampleRate, this.writer.sampleRate) : pcm);
       }
       this.next++;
       this.host.onProgress(this.next, this.host.count);
@@ -146,4 +147,20 @@ export function audioFileName(title: string): string {
   }
   base = base.replace(/[\s.]+$/, '');
   return `${base || 'Aloud'}.mp3`;
+}
+
+/** Linear resampling: enough for speech moving between 22–44 kHz engines in one file. */
+export function resample(pcm: Float32Array, from: number, to: number): Float32Array {
+  if (from === to || pcm.length === 0) return pcm;
+  const out = new Float32Array(Math.max(1, Math.round((pcm.length * to) / from)));
+  const step = from / to;
+  for (let i = 0; i < out.length; i++) {
+    const at = i * step;
+    const j = Math.floor(at);
+    const frac = at - j;
+    const a = pcm[Math.min(j, pcm.length - 1)]!;
+    const b = pcm[Math.min(j + 1, pcm.length - 1)]!;
+    out[i] = a + (b - a) * frac;
+  }
+  return out;
 }

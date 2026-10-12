@@ -5,7 +5,9 @@
 // What it proves, in order: the add-on installs; the reader starts on an article; the Piper voice
 // loads and returns real audio; playback starts; the word highlight steps through the spoken
 // words in order; "Save as MP3" produces a downloadable MP3; a highlight made on the page is kept in
-// Notes and drawn again after a reload. Exits non-zero on the first failure,
+// Notes and drawn again after a reload; on a bilingual story (tests/fixtures/bilingual-story.html),
+// only the visible Italian is read, a translation revealed before or during reading is read in
+// English, and a language with no voice is said to have none. Exits non-zero on the first failure,
 // with a screenshot in .output/e2e-firefox/.
 //
 // How, since Playwright cannot load extensions into Firefox itself:
@@ -15,6 +17,7 @@
 //    from the parent process, then the reader is injected exactly as the button does it.
 //  - Playwright drives the web page and the reading bar (by position: its shadow root is closed).
 //
+// E2E_STORY_ONLY=1 runs the bilingual-story checks alone (no voice download needed).
 // Needs Playwright's Firefox (`npx playwright install firefox`) and an audio output: Firefox never
 // starts an AudioContext without one. On a headless Linux box run a PulseAudio null sink and set
 // PULSE_SERVER. Extra library folders (GTK, libpulse) can be supplied with E2E_LD_LIBRARY_PATH.
@@ -148,12 +151,14 @@ async function installAddon(rdp) {
 
 mkdirSync(OUT, { recursive: true });
 
+const STORY = readFileSync(join(ROOT, 'tests/fixtures/bilingual-story.html'), 'utf8');
 const server = createServer((req, res) => {
   res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-  res.end(ARTICLE);
+  res.end(req.url?.startsWith('/story') ? STORY : ARTICLE);
 });
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const articleUrl = `http://127.0.0.1:${server.address().port}/article.html`;
+const storyUrl = `http://127.0.0.1:${server.address().port}/story.html`;
 
 const extraLibs = process.env.E2E_LD_LIBRARY_PATH;
 const context = await firefox.launchPersistentContext(mkdtempSync(join(tmpdir(), 'aloud-e2e-')), {
@@ -225,11 +230,14 @@ try {
   const logs = [];
   page.on('console', (m) => logs.push(m.text()));
   page.on('pageerror', (e) => logs.push(`pageerror: ${e.message}`));
-  const waitFor = async (re, ms, what, diagnose) => {
+  // `failOn`: a log line that means it never will — stop there, rather than wait out the clock.
+  const waitFor = async (re, ms, what, diagnose, failOn) => {
     const start = Date.now();
     while (Date.now() - start < ms) {
       const hit = logs.find((l) => re.test(l));
       if (hit) return hit;
+      const failed = failOn && logs.find((l) => failOn.test(l));
+      if (failed) await fail(`${what}: ${failed}`);
       await page.waitForTimeout(250);
     }
     const more = diagnose ? `\n  state: ${await diagnose().catch((e) => `could not inspect: ${e}`)}` : '';
@@ -254,6 +262,55 @@ try {
       ),
     );
 
+  const checkStory = async () => {
+    // A bilingual story: Italian paragraphs with collapsed English translations and "Translate?"
+    // divs. One translation is revealed before reading starts, another while the plan stands.
+    await page.goto(storyUrl);
+    await page.evaluate(() => window.__reveal(1, true));
+    const inStory = (body) =>
+      evaluate(rdp, consoles.background, `const tab = (await browser.tabs.query({})).find((t) => t.url === ${JSON.stringify(storyUrl)}); ${body}`);
+    await inStory(`await browser.scripting.executeScript({ target: { tabId: tab.id }, files: ['/reader-inject.js'] });
+       await new Promise((r) => setTimeout(r, 300));
+       await browser.tabs.sendMessage(tab.id, { type: 'activate', mode: 'article' });`);
+    const storyPlan = async () =>
+      inStory(`const [r] = await browser.scripting.executeScript({ target: { tabId: tab.id }, func: () =>
+        (window.__aloudSession?.playlist ?? []).map((p) => ({ read: p.eligible, lang: p.language ?? '', why: p.route?.kind === 'voice' ? p.route.reason : (p.route?.kind ?? ''), text: p.sourceText })) });
+       return r?.result ?? [];`);
+    let plan = [];
+    for (let i = 0; i < 40 && !plan.some((p) => p.lang); i++) {
+      await page.waitForTimeout(250);
+      plan = await storyPlan();
+    }
+    const read = plan.filter((p) => p.read);
+    const said = read.map((p) => p.text).join(' ');
+    if (/Translate\?|Show all translations|Let me tell you|One day an acorn/.test(said)) await fail(`the story read hidden or control text: ${said}`);
+    if (!/Lasciate che vi racconti/.test(said) || !/Once upon a time/.test(said)) await fail(`the story lost visible text: ${said}`);
+    const langOf = (re) => plan.find((p) => re.test(p.text))?.lang;
+    const langs = { it: langOf(/^C'era una volta/), en: langOf(/^Once upon a time/), reply: langOf(/Vattene/) };
+    if (langs.it !== 'it' || langs.en !== 'en' || langs.reply !== 'it') await fail(`story languages: ${JSON.stringify(langs)}`);
+    // This profile has the English voice only: Italian must be marked as having no voice, never
+    // passed off as read correctly; English is read by the saved voice.
+    const why = { it: plan.find((p) => p.lang === 'it')?.why, en: plan.find((p) => p.lang === 'en')?.why };
+    if (why.it !== 'missing' || why.en !== 'saved') await fail(`story voices: ${JSON.stringify(why)}`);
+    step(`story: ${read.length} of ${plan.length} sentences read; it/en by passage; Italian has no voice here and says so`);
+    await page.evaluate(() => window.__reveal(2, true));
+    await page.waitForTimeout(800);
+    plan = await storyPlan();
+    if (!plan.find((p) => /^One day an acorn/.test(p.text))?.read) await fail('a translation revealed during reading did not become readable');
+    step('story: a translation revealed during reading is read');
+  };
+
+  // E2E_STORY_ONLY=1: the bilingual story alone. It needs the reading plan, not a voice — for when
+  // the voice cannot be downloaded (the plan stands; Italian is reported as having no voice).
+  if (process.env.E2E_STORY_ONLY) {
+    await checkStory();
+    console.log('✓ Firefox story check passed');
+    rdp.close();
+    await context.close().catch(() => {});
+    server.close();
+    process.exit(0);
+  }
+
   await page.goto(articleUrl);
   await evaluate(
     rdp,
@@ -274,6 +331,7 @@ try {
     voiceTimeout,
     'the voice did not load — a cold run downloads ~60 MB from Hugging Face; check the line before the app',
     inspectLoad,
+    /Failed to load the voice model/,
   );
   step('voice loaded');
   const chunk = await waitFor(/→ chunk \d+ in [\d.]+s → [\d.]+s audio/, 120_000, 'no audio came back from the engine');
@@ -349,6 +407,8 @@ try {
   const restored = await noteHighlights();
   if (!restored.includes(passage)) await fail(`the highlight was not drawn again after a reload: ${JSON.stringify(restored)}`);
   step(`highlight kept and redrawn after reload: “${passage}”`);
+
+  await checkStory();
 
   writeFileSync(join(OUT, 'console.log'), logs.join('\n'));
   console.log('✓ Firefox end-to-end check passed');

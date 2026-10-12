@@ -1,0 +1,37 @@
+<!doctype html>
+<!-- A bilingual story laid out as one real site does it (Webflow): each Italian paragraph is followed
+     by a "Translate?" div and its English translation, collapsed with opacity 0 and height 0. The
+     reader must read the Italian, not the hidden English or the controls (scripts/e2e-firefox.mjs). -->
+<html lang="en"><head><meta charset="utf-8"><title>Chicken Little</title>
+<style>
+body{font-family:sans-serif;max-width:640px;margin:20px auto}
+.lan1{margin-top:18px;margin-bottom:9px}
+.lan2{opacity:0;color:#666;height:0;margin:0;padding:0;display:block}
+.lan2-p{color:#555;padding-bottom:15px}
+.trans-link{color:#55a6c4;text-transform:uppercase;cursor:pointer;background:#f3f3f3;border-radius:4px;padding:10px 12px;display:inline-block;margin-bottom:14px}
+.switch{width:40px;height:20px;border-radius:10px;background:#ccc;cursor:pointer;display:inline-block}
+.switch-label{display:inline-block;margin-left:8px}
+nav a{margin-right:12px}
+</style></head><body>
+<nav><a href="#">Stories</a><a href="#">Lessons</a><a href="#">About</a></nav>
+<article>
+<h1>Chicken Little</h1>
+<div class="switch-wrap"><div class="switch" id="all"></div><div class="switch-label">Show all translations?</div></div>
+<div class="pair"><p class="lan1">Lasciate che vi racconti la storia di un pollo.</p><div class="trans-link">Translate?</div><div class="lan2"><p class="lan2-p">Let me tell you a story about a chicken.</p></div></div>
+<div class="pair"><p class="lan1">C'era una volta un pollo che si chiamava Pollo Piccolino. Viveva in una fattoria insieme alla sua mamma e ai suoi fratelli.</p><div class="trans-link">Translate?</div><div class="lan2"><p class="lan2-p">Once upon a time there was a chicken called Chicken Little. He lived on a farm with his mother and his brothers.</p></div></div>
+<div class="pair"><p class="lan1">Un giorno una ghianda gli cadde sulla testa, e il pollo corse dalla volpe. La volpe chiese che cosa fosse successo, e il pollo rispose: «No! No! No! Vattene! Vattene!»</p><div class="trans-link">Translate?</div><div class="lan2"><p class="lan2-p">One day an acorn fell on his head, and the chicken ran to the fox. The fox asked what had happened, and the chicken replied: "No! No! No! Go away! Go away!"</p></div></div>
+<div class="pair"><p class="lan1">Potete leggere <a href="#">la versione originale</a> della favola alla fine di questa pagina, se volete.</p><div class="trans-link">Translate?</div><div class="lan2"><p class="lan2-p">You can read the original version of the fable at the end of this page, if you like.</p></div></div>
+</article>
+<footer><div class="trans-link">Back to top</div><p>© The Italian Experiment</p></footer>
+<script>
+// Webflow-style interactions: inline opacity and height on the translation.
+const show = (lan2, on) => { lan2.style.opacity = on ? '1' : '0'; lan2.style.height = on ? 'auto' : '0px'; };
+document.querySelectorAll('.pair').forEach((pair) => {
+  const lan2 = pair.querySelector('.lan2');
+  pair.querySelector('.trans-link').addEventListener('click', () => show(lan2, lan2.style.opacity !== '1'));
+});
+let all = false;
+document.getElementById('all').addEventListener('click', () => { all = !all; document.querySelectorAll('.lan2').forEach((l) => show(l, all)); });
+window.__reveal = (n, on) => show(document.querySelectorAll('.lan2')[n], on);
+</script>
+</body></html>

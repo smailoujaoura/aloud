@@ -22,7 +22,7 @@ import { humanBytes } from '@/shared/log';
 import { capabilities } from '@/shared/browser-env';
 import { engineInfo, listEngines, type EngineInfo } from '@/shared/engine-catalog';
 import { isEnglish, shortPiperLabel } from '@/shared/voice-catalog';
-import { languageName } from '@/shared/language-voice';
+import { languageName, primaryLanguage } from '@/shared/language-voice';
 import { cacheClear, cacheDelete, deleteModels } from '@/engine/model-cache';
 import { activeVoice, type EngineId, type Settings } from '@/shared/settings';
 import type { ModelManifest, PiperVoiceEntry } from '@/engine/engines/types';
@@ -128,10 +128,33 @@ export function renderVoiceSection(hosts: VoiceHosts, ctx: PanelContext): void {
   renderBrowser(hosts, ctx);
 }
 
+/**
+ * `?language=it`: opened from the reader, which met a passage in a language with no voice. The
+ * list opens on that language — Piper's, which has the most — once, then browsing is the reader's.
+ */
+let askedLanguage: string | null = new URLSearchParams(globalThis.location?.search ?? '').get('language');
+
+function openAskedLanguage(manifest: ModelManifest): void {
+  const code = askedLanguage;
+  askedLanguage = null;
+  if (!code) return;
+  const piper = Object.values(manifest.piper).find((v) => primaryLanguage(v.language) === code);
+  const kokoro = sharedVoices('kokoro', manifest).find((v) => primaryLanguage(manifest.kokoro.voices[v.id]?.language) === code);
+  if (kokoro) kokoroLanguage = kokoro.group;
+  if (piper) {
+    openTab = 'piper';
+    openLanguage = piper.languageName ?? null;
+    piperShow = 'all';
+  } else if (kokoro) {
+    openTab = 'kokoro';
+  }
+}
+
 /** The tabs and the list under them — everything that changes while browsing. */
 function renderBrowser(hosts: VoiceHosts, ctx: PanelContext): void {
   // The rows about to be replaced stop following the download queue now (downloads.ts).
   newDownloadScope();
+  openAskedLanguage(ctx.manifest);
   const engine = openTab ?? ctx.settings.engine;
   openTab = engine;
   const again = (): void => renderBrowser(hosts, ctx);
