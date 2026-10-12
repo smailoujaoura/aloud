@@ -52,9 +52,9 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
   black or white letters, and everything else keeps the page's colours. While Aloud reads, your
   saved highlights turn into underlines, so the only wash is the sentence being read, and the
   reading bar slides out of the way when you scroll down and keeps the sentence clear of itself.
-- **Words a minute** — the bar and the speed slider say what a speed means: 1× is about 185 wpm
-  with Piper, 165 with Kokoro. Once there is enough audio the figure is measured from it rather
-  than estimated.
+- **Live words a minute** — the bar follows the audio being heard, updating five times a second
+  from the last two seconds of word timings. Voices without timings use the current sentence's
+  audio duration. Pausing or waiting for audio shows zero; the speed slider shows the multiplier.
 - **Word by word** — with Piper and Kokoro voices the word being spoken is marked inside the
   sentence, timed from the voice model's own phoneme durations rather than estimated. It is shown
   as a darker shade by default; Settings switches it to an underline, or off.

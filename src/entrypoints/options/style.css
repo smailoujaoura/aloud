@@ -166,8 +166,7 @@ main { width: 100%; max-width: 720px; margin: 0; padding: 28px 24px 96px; box-si
   .row-hint { margin-left: 0; }
 }
 output { min-width: 3.5ch; text-align: right; font-variant-numeric: tabular-nums; }
-/* "1.40× · 260 wpm" needs room the bare number did not. */
-#speedOut { min-width: 12ch; }
+#speedOut { min-width: 6ch; }
 
 main > footer { color: var(--fg-muted); font-size: 12px; margin-top: 26px; }
 main > footer p { margin: 0 0 10px; }

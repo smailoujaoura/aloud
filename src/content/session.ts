@@ -68,7 +68,7 @@ import { TapToSeek } from './tap-to-seek';
 import { MediaControls } from './media-session';
 import { SleepTimer, type SleepChoice } from './sleep-timer';
 import { Mp3Export, audioFileName } from './audio-export';
-import { measuredWpm, wordsPerMinute } from '@/shared/reading-rate';
+import { currentWpm, speedLabel } from '@/shared/reading-rate';
 import { READING_ATTR } from '@/annotate/palette';
 
 interface BeginOptions {
@@ -217,9 +217,8 @@ export class ReaderSession {
   private halted = false;
   /** Seconds of speech in each synthesised sentence, lead silence excluded. */
   private readonly audioSeconds = new Map<number, number>();
-  /** Audio produced at the current speed, for the words-a-minute readout on the bar. */
-  private spokenSeconds = 0;
-  private spokenWords = 0;
+  /** Updates the pace from the audio clock, independently of word highlighting. */
+  private readingRateTimer = 0;
   private sourceHint: BeginOptions['source'] | null = null;
   private keepHistory = true;
   /** Listening not yet written to history, and what this session has measured of the voice's pace. */
@@ -349,11 +348,6 @@ export class ReaderSession {
         }
         if (sr > 0) {
           this.audioSeconds.set(playId, pcm.length / sr);
-          // Enough real audio to say what the reading rate actually is, rather than the engine's
-          // measured average (see shared/reading-rate.ts).
-          this.spokenSeconds += pcm.length / sr;
-          this.spokenWords += countWords(this.playlist[playId]?.spokenText ?? '');
-          this.showReadingRate();
         }
         if (words?.length) this.wordTimings.set(playId, words);
         else this.wordTimings.delete(playId);
@@ -759,11 +753,25 @@ export class ReaderSession {
     this.refreshOffScreen();
   }
 
-  /** The rate on the bar: measured once there is enough audio, the engine's average until then. */
+  /** The pace of the audio being heard, never of the synthesis queue or a previous sentence. */
   private showReadingRate(): void {
+    clearTimeout(this.readingRateTimer);
+    this.readingRateTimer = 0;
+    if (this.disposed) return;
+    const playing = this.state.status === 'playing' && !this.exporter;
+    const position = playing && this.scheduler?.isPlaying() ? this.scheduler.playbackPosition() : null;
+    const item = position && this.playlist[position.playId];
     this.bar?.setReadingRate(
-      measuredWpm(this.spokenWords, this.spokenSeconds) ?? wordsPerMinute(this.engine, this.settings.speed),
+      position && item
+        ? currentWpm(
+            item.spokenText,
+            this.audioSeconds.get(position.playId) ?? 0,
+            position.seconds,
+            this.wordTimings.get(position.playId),
+          )
+        : 0,
     );
+    if (playing) this.readingRateTimer = window.setTimeout(() => this.showReadingRate(), 200);
   }
 
   async setSpeed(speed: number): Promise<void> {
@@ -781,11 +789,10 @@ export class ReaderSession {
   private applySpeed(speed: number, opts: { flash: boolean }): void {
     this.cancelExport('The speed changed, so the MP3 was stopped');
     this.bar?.setSpeed(speed);
-    // The measurement belonged to the old speed.
-    this.spokenSeconds = 0;
-    this.spokenWords = 0;
+    // The current sentence finishes at its old speed. Its measured pace remains until the
+    // playback clock reaches audio made at the new speed.
     this.showReadingRate();
-    if (opts.flash) this.bar?.flash(`Speed ${speed}× · ${wordsPerMinute(this.engine, speed)} wpm`);
+    if (opts.flash) this.bar?.flash(`Speed ${speedLabel(speed)}`);
     if (!this.engineReady) return;
     // The sentence already playing keeps its old rate; everything after it is re-synthesised.
     const keepFrom = this.currentPlayId + 1;
@@ -1770,6 +1777,7 @@ export class ReaderSession {
   private pushState(): void {
     if (this.disposed) return;
     this.bar?.update(this.state);
+    this.showReadingRate();
     this.media?.setPlaying(this.state.status === 'playing' ? 'playing' : 'paused');
     try {
       // An idle reader leaves the background asleep; one that reads (or is getting ready to)
@@ -1806,6 +1814,8 @@ export class ReaderSession {
     // Anything still working through `begin()` stops at its next checkpoint.
     this.generation++;
 
+    clearTimeout(this.readingRateTimer);
+    this.readingRateTimer = 0;
     this.stopFollowingWords(false);
     this.tapToSeek?.dispose();
     this.sleepTimer?.dispose();
@@ -1898,9 +1908,4 @@ function sameRange(a: Range, b: Range): boolean {
     a.endContainer === b.endContainer &&
     a.endOffset === b.endOffset
   );
-}
-
-/** Words in a sentence, for the reading-rate readout: runs of letters, digits or apostrophes. */
-function countWords(text: string): number {
-  return (text.match(/[\p{L}\p{N}'’]+/gu) ?? []).length;
 }

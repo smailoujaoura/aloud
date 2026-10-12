@@ -145,3 +145,29 @@ describe('other line-break characters', () => {
     expect(segmentSentences('A first thought A second thought')).toHaveLength(2);
   });
 });
+
+describe('short quoted replies', () => {
+  const narration = 'Ma il porcellino vide le grosse zampe del lupo attraverso il buco della serratura, perciò rispose:';
+
+  it.each([['“', '”'], ['"', '"'], ['«', '»']])('keeps a reply in %s%s together after its introduction', (open, close) => {
+    const reply = `${open}No! No! No! Vattene! Vattene!${close}`;
+    const text = `${narration} ${reply} Il lupo se ne andò.`;
+    const chunks = segmentSentences(text, { locale: 'it' });
+    expect(chunks.map(c => c.text)).toEqual([narration, reply, 'Il lupo se ne andò.']);
+    for (const chunk of chunks) expect(text.slice(chunk.start, chunk.end)).toBe(chunk.text);
+  });
+
+  it('does not group an unclosed quote or separate an inline quoted term', () => {
+    expect(segmentSentences('He said: “No! No!').map(c => c.text)).toEqual(['He said: “No!', 'No!']);
+    expect(segmentSentences('Define: "word" means a unit of language.')).toHaveLength(1);
+  });
+
+  it('preserves paragraph and sentence boundaries within long quotations', () => {
+    const text = 'He said: “No!\n\nGo away!”';
+    expect(segmentSentences(text)).toHaveLength(2);
+    const long = `He said: “${'Stay right here! '.repeat(30)}Go away!”`;
+    const chunks = segmentSentences(long, { maxChars: 80 });
+    expect(chunks.length).toBeGreaterThan(20);
+    expect(chunks.every(c => c.text.length <= 80)).toBe(true);
+  });
+});

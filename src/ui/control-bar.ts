@@ -135,7 +135,7 @@ export class ControlBar {
   private scrubEl!: HTMLElement;
   private countEl!: HTMLElement;
   private speedEl!: HTMLSelectElement;
-  /** Words a minute at the current speed, beside the speed itself. */
+  /** Live words a minute, beside the speed multiplier. */
   private rateEl!: HTMLElement;
   private voiceEl!: HTMLSelectElement;
 
@@ -269,7 +269,7 @@ export class ControlBar {
 
     this.speedEl = this.make('select', { class: 'speed', 'aria-label': 'Speed', title: 'Speed (↑ / ↓)' });
     this.rateEl = this.make('span', { class: 'rate', hidden: '' });
-    this.rateEl.title = 'Words a minute at this speed';
+    this.rateEl.title = 'Current speaking pace · words per minute';
     for (const s of SPEEDS) {
       const opt = this.make('option', { value: String(s) }, `${s}×`);
       if (s === speed) opt.selected = true;
@@ -603,14 +603,11 @@ export class ControlBar {
     this.speedEl.value = String(speed);
   }
 
-  /**
-   * Words a minute, beside the speed. "1.5×" says how far the slider moved; this says whether
-   * that is an audiobook (about 155) or faster than most people can follow (past 400). Null
-   * while nothing has been measured and no estimate is known.
-   */
+  /** Live speech pace; zero when stopped, null when the current audio cannot be measured. */
   setReadingRate(wpm: number | null): void {
     this.rateEl.hidden = wpm == null;
-    this.rateEl.textContent = wpm == null ? '' : `${wpm} wpm`;
+    const text = wpm == null ? '' : `${wpm} wpm`;
+    if (this.rateEl.textContent !== text) this.rateEl.textContent = text;
   }
 
   setTheme(theme: ThemeChoice): void {

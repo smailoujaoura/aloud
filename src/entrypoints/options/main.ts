@@ -389,7 +389,7 @@ async function renderNow(): Promise<void> {
   const sizes = await readCacheSizes();
 
   $<HTMLInputElement>('speed').value = String(settings.speed);
-  $('speedOut').textContent = speedLabel(settings.engine, settings.speed);
+  $('speedOut').textContent = speedLabel(settings.speed);
   $<HTMLInputElement>('highlight').checked = settings.highlight;
   $<HTMLSelectElement>('wordHighlight').value = settings.wordHighlight;
   $<HTMLInputElement>('highlightReadable').checked = settings.highlightReadable;
@@ -535,7 +535,7 @@ function currentVoiceInstalled(manifest: ModelManifest, sizes: CacheSizes): bool
 function wire(): void {
   renderPrefList();
 
-  wireSlider('speed', 'speedOut', 'speed', (v) => speedLabel(settings.engine, v));
+  wireSlider('speed', 'speedOut', 'speed', speedLabel);
   wireSlider('sectionPauseMs', 'sectionPauseOut', 'sectionPauseMs', (v) => `${(v / 1000).toFixed(2)}s`);
   wireSlider('sentencePauseMs', 'sentencePauseOut', 'sentencePauseMs', (v) => `${(v / 1000).toFixed(2)}s`);
   wireSlider('supertonicSteps', 'supertonicStepsOut', 'supertonicSteps', String);

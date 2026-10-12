@@ -140,6 +140,26 @@ function trimmedSpan(text: string, start: number, end: number): { start: number;
 
 const MIN_PIECE = 16;
 
+/** Short direct speech is one utterance, even when it contains several exclamations. */
+function quotedReplies(text: string, maxChars: number): Array<{ start: number; end: number }> {
+  const replies: Array<{ start: number; end: number }> = [];
+  const intro = /:\s*(["“«])/g;
+  for (let match; (match = intro.exec(text));) {
+    const start = intro.lastIndex - 1;
+    const closer = match[1] === '“' ? '”' : match[1] === '«' ? '»' : '"';
+    const closing = text.indexOf(closer, start + 1);
+    if (closing < 0) continue;
+    const end = closing + 1;
+    // Long quotations retain ordinary sentence boundaries and their synthesis latency limit.
+    // An inline quoted term (Define: "word" ...) is not a spoken reply.
+    if (end - start > maxChars || HARD_BREAK.test(text.slice(match.index, end)) ||
+        !/[.!?…]\s*$/.test(text.slice(start + 1, closing))) continue;
+    replies.push({ start, end });
+    intro.lastIndex = end;
+  }
+  return replies;
+}
+
 /**
  * How far a chunk may run past `maxChars` rather than be cut at an arbitrary word.
  *
@@ -225,26 +245,36 @@ function clauseSplit(
 
 export function segmentSentences(text: string, options: SegmentOptions = {}): Chunk[] {
   const opts = { ...DEFAULTS, ...options };
-  const raw: Array<{ start: number; end: number }> = [];
+  const raw: Array<{ start: number; end: number; reply?: boolean }> = [];
 
   // Same length as `text`, so every offset below is an offset into `text` itself.
   const forBreaking = softenWrapNewlines(hideReferenceMarkers(text));
 
   const HasSegmenter = typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function';
-  if (HasSegmenter) {
-    const seg = new Intl.Segmenter(opts.locale, { granularity: 'sentence' });
-    for (const s of seg.segment(forBreaking)) {
-      raw.push({ start: s.index, end: s.index + s.segment.length });
+  const seg = HasSegmenter ? new Intl.Segmenter(opts.locale, { granularity: 'sentence' }) : null;
+  const split = (start: number, end: number): void => {
+    const slice = forBreaking.slice(start, end);
+    if (seg) {
+      for (const s of seg.segment(slice)) {
+        raw.push({ start: start + s.index, end: start + s.index + s.segment.length });
+      }
+    } else {
+      // Minimal fallback: split on sentence-final punctuation followed by whitespace + capital.
+      const re = /[^.!?…]+[.!?…]+(?:["'”’)\]]+)?\s+|[^.!?…]+$/g;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(slice))) raw.push({ start: start + m.index, end: start + m.index + m[0].length });
     }
-  } else {
-    // Minimal fallback: split on sentence-final punctuation followed by whitespace + capital.
-    const re = /[^.!?…]+[.!?…]+(?:["'”’)\]]+)?\s+|[^.!?…]+$/g;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(forBreaking))) raw.push({ start: m.index, end: m.index + m[0].length });
+  };
+  let start = 0;
+  for (const reply of quotedReplies(forBreaking, opts.maxChars)) {
+    split(start, reply.start);
+    raw.push({ ...reply, reply: true });
+    start = reply.end;
   }
+  split(start, forBreaking.length);
 
   // Merge dangling-abbreviation fragments and sub-min fragments.
-  const merged: Array<{ start: number; end: number }> = [];
+  const merged: typeof raw = [];
   for (const cur of raw) {
     const span = trimmedSpan(text, cur.start, cur.end);
     if (span.end <= span.start) continue;
@@ -252,6 +282,7 @@ export function segmentSentences(text: string, options: SegmentOptions = {}): Ch
     const prevText = prev ? text.slice(prev.start, prev.end) : '';
     if (
       prev &&
+      !prev.reply && !cur.reply &&
       (DANGLING_ABBR.test(prevText.trimEnd()) ||
         span.end - span.start < opts.minChars ||
         !endsSentence(prevText))
@@ -264,7 +295,7 @@ export function segmentSentences(text: string, options: SegmentOptions = {}): Ch
         continue;
       }
     }
-    merged.push({ start: span.start, end: span.end });
+    merged.push({ ...span, reply: cur.reply });
   }
 
   // Clause-split long chunks, then materialise.
