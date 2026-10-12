@@ -136,3 +136,26 @@ a.card-title:hover { text-decoration: underline; }
 /* A saved article's images stay on its own site until they are asked for (queue-panel.ts). */
 .article-images { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .lib-view [data-aloud-held] { display: inline-block; min-height: 1em; opacity: .5; font-style: italic; }
+
+/* Statistics. */
+.stats-range { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.stats-custom { display: inline-flex; align-items: center; gap: 6px; }
+.stats-custom[hidden] { display: none; }
+.stats-totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin: 0 0 16px; }
+.stats-totals > div { padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); }
+.stats-totals dt { font-size: 12px; color: var(--fg-muted); }
+.stats-totals dd { margin: 4px 0 0; font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; color: var(--fg); }
+.stats-chart { margin: 0 0 18px; padding: 12px 14px 8px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); }
+.stats-bars { display: flex; align-items: flex-end; gap: 2px; height: 140px; }
+.stats-bars > span { flex: 1 1 0; min-width: 1px; background: var(--accent-solid); border-radius: 2px 2px 0 0; min-height: 1px; }
+.stats-bars > span.none { background: var(--surface-3); }
+.stats-chart figcaption { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; }
+.stats-breakdowns { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.stats-breakdowns h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--fg-muted); margin: 0 0 8px; }
+.stats-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.stats-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; font-size: 13.5px; }
+.stats-list li > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stats-list li > span:nth-child(2) { color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+.stats-list li > i { grid-column: 1 / -1; display: block; height: 4px; border-radius: 2px; background: var(--accent-solid); }
+.stats-list li.unknown > span:first-child { color: var(--fg-muted); font-style: italic; }
+.stats-note { margin: 10px 0 0; line-height: 1.55; }

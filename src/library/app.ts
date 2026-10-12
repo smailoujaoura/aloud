@@ -1,6 +1,6 @@
 /**
  * The Library's views on Aloud's page: what to continue, what is up next, the notes kept along
- * the way, and history.
+ * the way, history, and statistics.
  *
  * Everything here lives in `storage.local` on this device (see `shared/notes.ts`,
  * `shared/reading-history.ts`, `shared/reading-queue.ts`) and updates live as the reader writes
@@ -9,6 +9,7 @@
 import { initNotes } from './notes-panel';
 import { initQueue } from './queue-panel';
 import { initReading } from './reading-panels';
+import { initStats } from './stats-panel';
 import { reopen } from './reopen';
 
 export interface LibraryHost {
@@ -35,6 +36,7 @@ export async function initLibrary(host: LibraryHost): Promise<{ continueCount: n
       },
       onContinue: (entry) => void reopen(entry.source, null, showQueue),
     }),
+    initStats(),
   ]);
   return { continueCount };
 }

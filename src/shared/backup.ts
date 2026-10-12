@@ -17,6 +17,7 @@ import { documentKey } from './position-match';
 import { normalizeHistoryEntry, normalizePosition, normalizeSiteSpeed, normalizeStoredMarks, recordsOf } from './record-shapes';
 import { SETTINGS_VERSION, migrateSettings, sanitizeSettings, withDefaults, type Settings } from './settings';
 import { markFingerprint, type Mark } from '@/pdf/annotations/model';
+import { STATS_STORAGE_KEY, mergeStats, normalizeStats, type ListeningStats } from './listening-stats';
 
 export const BACKUP_FORMAT = 'aloud-backup';
 export const BACKUP_VERSION = 1;
@@ -46,6 +47,8 @@ export interface Backup {
   models: BackupModels;
   /** Command name → shortcut as the browser reports it ('' = none). */
   shortcuts: Record<string, string>;
+  /** Listening statistics by day (shared/listening-stats.ts); null in older files. */
+  stats: ListeningStats | null;
 }
 
 /** The storage.local keys each part lives under. */
@@ -56,6 +59,7 @@ export const STORAGE_KEYS = {
   history: 'readingHistory',
   positions: 'readingPositions',
   siteSpeeds: 'mediaSpeedSites',
+  stats: STATS_STORAGE_KEY,
 } as const;
 export const PDF_MARKS_PREFIX = 'pdfMarks:';
 
@@ -85,6 +89,7 @@ export function makeBackup(
     pdfMarks,
     models: extra.models,
     shortcuts: extra.shortcuts,
+    stats: all[STORAGE_KEYS.stats] ? normalizeStats(all[STORAGE_KEYS.stats]) : null,
   };
 }
 
@@ -126,6 +131,7 @@ export function parseBackup(text: string): Backup {
       supertonic: b.models?.supertonic === true,
     },
     shortcuts: Object.fromEntries(Object.entries(obj(b.shortcuts)).filter(([, v]) => typeof v === 'string')) as Record<string, string>,
+    stats: b.stats && typeof b.stats === 'object' ? normalizeStats(b.stats) : null,
   };
 }
 
@@ -167,7 +173,9 @@ export function describeBackup(b: Backup): Record<BackupPart, string> {
   return {
     settings: !b.settings ? 'No settings in this file' : voices ? `every setting, and ${n(voices, 'voice model')} to download again` : 'every setting',
     notes: n(b.notes.length, 'note'),
-    library: `${n(b.queue.length, 'queued article')}, ${n(Object.keys(b.history).length, 'history entry', 'history entries')}, ${n(Object.keys(b.positions).length, 'reading position')}`,
+    library:
+      `${n(b.queue.length, 'queued article')}, ${n(Object.keys(b.history).length, 'history entry', 'history entries')}, ${n(Object.keys(b.positions).length, 'reading position')}` +
+      (b.stats && Object.keys(b.stats.days).length ? `, ${n(Object.keys(b.stats.days).length, 'day')} of statistics` : ''),
     speeds: n(Object.keys(b.siteSpeeds).length, 'remembered site speed'),
     pdfMarks: n(Object.keys(b.pdfMarks).length, 'marked-up PDF'),
     shortcuts: n(Object.values(b.shortcuts).filter(Boolean).length, 'keyboard shortcut'),
@@ -274,6 +282,8 @@ export function restorePlan(b: Backup, all: Record<string, unknown>, parts: Read
     }
     if (Object.keys(b.history).length) out[STORAGE_KEYS.history] = mergeRecords(obj(all[STORAGE_KEYS.history]), b.history);
     if (Object.keys(b.positions).length) out[STORAGE_KEYS.positions] = mergeRecords(obj(all[STORAGE_KEYS.positions]), b.positions);
+    // The larger figure per day, site and language: the same file restored twice adds nothing.
+    if (b.stats) out[STORAGE_KEYS.stats] = mergeStats(normalizeStats(all[STORAGE_KEYS.stats]), b.stats);
   }
   if (parts.has('speeds') && Object.keys(b.siteSpeeds).length) {
     out[STORAGE_KEYS.siteSpeeds] = mergeRecords(obj(all[STORAGE_KEYS.siteSpeeds]), b.siteSpeeds);

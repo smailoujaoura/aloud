@@ -73,3 +73,27 @@ describe('backup', () => {
     expect(Object.keys(plan)).toEqual(['notes']);
   });
 });
+
+describe('backup: listening statistics', () => {
+  const day = (seconds: number) => ({ seconds, words: seconds * 2, sites: { 'a.it': { seconds, words: seconds * 2 } }, languages: { it: { seconds, words: seconds * 2 } }, completed: ['doc'] });
+
+  it('travels with the Library part, and restoring the same file twice counts nothing twice', () => {
+    const file = parseBackup(JSON.stringify(makeBackup({ listeningStats: { since: 100, days: { '2026-10-01': day(60) } } }, extra)));
+    expect(file.stats?.days['2026-10-01']?.seconds).toBe(60);
+    const here: Record<string, unknown> = { listeningStats: { since: 500, days: { '2026-10-01': day(40), '2026-10-02': day(10) } } };
+    const first = restorePlan(file, here, new Set(['library']));
+    const second = restorePlan(file, { ...here, ...first }, new Set(['library']));
+    expect(second.listeningStats).toEqual(first.listeningStats);
+    const merged = first.listeningStats as { since: number; days: Record<string, { seconds: number; completed: string[] }> };
+    expect(merged.since).toBe(100);
+    expect(merged.days['2026-10-01']!.seconds).toBe(60);
+    expect(merged.days['2026-10-02']!.seconds).toBe(10);
+    expect(merged.days['2026-10-01']!.completed).toEqual(['doc']);
+  });
+
+  it('an older file without statistics leaves them alone', () => {
+    const file = parseBackup(JSON.stringify({ ...makeBackup({}, extra), stats: undefined }));
+    expect(file.stats).toBeNull();
+    expect(restorePlan(file, { listeningStats: { since: 1, days: {} } }, new Set(['library'])).listeningStats).toBeUndefined();
+  });
+});

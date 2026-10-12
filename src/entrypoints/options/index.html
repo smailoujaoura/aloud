@@ -30,6 +30,7 @@
           <a href="#queue" data-view="queue" class="nav-item"><span class="nav-icon" aria-hidden="true">☰</span><span class="nav-label">Up next</span><span class="count" id="count-queue"></span></a>
           <a href="#notes" data-view="notes" class="nav-item"><span class="nav-icon" aria-hidden="true">✎</span><span class="nav-label">Notes</span><span class="count" id="count-notes"></span></a>
           <a href="#history" data-view="history" class="nav-item"><span class="nav-icon" aria-hidden="true">⟲</span><span class="nav-label">History</span></a>
+          <a href="#stats" data-view="stats" class="nav-item"><span class="nav-icon" aria-hidden="true">▥</span><span class="nav-label">Statistics</span></a>
           <p class="nav-group">Settings</p>
           <a href="#voice" data-view="voice" class="nav-item"><span class="nav-icon" aria-hidden="true">♪</span><span class="nav-label">Voice</span></a>
           <a href="#reading" data-view="reading" class="nav-item"><span class="nav-icon" aria-hidden="true">¶</span><span class="nav-label">Reading</span></a>
@@ -150,6 +151,42 @@
             device.</p>
         </div>
       
+      </div>
+
+      <div class="view lib-view" id="view-stats" data-view="stats" role="region" aria-label="Statistics" hidden>
+        <header class="view-head"><h1>Statistics</h1><p class="muted small">What you listened to, day by day. Counted and kept on this device only.</p></header>
+        <div class="panel-bar">
+          <div class="stats-range">
+            <label for="statsRange" class="muted small">Show</label>
+            <select id="statsRange">
+              <option value="7">Last 7 days</option>
+              <option value="30" selected>Last 30 days</option>
+              <option value="90">Last 90 days</option>
+              <option value="365">Last 12 months</option>
+              <option value="all">Since counting began</option>
+              <option value="custom">Dates…</option>
+            </select>
+            <span id="statsCustom" class="stats-custom" hidden>
+              <input type="date" id="statsFrom" aria-label="From" /> – <input type="date" id="statsTo" aria-label="To" />
+            </span>
+          </div>
+          <div class="panel-actions">
+            <button id="clearStats" class="ghost danger btn-sm" type="button">Clear statistics</button>
+          </div>
+        </div>
+        <dl class="stats-totals" id="statsTotals"></dl>
+        <figure class="stats-chart" aria-labelledby="statsChartCaption">
+          <div class="stats-bars" id="statsChart"></div>
+          <figcaption id="statsChartCaption" class="muted small"></figcaption>
+        </figure>
+        <div class="stats-breakdowns">
+          <section aria-labelledby="statsSitesHead"><h2 id="statsSitesHead">Sites</h2><ol id="statsSites" class="stats-list"></ol></section>
+          <section aria-labelledby="statsLanguagesHead"><h2 id="statsLanguagesHead">Languages</h2><ol id="statsLanguages" class="stats-list"></ol></section>
+        </div>
+        <p class="muted small" id="statsSince"></p>
+        <p class="muted small stats-note">Only what you actually heard counts: a sentence as it plays, and the part of one you
+          heard before pausing or skipping. Making an MP3 is not listening. Statistics travel in the backup file with your
+          history — restoring the same file twice counts nothing twice.</p>
       </div>
 
       <div class="view" id="view-voice" data-view="voice" role="region" aria-label="Voice" hidden>

@@ -49,6 +49,7 @@ import { NOTES_FULL_MESSAGE, addNote } from '@/shared/notes';
 import { createAnchor, type TextAnchor } from '@/annotate/anchor';
 import { anchorForRange } from '@/annotate/page-anchoring';
 import { recordListening } from '@/shared/reading-history';
+import { countWords, recordCompleted, recordHeard, type Heard } from '@/shared/listening-stats';
 import { log } from '@/shared/log';
 
 import { backendOf, tuningFor, type SynthBackend } from './engine-tuning';
@@ -143,6 +144,9 @@ const JUST_STARTED_SECONDS = 1.2;
 const MAX_CONSECUTIVE_FAILURES = 3;
 /** How much speech "back a little" replays. */
 const BACK_A_LITTLE_SECONDS = 10;
+
+/** How often heard audio is written to the statistics while reading (and at every pause). */
+const STATS_WRITE_INTERVAL_MS = 30_000;
 
 /** How far either side of the current sentence to look for one that exists in the DOM. */
 const NEARBY_RANGE_SEARCH = 20;
@@ -254,6 +258,11 @@ export class ReaderSession {
   private readonly missingTold = new Set<string>();
   /** What the bar's language chip last showed, to update it only on a change. */
   private shownLanguageKey = '';
+  /** Seconds of the sentence playing now already counted as heard (statistics). */
+  private readonly heardCounted = new Map<number, number>();
+  /** Heard but not yet written to the statistics. */
+  private heardQueue: Heard[] = [];
+  private lastStatsWrite = 0;
 
   private state: SessionState = {
     status: 'idle',
@@ -762,6 +771,9 @@ export class ReaderSession {
     this.wantsPlayback = false;
     this.state.busy = false;
     this.state.hint = undefined;
+    // What was heard of the sentence playing, before the clock stops.
+    this.countPartlyHeard();
+    this.flushHeard();
     await this.scheduler.pause();
     this.stopFollowingWords(false);
     this.recordHistory(this.currentPlayId);
@@ -784,6 +796,8 @@ export class ReaderSession {
       this.bar?.flash('Reading carries on once the MP3 is made', 'info');
       return;
     }
+    // The part of the sentence heard before the jump counts; the rest was never heard.
+    this.countPartlyHeard();
     const wanted = Math.max(0, Math.min(playId, this.playlist.length - 1));
     // Onto something that is read: forward for a move forward, back for a move back.
     const target = this.readableNear(wanted, wanted >= this.currentPlayId ? 1 : -1);
@@ -1660,6 +1674,8 @@ export class ReaderSession {
   }
 
   private onChunkStart(playId: number): void {
+    // A new play of this sentence: nothing of it heard yet (a replay is heard again).
+    this.heardCounted.set(playId, 0);
     if (!this.outputLogged) {
       // Which path the audio took decides whether media keys and the OS overlay can reach us.
       this.outputLogged = true;
@@ -1822,6 +1838,8 @@ export class ReaderSession {
   }
 
   private onChunkEnd(playId: number): void {
+    this.countHeard(playId, Infinity);
+    if (Date.now() - this.lastStatsWrite > STATS_WRITE_INTERVAL_MS) this.flushHeard();
     const seconds = this.audioSeconds.get(playId) ?? 0;
     this.listening.pendingSeconds += seconds;
     if (seconds > 0) {
@@ -1856,7 +1874,49 @@ export class ReaderSession {
     this.lastSavedIndex = -1;
     if (this.docKey) void clearPosition(this.docKey);
     this.recordHistory(this.playlist.length, true);
+    this.flushHeard();
+    if (this.keepHistory && this.docKey && this.mode !== 'selection') void recordCompleted(this.docKey);
     this.finishedHook?.();
+  }
+
+  // ---- statistics ----------------------------------------------------------
+
+  /**
+   * Count `playId` as heard up to `upTo` seconds into its speech (Infinity: to its end), less what
+   * was already counted of this play of it. Only audio that played: a sentence passed over, or
+   * one that never arrived, has no length and adds nothing; "Save as MP3" never plays here.
+   */
+  private countHeard(playId: number, upTo: number): void {
+    if (!this.keepHistory) return;
+    const item = this.playlist[playId];
+    const total = this.audioSeconds.get(playId) ?? 0;
+    if (!item || total <= 0 || !this.readable(item)) return;
+    const already = this.heardCounted.get(playId) ?? 0;
+    const to = Math.min(total, Math.max(0, upTo));
+    if (to <= already) return;
+    this.heardCounted.set(playId, to);
+    const share = (to - already) / total;
+    this.heardQueue.push({
+      at: Date.now(),
+      seconds: to - already,
+      words: countWords(item.sourceText, item.language) * share,
+      site: this.docSource().site ?? '',
+      language: item.language ?? '',
+    });
+  }
+
+  /** The sentence playing now, as far as it has been heard. */
+  private countPartlyHeard(): void {
+    const at = this.scheduler?.isPlaying() ? this.scheduler.playbackPosition() : null;
+    if (at) this.countHeard(at.playId, at.seconds);
+  }
+
+  private flushHeard(): void {
+    this.lastStatsWrite = Date.now();
+    if (!this.heardQueue.length) return;
+    const heard = this.heardQueue;
+    this.heardQueue = [];
+    void recordHeard(heard);
   }
 
   // ---- the Library: history, notes, finding your place ------------------------
@@ -2314,6 +2374,8 @@ export class ReaderSession {
     // the tab was closed or the reader was stopped.
     if (this.engineReady || this.currentPlayId > 0) this.rememberPosition(this.currentPlayId, true);
     this.recordHistory(this.currentPlayId);
+    this.countPartlyHeard();
+    this.flushHeard();
     this.disposed = true;
     // Anything still working through `begin()` stops at its next checkpoint.
     this.generation++;

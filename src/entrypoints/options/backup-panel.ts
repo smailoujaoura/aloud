@@ -34,7 +34,7 @@ export interface BackupPanelOptions {
 }
 
 /** Every stored value a restore may rewrite, by the lock its own writers take. */
-const RESTORE_LOCKS = ['settings', 'notes', 'queue', 'history', 'positions', 'site-speeds'];
+const RESTORE_LOCKS = ['settings', 'notes', 'queue', 'history', 'positions', 'site-speeds', 'stats'];
 
 const PART_LABEL: Record<BackupPart, string> = {
   settings: 'Settings and voices',

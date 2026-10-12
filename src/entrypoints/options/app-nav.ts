@@ -11,6 +11,7 @@ export const VIEWS = [
   'queue',
   'notes',
   'history',
+  'stats',
   'voice',
   'reading',
   'appearance',

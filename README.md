@@ -88,13 +88,15 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
   what each key is set to and, on Firefox, sets it to whatever you press.
 - **Drifted off?** <kbd>Alt</kbd>+<kbd>,</kbd> (or <kbd>B</kbd> on the bar)
   goes back about ten seconds and shows you where that is.
-- **One page for everything** — the Library (*Continue*, *Up next*, *Notes*, *History*) and every
+- **One page for everything** — the Library (*Continue*, *Up next*, *Notes*, *History*, *Statistics*) and every
   setting sit side by side in Aloud's page, one click apart. *Continue* lists what you stopped
   part-way through with how much is left, *Up next* is the reading queue with listening times,
   *Notes* filters by site and tag, exports as Markdown or JSON and imports a notes file back
-  (merging, never doubling), and *History* keeps how far you got in everything, all on this device.
+  (merging, never doubling), *History* keeps how far you got in everything, and *Statistics* shows
+  words and time heard, documents finished, by day, site and language — only audio you actually
+  heard, never a saved MP3 — all on this device.
 - **Backup & restore** — one file with every setting, voice choice, key, colour, note, the queue,
-  history, video speeds and PDF marks. Restoring merges rather than overwrites, then offers to
+  history, statistics, video speeds and PDF marks. Restoring merges rather than overwrites, then offers to
   download the voices the backup had and to allow the sites that were allowed.
 - **Save as MP3** — the whole page or PDF as one audio file, in the voice and speed you chose.
 - **Mark up PDFs** — highlight, underline, strike through and comment on the page itself, and
