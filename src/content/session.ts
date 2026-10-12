@@ -25,7 +25,8 @@ import { normalizeForSpeech } from '@/segment/normalize';
 import { applyPronunciations } from '@/segment/pronunciations';
 import { GaplessScheduler } from '@/audio/scheduler';
 import { Highlighter } from '@/highlight/highlighter';
-import { ControlBar, type ExportState, type LanguageInfo } from '@/ui/control-bar';
+import { CONTROL_HOST_ID, ControlBar, type BarVoice, type ExportState, type LanguageInfo } from '@/ui/control-bar';
+import { voicePortrait } from '@/ui/voice-portraits';
 import type { EngineConfig, WordTiming } from '@/engine/protocol';
 import type { ModelManifest } from '@/engine/engines/types';
 import { getSettings, setSettings, activeVoice, voiceKeyFor, type EngineId, type Settings, type VoiceRef } from '@/shared/settings';
@@ -429,7 +430,9 @@ export class ReaderSession {
       speed: this.settings.speed,
       tapToSeek: this.settings.tapToSeek,
       theme: this.settings.theme,
+      autoHide: this.settings.barAutoHide,
     });
+    this.renderFollow();
     void this.refreshBarVoices();
     this.showReadingRate();
     this.watchViewport();
@@ -703,6 +706,10 @@ export class ReaderSession {
       onVoiceLock: (locked: boolean) => void this.setVoiceLock(locked),
       onLanguageVoice: (code: string, value: string) => void this.setLanguageVoice(code, value),
       onMissingVoice: (code: string, choice: 'get' | 'skip' | 'read') => void this.onMissingVoice(code, choice),
+      onFollow: () => void this.toggleFollow(),
+      onManageVoices: () => this.background()?.postMessage({ type: 'open-options', view: 'voice' }),
+      loadPortrait: (file: string) =>
+        (browser.runtime.sendMessage({ type: 'voice-portrait', file }) as Promise<string | null>).catch(() => null),
     };
   }
 
@@ -981,28 +988,18 @@ export class ReaderSession {
     const perEngine = await Promise.all(
       ENGINE_IDS.map(async (engine) => (await this.installedVoices(engine)).map((v): EngineVoice => ({ ...v, engine }))),
     );
-    const installed = perEngine.flat();
     // Read *after* the replies, never before: picking a second voice while the first was still
     // being answered painted the older choice back over the newer one on the picker.
-    const current = voiceValue(this.engine, this.voice);
-
-    const shown = [...installed];
-    if (!shown.some((v) => voiceValue(v.engine, v.id) === current)) {
-      // A <select> must be able to show its own value, so the active voice is always listed —
-      // labelled, when it is not on the device yet, so picking anything else is the obvious move.
-      const known = listVoices(this.engine, manifest).find((v) => v.id === this.voice);
-      shown.unshift({
-        engine: this.engine,
-        id: this.voice,
-        label: `${known?.label ?? this.voice} · not downloaded yet`,
-        group: known?.group ?? '',
-      });
-    }
-
-    this.bar.setVoices(shown, current, { downloadedOnly: installed.length > 0 });
-    // The picker shows the voice reading the passage now, which may not be the main one.
     const route = this.playlist[this.currentPlayId]?.route;
-    if (route?.kind === 'voice') this.bar.selectVoice(voiceValue(route.voice.engine, route.voice.id));
+    const current = route?.kind === 'voice' ? voiceValue(route.voice.engine, route.voice.id) : voiceValue(this.engine, this.voice);
+    // Voices put away in Settings are left out — unless one is reading now.
+    const hidden = new Set(this.settings.hiddenVoices);
+    const shown = perEngine.flat().filter((v) => !hidden.has(voiceValue(v.engine, v.id)) || voiceValue(v.engine, v.id) === current);
+    if (!shown.some((v) => voiceValue(v.engine, v.id) === current)) {
+      const known = listVoices(this.engine, manifest).find((v) => v.id === this.voice);
+      shown.unshift({ engine: this.engine, id: this.voice, label: `${known?.label ?? this.voice} · not downloaded yet`, group: known?.group ?? '' });
+    }
+    this.bar.setVoices(shown.map((v) => barVoice(v, manifest)), current);
   }
 
   /**
@@ -1299,6 +1296,7 @@ export class ReaderSession {
       // A voice that failed to load on this page is not offered again.
       installed: this.installedVoiceList.filter((v) => !this.worker || this.worker.usable({ engine: v.engine, voice: v.id })),
       skip: this.skipLanguages,
+      hidden: new Set(this.settings.hiddenVoices),
     };
   }
 
@@ -1426,7 +1424,7 @@ export class ReaderSession {
       if (route.kind !== 'voice') return;
       if (route.reason === 'match' || route.reason === 'preference') {
         if (voiceKey(route.voice) === voiceKey(this.savedVoice())) return;
-        this.bar?.flash(`This page is in ${name(lang)} — reading it with ${route.voice.label}`, 'ok');
+        this.bar?.flash(`This page is in ${name(lang)} — reading it with ${shortLabel(route.voice.label)}`, 'ok');
       } else if (route.reason === 'missing') {
         this.missingTold.add(lang);
         this.bar?.flash(`This page is in ${name(lang)}, and no ${name(lang)} voice is downloaded`, 'info', {
@@ -1438,10 +1436,12 @@ export class ReaderSession {
     }
     const voices = summary
       .slice(0, 3)
-      .map(([lang, e]) => (e.route.kind === 'voice' ? `${name(lang)} by ${e.route.voice.label}` : `${name(lang)} skipped`));
+      .filter(([, e]) => !(e.route.kind === 'voice' && e.route.reason === 'missing'))
+      .map(([lang, e]) => (e.route.kind === 'voice' ? `${name(lang)} by ${shortLabel(e.route.voice.label)}` : `${name(lang)} skipped`));
     if (missing.length) {
       for (const lang of missing) this.missingTold.add(lang);
-      this.bar?.flash(`No ${missing.map(name).join(' or ')} voice is downloaded — reading ${voices.join(', ')}`, 'info', {
+      const reader = shortLabel(this.savedVoice().label);
+      this.bar?.flash(`No ${missing.map(name).join(' or ')} voice is downloaded, so ${reader} reads it too`, 'info', {
         label: 'Choose',
         run: () => this.bar?.openLanguageMenu(),
       });
@@ -1496,7 +1496,7 @@ export class ReaderSession {
       language,
       name: language ? languageName(language) : '',
       how: how[source] ?? 'detected',
-      voiceLabel: voice.label,
+      voiceLabel: shortLabel(voice.label),
       missing: route?.kind === 'skip' || (route?.kind === 'voice' && route.reason === 'missing'),
       skipped: route?.kind === 'skip',
       manual: !!this.manualVoice,
@@ -1567,7 +1567,7 @@ export class ReaderSession {
     if (locked) {
       const item = this.playlist[this.currentPlayId];
       this.manualVoice = item?.route?.kind === 'voice' ? item.route.voice : this.savedVoice();
-      this.bar?.flash(`Reading this whole page with ${this.manualVoice.label}`, 'ok', {
+      this.bar?.flash(`Reading this whole page with ${shortLabel(this.manualVoice.label)}`, 'ok', {
         label: 'Undo',
         run: () => void this.setVoiceLock(false),
       });
@@ -1869,7 +1869,8 @@ export class ReaderSession {
     this.state.currentIndex = this.playlist.length;
     this.setStatus('paused');
     this.bar?.flash('Finished reading this page', 'ok');
-    this.bar?.setCurrentOffScreen(false);
+    this.currentOffScreen = false;
+    this.renderFollow();
     // Read to the end: next time it opens at the top, not at the last sentence.
     this.lastSavedIndex = -1;
     if (this.docKey) void clearPosition(this.docKey);
@@ -2141,6 +2142,12 @@ export class ReaderSession {
     // A speed set in the settings page means the same thing as one set on the bar.
     if (prev.speed !== this.settings.speed) this.applySpeed(this.settings.speed, { flash: false });
     if (prev.theme !== this.settings.theme) this.bar?.setTheme(this.settings.theme);
+    if (prev.barAutoHide !== this.settings.barAutoHide) this.bar?.setAutoHide(this.settings.barAutoHide);
+    if (prev.scrollMode !== this.settings.scrollMode) this.renderFollow();
+    if (!sameValue(prev.hiddenVoices, this.settings.hiddenVoices)) {
+      void this.refreshBarVoices();
+      void this.reroute();
+    }
 
     if (!sameValue(prev.skip, this.settings.skip)) {
       // Skipping changes which sentences exist, not how they sound, so it cannot be patched into
@@ -2240,12 +2247,21 @@ export class ReaderSession {
         this.refreshOffScreen();
       });
     };
+    // The reader's own hand on the page — not Aloud following the sentence, and not the bar.
+    const intent = (e: Event): void => {
+      if ((e.target as Element | null)?.id === CONTROL_HOST_ID) return;
+      if (e.type === 'keydown' && !/^(ArrowDown|ArrowUp|PageDown|PageUp|Home|End| )$/.test((e as KeyboardEvent).key)) return;
+      this.userScrollIntent = Date.now();
+    };
+    const intents = ['wheel', 'touchmove', 'keydown'] as const;
     view.addEventListener('scroll', onChange, { passive: true, capture: true });
     view.addEventListener('resize', onChange, { passive: true });
+    for (const type of intents) view.addEventListener(type, intent, { passive: true, capture: true });
     this.stopViewportWatch = () => {
       if (this.offScreenFrame) view.cancelAnimationFrame(this.offScreenFrame);
       view.removeEventListener('scroll', onChange, { capture: true });
       view.removeEventListener('resize', onChange);
+      for (const type of intents) view.removeEventListener(type, intent, { capture: true });
     };
   }
 
@@ -2259,9 +2275,60 @@ export class ReaderSession {
     // the user can be "away from", so leave the button quiet.
     const offScreen =
       (rect.width !== 0 || rect.height !== 0) && (rect.bottom < 0 || rect.top > view.innerHeight);
-    if (offScreen === this.currentOffScreen) return;
+    const following = this.settings.scrollMode !== 'off';
+    // Your own scrolling took the sentence off screen: you are looking at something else, and
+    // following rests rather than pull you back at the next sentence. Scroll back to it — or
+    // press Follow — and it carries on.
+    if (following && offScreen && !this.followPaused && Date.now() - this.userScrollIntent < 1500) this.setFollowPaused(true);
+    else if (this.followPaused && !offScreen) this.setFollowPaused(false);
+    if (offScreen === this.currentOffScreen && !this.followDirty) return;
     this.currentOffScreen = offScreen;
-    this.bar?.setCurrentOffScreen(offScreen);
+    this.renderFollow();
+  }
+
+  // ---- following the reading ----------------------------------------------
+
+  /** Following rests while the reader looks elsewhere on the page. */
+  private followPaused = false;
+  /** When the reader last scrolled the page themselves (wheel, touch, keys) — not Aloud. */
+  private userScrollIntent = 0;
+  private followDirty = false;
+
+  private setFollowPaused(paused: boolean): void {
+    if (paused === this.followPaused) return;
+    this.followPaused = paused;
+    this.highlighter?.setFollowPaused(paused);
+    this.followDirty = true;
+    this.renderFollow();
+  }
+
+  private renderFollow(): void {
+    this.followDirty = false;
+    const state = this.settings.scrollMode === 'off' ? 'off' : this.followPaused ? 'away' : 'on';
+    this.bar?.setFollow(state, this.currentOffScreen);
+  }
+
+  /**
+   * The bar's Follow button. Following and in sight: stop following. Resting, off, or the sentence
+   * out of sight: go back to it and follow from there. The choice is kept, like the setting.
+   */
+  private async toggleFollow(): Promise<void> {
+    const mode = this.settings.scrollMode;
+    if (mode !== 'off' && !this.followPaused && !this.currentOffScreen) {
+      this.settings = await setSettings({ scrollMode: 'off' });
+      this.highlighter?.setOptions({ scrollMode: 'off' });
+      this.renderFollow();
+      this.bar?.flash('Not following the reading — the page stays where you put it', 'ok');
+      return;
+    }
+    if (mode === 'off') {
+      this.settings = await setSettings({ scrollMode: 'keep-visible' });
+      this.highlighter?.setOptions({ scrollMode: 'keep-visible' });
+    }
+    this.setFollowPaused(false);
+    this.snapToCurrent();
+    this.renderFollow();
+    if (mode === 'off') this.bar?.flash('Following the reading', 'ok');
   }
 
   /**
@@ -2498,4 +2565,29 @@ function markupLanguage(node: Node | null, root: Element | null): string {
   if (!tagged || tagged === document.documentElement || tagged === document.body) return '';
   if (root && tagged.contains(root)) return '';
   return tagged.getAttribute('lang') ?? '';
+}
+
+/** A voice as the bar's menu shows it: a name, a line about it, a face. */
+function barVoice(v: EngineVoice, manifest: ModelManifest): BarVoice {
+  const [name, ...rest] = v.label.split(' · ');
+  const tag = voiceLanguage(v.engine, v.id, manifest);
+  const region = tag.replace('_', '-');
+  let language = region;
+  try {
+    language = new Intl.DisplayNames(['en'], { type: 'language' }).of(region) ?? region;
+  } catch {
+    /* an unusual tag: shown as it is */
+  }
+  return {
+    value: voiceValue(v.engine, v.id),
+    name: name ?? v.id,
+    meta: [engineInfo(v.engine).name, language, ...rest].filter(Boolean).join(' · '),
+    language: primaryLanguage(tag),
+    portrait: voicePortrait(v.engine, v.id)?.file ?? null,
+  };
+}
+
+/** "Alba · medium" → "Alba": the name, for messages. */
+function shortLabel(label: string): string {
+  return label.split(' · ')[0] ?? label;
 }

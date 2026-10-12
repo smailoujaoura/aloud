@@ -34,6 +34,15 @@ describe('routeFor', () => {
     );
   });
 
+  it('Auto passes over hidden voices while a visible one speaks the language, and falls back to them', () => {
+    const giulia: CandidateVoice = { engine: 'piper', id: 'it_IT-riccardo-x_low', label: 'Riccardo', language: 'it_IT' };
+    const installed = [alba, paola, giulia];
+    expect(voiceOf(routeFor('it', ctx({ installed, hidden: new Set(['piper:it_IT-paola-medium']) })))).toBe('it_IT-riccardo-x_low:match');
+    expect(voiceOf(routeFor('it', ctx({ installed, hidden: new Set(['piper:it_IT-paola-medium', 'piper:it_IT-riccardo-x_low']) })))).toBe(
+      'it_IT-paola-medium:match',
+    );
+  });
+
   it('a manual lock reads everything with one voice, whatever the language', () => {
     expect(voiceOf(routeFor('it', ctx({ manual: alba })))).toBe('en_GB-alba-medium:manual');
   });

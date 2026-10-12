@@ -33,6 +33,11 @@ export interface RouteContext {
   installed: readonly CandidateVoice[];
   /** Languages with no voice the reader chose to skip on this page. */
   skip: ReadonlySet<string>;
+  /**
+   * Voices put away in Settings (`engine:voice`). Auto passes over them while a voice still in
+   * view speaks the language; one chosen for the language, or the saved voice, is used anyway.
+   */
+  hidden?: ReadonlySet<string>;
 }
 
 export function voiceKey(v: { engine: string; id?: string; voice?: string }): string {
@@ -51,7 +56,9 @@ export function routeFor(languageTag: string, ctx: RouteContext): Route {
     if (found) return { kind: 'voice', voice: found, reason: 'preference', language };
   }
   if (primaryLanguage(ctx.saved.language) === language) return { kind: 'voice', voice: ctx.saved, reason: 'saved', language };
-  const match = pickVoiceForLanguage(language, ctx.saved, ctx.installed);
+  const hidden = ctx.hidden;
+  const visible = hidden?.size ? ctx.installed.filter((v) => !hidden.has(voiceKey(v))) : ctx.installed;
+  const match = pickVoiceForLanguage(language, ctx.saved, visible) ?? pickVoiceForLanguage(language, ctx.saved, ctx.installed);
   if (match) return { kind: 'voice', voice: match, reason: 'match', language };
   if (ctx.skip.has(language)) return { kind: 'skip', language };
   return { kind: 'voice', voice: ctx.saved, reason: 'missing', language };

@@ -282,6 +282,11 @@ export class GaplessScheduler {
     if (id + 1 >= this.count && this.sources.size === 0) {
       this.running = false;
       this.stopTicker();
+      // Nothing left to play: let the output go quiet, as a pause does. Left running, the media
+      // element kept playing a silent stream, and Firefox showed the tab as playing audio long
+      // after the page had been read. `start()` wakes both for a replay.
+      void this.ctx?.suspend().catch(() => undefined);
+      this.mediaElement?.pause();
       this.cb.onFinished();
       return;
     }

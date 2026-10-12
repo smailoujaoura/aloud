@@ -88,6 +88,8 @@ export const CONTROL_BAR_CSS = `
   box-sizing: border-box;
   width: min(760px, calc(100vw - 20px));
   display: flex; flex-direction: column; align-items: center; gap: 8px;
+  /* The bar lays itself out by its own width (the container queries below), not the window's. */
+  container-type: inline-size; container-name: aloud-dock;
   /* The gaps between the pieces must not swallow clicks meant for the page underneath. */
   pointer-events: none;
 }
@@ -145,10 +147,11 @@ button[disabled]:hover { background: none; }
 .tap.on { background: var(--accent); color: var(--accent-on); }
 .tap.on:hover { background: var(--accent-hi); }
 
-/* The snap button lights up on its own when the sentence being read has scrolled out of
-   sight — that is exactly the moment it is worth pressing. */
-.snap.offscreen { background: var(--accent-soft); color: var(--bar-fg); }
-.snap.offscreen::after {
+/* Follow: lit while following; a dot when following rests because you scrolled elsewhere, or
+   when the sentence being read is out of sight — the moment it is worth pressing. */
+.follow.on { color: var(--bar-fg); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.follow.offscreen { background: var(--accent-soft); color: var(--bar-fg); }
+.follow.offscreen::after {
   content: ''; position: absolute; top: 3px; right: 3px;
   width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
 }
@@ -187,6 +190,7 @@ button[disabled]:hover { background: none; }
   text-transform: uppercase; letter-spacing: .05em; color: var(--bar-muted);
 }
 .pop-menu button {
+  font: var(--font);
   width: 100%; height: auto; justify-content: flex-start;
   padding: 7px 10px; border-radius: 8px; font: var(--font); font-size: 13px;
 }
@@ -276,20 +280,78 @@ select option, select optgroup { background: var(--bar-solid); color: var(--bar-
 select optgroup { color: var(--bar-muted); font-weight: 600; }
 .voice[hidden] { display: none; }
 
-/* The passage's language: two letters, quiet until there is something to say. */
-.lang {
-  width: auto; min-width: 32px; padding: 0 7px;
-  font: var(--font); font-size: 11px; font-weight: 700; letter-spacing: .04em;
+/* Speed, with the live pace under it: one narrow column. */
+.speedbox { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; line-height: 1; gap: 1px; }
+.speedbox select { padding: 3px 7px; }
+.speedbox .rate { padding: 0; font-size: 9.5px; letter-spacing: .01em; }
+
+/* The voice reading now, with the passage's language on its face. */
+.voice {
+  font: var(--font);
+  width: auto; max-width: 132px; height: 32px; padding: 0 9px 0 3px; gap: 7px;
+  border-radius: 16px; background: var(--bar-hover);
 }
-.lang[hidden] { display: none; }
-.lang.missing { box-shadow: inset 0 -2px 0 var(--accent); }
-.lang.manual { background: var(--accent-soft); }
-.lang-menu { width: min(300px, 100%); }
-.lang-menu .menu-field {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 2px 10px 6px; font-size: 12.5px;
+.voice:hover { background: var(--bar-active); }
+.voice[hidden] { display: none; }
+.voice .face-wrap { position: relative; flex: 0 0 auto; display: inline-flex; }
+.voice .voice-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 550; }
+.badge-lang {
+  position: absolute; right: -6px; bottom: -4px;
+  padding: 0 3px; border-radius: 5px; min-width: 13px; text-align: center;
+  font-size: 8.5px; line-height: 12px; font-weight: 750; letter-spacing: .03em;
+  background: var(--bar-solid); color: var(--bar-fg); box-shadow: 0 0 0 1px var(--bar-border);
 }
-.lang-menu .menu-field select { max-width: 170px; }
+.badge-lang[hidden] { display: none; }
+.voice.missing .badge-lang { background: var(--accent); color: var(--accent-on); box-shadow: none; }
+.voice.manual { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.avatar { display: inline-flex; flex: 0 0 auto; border-radius: 50%; overflow: hidden; background: var(--bar-track); }
+.avatar img, .avatar svg { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+/* The voice menu: the passage, then faces to pick from. */
+.voice-menu { width: min(340px, 100%); max-height: min(70vh, 560px); gap: 4px; }
+.voice-head { display: flex; align-items: center; gap: 10px; padding: 6px 8px 4px; }
+.voice-head-text { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+.voice-head-text b { font-size: 14px; }
+.voice-head-text span { color: var(--bar-muted); font-size: 12px; }
+.voice-menu .menu-text { margin: 0; padding: 2px 10px 4px; font-size: 12.5px; line-height: 1.45; }
+.voice-menu .menu-text.warn { color: var(--bar-fg); background: var(--accent-soft); border-radius: 8px; margin: 2px 6px; padding: 6px 8px; }
+.voice-menu .menu-field { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 10px 4px; font-size: 12.5px; }
+.voice-menu .menu-field select { max-width: 170px; }
+.voice-menu .menu-actions { display: flex; gap: 6px; padding: 2px 8px 4px; flex-wrap: wrap; }
+.voice-menu .menu-actions button { width: auto; padding: 6px 10px; justify-content: center; background: var(--bar-hover); }
+.voice-menu .menu-actions button.primary { background: var(--accent); color: var(--accent-on); font-weight: 650; }
+.voice-list {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  margin: 2px 0; padding: 2px 0; border-top: 1px solid var(--bar-border); border-bottom: 1px solid var(--bar-border);
+}
+.voice-group { padding: 8px 10px 3px; font-size: 10.5px; font-weight: 650; letter-spacing: .05em; text-transform: uppercase; color: var(--bar-muted); }
+.voice-row { gap: 10px; }
+.voice-row.is-current { background: var(--accent-soft); }
+.voice-row-text { display: flex; flex-direction: column; min-width: 0; text-align: left; gap: 1px; }
+.voice-row-text b { font-weight: 600; }
+.voice-row-text span { font-size: 11.5px; color: var(--bar-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.voice-menu .menu-action { justify-content: center; }
+.voice-menu .menu-action.primary { background: var(--accent); color: var(--accent-on); font-weight: 650; }
+.voice-menu .menu-action.subtle { color: var(--bar-muted); font-size: 12.5px; }
+
+/*
+ * The bar by its own width. Where one row cannot hold everything, the progress bar takes a row
+ * of its own; narrower still, the voice shows its face without its name. The secondary buttons
+ * — settings and close among them — never leave the bar.
+ */
+.bar { flex-wrap: wrap; }
+.progress { min-width: 90px; }
+@container aloud-dock (max-width: 700px) {
+  .bar { row-gap: 4px; }
+  .progress { order: 10; flex: 1 1 70%; }
+  .count { order: 11; }
+  .spacer { flex: 1 1 auto; }
+  .sep:nth-of-type(2) { display: none; }
+}
+@container aloud-dock (max-width: 620px) {
+  .voice .voice-name { display: none; }
+  .voice { padding: 0 6px 0 3px; }
+}
 
 /* ---- floated status ------------------------------------------------------ */
 
@@ -404,9 +466,10 @@ select optgroup { color: var(--bar-muted); font-weight: 600; }
   .progress > .track > i { border-radius: 5px; }
   .progress > .knob { width: 16px; height: 16px; margin-left: -8px; transform: translateY(-50%) scale(1); }
   .count { order: 11; }
-  .rate { display: none; }
-  .side { order: 12; flex: 1 1 100%; justify-content: flex-end; }
-  .voice { display: none; }
+  .side { order: 12; flex: 1 1 100%; justify-content: space-between; }
+  /* The voice stays in the first row, by its face: on a phone it is the only way to change it. */
+  .voice { height: 40px; padding: 0 6px 0 4px; }
+  .voice .voice-name { display: none; }
   .sep { display: none; }
   .spacer { flex: 1 1 auto; }
 }

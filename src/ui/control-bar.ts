@@ -18,8 +18,6 @@
  *    waits that outlive a keystroke.
  */
 import { el, svgIcon } from '@/shared/dom';
-import { groupByLanguage, voiceValue, type EngineVoice } from '@/shared/voice-catalog';
-import { ENGINE_IDS, engineInfo } from '@/shared/engine-catalog';
 import type { SessionState } from '@/shared/messages';
 import type { ThemeChoice } from '@/shared/settings';
 import { CONTROL_BAR_CSS } from './control-bar-styles';
@@ -27,6 +25,7 @@ import { ICON_PATHS } from './icons';
 import { resolveTheme, watchSystemTheme } from './theme';
 import type { SleepChoice, SleepState } from '@/content/sleep-timer';
 import { containTyping } from './contain-typing';
+import { genericAvatar } from './voice-avatar';
 
 /** Where "Save as MP3" is, as the bar shows it. */
 export type ExportState =
@@ -34,6 +33,23 @@ export type ExportState =
   | { phase: 'running'; done: number; total: number }
   | { phase: 'done'; seconds: number; bytes: number }
   | { phase: 'error'; message: string };
+
+/** A downloaded voice as the bar's voice menu shows it. */
+export interface BarVoice {
+  /** `engine:voice` (shared/voice-catalog.ts). */
+  value: string;
+  /** "Sara". */
+  name: string;
+  /** "Kokoro · Italian · female". */
+  meta: string;
+  /** Primary language (`it`). */
+  language: string;
+  /** Portrait path under the extension root, or null for the stand-in avatar. */
+  portrait: string | null;
+}
+
+/** Following the reading: on, on but paused while you look elsewhere, or off. */
+export type FollowState = 'on' | 'away' | 'off';
 
 /** The passage being read: its language, the voice reading it, and what can be changed. */
 export interface LanguageInfo {
@@ -96,12 +112,20 @@ export interface ControlBarCallbacks {
   onLanguageVoice?(code: string, value: string): void;
   /** No voice for `code`: get one, skip its passages, or read them with the usual voice. */
   onMissingVoice?(code: string, choice: 'get' | 'skip' | 'read'): void;
+  /** The Follow button: start, resume or stop following the reading. */
+  onFollow?(): void;
+  /** "Choose voices…" in the voice menu: the voice settings. */
+  onManageVoices?(): void;
+  /** A portrait (path under the extension root) as a data: URL — pages cannot load it directly. */
+  loadPortrait?(file: string): Promise<string | null>;
 }
 
 export interface ControlBarOptions {
   speed: number;
   tapToSeek: boolean;
   theme: ThemeChoice;
+  /** Slide out of the way while you scroll down the page (settings: barAutoHide). */
+  autoHide?: boolean;
 }
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4];
@@ -169,10 +193,19 @@ export class ControlBar {
   private speedEl!: HTMLSelectElement;
   /** Live words a minute, beside the speed multiplier. */
   private rateEl!: HTMLElement;
-  private voiceEl!: HTMLSelectElement;
-  /** The language of the passage being read, and the menu to change how it is read. */
-  private langBtn!: HTMLButtonElement;
+  /** The voice reading now, and the language of the passage — one button, one menu. */
+  private voiceBtn!: HTMLButtonElement;
+  private voiceFace!: HTMLElement;
+  private voiceName!: HTMLElement;
+  private voiceBadge!: HTMLElement;
+  private voices: BarVoice[] = [];
+  private currentVoice = '';
   private languageInfo: LanguageInfo | null = null;
+  private readonly portraits = new Map<string, Promise<string | null>>();
+  /** Follows the sentence being read down the page. */
+  private followBtn!: HTMLButtonElement;
+  private followState: FollowState = 'on';
+  private autoHide: boolean;
 
   private playing = false;
   /** Slid out of the way while you scroll down the page (see `watchScrolling`). */
@@ -205,6 +238,7 @@ export class ControlBar {
     this.currentSpeed = opts.speed;
     this.tapToSeek = opts.tapToSeek;
     this.theme = opts.theme;
+    this.autoHide = opts.autoHide ?? false;
 
     this.host = doc.createElement('div');
     this.host.id = CONTROL_HOST_ID;
@@ -263,12 +297,8 @@ export class ControlBar {
     backBtn.addEventListener('click', () => this.cb.onBackALittle());
     const noteBtn = this.iconButton('note', 'Save to Notes', ICON_PATHS.bookmark, 'Save what you just heard to Notes (N)');
     noteBtn.addEventListener('click', () => this.cb.onSaveNote());
-    this.snapBtn = this.iconButton(
-      'snap',
-      'Scroll to the sentence being read',
-      ICON_PATHS.snap,
-      'Scroll to the sentence being read',
-    );
+    this.followBtn = this.iconButton('follow', 'Follow the reading', ICON_PATHS.snap);
+    this.followBtn.setAttribute('aria-pressed', 'true');
     this.tapBtn = this.iconButton('tap', 'Click a sentence to jump there', ICON_PATHS.target);
     const gearBtn = this.iconButton('gear', 'Settings', ICON_PATHS.gear, 'Voices, speed and theme');
     this.sleepBtn = this.iconButton('sleep', 'Sleep timer', ICON_PATHS.moon, 'Sleep timer');
@@ -303,7 +333,10 @@ export class ControlBar {
     this.countEl = this.make('span', { class: 'count' }, '–/–');
 
     this.speedEl = this.make('select', { class: 'speed', 'aria-label': 'Speed', title: 'Speed (↑ / ↓)' });
+    // The pace sits under the multiplier rather than beside it: one narrow column for both.
     this.rateEl = this.make('span', { class: 'rate', hidden: '' });
+    const speedBox = this.make('div', { class: 'speedbox' });
+    speedBox.append(this.speedEl, this.rateEl);
     this.rateEl.title = 'Current speaking pace · words per minute';
     for (const s of SPEEDS) {
       const opt = this.make('option', { value: String(s) }, `${s}×`);
@@ -311,22 +344,21 @@ export class ControlBar {
       this.speedEl.appendChild(opt);
     }
 
-    this.voiceEl = this.make('select', { class: 'voice', 'aria-label': 'Voice', title: 'Voice', hidden: '' });
+    this.voiceBtn = this.make('button', { class: 'voice', 'aria-haspopup': 'dialog', 'aria-expanded': 'false', 'aria-label': 'Voice and language', hidden: '' });
+    this.voiceFace = this.make('span', { class: 'face' });
+    this.voiceBadge = this.make('span', { class: 'badge-lang', hidden: '' });
+    this.voiceName = this.make('span', { class: 'voice-name' });
+    const faceWrap = this.make('span', { class: 'face-wrap' });
+    faceWrap.append(this.voiceFace, this.voiceBadge);
+    this.voiceBtn.append(faceWrap, this.voiceName);
+    this.voiceBtn.addEventListener('click', () => this.toggleVoiceMenu());
     this.reflectTapToSeek();
 
     // The four secondary buttons travel together in a group. On a phone the row cannot hold
     // every control, and a group is what stops the wrap from stranding a lone ✕ on a line of
     // its own: either they all fit beside the transport controls, or they all move down.
-    this.langBtn = this.make('button', {
-      class: 'lang',
-      'aria-haspopup': 'dialog',
-      'aria-expanded': 'false',
-      'aria-label': 'Language and voice',
-      hidden: '',
-    });
-    this.langBtn.addEventListener('click', () => this.toggleLanguageMenu());
     const side = this.make('div', { class: 'side' });
-    side.append(this.langBtn, noteBtn, this.snapBtn, this.tapBtn, this.sleepBtn, this.saveBtn, gearBtn, closeBtn);
+    side.append(noteBtn, this.followBtn, this.tapBtn, this.sleepBtn, this.saveBtn, gearBtn, closeBtn);
 
     this.bar.append(
       this.playBtn,
@@ -340,9 +372,8 @@ export class ControlBar {
       // row and the transport controls would otherwise stretch across the whole width.
       this.make('span', { class: 'spacer' }),
       this.make('span', { class: 'sep' }),
-      this.speedEl,
-      this.rateEl,
-      this.voiceEl,
+      speedBox,
+      this.voiceBtn,
       side,
     );
     // Column order is the stacking order on screen, bottom-up: the bar sits at the bottom, the
@@ -355,14 +386,13 @@ export class ControlBar {
     this.playBtn.addEventListener('click', () => (this.playing ? this.cb.onPause() : this.cb.onPlay()));
     this.prevBtn.addEventListener('click', () => this.cb.onPrev());
     this.nextBtn.addEventListener('click', () => this.cb.onNext());
-    this.snapBtn.addEventListener('click', () => this.cb.onSnapToCurrent());
+    this.followBtn.addEventListener('click', () => (this.cb.onFollow ? this.cb.onFollow() : this.cb.onSnapToCurrent()));
     this.tapBtn.addEventListener('click', () => {
       this.tapToSeek = !this.tapToSeek;
       this.reflectTapToSeek();
       this.cb.onToggleTapToSeek(this.tapToSeek);
     });
     this.speedEl.addEventListener('change', () => this.cb.onSpeed(Number(this.speedEl.value)));
-    this.voiceEl.addEventListener('change', () => this.cb.onVoice(this.voiceEl.value));
     gearBtn.addEventListener('click', () => this.cb.onOpenSettings());
     closeBtn.addEventListener('click', () => this.cb.onClose());
 
@@ -420,7 +450,7 @@ export class ControlBar {
     // Measure while it is still in place; once tucked it reports where it went, not where it was.
     if (tucked) this.covered = this.measureCovered();
     // Never while something needs the bar: a paused reader, an open menu, a message on screen.
-    if (tucked && (!this.playing || this.popover || this.flashing)) return;
+    if (tucked && (!this.autoHide || !this.playing || this.popover || this.flashing)) return;
     this.tucked = tucked;
     this.dock.classList.toggle('is-tucked', tucked);
   }
@@ -580,64 +610,85 @@ export class ControlBar {
 
   // ---- public API ----------------------------------------------------------
 
-  /** Populate the in-bar voice picker. Pass an empty list to hide it. */
   /**
-   * The voice picker: every downloaded voice, from every engine, grouped "Engine · language".
-   * `current` is an `engine:voice` value (see shared/voice-catalog.ts); picking a voice of another
-   * engine switches engine, which the session handles like any voice change.
+   * The voices the bar offers: downloaded, and not hidden in Settings. `current` is the
+   * `engine:voice` reading now. Picking one of another engine switches engine, which the session
+   * handles like any voice change.
    */
-  setVoices(voices: EngineVoice[], current: string, opts: { downloadedOnly?: boolean } = {}): void {
-    if (!voices.length) {
-      this.voiceEl.hidden = true;
-      return;
-    }
-
-    // The bar is narrow: "Alba · medium" was cut to "Alba · mediu…". Just the name, then — with the
-    // quality or gender kept only where two voices on the list share a name (Alba medium and Alba
-    // high), and the whole label in the tooltip.
-    const nameOf = (v: EngineVoice): string => v.label.split(' · ')[0] ?? v.label;
-    const named = new Map<string, number>();
-    for (const v of voices) named.set(`${v.engine}:${nameOf(v)}`, (named.get(`${v.engine}:${nameOf(v)}`) ?? 0) + 1);
-    const option = (v: EngineVoice): HTMLOptionElement => {
-      const value = voiceValue(v.engine, v.id);
-      const shared = (named.get(`${v.engine}:${nameOf(v)}`) ?? 0) > 1;
-      const o = this.make('option', { value, title: v.label }, shared ? v.label : nameOf(v));
-      if (value === current) o.selected = true;
-      return o;
-    };
-
-    const groups: HTMLElement[] = [];
-    for (const engine of ENGINE_IDS) {
-      const ofEngine = voices.filter((v) => v.engine === engine);
-      if (!ofEngine.length) continue;
-      const name = engineInfo(engine).name;
-      for (const [language, items] of groupByLanguage(ofEngine)) {
-        const group = this.make('optgroup', { label: language ? `${name} · ${readableLanguage(language)}` : name });
-        group.append(...items.map((v) => option(v as EngineVoice)));
-        groups.push(group);
-      }
-    }
-
-    this.voiceEl.replaceChildren(
-      ...groups,
-      // Says what the list is, in the list. The bar offers only voices already on the device —
-      // choosing one here should never start a 60 MB download in the middle of an article — and
-      // a picker that silently holds back most of the catalogue owes the reader that sentence.
-      ...(opts.downloadedOnly
-        ? [this.make('option', { value: '', disabled: '' }, '— downloaded voices · add more in Settings —')]
-        : []),
-    );
-    this.voiceEl.value = current;
-    this.voiceEl.title = opts.downloadedOnly
-      ? 'Voice — every voice downloaded to this device, from any engine. Add more in Settings.'
-      : 'Voice';
-    this.voiceEl.hidden = false;
+  setVoices(voices: BarVoice[], current: string): void {
+    this.voices = voices;
+    this.voiceBtn.hidden = voices.length === 0 && !current;
+    this.selectVoice(current);
   }
 
-  /** Sync the in-bar toggle when the setting was changed elsewhere (e.g. the options page). */
-  /** Show `value` as the voice reading now, when it is one of the picker's options. */
+  /** Show `value` as the voice reading now (the passage's voice, which may not be the main one). */
   selectVoice(value: string): void {
-    if ([...this.voiceEl.options].some((o) => o.value === value)) this.voiceEl.value = value;
+    if (!value) return;
+    this.currentVoice = value;
+    const voice = this.voices.find((v) => v.value === value);
+    this.voiceName.textContent = voice?.name ?? value.split(':')[1] ?? value;
+    this.voiceFace.replaceChildren(this.avatar(voice ?? null, 24));
+    this.voiceBtn.hidden = false;
+    this.refreshVoiceTitle();
+    const body = this.popover?.button === this.voiceBtn ? this.popover.menu : null;
+    if (body) this.renderVoiceMenu(body);
+  }
+
+  /** Slide out of the way while scrolling down (true), or stay put (false). */
+  setAutoHide(on: boolean): void {
+    this.autoHide = on;
+    if (!on) this.setTucked(false);
+  }
+
+  /** On, on but resting while you look elsewhere on the page, or off. */
+  setFollow(state: FollowState, offScreen = false): void {
+    this.followState = state;
+    this.followBtn.setAttribute('aria-pressed', String(state !== 'off'));
+    this.followBtn.classList.toggle('on', state === 'on');
+    this.followBtn.classList.toggle('offscreen', state === 'away' || (state === 'off' && offScreen));
+    this.followBtn.title =
+      state === 'on'
+        ? 'Following the reading — click to stop'
+        : state === 'away'
+          ? 'Paused while you look around — click to go back to the sentence being read'
+          : 'Not following — click to go to the sentence being read and follow it';
+  }
+
+  /** A voice's face: its portrait, or the one stand-in avatar. */
+  private avatar(voice: BarVoice | null, size: number): HTMLElement {
+    const box = this.make('span', { class: 'avatar' });
+    box.style.width = box.style.height = `${size}px`;
+    box.append(genericAvatar(this.doc, size));
+    const file = voice?.portrait;
+    if (file && this.cb.loadPortrait) {
+      let loading = this.portraits.get(file);
+      if (!loading) {
+        loading = this.cb.loadPortrait(file).catch(() => null);
+        this.portraits.set(file, loading);
+      }
+      void loading.then((url) => {
+        if (!url) return;
+        const img = this.make('img', { alt: '', src: url, width: String(size), height: String(size), draggable: 'false' });
+        box.replaceChildren(img);
+      });
+    }
+    return box;
+  }
+
+  private refreshVoiceTitle(): void {
+    const voice = this.voices.find((v) => v.value === this.currentVoice);
+    const info = this.languageInfo;
+    const name = voice?.name ?? this.voiceName.textContent ?? '';
+    const state = !info
+      ? ''
+      : info.manual
+        ? ' · one voice for this page'
+        : info.skipped
+          ? ` · ${info.name} skipped, no voice downloaded`
+          : info.missing
+            ? ` · no ${info.name} voice downloaded`
+            : '';
+    this.voiceBtn.title = `${name}${info?.name ? ` reading ${info.name}` : ''}${state} — voices and language`;
   }
 
   setTapToSeek(on: boolean): void {
@@ -662,19 +713,6 @@ export class ControlBar {
     if (this.theme === theme) return;
     this.theme = theme;
     this.applyTheme();
-  }
-
-  /**
-   * Light the snap button up while the sentence being read is off screen.
-   *
-   * This is the only control that advertises itself, and deliberately: someone who has scrolled
-   * away to look at something else has no other cue that Aloud can take them back.
-   */
-  setCurrentOffScreen(offScreen: boolean): void {
-    this.snapBtn.classList.toggle('offscreen', offScreen);
-    this.snapBtn.title = offScreen
-      ? 'The sentence being read is off screen — click to scroll back to it'
-      : 'Scroll to the sentence being read';
   }
 
   /**
@@ -727,7 +765,7 @@ export class ControlBar {
     const settingUp = state.status === 'extracting' || state.status === 'loading-model';
     this.prevBtn.disabled = settingUp;
     this.nextBtn.disabled = settingUp;
-    this.snapBtn.disabled = settingUp || state.totalChunks === 0;
+    this.followBtn.disabled = settingUp || state.totalChunks === 0;
   }
 
   focus(): void {
@@ -749,102 +787,159 @@ export class ControlBar {
 
   // ---- language and voice --------------------------------------------------
 
-  /** Show the language of the passage being read and the voice reading it; null hides it. */
+  /** The language of the passage being read, on the voice button and in its menu. */
   setLanguage(info: LanguageInfo | null): void {
     this.languageInfo = info;
-    this.langBtn.hidden = !info;
-    if (!info) {
-      if (this.popover?.button === this.langBtn) this.closePopover();
-      return;
-    }
-    this.langBtn.textContent = (info.language || '?').toUpperCase();
-    this.langBtn.classList.toggle('missing', info.missing && !info.manual);
-    this.langBtn.classList.toggle('manual', info.manual);
-    const state = info.manual
-      ? ' · one voice for this page'
-      : info.skipped
-        ? ' · skipped, no voice downloaded'
-        : info.missing
-          ? ` · no ${info.name} voice downloaded`
-          : '';
-    this.langBtn.title = `${info.name || 'Language unknown'} · ${info.voiceLabel}${state}`;
-    const body = this.popover?.button === this.langBtn ? this.popover.menu : null;
-    if (body) this.renderLanguageMenu(body);
+    this.voiceBadge.hidden = !info?.language;
+    this.voiceBadge.textContent = (info?.language ?? '').toUpperCase();
+    this.voiceBtn.classList.toggle('missing', !!info && info.missing && !info.manual);
+    this.voiceBtn.classList.toggle('manual', !!info?.manual);
+    this.refreshVoiceTitle();
+    const body = this.popover?.button === this.voiceBtn ? this.popover.menu : null;
+    if (body) this.renderVoiceMenu(body);
   }
 
-  /** Open the language menu — from a flash that points at it. */
+  /** Open the voice menu — from a flash that points at it. */
   openLanguageMenu(): void {
-    if (this.languageInfo && this.popover?.button !== this.langBtn) this.toggleLanguageMenu();
+    if (this.popover?.button !== this.voiceBtn) this.toggleVoiceMenu();
   }
 
-  private toggleLanguageMenu(): void {
-    if (this.popover?.button === this.langBtn) {
+  private toggleVoiceMenu(): void {
+    if (this.popover?.button === this.voiceBtn) {
       this.closePopover();
       return;
     }
-    const menu = this.make('div', { class: 'pop-menu export-menu lang-menu', role: 'dialog', 'aria-label': 'Language and voice' });
-    this.renderLanguageMenu(menu);
-    this.openPopover(this.langBtn, menu);
-    menu.querySelector<HTMLElement>('select, button')?.focus({ preventScroll: true });
+    const menu = this.make('div', { class: 'pop-menu voice-menu', role: 'dialog', 'aria-label': 'Voice and language' });
+    this.renderVoiceMenu(menu);
+    this.openPopover(this.voiceBtn, menu);
+    menu.querySelector<HTMLElement>('.voice-row.is-current, .voice-row, button')?.focus({ preventScroll: true });
   }
 
-  private renderLanguageMenu(menu: HTMLElement): void {
+  /**
+   * One menu for both: the passage — its language, with a way to correct it — and the voices,
+   * with faces, the passage's language first. What a pick does is the session's (it may make the
+   * voice that language's, or lock the page to it), and it says which.
+   */
+  private renderVoiceMenu(menu: HTMLElement): void {
     const info = this.languageInfo;
-    if (!info) return;
     const hadFocus = this.root.activeElement instanceof HTMLElement && menu.contains(this.root.activeElement);
-    menu.replaceChildren(this.make('div', { class: 'menu-title' }, 'Language and voice'));
-    const text = (t: string): void => void menu.appendChild(this.make('p', { class: 'menu-text' }, t));
-    const action = (label: string, run: () => void, primary = false): void => {
-      const b = this.make('button', { type: 'button', class: primary ? 'primary' : '' }, label);
+    const listScroll = menu.querySelector('.voice-list')?.scrollTop ?? 0;
+    menu.replaceChildren();
+    const text = (t: string, cls = 'menu-text'): HTMLElement => {
+      const p = this.make('p', { class: cls }, t);
+      menu.appendChild(p);
+      return p;
+    };
+    const action = (label: string, run: () => void, cls = ''): void => {
+      const b = this.make('button', { type: 'button', class: `menu-action ${cls}` }, label);
       b.addEventListener('click', run);
       menu.appendChild(b);
     };
-    const picker = (label: string, options: Array<{ value: string; label: string }>, value: string, change: (v: string) => void): void => {
+
+    // ---- the passage ----
+    const current = this.voices.find((v) => v.value === this.currentVoice) ?? null;
+    const head = this.make('div', { class: 'voice-head' });
+    const who = this.make('div', { class: 'voice-head-text' });
+    who.append(
+      this.make('b', {}, current?.name ?? this.voiceName.textContent ?? ''),
+      this.make(
+        'span',
+        {},
+        info
+          ? info.language
+            ? `Reading ${info.name} · ${info.how}`
+            : 'Language not known'
+          : (current?.meta ?? ''),
+      ),
+    );
+    head.append(this.avatar(current, 40), who);
+    menu.appendChild(head);
+
+    if (info) {
       const row = this.make('label', { class: 'menu-field' });
-      const select = this.make('select', { 'aria-label': label });
-      for (const o of options) {
-        const option = this.make('option', { value: o.value }, o.label);
-        if (o.value === value) option.selected = true;
-        select.appendChild(option);
+      const select = this.make('select', { 'aria-label': 'This passage is in' });
+      const languages = info.languages.some((l) => l.code === info.language) || !info.language
+        ? info.languages
+        : [{ code: info.language, name: info.name }, ...info.languages];
+      for (const l of languages) {
+        const o = this.make('option', { value: l.code }, l.name);
+        if (l.code === info.language) o.selected = true;
+        select.appendChild(o);
       }
-      select.addEventListener('change', () => change(select.value));
-      row.append(this.make('span', {}, label), select);
+      select.addEventListener('change', () => this.cb.onPassageLanguage?.(select.value));
+      row.append(this.make('span', {}, 'This passage is in'), select);
       menu.appendChild(row);
-    };
 
-    const name = info.name || 'an unknown language';
-    text(`This passage is in ${name} (${info.how}), read by ${info.voiceLabel}.`);
-    const languages = info.languages.some((l) => l.code === info.language)
-      ? info.languages
-      : [{ code: info.language, name: info.name || 'Unknown' }, ...info.languages];
-    picker('It is in', languages.map((l) => ({ value: l.code, label: l.name })), info.language, (code) => this.cb.onPassageLanguage?.(code));
-
-    if (info.manual) {
-      text(`Every passage on this page is read by ${info.voiceLabel}, whatever its language.`);
-      action('Follow the language again', () => this.cb.onVoiceLock?.(false), true);
-      return this.refocus(menu, hadFocus);
+      if (info.language && info.missing && !info.manual) {
+        text(
+          info.skipped
+            ? `No ${info.name} voice is downloaded, so ${info.name} passages are skipped.`
+            : `No ${info.name} voice is downloaded — ${info.voiceLabel} reads ${info.name} with its own pronunciation.`,
+          'menu-text warn',
+        );
+        const actions = this.make('div', { class: 'menu-actions' });
+        menu.appendChild(actions);
+        const add = (label: string, run: () => void, primary = false): void => {
+          const b = this.make('button', { type: 'button', class: primary ? 'primary' : '' }, label);
+          b.addEventListener('click', run);
+          actions.appendChild(b);
+        };
+        add(`Get a ${info.name} voice`, () => this.cb.onMissingVoice?.(info.language, 'get'), true);
+        if (info.skipped) add('Read them anyway', () => this.cb.onMissingVoice?.(info.language, 'read'));
+        else add(`Skip ${info.name}`, () => this.cb.onMissingVoice?.(info.language, 'skip'));
+      }
     }
-    if (info.language && info.missing) {
-      text(
-        info.skipped
-          ? `No ${info.name} voice is downloaded, so ${info.name} passages are skipped.`
-          : `No ${info.name} voice is downloaded, so ${info.voiceLabel} reads ${info.name} with its own pronunciation.`,
-      );
-      action(`Get a ${info.name} voice`, () => this.cb.onMissingVoice?.(info.language, 'get'), true);
-      if (info.skipped) action(`Read ${info.name} passages anyway`, () => this.cb.onMissingVoice?.(info.language, 'read'));
-      else action(`Skip ${info.name} passages`, () => this.cb.onMissingVoice?.(info.language, 'skip'));
-    } else if (info.language && info.voices.length > 1 && info.auto) {
-      picker(`${info.name} voice`, info.voices, info.preferred || info.voices[0]!.value, (value) =>
-        this.cb.onLanguageVoice?.(info.language, value),
-      );
-    }
-    if (info.auto) action(`Read this whole page with ${info.voiceLabel}`, () => this.cb.onVoiceLock?.(true));
-    else text('Voices do not follow the language: that is turned off in the settings.');
-    this.refocus(menu, hadFocus);
-  }
 
-  private refocus(menu: HTMLElement, hadFocus: boolean): void {
-    if (hadFocus) menu.querySelector<HTMLElement>('button.primary, select, button')?.focus({ preventScroll: true });
+    // ---- the voices, the passage's language first ----
+    const list = this.make('div', { class: 'voice-list', role: 'listbox', 'aria-label': 'Voices' });
+    const lang = info?.language ?? '';
+    const groups = new Map<string, BarVoice[]>();
+    for (const v of this.voices) {
+      const key = v.language || '';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(v);
+    }
+    const order = [...groups.keys()].sort((a, b) =>
+      a === lang ? -1 : b === lang ? 1 : readableLanguage(a).localeCompare(readableLanguage(b)),
+    );
+    for (const key of order) {
+      list.appendChild(this.make('div', { class: 'voice-group' }, key ? readableLanguage(key) : 'Other'));
+      for (const v of groups.get(key)!) {
+        const selected = v.value === this.currentVoice;
+        const row = this.make('button', {
+          type: 'button',
+          role: 'option',
+          'aria-selected': String(selected),
+          class: `voice-row${selected ? ' is-current' : ''}`,
+        });
+        const label = this.make('span', { class: 'voice-row-text' });
+        label.append(this.make('b', {}, v.name), this.make('span', {}, v.meta));
+        row.append(this.avatar(v, 28), label);
+        row.addEventListener('click', () => {
+          this.closePopover();
+          if (v.value !== this.currentVoice) this.cb.onVoice(v.value);
+        });
+        list.appendChild(row);
+      }
+    }
+    if (!this.voices.length) list.appendChild(this.make('p', { class: 'menu-text' }, 'No voices downloaded yet.'));
+    menu.appendChild(list);
+    list.scrollTop = listScroll;
+
+    // ---- how voices are chosen ----
+    if (info?.manual) {
+      text('This page is read by one voice, whatever the language.');
+      action('Switch voices with the language again', () => this.cb.onVoiceLock?.(false), 'primary');
+    } else if (info?.auto) {
+      action(`Read this whole page with ${current?.name ?? 'this voice'}`, () => this.cb.onVoiceLock?.(true));
+    } else if (info) {
+      text('Voices do not switch with the language — that is turned off in Settings.');
+    }
+    action('Choose which voices appear here…', () => {
+      this.closePopover();
+      this.cb.onManageVoices?.();
+    }, 'subtle');
+    if (hadFocus) menu.querySelector<HTMLElement>('.voice-row.is-current, .voice-row, button')?.focus({ preventScroll: true });
   }
 
   // ---- sleep timer ---------------------------------------------------------

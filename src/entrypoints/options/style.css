@@ -624,3 +624,31 @@ code {
 }
 @keyframes page-busy { from { transform: translateX(-100%); } to { transform: translateX(350%); } }
 @media (prefers-reduced-motion: reduce) { .page-busy::after { animation: none; width: 100%; opacity: .5; } }
+
+/* Voices put away: dimmed when listed, folded away otherwise (voice-panels.ts: hideControl). */
+.voice-item.is-hidden { opacity: .55; }
+.voice-item.is-hidden:hover { opacity: .85; }
+.vi-actions .vi-hide { color: var(--fg-muted); }
+.vi-actions .vi-hide.is-hidden { color: var(--fg); }
+.hidden-bar {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  margin: 8px 4px 2px; padding-top: 8px; border-top: 1px dashed var(--border);
+}
+
+/* Voice for each language. */
+.lang-voice-section { margin: 18px 0 20px; }
+.lang-voice-section h3 { margin: 0 0 4px; font-size: 15px; }
+.lang-voice-section > p { margin: 0 0 8px; line-height: 1.5; }
+.lang-voices { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.lang-voices.is-off { opacity: .5; }
+.lang-voice-row {
+  display: grid; grid-template-columns: 40px minmax(0, 1fr) minmax(0, 260px);
+  align-items: center; column-gap: 12px; padding: 7px 10px; border-radius: 11px;
+}
+.lang-voice-row:hover { background: var(--surface-2); }
+.lang-voice-row select { width: 100%; }
+.row-hint.flush { margin-left: 0; }
+@media (max-width: 560px) {
+  .lang-voice-row { grid-template-columns: 40px minmax(0, 1fr); row-gap: 6px; }
+  .lang-voice-row select { grid-column: 1 / -1; }
+}

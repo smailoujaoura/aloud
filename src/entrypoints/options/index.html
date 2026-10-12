@@ -204,6 +204,14 @@
           <output id="speedOut"></output>
         </label>
 
+        <section class="lang-voice-section" aria-labelledby="langVoiceHeading">
+          <h3 id="langVoiceHeading">Voice for each language</h3>
+          <p class="muted small">A passage in one of these languages is read by the voice shown for it. Automatic uses
+            your voice where it speaks the language, otherwise the best downloaded voice that does — and never a hidden
+            one while another is available.</p>
+          <div id="languageVoiceList"></div>
+        </section>
+
         <!-- Stays put while the list under it scrolls, so the engine you are looking at and the
              search that filters it are never scrolled away from what they act on. -->
         <div class="voice-toolbar">
@@ -242,11 +250,10 @@
           <input type="checkbox" id="tapToSeek" />
           <span>Click a sentence in the page to jump there</span>
         </label>
-        <label class="row check">
-          <input type="checkbox" id="matchPageLanguage" />
-          <span>Switch voices with the language: each passage in another language is read by a downloaded voice for it</span>
-        </label>
-        <div id="languageVoices" class="language-voices" hidden></div>
+        <p class="row-hint flush">
+          Which voice reads each language is set under
+          <a href="#voice" data-view="voice" class="nav-item-inline">Voice → Voice for each language</a>.
+        </p>
         <label class="row check">
           <input type="checkbox" id="skipUrls" />
           <span>Say “link” instead of reading URLs aloud</span>
@@ -278,6 +285,11 @@
         <p class="row-hint">
           Applies to the reading bar, this page, the PDF reader and the walkthrough.
         </p>
+        <label class="row check">
+          <input type="checkbox" id="barAutoHide" />
+          <span>Hide the reading bar while I scroll down the page
+            <small class="check-hint muted">It comes back when you scroll up, point at the bottom of the window, or pause. Off: it stays where it is.</small></span>
+        </label>
         <label class="row check">
           <input type="checkbox" id="highlight" />
           <span>Highlight the sentence being read</span>

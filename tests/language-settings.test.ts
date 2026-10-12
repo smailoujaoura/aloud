@@ -26,3 +26,12 @@ describe('languageVoices setting', () => {
     expect(sanitizeSettings({ ...DEFAULT_SETTINGS, languageVoices: 'nope' } as unknown as Settings).languageVoices).toEqual({});
   });
 });
+
+describe('hidden voices and the bar', () => {
+  it('keeps the bar in place by default, and only well-formed hidden voices', () => {
+    expect(DEFAULT_SETTINGS.barAutoHide).toBe(false);
+    const s = sanitizeSettings({ ...DEFAULT_SETTINGS, barAutoHide: 'yes', hiddenVoices: ['kokoro:af_alloy', 'kokoro:af_alloy', 'nope', 3, 'piper:en_US-amy-low'] } as unknown as Settings);
+    expect(s.barAutoHide).toBe(false);
+    expect(s.hiddenVoices).toEqual(['kokoro:af_alloy', 'piper:en_US-amy-low']);
+  });
+});

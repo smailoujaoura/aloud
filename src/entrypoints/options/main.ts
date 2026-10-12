@@ -161,33 +161,6 @@ function voiceLabel(engine: EngineId, voiceId: string): string {
   return listVoices(engine, manifestCache).find((v) => v.id === voiceId)?.label ?? voiceId;
 }
 
-/**
- * The voices chosen per language from the reading bar ("Italian is read by Paola from now on"),
- * each with a way to forget it. Nothing to show until one has been chosen.
- */
-function renderLanguageVoices(): void {
-  const host = $('languageVoices');
-  const entries = Object.entries(settings.languageVoices).sort(([a], [b]) => languageName(a).localeCompare(languageName(b)));
-  host.hidden = entries.length === 0;
-  host.replaceChildren();
-  if (!entries.length) return;
-  host.append(el(document, 'p', { class: 'sub-label' }, 'Voices chosen for a language from the reading bar, on every page'));
-  const list = el(document, 'div', { class: 'site-chips' });
-  for (const [code, ref] of entries) {
-    const label = `${languageName(code)}: ${voiceLabel(ref.engine, ref.voice)}`;
-    const chip = el(document, 'span', { class: 'site-chip' }, label);
-    const forget = el(document, 'button', { type: 'button', class: 'chip-x', title: `Forget ${label}`, 'aria-label': `Forget ${label}` }, '✕');
-    forget.addEventListener('click', () => {
-      const next = { ...settings.languageVoices };
-      delete next[code];
-      void save({ languageVoices: next }).then(renderLanguageVoices);
-    });
-    chip.append(forget);
-    list.append(chip);
-  }
-  host.append(list);
-}
-
 // ---- render ----------------------------------------------------------------
 
 /** `rgba(r, g, b, a)` -> `#rrggbb`, for the native colour input. */
@@ -430,8 +403,8 @@ async function renderNow(): Promise<void> {
   $<HTMLInputElement>('sentencePauseMs').value = String(settings.sentencePauseMs);
   $('sentencePauseOut').textContent = `${(settings.sentencePauseMs / 1000).toFixed(2)}s`;
   $<HTMLInputElement>('tapToSeek').checked = settings.tapToSeek;
-  $<HTMLInputElement>('matchPageLanguage').checked = settings.matchPageLanguage;
-  renderLanguageVoices();
+  $<HTMLInputElement>('barAutoHide').checked = settings.barAutoHide;
+
   $<HTMLInputElement>('skipUrls').checked = settings.skipUrls;
   $<HTMLInputElement>('expandAbbreviations').checked = settings.expandAbbreviations;
   for (const [id, key] of SKIP_SWITCHES) $<HTMLInputElement>(id).checked = settings.skip[key];
@@ -455,8 +428,35 @@ async function renderNow(): Promise<void> {
     useVoice,
     flashSaved,
     flashError: (message: string) => toast(message, 'error'),
+    setHiddenVoices: async (next) => {
+      const was = settings.hiddenVoices.length;
+      settings = await setSettings({ hiddenVoices: next });
+      await render();
+      toast(
+        next.length > was
+          ? `${next.length - was === 1 ? 'Hidden' : `${next.length - was} voices hidden`} — from this list and the reading bar`
+          : 'Shown again, here and on the reading bar',
+        'info',
+      );
+    },
+    setLanguageVoice: async (language, voice) => {
+      const next = { ...settings.languageVoices };
+      if (voice) next[language] = voice;
+      else delete next[language];
+      settings = await setSettings({ languageVoices: next });
+      await render();
+      flashSaved(voice ? `${languageName(language)} will be read by ${voiceLabel(voice.engine, voice.voice)}` : `${languageName(language)}: automatic`);
+    },
+    setAutoLanguage: async (on) => {
+      settings = await setSettings({ matchPageLanguage: on });
+      await render();
+      flashSaved(on ? 'Voices switch with the language' : 'One voice for every language');
+    },
   };
-  renderVoiceSection({ nowReading: $('nowReading'), tabs: $('engineTabs'), panel: $('enginePanels') }, ctx);
+  renderVoiceSection(
+    { nowReading: $('nowReading'), languages: $('languageVoiceList'), tabs: $('engineTabs'), panel: $('enginePanels') },
+    ctx,
+  );
 
   void refreshUsage();
   void refreshPositionsHint();
@@ -590,7 +590,7 @@ function wire(): void {
     save({ wordHighlight: (e.target as HTMLSelectElement).value as Settings['wordHighlight'] }),
   );
   wireCheckbox('tapToSeek', 'tapToSeek');
-  wireCheckbox('matchPageLanguage', 'matchPageLanguage');
+  wireCheckbox('barAutoHide', 'barAutoHide');
   wireCheckbox('skipUrls', 'skipUrls');
   wireCheckbox('expandAbbreviations', 'expandAbbreviations');
   for (const [id, key] of SKIP_SWITCHES) {

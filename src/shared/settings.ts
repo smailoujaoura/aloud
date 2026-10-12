@@ -258,6 +258,14 @@ export interface Settings {
    * English with Alba", set once. Used by Auto; a voice no longer downloaded is passed over.
    */
   languageVoices: Record<string, VoiceRef>;
+  /**
+   * Voices put away (`engine:voice`): left out of the reading bar's voice menu and folded away in
+   * Settings, so a model with dozens of voices shows only the ones kept. Still downloaded, and
+   * still used when chosen for a language or as the voice reading.
+   */
+  hiddenVoices: string[];
+  /** The reading bar slides away while you scroll down the page, and comes back when you scroll up. */
+  barAutoHide: boolean;
   /** Colour theme for every surface Aloud draws. */
   theme: ThemeChoice;
   /**
@@ -295,6 +303,8 @@ export const DEFAULT_SETTINGS: Settings = {
   skip: DEFAULT_SKIP,
   matchPageLanguage: true,
   languageVoices: {},
+  hiddenVoices: [],
+  barAutoHide: false,
   theme: 'system',
   tipsSeen: false,
   debug: false,
@@ -435,6 +445,10 @@ export function sanitizeSettings(raw: Settings): Settings {
     wordHighlight: oneOf(raw.wordHighlight, ['darker', 'underline', 'off'] as const, DEFAULT_SETTINGS.wordHighlight),
     highlightColor: typeof raw.highlightColor === 'string' && raw.highlightColor ? raw.highlightColor : DEFAULT_SETTINGS.highlightColor,
     languageVoices: languageVoices(raw.languageVoices),
+    hiddenVoices: Array.isArray(raw.hiddenVoices)
+      ? [...new Set(raw.hiddenVoices.filter((v): v is string => typeof v === 'string' && /^(piper|kokoro|supertonic):[\w.-]{1,80}$/.test(v)))]
+      : [],
+    barAutoHide: raw.barAutoHide === true,
     pronunciations: Array.isArray(raw.pronunciations)
       ? raw.pronunciations.filter((r) => !!r && typeof r.from === 'string' && typeof r.to === 'string')
       : [],

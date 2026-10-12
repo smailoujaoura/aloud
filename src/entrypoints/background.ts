@@ -272,6 +272,11 @@ export default defineBackground({
         // For the reader in a page: fetched here, so models.json need not be web-accessible —
         // every file a page can reach is one it can use to recognise the extension.
         return replyWith(loadManifest().catch(() => null));
+      } else if (m?.type === 'voice-portrait') {
+        // A voice's face for the reading bar's menu: the portraits are not web-accessible (any page
+        // could probe for them to recognise Aloud), so they travel as data, one file at a time.
+        const file = (m as { file?: unknown }).file;
+        return replyWith(typeof file === 'string' && /^\/portraits\/[a-z0-9_-]+\.webp$/.test(file) ? portraitDataUrl(file).catch(() => null) : Promise.resolve(null));
       } else if (m?.type === 'icon-data-url') {
         // The media overlay's artwork, likewise handed over rather than exposed to pages.
         return replyWith(iconDataUrl().catch(() => null));
@@ -336,6 +341,7 @@ export default defineBackground({
           if (tabId != null) setBadge(tabId, badgeFor(msg.state.status));
         } else if (msg.type === 'open-options') {
           if (msg.language && /^[a-z]{2,3}$/.test(msg.language)) void openVoicesFor(msg.language);
+          else if (msg.view === 'voice') void openVoicesFor();
           else void browser.runtime.openOptionsPage();
         } else if (msg.type === 'open-walkthrough') {
           void openWalkthrough();
@@ -598,6 +604,23 @@ async function loadManifest(): Promise<ModelManifest> {
 
 let iconCache: string | null = null;
 /** The 128 px icon as a data: URL (accepted as media artwork everywhere, unlike extension URLs). */
+const portraitCache = new Map<string, Promise<string>>();
+
+function portraitDataUrl(file: string): Promise<string> {
+  let cached = portraitCache.get(file);
+  if (!cached) {
+    cached = (async () => {
+      const bytes = new Uint8Array(await (await fetch(browser.runtime.getURL(file as '/icon/128.png'))).arrayBuffer());
+      let binary = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      return `data:image/webp;base64,${btoa(binary)}`;
+    })();
+    cached.catch(() => portraitCache.delete(file));
+    portraitCache.set(file, cached);
+  }
+  return cached;
+}
+
 async function iconDataUrl(): Promise<string> {
   if (iconCache) return iconCache;
   const bytes = new Uint8Array(await (await fetch(browser.runtime.getURL('/icon/128.png'))).arrayBuffer());
@@ -890,9 +913,9 @@ async function focusWindow(windowId: number | undefined): Promise<void> {
 }
 
 /** Show the Library at `tab`, reusing its tab if one is open. */
-/** The Voice settings, showing the voices for one language (`it`). */
-async function openVoicesFor(language: string): Promise<void> {
-  const url = `${browser.runtime.getURL(LIBRARY_PAGE)}?language=${language}#voice`;
+/** The Voice settings — showing the voices for one language (`it`), when one is given. */
+async function openVoicesFor(language?: string): Promise<void> {
+  const url = `${browser.runtime.getURL(LIBRARY_PAGE)}${language ? `?language=${language}` : ''}#voice`;
   const existing = await findOwnTab(LIBRARY_PAGE);
   if (existing) {
     try {

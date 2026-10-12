@@ -10,6 +10,7 @@
  * absent.
  */
 
+import { SmoothScroller, scrollerOf } from './smooth-scroll';
 import type { WordHighlightStyle } from '@/shared/settings';
 import { backgroundUnder, cssColor, parseColor, readableTextColor, toneOf, washFor, type PageTone } from './contrast';
 
@@ -31,6 +32,8 @@ const DARK_INK = '#101014';
 const LIGHT_INK = '#ffffff';
 const STYLE_ID = 'aloud-highlight-style';
 const SPAN_CLASS = 'aloud-hl-span';
+/** Where a followed sentence is set: this far down the visible part of the page. */
+const READING_LINE = 0.32;
 
 export type ScrollMode = 'off' | 'keep-visible' | 'snap';
 
@@ -68,7 +71,18 @@ export class Highlighter {
     this.supportsCSSHighlight =
       typeof CSS !== 'undefined' && 'highlights' in CSS && typeof Highlight !== 'undefined';
     this.reduceMotion = doc.defaultView?.matchMedia('(prefers-reduced-motion: reduce)').matches ?? false;
+    this.scroller = doc.defaultView ? new SmoothScroller(doc.defaultView, this.reduceMotion) : null;
     this.injectStyle();
+  }
+
+  private readonly scroller: SmoothScroller | null;
+  /** Following rests while the reader looks elsewhere on the page (see `setFollowPaused`). */
+  private followPaused = false;
+
+  /** Rest following (the reader scrolled away to look at something), or take it up again. */
+  setFollowPaused(paused: boolean): void {
+    this.followPaused = paused;
+    if (paused) this.scroller?.cancel();
   }
 
   /** Whether the text being highlighted sits on a light or a dark background (see `paint`). */
@@ -152,7 +166,7 @@ export class Highlighter {
     } else {
       this.showWithSpan(range);
     }
-    if (this.opts.scrollMode !== 'off') this.scrollIntoView(range);
+    if (this.opts.scrollMode !== 'off' && !this.followPaused) this.scrollIntoView(range);
   }
 
   /**
@@ -209,14 +223,17 @@ export class Highlighter {
     const el = range.startContainer.parentElement;
     if (!el) return false;
     this.lastScroll = Date.now();
-    el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: this.reduceMotion ? 'auto' : 'smooth' });
+    this.moveTo(el, rect, READING_LINE);
     return true;
   }
 
   /**
-   * Bring the sentence into the part of the window that is actually visible: above the reading
-   * bar, not merely inside the window. Centring in the whole window used to park the sentence
-   * behind the bar whenever it landed in the bottom third.
+   * Keep the sentence where it can be read: above the reading bar, not merely inside the window.
+   *
+   * `keep-visible` lets the sentence travel down the page and moves only when it nears an edge —
+   * then sets it on the reading line, a third of the way down, so the next several sentences
+   * follow on without moving the page again. `snap` sets every sentence on that line. Either way
+   * the page glides there (smooth-scroll.ts) rather than jumping or re-centring.
    */
   private scrollIntoView(range: Range): void {
     const snap = this.opts.scrollMode === 'snap';
@@ -225,32 +242,30 @@ export class Highlighter {
     const rect = range.getBoundingClientRect();
     if (rect.width === 0 && rect.height === 0) return;
     const view = this.doc.defaultView!;
-    const covered = Math.max(0, this.opts.bottomInset?.() ?? 0);
-    const visible = view.innerHeight - covered;
+    const visible = view.innerHeight - Math.max(0, this.opts.bottomInset?.() ?? 0);
     const margin = visible * 0.15;
     const outOfView = rect.top < margin || rect.bottom > visible - margin;
     if (!snap && !outOfView) return;
-    this.lastScroll = now;
-    const behavior: ScrollBehavior = this.reduceMotion ? 'auto' : 'smooth';
+    // Snap: a sentence already on the line, give or take a little, is left where it is.
+    if (snap && Math.abs(rect.top - visible * READING_LINE) < visible * 0.06) return;
     const el = range.startContainer.parentElement;
     if (!el) return;
+    this.lastScroll = now;
+    this.moveTo(el, rect, READING_LINE);
+  }
 
-    // A paragraph taller than the visible area cannot be centred usefully: centring it can leave
-    // the sentence itself off-screen. When the window is what scrolls, move by the sentence.
-    const scroller = this.doc.scrollingElement;
-    const windowScrolls = !!scroller && scroller.scrollHeight > view.innerHeight + 1;
-    if (windowScrolls && el.getBoundingClientRect().height > visible - 2 * margin) {
-      const target = rect.height > visible - 2 * margin ? margin : (visible - rect.height) / 2;
-      view.scrollBy({ top: rect.top - target, behavior });
-      return;
-    }
-
-    // Otherwise let the browser do it — it also knows about scrolling containers inside the page —
-    // with a scroll margin as tall as the bar, which lifts "centre" into the visible part.
-    const previous = el.style.scrollMarginBottom;
-    el.style.scrollMarginBottom = `${covered}px`;
-    el.scrollIntoView({ block: 'center', inline: 'nearest', behavior });
-    el.style.scrollMarginBottom = previous;
+  /** Glide so `rect` (inside `el`) stands at `line` (a fraction) of the visible height. */
+  private moveTo(el: Element, rect: DOMRect, line: number): void {
+    const view = this.doc.defaultView!;
+    const covered = Math.max(0, this.opts.bottomInset?.() ?? 0);
+    const container = scrollerOf(el);
+    const box = container ? container.getBoundingClientRect() : { top: 0, bottom: view.innerHeight - covered };
+    const height = Math.max(1, Math.min(box.bottom, view.innerHeight - covered) - box.top);
+    // A sentence taller than the space below the line starts higher, so all of it can be seen.
+    const target = rect.height > height * (1 - line) - 16 ? Math.max(8, (height - rect.height) / 2) : height * line;
+    const delta = rect.top - box.top - target;
+    if (this.scroller) this.scroller.by(container, delta);
+    else el.scrollIntoView({ block: 'center' });
   }
 
   /** Whether this browser can mark a word inside the sentence (the CSS Custom Highlight API). */
@@ -343,6 +358,7 @@ export class Highlighter {
   }
 
   dispose(): void {
+    this.scroller?.dispose();
     this.clear();
     if (this.supportsCSSHighlight) {
       for (const name of [HIGHLIGHT_NAME, DARK_TEXT_NAME, LIGHT_TEXT_NAME, WORD_HIGHLIGHT_NAME, WORD_DARK_TEXT_NAME, WORD_LIGHT_TEXT_NAME]) {

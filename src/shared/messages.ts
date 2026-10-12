@@ -50,7 +50,7 @@ export type ToBackgroundMessage =
   | { type: 'session-started' }
   | { type: 'session-ended' }
   /** `language`: open the voices for that language (`it`) — a voice the reader is missing. */
-  | { type: 'open-options'; language?: string }
+  | { type: 'open-options'; language?: string; view?: 'voice' }
   | { type: 'open-walkthrough' }
   | { type: 'open-library'; tab?: LibraryTab };
 

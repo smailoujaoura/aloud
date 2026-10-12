@@ -298,6 +298,8 @@ try {
     plan = await storyPlan();
     if (!plan.find((p) => /^One day an acorn/.test(p.text))?.read) await fail('a translation revealed during reading did not become readable');
     step('story: a translation revealed during reading is read');
+    // E2E_SHOT=<path>: a picture of the page with the reading bar, to see the bar as Firefox lays it out.
+    if (process.env.E2E_SHOT) await page.screenshot({ path: process.env.E2E_SHOT });
   };
 
   // E2E_STORY_ONLY=1: the bilingual story alone. It needs the reading plan, not a voice — for when

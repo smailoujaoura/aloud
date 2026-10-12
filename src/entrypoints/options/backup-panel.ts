@@ -49,6 +49,11 @@ export function renderBackupPanel(host: HTMLElement, opts: BackupPanelOptions): 
   const exportBtn = el(document, 'button', { type: 'button', class: 'primary' }, 'Download a backup');
   const exportNote = el(document, 'p', { class: 'muted small' }, 'Settings, voices chosen and downloaded, keys, colours, notes, the queue, history, reading positions, video speeds and PDF marks. The voice models themselves are not in the file — they are downloaded again on restore.');
   exportBtn.addEventListener('click', () => void exportBackup(opts).catch((err) => opts.toast(`Could not make the backup: ${String(err)}`, 'error')));
+  // Your setup without your reading: to set up another browser the way you like it, or to keep a
+  // known-good default — no notes, queue, history or statistics in the file.
+  const settingsBtn = el(document, 'button', { type: 'button' }, 'Download settings only');
+  settingsBtn.title = 'Settings, voices chosen and downloaded, and keyboard shortcuts — no notes, history, queue or statistics';
+  settingsBtn.addEventListener('click', () => void exportBackup(opts, true).catch((err) => opts.toast(`Could not save the settings: ${String(err)}`, 'error')));
 
   const file = el(document, 'input', { type: 'file', accept: '.json,application/json', hidden: '' }) as HTMLInputElement;
   const importBtn = el(document, 'button', { type: 'button' }, 'Restore from a file…');
@@ -66,12 +71,13 @@ export function renderBackupPanel(host: HTMLElement, opts: BackupPanelOptions): 
   });
 
   const exportRow = el(document, 'div', { class: 'backup-row' });
-  exportRow.append(exportBtn, importBtn, file);
+  exportRow.append(exportBtn, settingsBtn, importBtn, file);
   host.replaceChildren(exportRow, exportNote, result);
 }
 
-async function exportBackup(opts: BackupPanelOptions): Promise<void> {
-  const all = (await browser.storage.local.get(null)) as Record<string, unknown>;
+async function exportBackup(opts: BackupPanelOptions, settingsOnly = false): Promise<void> {
+  const stored = (await browser.storage.local.get(null)) as Record<string, unknown>;
+  const all = settingsOnly ? { settings: stored.settings } : stored;
   const backup = makeBackup(all, {
     aloud: browser.runtime.getManifest().version,
     models: await installedModels(opts.manifest),
@@ -79,13 +85,13 @@ async function exportBackup(opts: BackupPanelOptions): Promise<void> {
   });
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
-  const a = el(document, 'a', { href: url, download: backupFileName() });
+  const a = el(document, 'a', { href: url, download: settingsOnly ? backupFileName().replace('aloud-backup', 'aloud-settings') : backupFileName() });
   document.body.append(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
   const d = describeBackup(backup);
-  opts.toast(`Backup saved — ${d.notes}, ${d.settings.toLowerCase()}`, 'ok');
+  opts.toast(settingsOnly ? `Settings saved — ${d.settings.toLowerCase()}, and keyboard shortcuts` : `Backup saved — ${d.notes}, ${d.settings.toLowerCase()}`, 'ok');
 }
 
 async function installedModels(manifest: ModelManifest): Promise<BackupModels> {
