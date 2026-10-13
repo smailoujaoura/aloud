@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Aloud on your graphics card</title>
+<meta name="description" content="Why Aloud's most natural voices run faster on your graphics card, why turning WebGPU on is safe, and how to do it in Chrome, Edge, Brave, Opera, Vivaldi and Firefox.">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="canonical" href="https://aloud.souj.dev/gpu.html">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,400..700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+:root {
+  color-scheme: light;
+  --bg: #fbfbfd; --surface: #ffffff; --surface-2: #f2f2f6;
+  --ink: #17171c; --ink-muted: #54545f; --ink-faint: #6e6e7a;
+  --rule: rgba(20, 20, 35, 0.13); --amber: #8a6300; --ok: #1f7a4d;
+  --display: "Literata", Georgia, serif;
+  --sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #101014; --surface: #191920; --surface-2: #22222b;
+    --ink: #ececf1; --ink-muted: #b0afbd; --ink-faint: #918fa0;
+    --rule: rgba(255, 255, 255, 0.12); --amber: #ffd60a; --ok: #4ade80;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #101014; --surface: #191920; --surface-2: #22222b;
+  --ink: #ececf1; --ink-muted: #b0afbd; --ink-faint: #918fa0;
+  --rule: rgba(255, 255, 255, 0.12); --amber: #ffd60a; --ok: #4ade80;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.65 var(--sans); -webkit-font-smoothing: antialiased; }
+a { color: inherit; text-underline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; border-radius: 4px; }
+.top { border-bottom: 1px solid var(--rule); }
+.top div, main, footer div { max-width: 44rem; margin-inline: auto; padding-inline: 16px; }
+.top div { display: flex; align-items: center; justify-content: space-between; padding-block: 14px; }
+.brand { display: flex; align-items: center; gap: 10px; font: 700 1.15rem/1 var(--display); text-decoration: none; }
+.brand img { width: 28px; height: 28px; }
+.top a.back { font-size: 0.93rem; color: var(--ink-muted); text-decoration: none; }
+main { padding-block: 48px 64px; }
+.eyebrow { font: 500 0.75rem/1.2 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--amber); margin: 0 0 12px; }
+h1 { font: 700 clamp(2rem, 6vw, 2.8rem)/1.1 var(--display); letter-spacing: -0.015em; margin: 0 0 16px; }
+h2 { font: 650 1.35rem/1.25 var(--display); margin: 40px 0 10px; }
+p, li { color: var(--ink-muted); }
+p { margin: 0 0 14px; }
+strong { color: var(--ink); }
+ul { padding-left: 1.2em; margin: 0 0 14px; }
+li { margin-bottom: 6px; }
+.summary { padding: 20px 22px; border: 1px solid var(--rule); border-left: 3px solid var(--ok); border-radius: 12px; background: var(--surface); }
+.summary p { margin: 0; color: var(--ink); }
+.updated { font-size: 0.9rem; color: var(--ink-faint); }
+table { width: 100%; border-collapse: collapse; font-size: 0.95rem; margin: 6px 0 14px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--rule); }
+th { font: 500 0.72rem var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-faint); background: var(--surface-2); }
+td:first-child { color: var(--ink); white-space: nowrap; font: 500 0.88rem var(--mono); }
+td { color: var(--ink-muted); }
+@media (max-width: 560px) { td:first-child { white-space: normal; } }
+footer { border-top: 1px solid var(--rule); padding-block: 28px 40px; font-size: 0.9rem; color: var(--ink-muted); }
+
+.cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 10px 0 18px; }
+@media (max-width: 620px) { .cards { grid-template-columns: minmax(0, 1fr); } }
+.card { padding: 16px 18px; border: 1px solid var(--rule); border-radius: 12px; background: var(--surface); }
+.card h3 { font: 650 1.02rem/1.3 var(--display); margin: 0 0 6px; color: var(--ink); }
+.card p { margin: 0; font-size: 0.95rem; }
+.card.caveat { border-left: 3px solid var(--amber); }
+.speed { display: grid; gap: 10px; margin: 18px 0 8px; }
+.speed-row { display: grid; grid-template-columns: 9.5rem minmax(0, 1fr) 6.5rem; align-items: center; gap: 12px; font-size: 0.92rem; }
+.speed-row span:first-child { color: var(--ink); font-weight: 600; }
+.speed-row span:last-child { font: 500 0.8rem var(--mono); color: var(--ink-faint); text-align: right; }
+.speed-bar { height: 12px; border-radius: 6px; background: var(--surface-2); overflow: hidden; position: relative; }
+.speed-bar i { position: absolute; inset: 0 auto 0 0; border-radius: 6px; background: var(--amber-solid, #ffd60a); }
+.speed-bar i.cpu { background: var(--rule); }
+.speed-bar::after { content: ""; position: absolute; top: -3px; bottom: -3px; left: var(--rt, 50%); width: 2px; background: var(--ink-faint); }
+@media (max-width: 560px) { .speed-row { grid-template-columns: minmax(0, 1fr) 5.5rem; } .speed-bar { grid-column: 1 / -1; grid-row: 2; } }
+details.browser { margin: 10px 0; border: 1px solid var(--rule); border-radius: 12px; background: var(--surface); }
+details.browser > summary { cursor: pointer; list-style: none; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; gap: 12px; color: var(--ink); font-weight: 600; }
+details.browser > summary::-webkit-details-marker { display: none; }
+details.browser > summary small { font-weight: 400; color: var(--ink-faint); font-size: 0.85rem; }
+details.browser > summary::after { content: "+"; font: 500 1.2rem/1 var(--mono); color: var(--ink-faint); }
+details.browser[open] > summary::after { content: "–"; }
+details.browser > div { padding: 0 18px 14px; }
+details.browser ol { padding-left: 1.3em; }
+code { font: 0.86em var(--mono); background: var(--surface-2); border: 1px solid var(--rule); border-radius: 5px; padding: 1px 6px; overflow-wrap: anywhere; color: var(--ink); }
+.copy { font: 600 0.75rem/1 var(--sans); padding: 4px 9px; margin-left: 4px; border-radius: 999px; cursor: pointer; border: 1px solid var(--rule); background: var(--surface); color: var(--ink); vertical-align: 1px; }
+.check { padding: 18px 20px; border: 1px solid var(--rule); border-left: 3px solid var(--ok); border-radius: 12px; background: var(--surface); }
+.check p:last-child { margin: 0; }
+:root { --amber-solid: #ffd60a; }
+</style>
+</head>
+<body>
+<header class="top"><div><a class="brand" href="./"><img src="assets/icon.svg" alt="">Aloud</a><a class="back" href="./">← Back to Aloud</a></div></header>
+<main>
+  <p class="eyebrow">Speed</p>
+  <h1>Let the voice use your graphics card.</h1>
+  <p>Aloud's most natural voices are neural networks, and a neural network is a great deal of arithmetic. Your processor can do it, but your graphics card was built for exactly this kind of work. Browsers let web pages and extensions use it through a standard called <strong>WebGPU</strong>. This page explains what changes when Aloud can use it, why it is safe, and how to turn it on where your browser leaves it off.</p>
+
+  <div class="speed" aria-label="How fast each voice is made, compared with real time">
+    <div class="speed-row"><span>Kokoro, processor</span><span class="speed-bar" style="--rt:33%"><i class="cpu" style="width:11%"></i></span><span>~3× too slow</span></div>
+    <div class="speed-row"><span>Kokoro, graphics card</span><span class="speed-bar" style="--rt:33%"><i style="width:100%"></i></span><span>faster than speech</span></div>
+    <div class="speed-row"><span>Piper, either</span><span class="speed-bar" style="--rt:33%"><i style="width:90%"></i></span><span>always fast</span></div>
+  </div>
+  <p class="updated">The line marks real time: the voice has to be made at least as fast as it is spoken. Measured on one machine; yours will differ. On the processor alone Aloud runs several copies of the voice side by side so Kokoro can still keep up, but it is slower to start and works harder. Piper is fast anywhere and never needs the graphics card.</p>
+
+  <h2>First, see where you stand</h2>
+  <div class="check">
+    <p>Open Aloud's settings and go to <strong>Advanced</strong>. Aloud starts its real voice worker and asks it whether it can reach your graphics card, then tells you in one sentence, naming your graphics card if it can. That answer is more reliable than any table on a website, including the one below: it is your browser, your drivers and your machine.</p>
+    <p>If it already says the voice runs on your graphics card, there is nothing to do.</p>
+  </div>
+
+  <h2>Is it safe to turn on?</h2>
+  <p>Yes. It does not install anything, give Aloud new permissions, or open a way in to your computer. Here is why, and the one honest caveat.</p>
+  <div class="cards">
+    <div class="card"><h3>It is a web standard</h3><p>WebGPU is the W3C successor to WebGL, which every browser has shipped for over a decade. Chrome and Edge have had WebGPU on by default since 2023, Safari ships it, and Firefox has it on by default on Windows. Turning it on elsewhere switches on the same code.</p></div>
+    <div class="card"><h3>Nothing touches your driver directly</h3><p>Pages and extensions never talk to the graphics driver. They hand the browser a description of the work; the browser checks every instruction, rejects anything out of bounds, and runs it from its own sandboxed graphics process.</p></div>
+    <div class="card"><h3>Nothing leaves your device</h3><p>The graphics card only does the voice's arithmetic, on the machine in front of you. Aloud sends nothing anywhere either way, and needs no extra permission to use it.</p></div>
+    <div class="card"><h3>Aloud has a safety net</h3><p>If the graphics card refuses part of the work, or gives up halfway through an article, Aloud notices, tells you, and carries on with the processor. You never lose your place.</p></div>
+    <div class="card caveat"><h3>The caveat</h3><p>Where a browser still keeps WebGPU off, it is because it is still being tested on that system and some drivers. The realistic worst case is a glitch or a crashed tab, not harm to your computer. And it is a browser setting: every site you visit can then use WebGPU, as they already can in Chrome. Like WebGL, it tells sites what kind of graphics card you have.</p></div>
+    <div class="card"><h3>You can undo it in seconds</h3><p>Every step below is reversible: the setting's reset button puts it back exactly as it was.</p></div>
+  </div>
+
+  <h2>Turn it on</h2>
+
+  <details class="browser" open>
+    <summary>Chrome, Edge, Brave, Opera, Vivaldi <small>on by default</small></summary>
+    <div>
+      <p>On Windows, macOS and ChromeOS there is usually nothing to do. If Aloud's check says it has no graphics card:</p>
+      <ol>
+        <li>Open the browser's settings, go to <strong>System</strong>, and make sure <strong>Use graphics acceleration when available</strong> is on. Relaunch if you change it.</li>
+        <li>Open <code>chrome://gpu</code> <button class="copy" type="button" data-copy="chrome://gpu">Copy</button> and look for <strong>WebGPU: Hardware accelerated</strong>. If it says disabled, your graphics driver may be on the browser's list of drivers it does not trust; updating the driver is the real fix.</li>
+        <li>In Aloud's settings, press <strong>Check for a GPU again</strong>.</li>
+      </ol>
+      <p><strong>On Linux</strong>, Chrome turns WebGPU on for some graphics cards and not others yet. If <code>chrome://gpu</code> shows it disabled, open <code>chrome://flags/#enable-unsafe-webgpu</code> <button class="copy" type="button" data-copy="chrome://flags/#enable-unsafe-webgpu">Copy</button>, enable it, and relaunch. Despite the name, “unsafe” here means “skip Chrome's list of drivers it has not tested”, not “turn off security”: the checks and the sandbox described above still apply. A Vulkan-capable driver is needed.</p>
+    </div>
+  </details>
+
+  <details class="browser" open>
+    <summary>Firefox <small>two settings, a minute</small></summary>
+    <div>
+      <p>Firefox has WebGPU, and on Windows it is already on for web pages. But Aloud makes its voice in a <em>background worker</em>, and Firefox switches WebGPU off for workers separately. So:</p>
+      <ol>
+        <li>Open a new tab, type <code>about:config</code> into the address bar, and accept the warning.</li>
+        <li>Search for <code>dom.webgpu.enabled</code> <button class="copy" type="button" data-copy="dom.webgpu.enabled">Copy</button>. If it is <strong>false</strong>, double-click it to make it <strong>true</strong>.</li>
+        <li>Search for <code>dom.webgpu.workers.enabled</code> <button class="copy" type="button" data-copy="dom.webgpu.workers.enabled">Copy</button> and make it <strong>true</strong>. This is the one that matters for Aloud.</li>
+        <li>Only if hardware acceleration is off on your machine: set <code>gfx.webrender.all</code> <button class="copy" type="button" data-copy="gfx.webrender.all">Copy</button> to <strong>true</strong>.</li>
+        <li>Restart Firefox, then press <strong>Check for a GPU again</strong> in Aloud's Advanced settings.</li>
+      </ol>
+      <p>Aloud's settings show these steps too, with copy buttons, whenever Firefox is the reason the voice is on the processor.</p>
+      <p><strong>To undo it</strong>, search for the same names in <code>about:config</code> and click the reset arrow beside each.</p>
+    </div>
+  </details>
+
+  <details class="browser">
+    <summary>Firefox for Android <small>use Piper</small></summary>
+    <div>
+      <p>Firefox on Android does not give extension workers a graphics card. Piper voices are made for exactly this: they read faster than real time on a phone's processor, in 49 languages. Kokoro works too, but too slowly to enjoy.</p>
+    </div>
+  </details>
+
+  <h2>Questions</h2>
+  <p><strong>Will it drain my battery?</strong> For the same article, a graphics card usually does the work in less time and less energy than several processor cores running flat out. On a laptop on battery, your system may still choose its power-saving graphics; that is fine.</p>
+  <p><strong>Does Aloud need it?</strong> No. Every voice works on the processor. The graphics card makes the most natural voices start sooner and keep well ahead of the reading.</p>
+  <p><strong>Does it change what Aloud can see?</strong> No. Aloud's permissions are the same with or without it; see the <a href="privacy.html">privacy policy</a>.</p>
+</main>
+<footer><div><p>Aloud is built by <a href="https://souj.dev">Smail Oujaoura</a>. This website has no analytics and sets no cookies; its fonts are served by Google Fonts.</p></div></footer>
+<script>
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-copy]');
+  if (!b) return;
+  navigator.clipboard?.writeText(b.dataset.copy).then(() => { const t = b.textContent; b.textContent = 'Copied'; setTimeout(() => (b.textContent = t), 1200); }, () => {});
+});
+</script>
+</body>
+</html>

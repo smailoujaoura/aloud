@@ -428,6 +428,53 @@ footer p + p { margin-top: 8px; }
 footer .by { text-align: right; }
 @media (max-width: 720px) { footer .by { text-align: left; } }
 footer .by b { color: var(--ink); }
+
+/* ---------- languages: a page in two languages, read in two voices ---------- */
+.lang-demo { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); gap: clamp(20px, 3vw, 36px); align-items: start; }
+@media (max-width: 900px) { .lang-demo { grid-template-columns: minmax(0, 1fr); } }
+.lang-page {
+  position: relative; padding: 24px clamp(18px, 3vw, 30px) 22px; border-radius: var(--radius);
+  background: var(--surface); border: 1px solid var(--rule); box-shadow: var(--shadow);
+  font-family: var(--display);
+}
+.lang-page .lp { position: relative; font-size: 1.02rem; line-height: 1.75; margin: 0 0 14px; padding-left: 46px; }
+.lang-page .lp .who {
+  position: absolute; left: 0; top: 2px; width: 34px; height: 34px; border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px var(--rule); transition: box-shadow 200ms;
+}
+.lang-page .lp .who img { width: 100%; height: 100%; border-radius: 50%; }
+.lang-page .lp .who b {
+  position: absolute; right: -8px; bottom: -6px; padding: 0 4px; border-radius: 5px;
+  font: 700 0.6rem/14px var(--sans); letter-spacing: 0.04em; background: var(--surface); box-shadow: 0 0 0 1px var(--rule-strong); color: var(--ink);
+}
+.lang-page .lp.on .who { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--amber-solid); }
+.lang-page .lp.en { color: var(--ink-muted); font-style: italic; }
+.lang-page .skipped {
+  display: flex; align-items: center; gap: 10px; margin: 0 0 14px 46px; font: 0.8rem/1.4 var(--sans); color: var(--ink-faint);
+}
+.lang-page .skipped s { padding: 4px 10px; border-radius: 6px; background: var(--surface-2); text-decoration-thickness: 1.5px; font: 600 0.72rem/1.2 var(--sans); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-faint); }
+.lang-play { margin-top: 6px; }
+.board { padding: 16px; border-radius: var(--radius); border: 1px solid var(--rule); display: grid; gap: 8px;
+  background: radial-gradient(circle at 1px 1px, var(--rule) 1px, transparent 0) 0 0 / 18px 18px, var(--surface); }
+.board .row { display: grid; grid-template-columns: 7.2rem 64px minmax(0, 1fr); align-items: center; gap: 0; padding: 4px 0; transition: opacity 200ms; }
+.board .lang { padding: 8px 12px; border-radius: 10px; background: var(--surface-2); font: 600 0.92rem/1.2 var(--sans); }
+.board .lang small { display: block; font-weight: 400; font-size: 0.72rem; color: var(--ink-faint); }
+.board svg { width: 64px; height: 36px; overflow: visible; }
+.board path { fill: none; stroke: var(--amber-solid); stroke-width: 2.5; stroke-linecap: round; }
+.board path.auto { stroke-dasharray: 5 6; animation: flow 1.6s linear infinite; }
+@keyframes flow { to { stroke-dashoffset: -22; } }
+@media (prefers-reduced-motion: reduce) { .board path.auto { animation: none; } }
+.board .who { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; font-weight: 600; }
+.board .who img { width: 40px; height: 40px; border-radius: 50%; box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--amber-solid); }
+.board .who span small { display: block; font-weight: 400; font-size: 0.72rem; color: var(--ink-faint); }
+.board.live .row { opacity: 0.45; }
+.board.live .row.on { opacity: 1; }
+.board-note { font-size: 0.85rem; color: var(--ink-faint); margin-top: 10px; }
+.lang-points { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px 28px; margin-top: clamp(32px, 4vw, 48px); }
+@media (max-width: 900px) { .lang-points { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .lang-points { grid-template-columns: minmax(0, 1fr); } }
+.gpu-link { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.audio-note { margin-top: 18px; font-size: 0.85rem; color: var(--ink-faint); }
 </style>
 </head>
 <!-- Before the store listings are live: data-stores="soon". Once they are: "live", and check the
@@ -439,6 +486,7 @@ footer .by b { color: var(--ink); }
     <a class="brand" href="#"><img src="assets/icon.svg" alt="">Aloud</a>
     <nav aria-label="Sections">
       <a href="#voices">Voices</a>
+      <a href="#languages">Languages</a>
       <a href="#see">See it</a>
       <a href="#features">Features</a>
       <a href="#privacy">Privacy</a>
@@ -454,7 +502,7 @@ footer .by b { color: var(--ink); }
       <div class="hero-copy">
         <p class="eyebrow">Free browser extension · Firefox, Android, Chrome</p>
         <h1>Listen to the web, <em>in a voice that lives on your device.</em></h1>
-        <p class="lede">Aloud turns any article or PDF into natural speech and lights up every word as it's read. The voice is a neural network running inside your browser, so it works offline and nothing you read is ever sent anywhere. No account, no subscription.</p>
+        <p class="lede">Aloud turns any article or PDF into natural speech and lights up every word as it's read. The voice is a neural network running inside your browser, so it works offline and nothing you read is ever sent anywhere. When the page changes language, so does the voice. No account, no subscription.</p>
         <div class="ctas">
           <a class="btn primary when-live" id="hero-install" href="#install">Get Aloud, it's free</a>
           <button class="btn primary when-soon" type="button" data-hear><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg>Hear it read</button>
@@ -477,7 +525,7 @@ footer .by b { color: var(--ink); }
             <button type="button" id="demo-prev" aria-label="Previous sentence"><svg viewBox="0 0 16 16"><path d="M5 2.5v11H3.5v-11z"/><path d="M13 2.5v11l-7-5.5z"/></svg></button>
             <button type="button" class="play" id="demo-play" aria-label="Play"><svg viewBox="0 0 16 16" id="demo-play-icon"><path d="M4 2.5v11l9-5.5z"/></svg></button>
             <button type="button" id="demo-next" aria-label="Next sentence"><svg viewBox="0 0 16 16"><path d="M11 2.5v11h1.5v-11z"/><path d="M3 2.5v11l7-5.5z"/></svg></button>
-            <div class="voice"><img src="assets/portraits/piper-alba.webp" alt=""><span>Alba · Piper</span></div>
+            <div class="voice"><img src="assets/portraits/piper-alba.webp" alt=""><span>Alba · EN</span></div>
             <button type="button" class="speed" id="demo-speed" aria-label="Reading speed: 1×. Change speed">1.0× · 185 wpm</button>
           </div>
           <div class="track" aria-hidden="true"><div class="fill" id="demo-fill"></div></div>
@@ -532,7 +580,7 @@ footer .by b { color: var(--ink); }
         <div class="engine">
           <h3>Kokoro-82M</h3>
           <p class="meta">41 voices · English, Spanish, French, Italian, Portuguese, Hindi · ~86 MB for all</p>
-          <p>The most natural-sounding of the three. On a graphics card it is both the richest voice and a fast one.</p>
+          <p>The most natural-sounding of the three. On a graphics card it is both the richest voice and a fast one. <a href="gpu.html">Using your graphics card →</a></p>
         </div>
         <div class="engine">
           <h3>Supertonic-2</h3>
@@ -553,7 +601,7 @@ footer .by b { color: var(--ink); }
             </tbody>
           </table>
         </div>
-        <p class="fit-note">Chrome and Firefox do equally well: what matters is whether the voice can reach your graphics card through WebGPU. Chrome has it on already. Firefox keeps it switched off for now, and it takes a minute to <a href="#firefox-webgpu" data-open="firefox-webgpu">turn on</a>. Aloud's settings test your machine and tell you which case you're in.</p>
+        <p class="fit-note">Chrome and Firefox do equally well: what matters is whether the voice can reach your graphics card through WebGPU. Chrome has it on already. Firefox keeps it switched off for now, and it takes a minute to <a href="#firefox-webgpu" data-open="firefox-webgpu">turn on</a>. Aloud's settings test your machine and tell you which case you're in. <a class="gpu-link" href="gpu.html">Why it's safe, and how to turn it on in every browser →</a></p>
         <details class="howto" id="firefox-webgpu">
           <summary>Turn on WebGPU in Firefox</summary>
           <ol>
@@ -566,6 +614,44 @@ footer .by b { color: var(--ink); }
           <p class="howto-note">To undo it, search for the same names and click the reset arrow next to each.</p>
         </details>
       </details>
+    </div>
+  </section>
+
+  <section id="languages">
+    <div class="wrap">
+      <div class="head measure">
+        <p class="eyebrow">Every language on the page</p>
+        <h2>An Italian story with English translations, read in two voices.</h2>
+        <p class="lede">Aloud works out the language of every paragraph, from the page's own markup, your browser's built-in language detector and the paragraphs around a short reply, and hands each one to a voice that speaks it. It reads only what the page shows: a collapsed translation or a "Translate?" button is passed over, and a translation you open while listening is read when it's reached.</p>
+      </div>
+      <div class="lang-demo">
+        <div>
+          <article class="lang-page" id="lang-page" aria-label="A bilingual story as Aloud reads it">
+            <p class="lp" lang="it" data-lang="it"><span class="who"><img src="assets/portraits/kokoro-if_sara.webp" alt=""><b>IT</b></span><span class="s">C'era una volta un pollo che si chiamava Pollo Piccolino.</span> <span class="s">Viveva in una fattoria insieme alla sua mamma e ai suoi fratelli.</span></p>
+            <p class="lp en" lang="en" data-lang="en"><span class="who"><img src="assets/portraits/kokoro-af_heart.webp" alt=""><b>EN</b></span><span class="s">Once upon a time there was a chicken called Chicken Little.</span> <span class="s">He lived on a farm with his mother and his brothers.</span></p>
+            <p class="lp" lang="it" data-lang="it"><span class="who"><img src="assets/portraits/kokoro-if_sara.webp" alt=""><b>IT</b></span><span class="s">Un giorno una ghianda gli cadde sulla testa, e il pollo corse dalla volpe.</span></p>
+            <p class="skipped"><s>Translate?</s> a button, and a translation still folded away: not read</p>
+          </article>
+          <button class="btn primary lang-play" type="button" id="lang-play"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span>Hear it switch voices</span></button>
+        </div>
+        <div>
+          <div class="board" id="lang-board" aria-label="Which voice reads which language">
+            <div class="row" data-lang="en"><span class="lang">English<small>your voice</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path class="auto" d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/kokoro-af_heart.webp" alt=""><span>Heart<small>Kokoro · US</small></span></span></div>
+            <div class="row" data-lang="it"><span class="lang">Italian<small>chosen by you</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/kokoro-if_sara.webp" alt=""><span>Sara<small>Kokoro · IT</small></span></span></div>
+            <div class="row" data-lang="fr"><span class="lang">French<small>auto</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path class="auto" d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/kokoro-ff_siwis.webp" alt=""><span>Siwis<small>Kokoro · FR</small></span></span></div>
+            <div class="row" data-lang="es"><span class="lang">Spanish<small>auto</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path class="auto" d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/kokoro-ef_dora.webp" alt=""><span>Dora<small>Kokoro · ES</small></span></span></div>
+            <div class="row" data-lang="hi"><span class="lang">Hindi<small>auto</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path class="auto" d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/kokoro-hf_alpha.webp" alt=""><span>Alpha<small>Kokoro · IN</small></span></span></div>
+          </div>
+          <p class="board-note">Aloud's voice settings, in miniature: each language wired to the voice that reads it. A solid wire is your choice; a moving one is Auto, which picks your voice where it speaks the language and the best one you keep where it doesn't.</p>
+        </div>
+      </div>
+      <div class="lang-points">
+        <div class="callout"><h3>A voice per language</h3><p>Italian with an Italian voice, English with an English one, on the same page, without a click. Up to three voice models stay ready at once.</p></div>
+        <div class="callout"><h3>Only what you can see</h3><p>Hidden translations, buttons dressed as text and closed sections are skipped. Open one while listening and it's read in its turn.</p></div>
+        <div class="callout"><h3>Your voices, kept tidy</h3><p>Choose a voice for each language once. Put away the voices you don't use, and the player only offers the ones you keep.</p></div>
+        <div class="callout"><h3>No voice? It says so</h3><p>A language you have no voice for is named, with a link to its voices or a way to skip it. Never read silently with the wrong accent.</p></div>
+      </div>
+      <p class="audio-note muted">The audio is Aloud's own: Kokoro's Sara and Heart reading this story in Chrome, recorded from the extension.</p>
     </div>
   </section>
 
@@ -583,22 +669,22 @@ footer .by b { color: var(--ink); }
         </picture>
       </figure>
       <div class="callouts">
-        <div class="callout"><h3>The sentence, lit up</h3><p>What's being read is highlighted where it sits. Scroll away, and one button brings you back to it.</p></div>
+        <div class="callout"><h3>The sentence, lit up</h3><p>What's being read is highlighted where it sits, and the page glides along with it. Scroll away to look at something and it lets you; Follow brings you back.</p></div>
         <div class="callout"><h3>Your highlights, kept</h3><p>Select, press <kbd>K</kbd>. While Aloud reads, your marks turn into underlines so the two never clash.</p></div>
-        <div class="callout"><h3>A bar that stays put</h3><p>Play, skip, speed, voice, save as MP3. It tucks away when you scroll and never jumps under your pointer.</p></div>
+        <div class="callout"><h3>A bar that stays put</h3><p>Play, skip, speed, the voice with its language, save as MP3. It never jumps under your pointer, and fits a phone. Hiding it while you scroll is a setting.</p></div>
         <div class="callout"><h3>Notes beside the text</h3><p>Press <kbd>Alt</kbd>+<kbd>N</kbd> for this page's notes, or search all of them. Each one is a click from its passage.</p></div>
       </div>
 
       <div class="shot-pair">
         <div class="copy">
           <p class="eyebrow">Settings that explain themselves</p>
-          <h2>Every voice has a face, a size and a preview.</h2>
-          <p>Choose by listening, not by reading model names. Aloud shows what each voice costs to download, what's already on this device, and how fast it reads in words a minute rather than a mysterious “1.4×”.</p>
+          <h2>Who reads what, drawn instead of listed.</h2>
+          <p>Every language you have a voice for, wired to the face that reads it. Click another face and the wire swings over. Below it, only the voices you keep, each with a preview, while the full catalogue of 222 stays folded until you want it.</p>
         </div>
         <figure class="shot">
           <picture>
             <source srcset="assets/shots/voice-dark.webp" media="(prefers-color-scheme: dark)">
-            <img src="assets/shots/voice-light.webp" width="1011" height="1158" loading="lazy" alt="Aloud's voice settings: the current voice Alba with a portrait, a speed slider showing 1.00× and 185 words a minute, tabs for the three engines, and a list of voices with preview and download buttons.">
+            <img src="assets/shots/voice-light.webp" width="1344" height="2020" loading="lazy" alt="Aloud's voice settings: Heart is the voice reading, and a board titled Who reads what wires English to Heart, French to Siwis, Hindi to Alpha, Italian to Sara, Portuguese and Spanish to Dora, each beside the other voices that could read it.">
           </picture>
         </figure>
       </div>
@@ -639,11 +725,13 @@ footer .by b { color: var(--ink); }
       </div>
       <div class="feats">
         <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h13"/><rect x="13" y="10" width="7" height="4" rx="1" fill="currentColor" stroke="none" opacity=".35"/></svg></span><h3>Word by word</h3><p>The sentence is shaded and the word being spoken marked inside it, timed from the voice's own pronunciation.</p></div>
-        <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M3 12h3l2-6 4 12 3-9 2 3h4"/></svg></span><h3>No gaps, no waiting</h3><p>Sentences are made a few ahead of the one you're hearing and played back to back. Uses your graphics card when it can.</p></div>
+        <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M3 12h3l2-6 4 12 3-9 2 3h4"/></svg></span><h3>No gaps, no waiting</h3><p>Sentences are made a few ahead of the one you're hearing and played back to back. Uses your graphics card when it can — <a href="gpu.html">here's how</a>.</p></div>
         <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z"/></svg></span><h3>Picks up where you stopped</h3><p>Come back tomorrow and land on the exact sentence, checked against the text so an edited page never resumes in the wrong place.</p></div>
         <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h4"/></svg></span><h3>PDFs, properly</h3><p>Real pages with figures and columns intact, the sentence highlighted on the page. Mark up, comment, and save the marks into the PDF.</p></div>
         <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/></svg></span><h3>Highlights and notes</h3><p>Press <kbd>K</kbd> to keep a passage in your colour. Marks are anchored to the text, so they survive the page changing. Export to Markdown.</p></div>
-        <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h9"/><path d="M17 16l4 2.5-4 2.5z" fill="currentColor"/></svg></span><h3>A reading queue</h3><p>Save articles for later and Aloud reads them one after another. Continue, Up next, Notes and History, all in one place.</p></div>
+        <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h9"/><path d="M17 16l4 2.5-4 2.5z" fill="currentColor"/></svg></span><h3>A reading queue</h3><p>Save articles for later and Aloud reads them one after another. Continue, Up next, Notes, History and Statistics, all in one place.</p></div>
+        <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span><h3>Your listening, counted <span class="new">New</span></h3><p>Words heard, time listened and documents finished, day by day, by site and by language. Only what you actually heard counts, and it never leaves your device.</p></div>
+        <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M4 6h11a4 4 0 0 1 0 8H9l-5 4z"/></svg></span><h3>Said the way people say it <span class="new">New</span></h3><p>“No!” he said. A reply and who said it come out as one line, French and Spanish dialogue included, and abbreviations like <i>Sig.</i> or <i>z. B.</i> don't end a sentence.</p></div>
         <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 20h14"/></svg></span><h3>Save as MP3</h3><p>Turn a whole article or PDF into one audio file, in your voice and speed, for a walk or a commute. There's a sleep timer too.</p></div>
         <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 3-6.2"/><path d="M4 3v5h5"/></svg></span><h3>Drifted off?</h3><p>One key goes back about ten seconds and shows you where that is on the page. Speed shows real words a minute.</p></div>
         <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5v5l4-2.5z" fill="currentColor"/></svg></span><h3>Every video, too <span class="new">New</span></h3><p>The same speed keys for any video or audio player on the web, remembered per site. Rewind and skip, even on YouTube Shorts. And it can stop videos playing by themselves.</p></div>
@@ -665,7 +753,7 @@ footer .by b { color: var(--ink); }
             <li>The speech itself: every sentence is made locally</li>
             <li>Your highlights and notes, and the tags on them</li>
             <li>Where you stopped in every article and PDF</li>
-            <li>Your reading queue and history</li>
+            <li>Your reading queue, history and listening statistics</li>
             <li>Settings, keys, colours and per-site video speeds</li>
           </ul>
         </div>
@@ -712,8 +800,8 @@ footer .by b { color: var(--ink); }
       </div>
       <ol class="pipe">
         <li><span class="where">Content script</span><h3>Extract</h3><p>Mozilla Readability strips navigation and ads and keeps the article.</p></li>
-        <li><span class="where">Content script</span><h3>Plan</h3><p>The text is normalised, split into sentences and mapped back to its exact place on the page.</p></li>
-        <li><span class="where">Worker pool</span><h3>Synthesise</h3><p>Neural voices run on ONNX Runtime Web: WebGPU where the browser allows it, parallel WebAssembly workers everywhere else.</p></li>
+        <li><span class="where">Content script</span><h3>Plan</h3><p>Only what the page shows is kept. Each paragraph's language is decided, the text is grouped into natural utterances and mapped back to its exact place on the page.</p></li>
+        <li><span class="where">Worker pool</span><h3>Synthesise</h3><p>Neural voices run on ONNX Runtime Web: WebGPU where the browser allows it, parallel WebAssembly workers everywhere else, up to three voice models side by side.</p></li>
         <li><span class="where">Web Audio</span><h3>Play and follow</h3><p>Audio is scheduled sample-accurately, back to back, while the sentence and word are highlighted in place.</p></li>
       </ol>
       <div class="eng">
@@ -722,7 +810,7 @@ footer .by b { color: var(--ink); }
         <div><h3>One codebase, three browsers</h3><p>Firefox, Firefox for Android and Chromium from one Manifest V3 codebase built with WXT. Differences are detected as capabilities, not guessed from the browser's name.</p></div>
         <div><h3>Isolated from the page</h3><p>Synthesis runs in a hidden extension frame that only accepts connections carrying a one-time ticket from the extension, so a hostile page can't drive it.</p></div>
         <div><h3>Safe with many tabs open</h3><p>Every saved change is serialised through a lock in the background, so two tabs saving notes at once can't silently overwrite each other.</p></div>
-        <div><h3>Tested by ear</h3><p>Over 300 automated tests, and every engine change is checked by transcribing its audio with speech recognition. The samples on this page were made the same way.</p></div>
+        <div><h3>Tested by ear</h3><p>Over 500 automated tests, and every engine change is checked by transcribing its audio with speech recognition. The samples on this page were made the same way.</p></div>
       </div>
       <ul class="stack" aria-label="Built with">
         <li>TypeScript</li><li>WXT</li><li>Manifest V3</li><li>ONNX Runtime Web</li><li>WebGPU</li><li>WebAssembly</li><li>Web Audio</li><li>CSS Custom Highlight API</li><li>pdf.js</li><li>Mozilla Readability</li><li>eSpeak NG</li><li>Vitest</li><li>Playwright</li>
@@ -771,7 +859,7 @@ footer .by b { color: var(--ink); }
   <div class="wrap">
     <div>
       <p><b>Aloud</b> is free software under GPL-3.0-or-later, because eSpeak NG, its phonemiser, is GPLv3. Voices come from Piper, Kokoro-82M and Supertonic-2, each under its own licence.</p>
-      <p>Built on Mozilla Readability, ONNX Runtime Web and pdf.js. <a href="privacy.html">Privacy policy</a>: Aloud collects nothing. <a class="source-link" href="https://github.com/smailoujaoura/aloud">Source code</a>.</p>
+      <p>Built on Mozilla Readability, ONNX Runtime Web and pdf.js. <a href="privacy.html">Privacy policy</a>: Aloud collects nothing. <a href="gpu.html">Using your graphics card</a>. <a class="source-link" href="https://github.com/smailoujaoura/aloud">Source code</a>.</p>
     </div>
     <p class="by">Designed and built by<br><a href="https://souj.dev"><b>Smail Oujaoura</b></a></p>
   </div>
@@ -887,6 +975,50 @@ footer .by b { color: var(--ink); }
     b.addEventListener('click', () => {
       document.getElementById('demo').scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
       play();
+    });
+  }
+
+  // ---- Two languages, two voices: the story as Aloud read it, Italian by Sara, English by Heart.
+  {
+    const btn = document.getElementById('lang-play');
+    const label = btn.querySelector('span');
+    const glyph = btn.querySelector('svg');
+    const showPlaying = (on) => { glyph.innerHTML = on ? PAUSE : PLAY; label.textContent = on ? 'Pause' : 'Hear it switch voices'; };
+    const board = document.getElementById('lang-board');
+    const spans = [...document.querySelectorAll('#lang-page .s')];
+    const rows = [...board.querySelectorAll('.row')];
+    const paras = [...document.querySelectorAll('#lang-page .lp')];
+    const story = new Audio();
+    story.preload = 'none';
+    let timing = null;
+    let raf = 0;
+    const clear = () => {
+      for (const s of spans) s.classList.remove('on');
+      for (const p of paras) p.classList.remove('on');
+      for (const r of rows) r.classList.remove('on');
+      board.classList.remove('live');
+    };
+    const stop = () => { cancelAnimationFrame(raf); clear(); showPlaying(false); };
+    const paint = () => {
+      if (!timing) return;
+      const t = story.currentTime;
+      const i = timing.sentences.findIndex((x) => t >= x.start && t < x.end + 0.25);
+      spans.forEach((s, n) => s.classList.toggle('on', n === i));
+      const para = i >= 0 ? spans[i].closest('.lp') : null;
+      paras.forEach((p) => p.classList.toggle('on', p === para));
+      const lang = i >= 0 ? timing.sentences[i].lang : '';
+      board.classList.toggle('live', !!lang);
+      rows.forEach((r) => r.classList.toggle('on', r.dataset.lang === lang));
+      if (!story.paused) raf = requestAnimationFrame(paint);
+    };
+    story.addEventListener('ended', stop);
+    btn.addEventListener('click', async () => {
+      if (!story.paused) { story.pause(); stop(); return; }
+      claim(story, stop);
+      timing ??= await fetch('assets/voices/bilingual.json').then((r) => r.json()).catch(() => null);
+      if (!story.src) story.src = 'assets/voices/bilingual.mp3';
+      showPlaying(true);
+      try { await story.play(); paint(); } catch { stop(); }
     });
   }
 

@@ -124,7 +124,11 @@ WebGPU. With it, Chromium and Firefox perform the same:
 | **Chromium or Firefox, CPU only** | **best choice — fast** | works, ~3× slower than real time | roughly real time |
 | **Firefox Android** | **the only sensible choice** | too slow | too large |
 
-Chromium has WebGPU on by default; Firefox desktop ships it switched off (see below).
+Chromium has WebGPU on by default; Firefox turns it on for pages on Windows but not for the
+workers Aloud synthesises in (see below). [Using your graphics card](https://aloud.souj.dev/gpu.html)
+explains, for readers rather than developers, why turning it on is safe and how to do it in each
+browser; Settings → Advanced links to it, and the reader mentions it once when Kokoro or
+Supertonic is running on the CPU.
 
 Firefox ships WebGPU switched off, and extensions get no `SharedArrayBuffer`
 ([bug 1673477](https://bugzilla.mozilla.org/show_bug.cgi?id=1673477)), so ONNX Runtime is stuck

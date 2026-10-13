@@ -273,6 +273,11 @@ export interface Settings {
    * time a reader session starts, so the card teaches the controls once and never again.
    */
   tipsSeen: boolean;
+  /**
+   * Whether the reader has once said that a slow voice is on the processor and how the graphics
+   * card would help (GPU_GUIDE_URL). Said once per profile, never as a nag.
+   */
+  gpuTipSeen: boolean;
   /** Verbose console logging. */
   debug: boolean;
 }
@@ -307,6 +312,7 @@ export const DEFAULT_SETTINGS: Settings = {
   barAutoHide: false,
   theme: 'system',
   tipsSeen: false,
+  gpuTipSeen: false,
   debug: false,
 };
 

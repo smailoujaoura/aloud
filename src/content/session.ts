@@ -52,6 +52,7 @@ import { anchorForRange } from '@/annotate/page-anchoring';
 import { recordListening } from '@/shared/reading-history';
 import { countWords, recordCompleted, recordHeard, type Heard } from '@/shared/listening-stats';
 import { log } from '@/shared/log';
+import { GPU_GUIDE_URL } from '@/shared/links';
 
 import { backendOf, tuningFor, type SynthBackend } from './engine-tuning';
 import { loadLastBackend, saveLastBackend, saveWorkerGpu } from '@/shared/backend-memory';
@@ -508,6 +509,7 @@ export class ReaderSession {
     // the about:config prefs stops being told their browser has no GPU access.
     if (executionProvider.startsWith('webgpu')) void saveWorkerGpu(true);
     log.info('engine ready', executionProvider, `${sampleRate}Hz`, `→ ${this.backend} tuning`);
+    this.maybeOfferGpuGuide(executionProvider);
     this.setStatus(this.wantsPlayback ? 'playing' : 'paused');
     if (this.pendingVoiceLabel) {
       this.bar?.flash(`${this.pendingVoiceLabel} ready`, 'ok');
@@ -523,6 +525,21 @@ export class ReaderSession {
 
   /** What the main voice was last loaded as (`engineIdentity`), to tell when it must change. */
   private loadedIdentity = '';
+
+  /**
+   * Kokoro or Supertonic on the processor is the one case where a setting elsewhere — the browser
+   * keeping WebGPU from workers — costs real speed. Say so once, with the way to fix it; Piper is
+   * fast anywhere and gets no tip, and someone who switched acceleration off chose that.
+   */
+  private maybeOfferGpuGuide(executionProvider: string): void {
+    if (this.settings.gpuTipSeen || !this.settings.preferWebGPU || this.engine === 'piper') return;
+    if (executionProvider.startsWith('webgpu')) return;
+    void setSettings({ gpuTipSeen: true });
+    this.bar?.flash(`${engineInfo(this.engine).name} is running on your processor — your graphics card would make it faster`, 'info', {
+      label: 'How',
+      run: () => window.open(GPU_GUIDE_URL, '_blank', 'noopener'),
+    });
+  }
 
   private async loadEngine(): Promise<void> {
     const reload = this.voiceReload;
