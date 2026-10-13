@@ -29,7 +29,7 @@ export const CONTROL_BAR_CSS = `
   --bar-bg: rgba(255,255,255,.92);
   --bar-solid: #ffffff;
   --bar-fg: #17171c;
-  --bar-muted: #5f5f6d;
+  --bar-muted: #4c4c59;
   --bar-hover: rgba(20,20,35,.07);
   --bar-active: rgba(20,20,35,.12);
   --bar-track: rgba(20,20,35,.14);
@@ -40,7 +40,7 @@ export const CONTROL_BAR_CSS = `
   --accent-on: #1c1c22;
   --accent-soft: rgba(255,214,10,.22);
   --danger: #c0392b;
-  --font: 13px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font: 13.5px/1.35 "Aloud Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 
   /* color-scheme is NOT set here: the host's inline "all: initial" outranks :host rules, so it
      is set inline from ControlBar.applyTheme() instead. */
@@ -50,7 +50,7 @@ export const CONTROL_BAR_CSS = `
   --bar-bg: rgba(24,24,30,.94);
   --bar-solid: #191920;
   --bar-fg: #f0f0f4;
-  --bar-muted: #a0a0ae;
+  --bar-muted: #b6b5c3;
   --bar-hover: rgba(255,255,255,.10);
   --bar-active: rgba(255,255,255,.16);
   --bar-track: rgba(255,255,255,.18);
@@ -65,7 +65,7 @@ export const CONTROL_BAR_CSS = `
     --bar-bg: rgba(24,24,30,.94);
     --bar-solid: #191920;
     --bar-fg: #f0f0f4;
-    --bar-muted: #a0a0ae;
+    --bar-muted: #b6b5c3;
     --bar-hover: rgba(255,255,255,.10);
     --bar-active: rgba(255,255,255,.16);
     --bar-track: rgba(255,255,255,.18);

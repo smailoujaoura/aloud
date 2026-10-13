@@ -12,6 +12,26 @@
  * `data-theme="light"` on a dark OS must still find every token.
  */
 
+/* Inter (SIL Open Font License, public/fonts/Inter-OFL.txt), shipped with Aloud so every page reads
+   the same on every system — Linux desktops in particular fell back to plain faces. Latin and
+   extended Latin only: other scripts use the system's own fonts, as before. */
+@font-face {
+  font-family: 'Inter Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('/fonts/inter-latin-ext.woff2') format('woff2-variations');
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Inter Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('/fonts/inter-latin.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
 :root {
   color-scheme: light;
 
@@ -20,9 +40,9 @@
   --surface-2: #f2f2f6;
   --surface-3: #e8e8ef;
   --fg: #17171c;
-  --fg-muted: #54545f;
-  --fg-faint: #73737f;
-  --border: rgba(20, 20, 35, 0.13);
+  --fg-muted: #4a4a55;
+  --fg-faint: #676774;
+  --border: rgba(20, 20, 35, 0.14);
   --border-strong: rgba(20, 20, 35, 0.28);
 
   /* Amber is Aloud's accent. `--accent` is the *text* amber (contrast-safe on the page
@@ -46,7 +66,7 @@
   /* `system-ui` first: on Linux that is the desktop's own UI face (Cantarell, Inter, Noto Sans)
      rather than the Helvetica-ish fallback the old stack landed on, and on Windows it picks the
      variable Segoe. The rest are the per-platform names for when `system-ui` is unavailable. */
-  --sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI",
+  --sans: 'Inter Variable', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI",
     Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
@@ -62,8 +82,8 @@
     --surface-2: #22222b;
     --surface-3: #2d2d38;
     --fg: #ececf1;
-    --fg-muted: #abaab8;
-    --fg-faint: #8d8d9c;
+    --fg-muted: #bebdcb;
+    --fg-faint: #9d9cac;
     --border: rgba(255, 255, 255, 0.13);
     --border-strong: rgba(255, 255, 255, 0.3);
 
@@ -89,8 +109,8 @@
   --surface-2: #22222b;
   --surface-3: #2d2d38;
   --fg: #ececf1;
-  --fg-muted: #abaab8;
-  --fg-faint: #8d8d9c;
+  --fg-muted: #bebdcb;
+  --fg-faint: #9d9cac;
   --border: rgba(255, 255, 255, 0.13);
   --border-strong: rgba(255, 255, 255, 0.3);
 
@@ -120,7 +140,9 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--fg);
-  font: 14.5px/1.6 var(--sans);
+  font: 15px/1.6 var(--sans);
+  font-feature-settings: 'cv11', 'ss03';
+  letter-spacing: -0.006em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;

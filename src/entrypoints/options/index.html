@@ -134,10 +134,6 @@
       <div class="view lib-view" id="view-history" data-view="history" role="region" aria-label="History" hidden>
         <header class="view-head"><h1>History</h1><p class="muted small">What you listened to, and how far you got.</p></header>
 
-        <p class="row-hint">
-          History travels in the backup file, with your notes and everything else —
-          <a href="#backup" data-view="backup" class="nav-item-inline">Backup &amp; restore</a>.
-        </p>
         <div class="panel-bar">
           <p class="muted small" id="historySummary"></p>
           <div class="panel-actions">
@@ -193,7 +189,7 @@
 <section class="voice-section" aria-labelledby="voiceHeading">
         <div class="section-head">
           <h2 id="voiceHeading">Voice</h2>
-          <p class="muted small">Downloaded once, then everything runs on this device.</p>
+
         </div>
 
         <div id="nowReading" class="now-card"><span class="skeleton sk-avatar"></span><span class="skeleton sk-line"></span></div>
@@ -252,10 +248,7 @@
           <input type="checkbox" id="tapToSeek" />
           <span>Click a sentence in the page to jump there</span>
         </label>
-        <p class="row-hint flush">
-          Which voice reads each language is set under
-          <a href="#voice" data-view="voice" class="nav-item-inline">Voice → Voice for each language</a>.
-        </p>
+        <p class="row-hint flush">Voices for each language: <a href="#voice" data-view="voice" class="nav-item-inline">Voice</a>.</p>
         <label class="row check">
           <input type="checkbox" id="skipUrls" />
           <span>Say “link” instead of reading URLs aloud</span>
@@ -272,7 +265,6 @@
           <label class="row check"><input type="checkbox" id="skipCaptions" /><span>Image and table captions</span></label>
           <label class="row check"><input type="checkbox" id="skipReferences" /><span>References, notes and “See also”</span></label>
         </div>
-        <p class="muted small">Skipped parts stay on the page — only the voice passes over them. A selection is always read as selected.</p>
       </section>
       </div>
 
@@ -284,13 +276,10 @@
           <!-- Built in main.ts, shared with the walkthrough (src/ui/theme-switch.ts). -->
           <span id="themeSwitchRow"></span>
         </label>
-        <p class="row-hint">
-          Applies to the reading bar, this page, the PDF reader and the walkthrough.
-        </p>
         <label class="row check">
           <input type="checkbox" id="barAutoHide" />
           <span>Hide the reading bar while I scroll down the page
-            <small class="check-hint muted">It comes back when you scroll up, point at the bottom of the window, or pause. Off: it stays where it is.</small></span>
+            <small class="check-hint muted">It comes back when you scroll up or pause.</small></span>
         </label>
         <label class="row check">
           <input type="checkbox" id="highlight" />
@@ -304,36 +293,23 @@
             <option value="off">Don't mark words</option>
           </select>
         </label>
-        <p class="row-hint">
-          Piper and Kokoro voices: their models report exactly when each sound plays, so the mark
-          stays on the word you hear. Supertonic highlights the sentence.
-        </p>
         <label class="row">
           <span>Highlight colour</span>
           <input type="color" id="highlightColor" />
         </label>
         <label class="row check">
           <input type="checkbox" id="highlightReadable" />
-          <span>Keep highlighted text readable</span>
+          <span>Keep highlighted text readable
+            <small class="check-hint muted">Hard-to-read text gets black or white letters under the highlight.</small></span>
         </label>
-        <p class="row-hint">
-          Some pages set text a shade that vanishes under a highlight — pale grey on white, or
-          light text on a dark page. Aloud measures each sentence against the colour it is about
-          to sit on and, only when it would be hard to read, gives that sentence black or white
-          letters. Every other sentence keeps the page’s own colours.
-        </p>
         <label class="row">
-          <span>Follow the reader</span>
+          <span>Follow the reading</span>
           <select id="scrollMode">
             <option value="off">Don’t scroll</option>
-            <option value="keep-visible">Keep the sentence visible</option>
-            <option value="snap">Snap the sentence to the centre</option>
+            <option value="keep-visible">Keep the sentence in view</option>
+            <option value="snap">Move with every sentence</option>
           </select>
         </label>
-        <p class="row-hint">
-          Whatever this says, the bar’s “scroll to the sentence being read” button always takes
-          you back to it on request.
-        </p>
       </section>
       </div>
 
@@ -341,10 +317,7 @@
 <section>
         <div class="section-head">
           <h2>Highlights &amp; notes</h2>
-          <p class="muted small">
-            Keep passages from any page — with your note and tags — and see them marked again
-            whenever you come back.
-          </p>
+          <p class="muted small">Keep passages from any page, marked again when you come back.</p>
         </div>
         <label class="row check">
           <input type="checkbox" id="annotateToolbar" />
@@ -359,10 +332,7 @@
 <section>
         <div class="section-head">
           <h2>Video &amp; audio speed</h2>
-          <p class="muted small">
-            Aloud’s other job: set the speed of any video or audio on a page — from the keyboard,
-            without the site’s own menu.
-          </p>
+          <p class="muted small">Speed up any video or audio from the keyboard.</p>
         </div>
         <label class="row check">
           <input type="checkbox" id="mediaSpeedEnabled" />
@@ -382,11 +352,7 @@
             <option value="reflow">Reflowed text</option>
           </select>
         </label>
-        <p class="muted small">
-          The original pages keep figures, tables and columns, and the sentence is highlighted on
-          the page itself. Reflowed text is easier on a small screen and follows the page’s text
-          size, but loses the document’s appearance.
-        </p>
+        <p class="muted small">Original pages keep figures and columns. Reflowed text suits a small screen.</p>
         <button id="openPdf">Open a PDF…</button>
       </section>
       </div>
@@ -420,7 +386,7 @@
           <span>Use WebGPU acceleration when available</span>
         </label>
         <p class="row-hint" id="webgpuHint"></p>
-        <p class="row-hint"><a class="gpu-guide" href="https://aloud.souj.dev/gpu.html" target="_blank" rel="noopener">Why turning on WebGPU is safe, and how to do it in every browser →</a></p>
+        <p class="row-hint"><a class="gpu-guide" href="https://aloud.souj.dev/gpu.html" target="_blank" rel="noopener">How to turn it on, and why it's safe →</a></p>
         <div class="gpu-actions">
           <button id="gpuRecheck" type="button">Check for a GPU again</button>
           <span class="muted small" id="gpuChecked"></span>
@@ -429,36 +395,26 @@
              that. Built in main.ts so each one gets a copy button. -->
         <details class="gpu-help" id="firefoxGpu" hidden>
           <summary>Make Kokoro fast on Firefox (about:config)</summary>
-          <p class="small">
-            Firefox has WebGPU, but ships it switched off — and switches it off separately for
-            web workers, which is where Aloud runs synthesis. Turning both on lets Kokoro run on
-            your graphics card: measured on a machine that did it, it went from roughly three
-            times slower than real time to faster than Piper.
-          </p>
+          <p class="small">Turn these on in <code>about:config</code>, so Kokoro runs on your graphics card:</p>
           <ol class="pref-list" id="prefList"></ol>
           <p class="small">
             Then restart Firefox and press <b>Check for a GPU again</b>.
           </p>
-          <p class="small muted">
-            These are experimental settings. If Firefox misbehaves afterwards — crashes, blank
-            pages, heavy battery use — set the same prefs back to <code>false</code> and Aloud
-            goes back to the CPU path on its own.
-          </p>
+          <p class="small muted">If Firefox misbehaves, set them back to <code>false</code>.</p>
         </details>
         <label class="row check">
           <input type="checkbox" id="debug" />
-          <span>Verbose console logging</span>
+          <span>Debug logging <small class="check-hint muted">For bug reports.</small></span>
         </label>
-        <p class="row-hint" id="positionsHint">
-          Aloud remembers where you stopped on each page and PDF, on this device only, and picks up
-          there next time.
-        </p>
-        <button id="clearPositions">Forget reading positions</button>
+        <div class="gpu-actions">
+          <button id="clearPositions">Forget reading positions</button>
+          <span class="muted small" id="positionsHint"></span>
+        </div>
         <button id="reset">Reset all settings to defaults</button>
       </section>
       <section>
         <h2>Licences and source</h2>
-        <p class="muted">Aloud is free software under the GNU GPL, version 3 or later. It includes eSpeak NG (GPL) and lamejs (LGPL).</p>
+        <p class="muted">Free software under the GNU GPL, version 3 or later.</p>
         <p><a href="/licenses/THIRD_PARTY_NOTICES.txt" target="_blank" rel="noopener">Licences</a> · <a class="source-link" href="https://github.com/smailoujaoura/aloud" target="_blank" rel="noopener">Source code</a></p>
       </section>
       </div>
@@ -476,26 +432,15 @@
       <section>
         <div class="section-head">
           <h2>Backup &amp; restore</h2>
-          <p class="muted small">Everything you set and kept in Aloud, in one file — to move to another browser or computer, or to keep safe.</p>
+          <p class="muted small">Everything in one file, to move to another browser or keep safe.</p>
         </div>
         <div id="backup"></div>
       </section>
       </div>
 
         <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-      <footer>
-        <p>
-          New here, or want a reminder of what the buttons do?
-          <button id="walkthroughFooter" class="ghost" type="button">Open the walkthrough</button>
-        </p>
-        GPLv3 · bundles eSpeak-NG, ONNX Runtime Web, Piper &amp; Kokoro. Supertonic weights are
-        under the use-restricted OpenRAIL-M licence. Model licences are listed in the repository’s
-        <code>THIRD_PARTY.md</code>.
-      </footer>
       </main>
 
-      <!-- What this view is for, and the keys that work in it (rail.ts). -->
-      <aside class="app-rail" id="rail" aria-label="About this view"></aside>
     </div>
     <script type="module" src="./main.ts"></script>
   </body>

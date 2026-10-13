@@ -35,8 +35,7 @@ import { clearAllPositions, countPositions } from '@/shared/reading-positions';
 /** Say how many pages have a remembered position, so the "forget" button has a visible effect. */
 async function refreshPositionsHint(): Promise<void> {
   const n = await countPositions();
-  const base = 'Aloud remembers where you stopped on each page and PDF, on this device only, and picks up there next time.';
-  $('positionsHint').textContent = n ? `${base} ${n} page${n === 1 ? '' : 's'} remembered.` : base;
+  $('positionsHint').textContent = n ? `${n} page${n === 1 ? '' : 's'} remembered` : 'None remembered';
   $<HTMLButtonElement>('clearPositions').disabled = n === 0;
 }
 import { applyTheme, watchSystemTheme, THEME_LABEL } from '@/ui/theme';
@@ -54,7 +53,6 @@ import { renderSiteList } from './site-list';
 import { renderPronunciationEditor } from './pronunciation-editor';
 import { renderVoiceSection, type PanelContext } from './voice-panels';
 import { initNav, onViewChange, setNavCount, showView } from './app-nav';
-import { renderRail } from './rail';
 import { initLibrary } from '@/library/app';
 import { answerTabQueries } from '@/shared/own-tab';
 import { downloads } from './download-queue';
@@ -197,12 +195,8 @@ function renderCapabilityHints(): void {
   const caps = capabilities();
 
   $('workersHint').textContent = caps.workerWebGPU
-    ? 'Only used when synthesis falls back to the CPU. On the GPU path one worker is enough, and ' +
-      'extra workers just add a copy of the model in memory. 0 = auto. Piper ignores this.'
-    : 'The neural engines run several times slower than real time on the CPU, so a few sentences ' +
-      'are synthesised at once to keep up with playback. 0 = auto, based on your CPU cores. Each ' +
-      'extra worker adds one in-memory copy of the model (~90 MB for Kokoro), so higher is not ' +
-      'always better. Piper ignores this.';
+    ? 'Only used on the processor. Auto is best.'
+    : 'More workers keep Kokoro ahead on the processor, at ~90 MB of memory each. Auto is best.';
 
   $('webgpuHint').textContent = gpuHintText();
   $('webgpuHint').classList.toggle('warn', workerGpu != null && !workerGpu.webgpu && caps.engine === 'gecko');
@@ -218,35 +212,22 @@ function gpuHintText(): string {
   const caps = capabilities();
   const page = gpuProbeIfKnown();
 
-  if (!workerGpu) return 'Checking whether Aloud’s synthesis worker can reach the GPU…';
+  if (!workerGpu) return 'Checking for a graphics card…';
 
   if (workerGpu.webgpu) {
-    return (
-      `Aloud’s synthesis worker has WebGPU here${workerGpu.adapterInfo ? ` (${workerGpu.adapterInfo})` : ''}, ` +
-      'so Kokoro and Supertonic run on the GPU — comfortably faster than real time.'
-    );
+    return `Voices run on your graphics card${workerGpu.adapterInfo ? ` (${workerGpu.adapterInfo})` : ''}.`;
   }
 
   if (caps.engine === 'gecko') {
     // Firefox *can* do this; it is two prefs away, and saying so is more useful than saying no.
     return page?.available
-      ? 'Firefox gives this page a GPU but not its workers, which is where Aloud runs synthesis — ' +
-          'so the neural voices are on the CPU. One about:config pref changes that.'
-      : 'Firefox keeps WebGPU behind two about:config settings and both are off here, so the ' +
-          'neural voices run on the CPU across several workers. Turning them on makes Kokoro ' +
-          'faster than Piper on this machine.';
+      ? 'Voices run on the processor: Firefox gives the graphics card to pages but not to Aloud’s worker.'
+      : 'Voices run on the processor: Firefox keeps WebGPU switched off.';
   }
 
-  if (page?.status === 'unsupported') {
-    return 'This browser exposes no WebGPU here, so synthesis runs on the CPU across several parallel workers.';
-  }
+  if (page?.status === 'unsupported') return 'Voices run on the processor: this browser has no WebGPU.';
 
-  return (
-    'Your browser has WebGPU but this machine granted no GPU adapter, so synthesis runs on the ' +
-    'CPU across several parallel workers. Check chrome://gpu — on Linux, WebGPU needs a ' +
-    'Vulkan-capable driver and Chrome 137 or newer; chrome://flags/#enable-unsafe-webgpu can ' +
-    'force it on a machine Chrome has blocklisted.'
-  );
+  return 'Voices run on the processor: the browser found no usable graphics card. Check chrome://gpu.';
 }
 
 /** The three prefs, each with a button that copies its name — they are tedious to retype. */
@@ -308,10 +289,10 @@ async function checkWorkerGpu(): Promise<string> {
   // report rather than from guesswork.
   log.info(`worker GPU check: webgpu=${workerGpu.webgpu} — ${workerGpu.detail}`);
   applyWorkerGpuProbe(workerGpu.webgpu);
-  const summary = workerGpu.webgpu
-    ? 'GPU found for the synthesis worker.'
-    : workerGpu.detail;
-  $('gpuChecked').textContent = summary;
+  const summary = workerGpu.webgpu ? 'Graphics card found' : 'No graphics card for the voice';
+  // The line above the button already says what this means; the technical detail is a hover away.
+  $('gpuChecked').textContent = 'Checked just now';
+  $('gpuChecked').title = workerGpu.detail;
   await render();
   // Returned so the button that asked can say what came back. Without this the check ran, found
   // the same answer as before, changed no visible text, and looked like a dead button.
@@ -702,7 +683,7 @@ function wire(): void {
     ),
   );
 
-  for (const id of ['walkthrough', 'walkthroughFooter']) {
+  for (const id of ['walkthrough']) {
     $(id).addEventListener('click', () => {
       toast('Opening the walkthrough…', 'info');
       void browser.runtime.sendMessage({ type: 'open-walkthrough' }).catch(() => undefined);
@@ -779,6 +760,5 @@ watchSettings((next) => {
   void render();
 });
 // The rail says what the view in front of you is for (rail.ts).
-onViewChange((view) => renderRail($('rail'), view));
 initNav();
 void initLibrary({ show: (view) => showView(view, { push: true }), setCount: setNavCount });
