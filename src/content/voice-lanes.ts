@@ -23,10 +23,15 @@ import type { EngineConfig, WordTiming } from '@/engine/protocol';
 import type { VoiceRef } from '@/shared/settings';
 import { log } from '@/shared/log';
 
-/** The primary lane and up to two others. */
+/** The primary lane and up to two others (on a phone, one other: see `VoiceLanes`). */
 export const MAX_LANES = 3;
-/** Workers per secondary lane: enough to keep ahead of reading, without a second full pool. */
-const SECONDARY_WORKERS = 2;
+/**
+ * Workers per secondary lane: one. A fixed count overrides the synthesis host's own rules — one
+ * worker for Piper, one on a GPU, one on a phone — and two copies of a second model (Supertonic is
+ * ~260 MB each) beside the main voice's pool was memory a phone does not have. A passage in another
+ * language is a small share of the page; one worker reads it.
+ */
+const SECONDARY_WORKERS = 1;
 
 export interface LaneCallbacks extends WorkerClientCallbacks {
   /** A secondary voice started loading (`ready: false`) or finished (`ready: true`). */
@@ -61,7 +66,15 @@ export class VoiceLanes {
   private waiting: Array<{ playId: number; text: string; speed: number; ref: VoiceRef; key: string }> = [];
   private clock = 0;
 
-  constructor(private readonly cb: LaneCallbacks) {}
+  /** How many models may be loaded at once: MAX_LANES, or fewer (a phone passes 2). */
+  private readonly maxLanes: number;
+
+  constructor(
+    private readonly cb: LaneCallbacks,
+    opts: { maxLanes?: number } = {},
+  ) {
+    this.maxLanes = Math.max(1, Math.min(MAX_LANES, opts.maxLanes ?? MAX_LANES));
+  }
 
   /** Load the primary voice; every other lane is closed. Resolves when it is ready. */
   async init(config: EngineConfig): Promise<void> {
@@ -157,6 +170,11 @@ export class VoiceLanes {
     }
   }
 
+  /** Stop waiting for `playId`: whatever is coming for it is dropped (a sentence that changed). */
+  drop(playId: number): void {
+    this.dropOwner(playId);
+  }
+
   isPending(playId: number): boolean {
     return this.owner.has(playId);
   }
@@ -223,13 +241,13 @@ export class VoiceLanes {
     if (this.failed.has(`${ref.engine}:${ref.voice}`)) return null;
     const open = this.others.get(key);
     if (open) return open;
-    if (this.laneCount >= MAX_LANES && !this.closeLeastRecentIdle()) return 'wait';
+    if (this.laneCount >= this.maxLanes && !this.closeLeastRecentIdle()) return 'wait';
     const primary = this.primary!;
     const config: EngineConfig = {
       ...primary.config,
       engine: ref.engine,
       voice: ref.voice,
-      workers: Math.min(SECONDARY_WORKERS, primary.config.workers || SECONDARY_WORKERS),
+      workers: SECONDARY_WORKERS,
     };
     const lane: Lane = {
       key,

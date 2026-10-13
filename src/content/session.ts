@@ -19,7 +19,7 @@ import { browser } from 'wxt/browser';
 
 import { extractArticle, type ExtractedArticle } from '@/extract/readability';
 import { resolveLiveRoot } from '@/extract/live-container';
-import { buildTextIndex, nearestBlock, refreshEligibility, rangeForSpan, visibleTextOf, type TextIndex } from '@/extract/text-index';
+import { buildTextIndex, changedEligibility, nearestBlock, rangeForSpan, visibleTextOf, type TextIndex } from '@/extract/text-index';
 import { spokenToSource } from '@/highlight/word-map';
 import { isSpeakable, normalizeForSpeech } from '@/segment/normalize';
 import { applyPronunciations } from '@/segment/pronunciations';
@@ -34,7 +34,7 @@ import { ENGINE_IDS, engineInfo } from '@/shared/engine-catalog';
 import { languageName, primaryLanguage, voiceLanguage, type CandidateVoice } from '@/shared/language-voice';
 import { planLanguages, type Detection, type Detector, type PassageInput, type PassageLanguage } from './language-plan';
 import { routeFor, voiceKey, type Route, type RouteContext } from './voice-routing';
-import { VoiceLanes } from './voice-lanes';
+import { MAX_LANES, VoiceLanes } from './voice-lanes';
 import { listVoices, parseVoiceValue, voiceValue, type EngineVoice, type VoiceOption } from '@/shared/voice-catalog';
 import {
   clearPosition,
@@ -52,6 +52,7 @@ import { anchorForRange } from '@/annotate/page-anchoring';
 import { recordListening } from '@/shared/reading-history';
 import { countWords, recordCompleted, recordHeard, type Heard } from '@/shared/listening-stats';
 import { log } from '@/shared/log';
+import { capabilities } from '@/shared/browser-env';
 import { GPU_GUIDE_URL } from '@/shared/links';
 
 import { backendOf, tuningFor, type SynthBackend } from './engine-tuning';
@@ -365,6 +366,7 @@ export class ReaderSession {
   private buildSubsystems(): void {
     this.scheduler = this.createScheduler();
 
+    // A phone keeps one voice beside the main one, not two (voice-lanes.ts).
     this.worker = new VoiceLanes({
       onReady: ({ sampleRate, executionProvider }) => this.onEngineReady(executionProvider, sampleRate),
       onProgress: ({ progress }) => {
@@ -416,7 +418,7 @@ export class ReaderSession {
         this.bar?.flash(`${label} could not be loaded (${message}) — its passages are read by another voice`);
         void this.reroute();
       },
-    });
+    }, { maxLanes: capabilities().formFactor === 'android' ? 2 : MAX_LANES });
 
     // Your saved highlights draw as underlines while the reader is open, so the one wash on the
     // page is the sentence being read (annotate/palette.ts: READING_ATTR).
@@ -865,9 +867,18 @@ export class ReaderSession {
   private watchEligibility(): void {
     this.eligibilityObserver?.disconnect();
     if (!this.textIndex?.forReader || typeof MutationObserver === 'undefined') return;
-    this.eligibilityObserver = new MutationObserver(() => {
-      clearTimeout(this.eligibilityTimer);
-      this.eligibilityTimer = window.setTimeout(() => this.onEligibilityChanged(), 200);
+    const root = this.textIndex.root;
+    this.eligibilityObserver = new MutationObserver((records) => {
+      // Only changes that can touch the text being read: inside it, or on something around it (a
+      // class on <body>). A video's progress bar or a parallax header elsewhere says nothing.
+      if (!records.some((r) => root.contains(r.target) || (r.target as Node).contains(root))) return;
+      // A throttle, not a debounce: a page that animates without pause reset a debounce forever,
+      // and a translation revealed meanwhile was never looked at.
+      if (this.eligibilityTimer) return;
+      this.eligibilityTimer = window.setTimeout(() => {
+        this.eligibilityTimer = 0;
+        this.onEligibilityChanged();
+      }, 200);
     });
     this.eligibilityObserver.observe(document.documentElement, {
       subtree: true,
@@ -877,15 +888,19 @@ export class ReaderSession {
   }
 
   private onEligibilityChanged(): void {
-    if (this.disposed || !this.textIndex || !refreshEligibility(this.textIndex)) return;
+    if (this.disposed || !this.textIndex) return;
+    const ranges = changedEligibility(this.textIndex);
+    if (!ranges.length) return;
     // What was heard of the sentence playing counts before anything about it changes.
     this.countPartlyHeard();
     const index = this.textIndex;
     const current = this.currentPlayId;
-    let ahead = false;
+    const touches = (span: { start: number; end: number }): boolean => ranges.some(([a, b]) => span.start < b && a < span.end);
+    const changed: number[] = [];
     let here = false;
+    // Only the sentences over what changed — a book-length page has thousands.
     for (const item of this.playlist) {
-      if (!item.span) continue;
+      if (!item.span || !touches(item.span)) continue;
       // Whole sentences shown or hidden, and words hidden inside a sentence still shown.
       const visible = visibleTextOf(index, item.span.start, item.span.end);
       const now = isSpeakable(visible);
@@ -893,10 +908,10 @@ export class ReaderSession {
       item.eligible = now;
       item.visibleSource = visible;
       if (now) item.spokenText = this.normalizeAs(visible, item.spokenAs ?? this.spokenLanguageOf(item));
-      if (item.playId > current) ahead = true;
+      if (item.playId > current) changed.push(item.playId);
       else if (item.playId === current) here = true;
     }
-    if (!ahead && !here) return;
+    if (!changed.length && !here) return;
     log.info(`[eligibility] the page changed: ${this.playlist.filter((p) => p.eligible).length} of ${this.playlist.length} sentences readable`);
     if (this.exporter) {
       this.cancelExport('The page changed, so the MP3 was stopped');
@@ -908,12 +923,31 @@ export class ReaderSession {
       this.moveOnFrom(current + 1);
       return;
     }
-    // Upcoming sentences changed: what was prepared for them is dropped and asked for again.
-    const keepFrom = current + 1;
-    this.requested.clear();
-    this.worker.cancelFrom(keepFrom, 0);
-    this.scheduler.reprimeForSpeed();
-    this.ensureSynth(keepFrom);
+    this.remake(changed);
+  }
+
+  /**
+   * Make again the upcoming sentences in `playIds`, and only those: a caption that changes fifty
+   * sentences ahead does not cost the audio prepared for the forty-nine before it — on the CPU that
+   * was the difference between reading on and running dry. A sentence already queued to play can
+   * only be taken back by a seek, so from the first such one everything is made again.
+   */
+  private remake(playIds: number[]): void {
+    for (const id of [...playIds].sort((a, b) => a - b)) {
+      if (!this.scheduler.discard(id)) {
+        // Already queued behind the sentence playing: re-plan everything after that sentence,
+        // which keeps sounding (a seek would cut it off).
+        this.requested.clear();
+        this.worker.cancelFrom(this.currentPlayId + 1, 0);
+        this.scheduler.reprimeForSpeed();
+        break;
+      }
+      this.worker.drop(id);
+      this.requested.delete(id);
+      this.audioSeconds.delete(id);
+      this.wordTimings.delete(id);
+    }
+    this.ensureSynth(this.currentPlayId + 1);
     this.pushState();
   }
 

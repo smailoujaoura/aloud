@@ -51,7 +51,7 @@ export class Eligibility {
     // Text straight inside a closed <details>, beside its summary.
     if (parent.tagName === 'DETAILS' && !parent.hasAttribute('open')) return false;
     const style = styleOf(parent);
-    return !style || (style.visibility !== 'hidden' && style.visibility !== 'collapse');
+    return !style || (style.visibility !== 'hidden' && style.visibility !== 'collapse') || revealPending(parent);
   }
 
   /** Hidden for everything inside it: not rendered, invisible by opacity, or clipped to nothing. */
@@ -113,12 +113,17 @@ function selfHidden(el: Element): boolean {
 /** Libraries that fade text in as it scrolls into view mark it with one of these. */
 /**
  * What scroll-reveal libraries leave on the text they will fade in: AOS (`data-aos`, `aos-init`),
- * Sal (`data-sal`), ScrollReveal (`data-sr-id`), WOW.js (`wow`), Animate.css (`animate__`). Only
- * their own names: a class merely starting with "reveal" can be a spoiler kept hidden on purpose,
- * and `data-reveal` is Foundation's modal.
+ * Sal (`data-sal`), ScrollReveal (`data-sr-id`), WOW.js (`wow`), Animate.css (`animate__`), Webflow
+ * interactions (`data-w-id`). Only their own names: a class merely starting with "reveal" can be a
+ * spoiler kept hidden on purpose, and `data-reveal` is Foundation's modal.
  */
-const REVEAL_MARK = /^(data-aos|data-sal|data-sr-id)$/;
+const REVEAL_MARK = /^(data-aos|data-sal|data-sr-id|data-w-id)$/;
 const REVEAL_CLASS = /(^|\s)(aos-(init|animate)|wow|animate__\w+|sal-animate)(\s|$)/;
+const REVEAL_SELECTOR = '[data-aos], [data-sal], [data-sr-id], [data-w-id], .wow, .aos-init, .sal-animate';
+
+function marked(el: Element): boolean {
+  return [...el.attributes].some((a) => REVEAL_MARK.test(a.name)) || REVEAL_CLASS.test(el.className);
+}
 
 /**
  * Transparent, but only until it is scrolled to. Scroll-reveal pages keep every paragraph below the
@@ -126,22 +131,48 @@ const REVEAL_CLASS = /(^|\s)(aos-(init|animate)|wow|animate__\w+|sal-animate)(\s
  * page was the result of treating them as hidden.
  *
  * Decided by how the element is made, never by where it happens to sit when reading starts (the
- * same paragraph must not be read or skipped depending on the scroll position): a full-size box in
- * the flow of the page, and either marked by one of those libraries, or set up to animate in — moved
- * out of place (`transform`) with a transition waiting to bring it back, which is how they fade text
- * up into view. A collapsed translation has no height; a tooltip or menu floats above the page; a
- * spoiler or answer kept transparent has nothing waiting to move it: those stay hidden.
+ * same paragraph must not be read or skipped depending on the scroll position). A full-size box in
+ * the flow of the page, and any of:
+ *  - marked by one of those libraries;
+ *  - made transparent and moved by a script, on the element itself (GSAP, Framer Motion and
+ *    Webflow set an inline opacity and transform to fade text up into place);
+ *  - announced to the browser as about to animate (`will-change: opacity | transform`);
+ *  - moved out of place (`transform`, or Tailwind v4's own `translate` / `scale`) with a transition
+ *    or an animation waiting to bring it back.
+ * A collapsed translation has no height; a tooltip or menu floats above the page; a spoiler kept
+ * transparent by a class, with nothing set to move it, stays hidden.
  */
 function awaitingReveal(el: Element, style: CSSStyleDeclaration): boolean {
   if (!(el instanceof HTMLElement)) return false;
   if (el.offsetWidth <= 1 || el.offsetHeight <= 1) return false;
   if (style.position === 'absolute' || style.position === 'fixed') return false;
-  if ([...el.attributes].some((a) => REVEAL_MARK.test(a.name)) || REVEAL_CLASS.test(el.className)) return true;
-  const moved = style.transform !== '' && style.transform !== 'none';
+  if (marked(el)) return true;
+  // A script's fade-up: transparent *and* moved, both on the element itself. Inline transparency
+  // alone says too little — a modal or an answer can be hidden that way.
+  const inlineMoved = el.style.transform !== '' || el.style.getPropertyValue('translate') !== '';
+  if (el.style.opacity !== '' && Number.parseFloat(el.style.opacity) === 0 && inlineMoved) return true;
+  if (/(^|,\s*)(opacity|transform)(\s*,|$)/.test(style.willChange)) return true;
+  const set = (v: string | undefined): boolean => !!v && v !== 'none' && v !== '';
+  // CSS repeats a shorter list of durations across the properties, cyclically.
   const durations = style.transitionDuration.split(',').map((d) => Number.parseFloat(d) || 0);
   const transitions = style.transitionProperty.split(',').map((p) => p.trim());
-  const animates = transitions.some((p, i) => /^(all|opacity|transform)$/.test(p) && (durations[i] ?? durations[0] ?? 0) > 0);
-  return moved && animates;
+  const transitioning = (re: RegExp, minSeconds = 0): boolean =>
+    transitions.some((p, i) => re.test(p) && (durations[i % durations.length] ?? 0) > minSeconds);
+  // A fade waiting to happen: a visible transition on opacity. A spoiler kept transparent by a class
+  // has none — and of the two ways to be wrong, reading a fading spoiler aloud costs far less than
+  // losing every paragraph of an article below its first screen.
+  if (transitioning(/^(all|opacity)$/, 0.15)) return true;
+  const moved = set(style.transform) || set(style.getPropertyValue('translate')) || set(style.getPropertyValue('scale'));
+  return moved && (transitioning(/^(all|opacity|transform|translate|scale)$/) || set(style.animationName));
+}
+
+/**
+ * Hidden with `visibility` by a scroll-reveal library until scrolled to: WOW.js does this, inline, on
+ * the element it marks. Such text is waiting, not hidden.
+ */
+export function revealPending(el: Element): boolean {
+  const owner = el.closest(REVEAL_SELECTOR);
+  return owner instanceof HTMLElement && owner.style.visibility === 'hidden';
 }
 
 /** Text in this element is drawn invisibly (`visibility`), unless a child makes itself visible. */

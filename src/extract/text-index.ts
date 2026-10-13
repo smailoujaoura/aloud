@@ -123,17 +123,26 @@ export function buildTextIndex(root: Element, opts: { forReader?: boolean } = {}
  * section collapsed while reading.
  */
 export function refreshEligibility(index: TextIndex): boolean {
-  if (!index.forReader) return false;
+  return changedEligibility(index).length > 0;
+}
+
+/**
+ * Re-read which pieces are rendered now, and return where it changed: `[start, end)` ranges of
+ * `fullText`, merged. Only the sentences over these need to be looked at again.
+ */
+export function changedEligibility(index: TextIndex): Array<[number, number]> {
+  if (!index.forReader) return [];
   const check = new Eligibility();
-  let changed = false;
+  const ranges: Array<[number, number]> = [];
   for (const piece of index.pieces) {
     const now = piece.node.isConnected && check.rendered(piece.node);
-    if (now !== piece.eligible) {
-      piece.eligible = now;
-      changed = true;
-    }
+    if (now === piece.eligible) continue;
+    piece.eligible = now;
+    const last = ranges[ranges.length - 1];
+    if (last && piece.at <= last[1] + 1) last[1] = piece.at + piece.len;
+    else ranges.push([piece.at, piece.at + piece.len]);
   }
-  return changed;
+  return ranges;
 }
 
 /**

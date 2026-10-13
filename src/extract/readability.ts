@@ -7,7 +7,7 @@
  * resolved separately against the live DOM (see live-container.ts + fuzzy-align.ts).
  */
 import { Readability, isProbablyReaderable } from '@mozilla/readability';
-import { Eligibility, invisible } from './eligibility';
+import { Eligibility, invisible, revealPending } from './eligibility';
 
 /**
  * Prune Readability's copy of the page using what the *live* page shows. The copy has lost the
@@ -27,7 +27,7 @@ function pruneCopy(live: Document, copy: Document, forSaving: boolean): void {
     if (check.control(el) || (forSaving && el.ownerDocument.defaultView && check.hidden(el))) drop.push(copyEls[i]!);
     // `visibility: hidden` is inherited but can be undone below: the element's own text goes, and a
     // child that makes itself visible again stays.
-    else if (forSaving && el.ownerDocument.defaultView && invisible(el)) {
+    else if (forSaving && el.ownerDocument.defaultView && invisible(el) && !revealPending(el)) {
       const shown = [...el.querySelectorAll('*')].some((d) => !invisible(d));
       if (shown) blank.push(copyEls[i]!);
       else drop.push(copyEls[i]!);
@@ -44,6 +44,11 @@ function pruneCopy(live: Document, copy: Document, forSaving: boolean): void {
       el.removeAttribute('aria-hidden');
     }
   }
+  // Text a scroll-reveal library hides with `visibility` until scrolled to (WOW.js) is content:
+  // Readability drops it otherwise, saving or reading.
+  liveEls.forEach((el, i) => {
+    if (el instanceof HTMLElement && el.style.visibility === 'hidden' && revealPending(el)) (copyEls[i] as HTMLElement).style.removeProperty('visibility');
+  });
 }
 
 export interface ExtractedArticle {

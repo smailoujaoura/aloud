@@ -93,6 +93,18 @@ export class GaplessScheduler {
     return null;
   }
 
+  /**
+   * Forget the audio prepared for `playId`, to be provided again (its text changed). False when it
+   * is already scheduled to play — then only a seek can take it back.
+   */
+  discard(playId: number): boolean {
+    if (playId < this.nextToSchedule) return false;
+    this.ready.delete(playId);
+    this.pendingPcm.delete(playId);
+    this.leads.delete(playId);
+    return true;
+  }
+
   /** True when we want to play but the browser is holding the AudioContext for a user gesture. */
   needsGesture(): boolean {
     return this.running && this.ctx != null && this.ctx.state !== 'running';

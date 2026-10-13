@@ -74,7 +74,7 @@ describe('VoiceLanes', () => {
     lanes.request(0, 'Hello.', 1);
     lanes.request(1, 'Ciao.', 1, { engine: 'piper', voice: 'it_IT-paola-medium' });
     expect(hosts).toHaveLength(2);
-    expect(hosts[1]!.config).toMatchObject({ engine: 'piper', voice: 'it_IT-paola-medium', workers: 2 });
+    expect(hosts[1]!.config).toMatchObject({ engine: 'piper', voice: 'it_IT-paola-medium', workers: 1 });
     // Asked before the second model was ready: held, then sent.
     expect(hosts[1]!.requests).toHaveLength(0);
     hosts[1]!.ready();
@@ -206,6 +206,21 @@ describe('VoiceLanes', () => {
     expect(lanes.isPending(1)).toBe(false);
     expect(hosts[1]!.disposed).toBe(true);
     expect(lanes.usable({ engine: 'piper', voice: 'fr' })).toBe(false);
+  });
+
+  it('a phone keeps one voice beside the main one: a third waits rather than loading', async () => {
+    const lanes = new VoiceLanes({ onReady: () => undefined, onProgress: () => undefined, onError: () => undefined, onAudio: () => undefined }, { maxLanes: 2 });
+    const before = hosts.length;
+    const init = lanes.init({ ...base, engine: 'piper', voice: 'en' });
+    hosts[before]!.ready();
+    await init;
+    lanes.request(1, 'a', 1, { engine: 'piper', voice: 'it' });
+    lanes.request(2, 'b', 1, { engine: 'piper', voice: 'fr' });
+    expect(lanes.laneCount).toBe(2);
+    expect(hosts.length - before).toBe(2);
+    expect(lanes.isPending(2)).toBe(true);
+    // Every extra voice runs one worker, whatever the main pool runs.
+    expect(hosts[before + 1]!.config).toMatchObject({ workers: 1 });
   });
 
   it('a voice that cannot load is reported with what it owed, and not tried again', async () => {
