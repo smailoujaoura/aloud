@@ -40,7 +40,10 @@ export const CONTROL_BAR_CSS = `
   --accent-on: #1c1c22;
   --accent-soft: rgba(255,214,10,.22);
   --danger: #c0392b;
-  --font: 13.5px/1.35 "Aloud Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  /* The system's own face. Aloud's pages use Inter, but the bar lives in someone else's page, and
+     any font it brought would sit in that page's document.fonts — where the page can see it, and
+     so tell that Aloud is running (fonts declared inside a shadow root are not loaded at all). */
+  --font: 13.5px/1.35 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 
   /* color-scheme is NOT set here: the host's inline "all: initial" outranks :host rules, so it
      is set inline from ControlBar.applyTheme() instead. */

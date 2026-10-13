@@ -26,7 +26,6 @@ import { resolveTheme, watchSystemTheme } from './theme';
 import type { SleepChoice, SleepState } from '@/content/sleep-timer';
 import { containTyping } from './contain-typing';
 import { genericAvatar } from './voice-avatar';
-import { loadBarFont, unloadBarFont } from './bar-font';
 
 /** Where "Save as MP3" is, as the bar shows it. */
 export type ExportState =
@@ -248,7 +247,6 @@ export class ControlBar {
     containTyping(this.root); // removed with the host
     (doc.documentElement ?? doc.body).appendChild(this.host);
 
-    loadBarFont(doc);
     this.build(opts.speed);
     this.applyTheme();
     // "Match the system" has to keep matching it: the OS can flip to dark while a page is open.
@@ -785,7 +783,6 @@ export class ControlBar {
     this.closePopover();
     this.unwatchTheme();
     this.host.remove();
-    unloadBarFont(this.doc);
   }
 
   // ---- language and voice --------------------------------------------------

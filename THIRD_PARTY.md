@@ -17,7 +17,7 @@ build inside the `phonemizer` package that kokoro-js uses.
 | [`@huggingface/transformers`](https://github.com/huggingface/transformers.js) | 3.7.5 (`transformers.web.js`) | Apache-2.0 | Model loading / tokenisation for Kokoro | `tts-worker.js` |
 | [`@mozilla/readability`](https://github.com/mozilla/readability) | 0.6.0 | Apache-2.0 | Article extraction | `reader-inject.js` |
 | [`@breezystack/lamejs`](https://github.com/gideonstele/lamejs) (JavaScript port of LAME) | 1.2.7 | **LGPL-3.0** | MP3 encoding for “Save as MP3” | `reader-inject.js`, and the shared reader chunk the PDF and queue pages load |
-| [Inter](https://rsms.me/inter/) via [`@fontsource-variable/inter`](https://fontsource.org/fonts/inter) | 5.3.0 | **OFL-1.1** | The interface typeface: Latin subsets, as `fonts/` for Aloud's pages and inside `reader-inject.js` for the reading bar | `fonts/`, `reader-inject.js` |
+| [Inter](https://rsms.me/inter/) via [`@fontsource-variable/inter`](https://fontsource.org/fonts/inter) | 5.3.0 | **OFL-1.1** | The interface typeface of Aloud's own pages (Latin subsets) | `fonts/` |
 | [`pdf-lib`](https://github.com/Hopding/pdf-lib) | 1.17.1 | MIT | Writing highlights and notes into PDF files | a chunk of the PDF page, loaded on first save |
 | [pdf.js](https://github.com/mozilla/pdf.js) (legacy build) | as shipped in `pdfjs-dist` | Apache-2.0 | Rendering and text extraction for PDFs | `vendor/pdfjs/*` (loaded at runtime, with its own worker, CMaps and standard fonts) |
 | [WXT](https://wxt.dev) | 0.21.4 | MIT | Build tooling only (not shipped) | — |
