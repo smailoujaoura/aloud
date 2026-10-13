@@ -85,7 +85,10 @@ export function buildTextIndex(root: Element, opts: { forReader?: boolean } = {}
       if (!text || !text.trim()) return NodeFilter.FILTER_REJECT;
       for (let el = node.parentElement; el && el !== root.parentElement; el = el.parentElement) {
         if (SKIP_TAGS.has(el.tagName)) return NodeFilter.FILTER_REJECT;
-        if (el.getAttribute('aria-hidden') === 'true') return NodeFilter.FILTER_REJECT;
+        // The reader keeps `aria-hidden` and `hidden` text as hidden candidates rather than leaving
+        // it out: a disclosure that reveals a translation removes both, and text never indexed
+        // could not be read once it appeared (Eligibility treats both as hidden meanwhile).
+        if (!reader && el.getAttribute('aria-hidden') === 'true') return NodeFilter.FILTER_REJECT;
         if (!reader && el.hasAttribute('hidden')) return NodeFilter.FILTER_REJECT;
       }
       if (reader) {
@@ -150,6 +153,29 @@ export function spanEligible(index: TextIndex, start: number, end: number): bool
     else yes += overlap;
   }
   return yes > no;
+}
+
+/**
+ * The text of `[start, end)` as it is read: in a reader index, what is hidden on the page now is
+ * blanked out (a hidden word inside a visible sentence is not said), then spaces are tidied. The
+ * text itself, unchanged, in a plain index.
+ */
+export function visibleTextOf(index: TextIndex, start: number, end: number): string {
+  const text = index.fullText.slice(start, end);
+  if (!index.forReader || end <= start) return text;
+  let out = text;
+  let blanked = false;
+  for (let i = pieceIndexAt(index.pieces, start); i < index.pieces.length; i++) {
+    const p = index.pieces[i]!;
+    if (p.at >= end) break;
+    if (p.eligible !== false) continue;
+    const from = Math.max(start, p.at) - start;
+    const to = Math.min(end, p.at + p.len) - start;
+    if (to <= from) continue;
+    out = out.slice(0, from) + ' '.repeat(to - from) + out.slice(to);
+    blanked = true;
+  }
+  return blanked ? out.replace(/[ \t]{2,}/g, ' ').replace(/\s+([,.;:!?…])/g, '$1').trim() : text;
 }
 
 /** Binary search for the piece containing `offset` (or the first piece starting at/after it). */

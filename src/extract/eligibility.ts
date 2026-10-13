@@ -100,7 +100,7 @@ function selfHidden(el: Element): boolean {
   // `display: contents` has no box of its own, and hides nothing: its children are drawn.
   if (style.display === 'contents') return false;
   if (style.display === 'none') return true;
-  if (Number.parseFloat(style.opacity) === 0) return true;
+  if (Number.parseFloat(style.opacity) === 0 && !awaitingReveal(el, style)) return true;
   // Clipped to nothing: a box with no width or no height that does not let content overflow
   // (a collapsed accordion, a "visually hidden" helper). A zero-height box whose content
   // overflows visibly is not hidden by this — its content is drawn below it.
@@ -108,6 +108,33 @@ function selfHidden(el: Element): boolean {
   if (clips && el instanceof HTMLElement && (el.offsetWidth <= 1 || el.offsetHeight <= 1)) return true;
   if (/^inset\(\s*(50|100)%/.test(style.clipPath) || /rect\(\s*0(px)?,?\s+0(px)?,?\s+0(px)?,?\s+0(px)?\s*\)/.test(style.clip)) return true;
   return false;
+}
+
+/** Libraries that fade text in as it scrolls into view mark it with one of these. */
+const REVEAL_MARK = /^(data-aos|data-sal|data-scroll|data-animate|data-reveal|data-sr)/;
+const REVEAL_CLASS = /(^|\s)(aos-|wow|reveal|fade-?in|animate__|sal-|scroll-?reveal)/i;
+
+/**
+ * Transparent, but only until it is scrolled to. Scroll-reveal pages (AOS and the like) keep every
+ * paragraph below the first screen at opacity 0 and fade each in as it arrives — reading only the
+ * first screen of such a page was the result of treating them as hidden. Such a paragraph is a
+ * full-size box in the flow of the page, and below what is on screen. A collapsed translation has
+ * no height; a tooltip or menu floats above the page; text faded out on screen is meant unseen:
+ * those stay hidden.
+ */
+function awaitingReveal(el: Element, style: CSSStyleDeclaration): boolean {
+  if (!(el instanceof HTMLElement)) return false;
+  if (el.offsetWidth <= 1 || el.offsetHeight <= 1) return false;
+  if (style.position === 'absolute' || style.position === 'fixed') return false;
+  if ([...el.attributes].some((a) => REVEAL_MARK.test(a.name)) || REVEAL_CLASS.test(el.className)) return true;
+  const view = el.ownerDocument.defaultView;
+  return !!view && el.getBoundingClientRect().top >= view.innerHeight;
+}
+
+/** Text in this element is drawn invisibly (`visibility`), unless a child makes itself visible. */
+export function invisible(el: Element): boolean {
+  const v = styleOf(el)?.visibility;
+  return v === 'hidden' || v === 'collapse';
 }
 
 function isControl(el: Element): boolean {

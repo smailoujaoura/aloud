@@ -48,12 +48,15 @@ export class SmoothScroller {
     return this.animation !== null;
   }
 
-  /** Move `scroller` (null: the window) so its scroll position changes by `delta` pixels. */
+  /** Move `scroller` (null: the window) by `delta` pixels from where it is now. */
   by(scroller: Element | null, delta: number): void {
     if (Math.abs(delta) < 1) return;
     const current = this.position(scroller);
     const max = this.maxScroll(scroller);
-    const to = Math.max(0, Math.min(max, (this.animation?.scroller === scroller ? this.animation.to : current) + delta));
+    // `delta` is measured from where the page is now (the caller reads the target's box as
+    // rendered), so it is added to the current position — never to the destination of a move still
+    // under way, which counted its unfinished part twice and overshot.
+    const to = Math.max(0, Math.min(max, current + delta));
     if (this.reduceMotion) {
       this.cancel();
       this.set(scroller, to);

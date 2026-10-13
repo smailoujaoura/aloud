@@ -19,9 +19,9 @@ import { browser } from 'wxt/browser';
 
 import { extractArticle, type ExtractedArticle } from '@/extract/readability';
 import { resolveLiveRoot } from '@/extract/live-container';
-import { buildTextIndex, nearestBlock, refreshEligibility, spanEligible, rangeForSpan, type TextIndex } from '@/extract/text-index';
+import { buildTextIndex, nearestBlock, refreshEligibility, rangeForSpan, visibleTextOf, type TextIndex } from '@/extract/text-index';
 import { spokenToSource } from '@/highlight/word-map';
-import { normalizeForSpeech } from '@/segment/normalize';
+import { isSpeakable, normalizeForSpeech } from '@/segment/normalize';
 import { applyPronunciations } from '@/segment/pronunciations';
 import { GaplessScheduler } from '@/audio/scheduler';
 import { Highlighter } from '@/highlight/highlighter';
@@ -416,10 +416,6 @@ export class ReaderSession {
         this.bar?.flash(`${label} could not be loaded (${message}) — its passages are read by another voice`);
         void this.reroute();
       },
-      onLaneClosed: (playIds) => {
-        for (const id of playIds) this.requested.delete(id);
-        this.ensureSynth(this.currentPlayId);
-      },
     });
 
     // Your saved highlights draw as underlines while the reader is open, so the one wash on the
@@ -603,7 +599,7 @@ export class ReaderSession {
   private respeak(): void {
     for (const item of this.playlist) {
       item.spokenAs = this.spokenLanguageOf(item);
-      item.spokenText = this.normalizeAs(item.sourceText, item.spokenAs);
+      item.spokenText = this.normalizeAs(item.visibleSource ?? item.sourceText, item.spokenAs);
     }
     this.cancelExport('How words are spoken changed, so the MP3 was stopped');
     if (!this.engineReady) return;
@@ -882,15 +878,21 @@ export class ReaderSession {
 
   private onEligibilityChanged(): void {
     if (this.disposed || !this.textIndex || !refreshEligibility(this.textIndex)) return;
+    // What was heard of the sentence playing counts before anything about it changes.
+    this.countPartlyHeard();
     const index = this.textIndex;
     const current = this.currentPlayId;
     let ahead = false;
     let here = false;
     for (const item of this.playlist) {
       if (!item.span) continue;
-      const now = spanEligible(index, item.span.start, item.span.end);
-      if (now === item.eligible) continue;
+      // Whole sentences shown or hidden, and words hidden inside a sentence still shown.
+      const visible = visibleTextOf(index, item.span.start, item.span.end);
+      const now = isSpeakable(visible);
+      if (now === item.eligible && visible === item.visibleSource) continue;
       item.eligible = now;
+      item.visibleSource = visible;
+      if (now) item.spokenText = this.normalizeAs(visible, item.spokenAs ?? this.spokenLanguageOf(item));
       if (item.playId > current) ahead = true;
       else if (item.playId === current) here = true;
     }
@@ -902,8 +904,8 @@ export class ReaderSession {
     }
     if (!this.engineReady) return;
     if (here && !this.playlist[current]!.eligible) {
-      // The sentence being read was hidden: on to the next one that is not.
-      this.seekTo(this.readableNear(current + 1, 1), { quiet: true });
+      // The sentence being read was hidden: on to the next one that is not, or the end — never back.
+      this.moveOnFrom(current + 1);
       return;
     }
     // Upcoming sentences changed: what was prepared for them is dropped and asked for again.
@@ -914,6 +916,29 @@ export class ReaderSession {
     this.ensureSynth(keepFrom);
     this.pushState();
   }
+
+  /**
+   * After the sentence being read was hidden or skipped: the next readable one, or — with none left
+   * — the end of the document. Only forwards: what was already read is not read again.
+   */
+  private moveOnFrom(from: number): void {
+    for (let i = Math.max(0, from); i < this.playlist.length; i++) {
+      if (this.readable(this.playlist[i])) {
+        this.seekTo(i, { quiet: true });
+        return;
+      }
+    }
+    void this.finishEarly();
+  }
+
+  /** Nothing readable is left after where reading is: stop as at the end of the page. */
+  private async finishEarly(): Promise<void> {
+    this.countPartlyHeard();
+    this.stopFollowingWords(true);
+    await this.scheduler.pause();
+    this.onFinished();
+  }
+
 
   /**
    * The pace of the chunk being heard — its words over its audio — set as each chunk starts and
@@ -1362,7 +1387,7 @@ export class ReaderSession {
       const language = this.spokenLanguageOf(item);
       let differs = !sameRoute(before, item.route);
       if (item.spokenAs !== language) {
-        item.spokenText = this.normalizeAs(item.sourceText, language);
+        item.spokenText = this.normalizeAs(item.visibleSource ?? item.sourceText, language);
         item.spokenAs = language;
         differs = true;
       }
@@ -1523,6 +1548,8 @@ export class ReaderSession {
    */
   private async reroute(): Promise<void> {
     if (this.disposed || this.playlist.length === 0) return;
+    // Heard is heard: counted before the voice or the plan around it changes.
+    this.countPartlyHeard();
     const current = this.currentPlayId;
     const changed = this.routeItems(current);
     this.languageVoice = this.pickPrimary();
@@ -1539,7 +1566,9 @@ export class ReaderSession {
     this.cancelExport('The voices changed, so the MP3 was stopped');
     if (!this.engineReady) return;
     if (changed.current) {
-      this.seekTo(current, { quiet: true });
+      // The sentence playing now sounds different, or is now skipped: say it again, or move on.
+      if (this.readable(this.playlist[current])) this.seekTo(current, { quiet: true });
+      else this.moveOnFrom(current + 1);
       return;
     }
     this.resynthesizeUpcoming();
@@ -1607,7 +1636,7 @@ export class ReaderSession {
     await this.reroute();
     // Skipping the passage playing now: on to the next one that is read.
     if (choice === 'skip' && !this.readable(this.playlist[this.currentPlayId]) && this.engineReady) {
-      this.seekTo(this.readableNear(this.currentPlayId + 1, 1), { quiet: true });
+      this.moveOnFrom(this.currentPlayId + 1);
     }
   }
 
@@ -1895,7 +1924,9 @@ export class ReaderSession {
     if (!this.keepHistory) return;
     const item = this.playlist[playId];
     const total = this.audioSeconds.get(playId) ?? 0;
-    if (!item || total <= 0 || !this.readable(item)) return;
+    // Audio that played counts, whatever has happened to the sentence since — hidden, rerouted or
+    // skipped a moment later, it was still heard. A sentence passed over has no audio at all.
+    if (!item || total <= 0) return;
     const already = this.heardCounted.get(playId) ?? 0;
     const to = Math.min(total, Math.max(0, upTo));
     if (to <= already) return;

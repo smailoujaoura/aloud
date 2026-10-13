@@ -7,7 +7,7 @@
  * resolved separately against the live DOM (see live-container.ts + fuzzy-align.ts).
  */
 import { Readability, isProbablyReaderable } from '@mozilla/readability';
-import { Eligibility } from './eligibility';
+import { Eligibility, invisible } from './eligibility';
 
 /**
  * Prune Readability's copy of the page using what the *live* page shows. The copy has lost the
@@ -22,10 +22,28 @@ function pruneCopy(live: Document, copy: Document, forSaving: boolean): void {
   if (liveEls.length !== copyEls.length) return; // the page changed under us: prune nothing
   const check = new Eligibility();
   const drop: Element[] = [];
+  const blank: Element[] = [];
   liveEls.forEach((el, i) => {
     if (check.control(el) || (forSaving && el.ownerDocument.defaultView && check.hidden(el))) drop.push(copyEls[i]!);
+    // `visibility: hidden` is inherited but can be undone below: the element's own text goes, and a
+    // child that makes itself visible again stays.
+    else if (forSaving && el.ownerDocument.defaultView && invisible(el)) {
+      const shown = [...el.querySelectorAll('*')].some((d) => !invisible(d));
+      if (shown) blank.push(copyEls[i]!);
+      else drop.push(copyEls[i]!);
+    }
   });
+  for (const el of blank) for (const n of [...el.childNodes]) if (n.nodeType === Node.TEXT_NODE) n.remove();
   for (const el of drop) el.remove();
+  // Read live, hidden prose stays a candidate (a disclosure may reveal it), so Readability must see
+  // it: it skips anything marked `hidden` or `aria-hidden`, and the reader only plans what
+  // Readability kept. The live page decides what is read now (extract/eligibility.ts).
+  if (!forSaving) {
+    for (const el of copy.querySelectorAll('[hidden], [aria-hidden="true"]')) {
+      el.removeAttribute('hidden');
+      el.removeAttribute('aria-hidden');
+    }
+  }
 }
 
 export interface ExtractedArticle {
@@ -62,7 +80,7 @@ export function elementToText(root: Element, check?: Eligibility): string {
         continue;
       }
       // On a live page: not hidden text, not a control's label.
-      if (check && (check.control(node as Element) || ((node as Element).ownerDocument.defaultView && check.hidden(node as Element)))) {
+      if (check && (check.control(node as Element) || ((node as Element).ownerDocument.defaultView && (check.hidden(node as Element) || invisible(node as Element))))) {
         node = skipSubtree(walker);
         continue;
       }

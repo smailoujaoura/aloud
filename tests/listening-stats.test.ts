@@ -45,15 +45,33 @@ describe('listening statistics', () => {
     expect(summarize(s, '2026-10-01', '2026-10-02').completed).toBe(2);
   });
 
-  it('restoring the same backup twice counts nothing twice, and an older one takes nothing away', () => {
-    const here = withHeard(emptyStats(at(2026, 9, 1)), [heard(at(2026, 10, 1), 100, 250), heard(at(2026, 10, 3), 50, 120)]);
-    const backup = withHeard(emptyStats(at(2026, 8, 1)), [heard(at(2026, 10, 1), 60, 150), heard(at(2026, 10, 2), 40, 90, 'b.org', 'fr')]);
-    const once = mergeStats(here, backup);
-    const twice = mergeStats(once, backup);
-    expect(twice).toEqual(once);
+  it('restoring this profile\'s own backup twice counts nothing twice, and an older one takes nothing away', () => {
+    const earlier = withHeard(emptyStats(at(2026, 9, 1), 'me'), [heard(at(2026, 10, 1), 60, 150)]);
+    const now = withHeard(earlier, [heard(at(2026, 10, 1), 40, 100), heard(at(2026, 10, 3), 50, 120)]);
+    const once = mergeStats(now, earlier);
+    expect(mergeStats(once, earlier)).toEqual(once);
     expect(once.days['2026-10-01']!.seconds).toBe(100);
-    expect(once.days['2026-10-02']!.languages.fr).toEqual({ seconds: 40, words: 90 });
-    expect(once.since).toBe(at(2026, 8, 1));
+    expect(once.days['2026-10-03']!.seconds).toBe(50);
+  });
+
+  it('another device\'s listening adds, and the totals still equal every breakdown', () => {
+    // The reviewer's case: 10 s on site A in Italian here, 20 s on site B in English in a backup.
+    const here = withHeard(emptyStats(at(2026, 9, 1), 'laptop'), [heard(at(2026, 10, 1), 10, 20, 'a.it', 'it')]);
+    const backup = withHeard(emptyStats(at(2026, 8, 1), 'phone'), [heard(at(2026, 10, 1), 20, 40, 'b.org', 'en')]);
+    const merged = mergeStats(here, backup);
+    const day = merged.days['2026-10-01']!;
+    const sum = (m: Record<string, { seconds: number }>) => Object.values(m).reduce((n, t) => n + t.seconds, 0);
+    expect(day.seconds).toBe(30);
+    expect(sum(day.sites)).toBe(30);
+    expect(sum(day.languages)).toBe(30);
+    expect(merged.since).toBe(at(2026, 8, 1));
+    expect(merged.origin).toBe('laptop');
+    // Partly overlapping: the phone's backup restored again after this laptop's was merged into it.
+    const phoneLater = mergeStats(withHeard(backup, [heard(at(2026, 10, 1), 5, 10, 'b.org', 'en')]), here);
+    const again = mergeStats(merged, phoneLater);
+    expect(again.days['2026-10-01']!.seconds).toBe(35);
+    expect(sum(again.days['2026-10-01']!.sites)).toBe(35);
+    expect(mergeStats(again, phoneLater)).toEqual(again);
   });
 
   it('totals, the chart and both breakdowns reconcile', () => {
@@ -81,9 +99,11 @@ describe('listening statistics', () => {
       },
     }, at(2026, 10, 12));
     expect(Object.keys(s.days)).toEqual(['2026-10-01']);
-    expect(s.days['2026-10-01']).toEqual({ seconds: 10, words: 0, sites: { x: { seconds: 0, words: 0 } }, languages: {}, completed: ['d'] });
+    expect(s.days['2026-10-01']).toMatchObject({ seconds: 10, words: 0, sites: { x: { seconds: 0, words: 0 } }, languages: {}, completed: ['d'] });
+    // Counted before buckets existed: kept, in the one bucket every device names the same.
+    expect(Object.keys(s.days['2026-10-01']!.origins)).toEqual(['legacy']);
     expect(s.since).toBe(at(2026, 10, 12));
-    expect(normalizeStats(null, 5)).toEqual({ since: 5, days: {} });
+    expect(normalizeStats(null, 5)).toMatchObject({ since: 5, days: {} });
   });
 
   it('counts words as the language does', () => {

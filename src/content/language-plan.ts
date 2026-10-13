@@ -58,14 +58,29 @@ const MIN_LETTERS_TO_DETECT = 12;
 const SHORT_PASSAGE_WORDS = 3;
 
 /** Enough different words to be judged: a sentence, not an exclamation said three times. */
+/**
+ * Words as the text's own writing system has them. Splitting on spaces counted a whole Chinese
+ * or Japanese paragraph as one word — "short" — so its English neighbours outvoted a reliable
+ * detection. The segmenter knows where words end in scripts written without spaces.
+ */
+const wordSegmenter = typeof Intl !== 'undefined' && 'Segmenter' in Intl ? new Intl.Segmenter(undefined, { granularity: 'word' }) : null;
+
+function wordsOf(text: string): string[] {
+  if (wordSegmenter) {
+    const out: string[] = [];
+    for (const s of wordSegmenter.segment(text.toLowerCase())) if (s.isWordLike) out.push(s.segment);
+    return out;
+  }
+  return text.toLowerCase().match(/[\p{L}\p{M}']+/gu) ?? [];
+}
+
 function substantial(text: string): boolean {
-  const words = text.toLowerCase().match(/[\p{L}\p{M}']+/gu) ?? [];
+  const words = wordsOf(text);
   return letterCount(text) >= 25 && words.length >= 5 && new Set(words).size >= 4;
 }
 
 function isShortPassage(text: string): boolean {
-  const words = text.trim().split(/\s+/).filter((w) => /\p{L}/u.test(w)).length;
-  return words <= SHORT_PASSAGE_WORDS || letterCount(text) < MIN_LETTERS_TO_DETECT;
+  return wordsOf(text).length <= SHORT_PASSAGE_WORDS || letterCount(text) < MIN_LETTERS_TO_DETECT;
 }
 
 export function letterCount(text: string): number {

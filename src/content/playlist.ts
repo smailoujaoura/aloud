@@ -13,7 +13,7 @@
  *    arbitrary nodes), so it segments the selected string and fuzzy-locates each sentence.
  */
 import { buildBlockModel, type BlockRole } from '@/extract/block-model';
-import { rangeForSpan, spanEligible, type TextIndex } from '@/extract/text-index';
+import { rangeForSpan, visibleTextOf, type TextIndex } from '@/extract/text-index';
 import type { Route } from './voice-routing';
 import { segmentSentences } from '@/segment/sentences';
 import { isSpeakable } from '@/segment/normalize';
@@ -48,6 +48,11 @@ export interface PlaylistItem {
    * Re-evaluated when the page changes while reading (session.ts), so it is not fixed at planning.
    */
   eligible: boolean;
+  /**
+   * `sourceText` as it is read now: with any part hidden on the page blanked out (a hidden word
+   * inside a visible sentence). What spoken text is made from; updated when the page changes.
+   */
+  visibleSource?: string;
   /** Which passage (block) of the page it is in — set by the reader when it plans languages. */
   passage?: number;
   /** Its passage's primary language (`it`), or '' when nothing could tell. */
@@ -129,18 +134,21 @@ export function buildArticlePlaylist(
     let first = true;
 
     for (const chunk of segmentSentences(blockText, { locale: lang, maxChars, utterances: true })) {
-      const spoken = normalize(chunk.text);
-      if (!isSpeakable(spoken)) continue;
+      // Planned whether or not it shows now, so a translation revealed later can be read.
+      if (!isSpeakable(normalize(chunk.text))) continue;
       const at = block.start + chunk.start;
       const range = rangeForSpan(index, at, block.start + chunk.end);
+      const visible = visibleTextOf(index, at, block.start + chunk.end);
+      const shown = isSpeakable(visible);
       push({
-        spokenText: spoken,
+        spokenText: normalize(shown ? visible : chunk.text),
         sourceText: chunk.text,
+        visibleSource: visible,
         range: range ?? blockRange,
         sourceAt: range && index.fullText.startsWith(chunk.text, at) ? at : null,
         blockRange,
         span: { start: at, end: block.start + chunk.end },
-        eligible: spanEligible(index, at, block.start + chunk.end),
+        eligible: shown,
         role: block.role,
         startsBlock: first,
         isHeading,
@@ -161,19 +169,21 @@ export function buildSelectionPlaylist(opts: PlanOptions & { sourceText: string 
   const playlist: PlaylistItem[] = [];
 
   for (const chunk of segmentSentences(sourceText, { locale: lang, maxChars, utterances: true })) {
-    const spoken = normalize(chunk.text);
-    if (!isSpeakable(spoken)) continue;
+    if (!isSpeakable(normalize(chunk.text))) continue;
     const found = aligner.locate(chunk.text, chunk.index);
+    // A selection dragged across a collapsed translation: its hidden text is not read.
+    const visible = found ? visibleTextOf(index, found.start, found.end) : chunk.text;
+    const shown = isSpeakable(visible);
     playlist.push({
       playId: playlist.length,
-      spokenText: spoken,
+      spokenText: normalize(shown ? visible : chunk.text),
       sourceText: chunk.text,
+      visibleSource: visible,
       range: found ? rangeForSpan(index, found.start, found.end) : null,
       sourceAt: found && index.fullText.startsWith(chunk.text, found.start) ? found.start : null,
       blockRange: null,
       span: found ? { start: found.start, end: found.end } : null,
-      // A selection dragged across a collapsed translation: its hidden text is not read.
-      eligible: found ? spanEligible(index, found.start, found.end) : true,
+      eligible: shown,
       role: 'paragraph',
       startsBlock: false,
       isHeading: false,

@@ -38,3 +38,25 @@ describe('following the reading without lurching', () => {
     expect(s.moving).toBe(false);
   });
 });
+
+describe('retargeting a move under way', () => {
+  it('aims at the current position plus the new delta, never the old destination plus it', () => {
+    let y = 0;
+    let frame = null as ((t: number) => void) | null;
+    const view = {
+      get scrollY() { return y; }, scrollX: 0, innerHeight: 500, document,
+      scrollTo: (_x: number, top: number) => { y = top; },
+      requestAnimationFrame: (f: (t: number) => void) => { frame = f; return 1; },
+      cancelAnimationFrame() {},
+      addEventListener() {}, removeEventListener() {},
+    } as unknown as Window;
+    Object.defineProperty(document.documentElement, 'scrollHeight', { value: 10000, configurable: true });
+    const s = new SmoothScroller(view, false);
+    s.by(null, 1000); // to 1000
+    y = 600; // part-way there; the passage is now 400 px below the line
+    s.by(null, 400);
+    // Run the animation to its end.
+    for (let i = 0; i < 200 && frame; i++) { const f = frame; frame = null; f(performance.now() + 10_000); }
+    expect(y).toBe(1000);
+  });
+});

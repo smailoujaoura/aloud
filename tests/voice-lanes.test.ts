@@ -57,7 +57,6 @@ function setup() {
     onError: () => undefined,
     onAudio: (id) => audio.push([id, 'heard']),
     onLaneFailed: (voice, _m, ids) => failed.push({ voice: voice.voice, ids }),
-    onLaneClosed: (ids) => closed.push(ids),
   });
   return { lanes, audio, failed, closed };
 }
@@ -127,19 +126,86 @@ describe('VoiceLanes', () => {
     expect(audio).toEqual([[3, 'heard']]);
   });
 
-  it('keeps at most MAX_LANES models, closing the least recently used and reporting what it owed', async () => {
+  it('a fourth voice waits for a lane to finish what it owes; no busy lane is closed, never more than MAX_LANES', async () => {
     const { lanes, closed } = setup();
     const init = lanes.init({ ...base, engine: 'piper', voice: 'en' });
     hosts[0]!.ready();
     await init;
     lanes.request(1, 'a', 1, { engine: 'piper', voice: 'it' });
     lanes.request(2, 'b', 1, { engine: 'piper', voice: 'fr' });
-    expect(lanes.laneCount).toBe(MAX_LANES);
     lanes.request(3, 'c', 1, { engine: 'piper', voice: 'de' });
     expect(lanes.laneCount).toBe(MAX_LANES);
-    expect(hosts[1]!.disposed).toBe(true); // Italian, the oldest
-    expect(closed).toEqual([[1]]);
+    expect(hosts).toHaveLength(3); // no fourth model while the others owe audio
+    expect(hosts.some((h) => h.disposed)).toBe(false);
+    expect(lanes.isPending(3)).toBe(true);
+    expect(closed).toEqual([]);
+    hosts[1]!.ready();
+    await flush();
+    hosts[1]!.say(1); // Italian has delivered everything it owed…
+    expect(hosts[1]!.disposed).toBe(true); // …so it makes room
+    expect(hosts).toHaveLength(4);
+    expect(lanes.laneCount).toBe(MAX_LANES);
+    hosts[3]!.ready();
+    await flush();
+    expect(hosts[3]!.requests.map((r) => r.playId)).toEqual([3]);
+  });
+
+  it('an MP3 export with four voices finishes, whatever order the audio comes back in', async () => {
+    const { Mp3Export } = await import('@/content/audio-export');
+    let exp!: InstanceType<typeof Mp3Export>;
+    let done = false;
+    const voices = ['en', 'it', 'fr', 'de', 'it', 'es'];
+    const lanes = new VoiceLanes({
+      onReady: () => undefined,
+      onProgress: () => undefined,
+      onError: () => undefined,
+      onAudio: (id, pcm, sr) => exp.accept(id, pcm, sr),
+    });
+    const init = lanes.init({ ...base, engine: 'piper', voice: 'en' });
+    hosts[0]!.ready();
+    await init;
+    exp = new Mp3Export({
+      count: voices.length,
+      lookahead: 6,
+      request: (id) => lanes.request(id, 'Text to read.', 1, { engine: 'piper', voice: voices[id]! }),
+      leadSilenceSec: () => 0,
+      onProgress: () => undefined,
+      onDone: () => (done = true),
+      onError: () => undefined,
+    });
+    exp.start();
+    // Hosts answer in rounds, newest first: every live host that is ready answers what it owes.
+    const answered = new Set<string>();
+    for (let round = 0; round < 20 && !done; round++) {
+      for (const h of [...hosts].reverse()) {
+        if (h.disposed) continue;
+        h.ready();
+        await flush();
+        for (const r of h.requests) {
+          const k = `${hosts.indexOf(h)}:${r.playId}`;
+          if (answered.has(k)) continue;
+          answered.add(k);
+          (h.cb as { onAudio(i: number, p: Float32Array, s: number): void }).onAudio(r.playId, new Float32Array(2205).fill(0.1), 22050);
+        }
+      }
+      expect(hosts.filter((h) => !h.disposed).length).toBeLessThanOrEqual(MAX_LANES);
+    }
+    expect(done).toBe(true);
+  });
+
+  it('a secondary voice that fails after loading is reported, with what it owed', async () => {
+    const { lanes, failed } = setup();
+    const init = lanes.init({ ...base, engine: 'piper', voice: 'en' });
+    hosts[0]!.ready();
+    await init;
+    lanes.request(1, 'Bonjour.', 1, { engine: 'piper', voice: 'fr' });
+    hosts[1]!.ready();
+    await flush();
+    (hosts[1]!.cb as { onError(i: unknown): void }).onError({ fatal: true, message: 'The voice stopped working and could not be restarted' });
+    expect(failed).toEqual([{ voice: 'fr', ids: [1] }]);
     expect(lanes.isPending(1)).toBe(false);
+    expect(hosts[1]!.disposed).toBe(true);
+    expect(lanes.usable({ engine: 'piper', voice: 'fr' })).toBe(false);
   });
 
   it('a voice that cannot load is reported with what it owed, and not tried again', async () => {

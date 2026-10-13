@@ -7,9 +7,12 @@
  * secondary lane, started the first time one of its sentences is asked for (a few sentences
  * ahead of playback), and kept while it is useful.
  *
- * Bounded: at most `MAX_LANES` models are loaded, and a secondary lane runs few workers. The
- * least recently used secondary lane is closed to make room; what it still owed is reported, so
- * the reader can ask again. Kokoro's voices share one model, so every Kokoro voice is one lane.
+ * Bounded: at most `MAX_LANES` models are loaded, and a secondary lane runs few workers. Only a
+ * lane that owes nothing is closed to make room — the least recently used of them. A voice that
+ * finds every lane still busy waits its turn and is let in the moment one has delivered all it
+ * owed: nothing asked for is ever dropped, nothing is asked for twice, and an export waiting on
+ * that voice simply waits (closing a busy lane lost its sentences, and a re-request from inside
+ * the eviction opened a fourth model). Kokoro's voices share one model, so they are one lane.
  *
  * Every sentence asked for is owned by the lane it was asked of. Audio from any other lane —
  * asked before a correction moved the passage to another voice — is dropped, never played as the
@@ -30,8 +33,6 @@ export interface LaneCallbacks extends WorkerClientCallbacks {
   onLaneState?(voice: VoiceRef, ready: boolean): void;
   /** A secondary voice could not be loaded; `playIds` were asked of it and will not come. */
   onLaneFailed?(voice: VoiceRef, message: string, playIds: number[]): void;
-  /** A secondary lane was closed to make room; `playIds` were asked of it and will not come. */
-  onLaneClosed?(playIds: number[]): void;
 }
 
 interface Lane {
@@ -54,8 +55,10 @@ export class VoiceLanes {
   private readonly others = new Map<string, Lane>();
   /** Voices that failed to load: not tried again on this page. */
   private readonly failed = new Set<string>();
-  /** playId → the key of the lane it was asked of. */
+  /** playId → the key of the lane it was asked of (or is waiting for). */
   private readonly owner = new Map<number, string>();
+  /** Asked of a voice with no room for its model yet, in order; let in as lanes go idle. */
+  private waiting: Array<{ playId: number; text: string; speed: number; ref: VoiceRef; key: string }> = [];
   private clock = 0;
 
   constructor(private readonly cb: LaneCallbacks) {}
@@ -121,7 +124,17 @@ export class VoiceLanes {
     this.dropOwner(playId);
 
     const lane = key === primary.key ? primary : this.laneFor(ref, key);
+    if (lane === 'wait') {
+      this.owner.set(playId, key);
+      this.waiting.push({ playId, text, speed, ref, key });
+      return;
+    }
     if (!lane) return;
+    this.send(lane, ref, playId, text, speed);
+  }
+
+  private send(lane: Lane, ref: VoiceRef, playId: number, text: string, speed: number): void {
+    const key = lane.key;
     lane.lastUsed = ++this.clock;
     this.owner.set(playId, key);
     // Kokoro remembers the last voice it was given, so every Kokoro request names its own.
@@ -136,6 +149,7 @@ export class VoiceLanes {
   /** Drop queued work everywhere, keeping in-flight work for `keepAhead` items from `playId`. */
   cancelFrom(playId: number, keepAhead: number): void {
     this.owner.clear();
+    this.waiting = [];
     this.primary?.client.cancelFrom(playId, keepAhead);
     for (const lane of this.others.values()) {
       lane.queued = [];
@@ -153,6 +167,7 @@ export class VoiceLanes {
   }
 
   dispose(): void {
+    this.waiting = [];
     this.closeOthers();
     this.primary?.client.dispose();
     this.primary = null;
@@ -163,23 +178,52 @@ export class VoiceLanes {
     const was = this.owner.get(playId);
     if (was === undefined) return;
     this.owner.delete(playId);
+    this.waiting = this.waiting.filter((w) => w.playId !== playId);
     const lane = was === this.primary?.key ? this.primary : this.others.get(was);
     if (!lane) return;
     lane.queued = lane.queued.filter((q) => q.playId !== playId);
     lane.client.forget(playId);
+    this.admitWaiting();
   }
 
   private deliver(key: string, playId: number, pcm: Float32Array, sr: number, words?: WordTiming[]): void {
     if (this.owner.get(playId) !== key) return; // asked again of another voice since
     this.owner.delete(playId);
     this.cb.onAudio(playId, pcm, sr, words);
+    this.admitWaiting();
   }
 
-  private laneFor(ref: VoiceRef, key: string): Lane | null {
+  /** Does lane `key` still owe audio? */
+  private owes(key: string): boolean {
+    for (const k of this.owner.values()) if (k === key) return true;
+    return false;
+  }
+
+  /** Let in waiting voices, oldest first, as far as there is room. Never closes a busy lane. */
+  private admitWaiting(): void {
+    while (this.waiting.length) {
+      const first = this.waiting[0]!;
+      const lane = this.laneFor(first.ref, first.key);
+      if (lane === 'wait') return;
+      const mine = this.waiting.filter((w) => w.key === first.key);
+      this.waiting = this.waiting.filter((w) => w.key !== first.key);
+      for (const w of mine) {
+        if (this.owner.get(w.playId) !== w.key) continue;
+        if (!lane) {
+          // Its voice failed meanwhile: these will not come from it.
+          this.owner.delete(w.playId);
+          continue;
+        }
+        this.send(lane, w.ref, w.playId, w.text, w.speed);
+      }
+    }
+  }
+
+  private laneFor(ref: VoiceRef, key: string): Lane | null | 'wait' {
     if (this.failed.has(`${ref.engine}:${ref.voice}`)) return null;
     const open = this.others.get(key);
     if (open) return open;
-    if (this.laneCount >= MAX_LANES) this.closeLeastRecent();
+    if (this.laneCount >= MAX_LANES && !this.closeLeastRecentIdle()) return 'wait';
     const primary = this.primary!;
     const config: EngineConfig = {
       ...primary.config,
@@ -198,10 +242,16 @@ export class VoiceLanes {
         onProgress: () => undefined,
         onAudio: (playId, pcm, sr, words) => this.deliver(key, playId, pcm, sr, words),
         onError: (info) => {
-          if (info.fatal) return; // reported by the failed init below
+          if (info.fatal) {
+            // Before ready, the failed init below reports it. After — a host whose workers could not
+            // be restarted — nothing else would: the lane is gone, and what it owed goes back.
+            if (lane.ready) this.failLane(lane, ref, info.message);
+            return;
+          }
           if (info.playId != null && this.owner.get(info.playId) === key) {
             this.owner.delete(info.playId);
             this.cb.onError(info);
+            this.admitWaiting();
           }
         },
         onNotice: (message) => this.cb.onNotice?.(message),
@@ -219,15 +269,22 @@ export class VoiceLanes {
       },
       (err: unknown) => {
         if (this.others.get(key) !== lane) return; // closed on purpose
-        const message = err instanceof Error ? err.message : String(err);
-        log.warn(`[voices] ${ref.engine}/${ref.voice} could not load:`, message);
-        this.others.delete(key);
-        lane.client.dispose();
-        this.failed.add(`${ref.engine}:${ref.voice}`);
-        this.cb.onLaneFailed?.(ref, message, this.release(key));
+        this.failLane(lane, ref, err instanceof Error ? err.message : String(err));
       },
     );
     return lane;
+  }
+
+  /** A voice that cannot be used on this page: closed, not tried again, its sentences handed back. */
+  private failLane(lane: Lane, ref: VoiceRef, message: string): void {
+    if (this.others.get(lane.key) !== lane) return;
+    log.warn(`[voices] ${ref.engine}/${ref.voice} failed:`, message);
+    this.others.delete(lane.key);
+    lane.client.dispose();
+    this.failed.add(`${ref.engine}:${ref.voice}`);
+    const owed = this.release(lane.key);
+    this.cb.onLaneFailed?.(ref, message, owed);
+    this.admitWaiting();
   }
 
   /** Every playId owned by lane `key`, no longer owned by anything. */
@@ -238,15 +295,18 @@ export class VoiceLanes {
     return ids;
   }
 
-  private closeLeastRecent(): void {
+  /** Close the least recently used secondary lane that owes nothing; false when every one is busy. */
+  private closeLeastRecentIdle(): boolean {
     let oldest: Lane | null = null;
-    for (const lane of this.others.values()) if (!oldest || lane.lastUsed < oldest.lastUsed) oldest = lane;
-    if (!oldest) return;
+    for (const lane of this.others.values()) {
+      if (this.owes(lane.key)) continue;
+      if (!oldest || lane.lastUsed < oldest.lastUsed) oldest = lane;
+    }
+    if (!oldest) return false;
     log.info(`[voices] closing ${oldest.key} to make room`);
     this.others.delete(oldest.key);
     oldest.client.dispose();
-    const ids = this.release(oldest.key);
-    if (ids.length) this.cb.onLaneClosed?.(ids);
+    return true;
   }
 
   private closeOthers(): void {

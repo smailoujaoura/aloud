@@ -137,3 +137,47 @@ describe('what the reader reads', () => {
     expect(index.fullText).toContain('Translate?');
   });
 });
+
+describe('review findings', () => {
+  it('a hidden word inside a visible sentence is not said, and the sentence still is', () => {
+    load(`<style>.gone{display:none}</style><article>
+      <p>This is a fully visible sentence about the forest <span class="gone">HIDDEN SECRET</span> and the animals living there.</p>
+    </article>`);
+    const { items } = plan();
+    expect(items).toHaveLength(1);
+    expect(items[0]!.eligible).toBe(true);
+    expect(items[0]!.spokenText).not.toContain('HIDDEN');
+    expect(items[0]!.spokenText).toContain('forest and the animals');
+  });
+
+  it('a translation behind hidden + aria-hidden is planned, and read once both are removed', () => {
+    load(`<article>
+      <p>Una frase visibile prima della traduzione nascosta qui.</p>
+      <p id="t" hidden aria-hidden="true">A translation that a disclosure reveals later on.</p>
+    </article>`);
+    const { items, index } = plan();
+    const t = items.find((i) => i.sourceText.includes('disclosure'))!;
+    expect(t).toBeDefined();
+    expect(t.eligible).toBe(false);
+    const el = document.getElementById('t')!;
+    el.removeAttribute('hidden');
+    el.removeAttribute('aria-hidden');
+    expect(refreshEligibility(index)).toBe(true);
+    expect(spanEligible(index, t.span!.start, t.span!.end)).toBe(true);
+  });
+
+  it('a saved copy leaves out a paragraph hidden with visibility, keeping a child shown again', () => {
+    load(`<style>.inv{visibility:hidden}.back{visibility:visible}</style><article>
+      <h1>Saved article title</h1>
+      <p>The first paragraph is plainly visible and long enough to be kept as the article body text.</p>
+      <p class="inv">INVISIBLE PARAGRAPH that was never seen on the page.</p>
+      <div class="inv">Unseen words <p class="back">but this part shows itself again, and is read like the rest of the article text.</p></div>
+      <p>The last paragraph is visible as well, and long enough to make the article worth saving here.</p>
+    </article>`);
+    const saved = extractArticle(document, { forSaving: true });
+    expect(saved.text).not.toContain('INVISIBLE');
+    expect(saved.html).not.toContain('INVISIBLE');
+    expect(saved.text).not.toContain('Unseen words');
+    expect(saved.text).toContain('shows itself again');
+  });
+});

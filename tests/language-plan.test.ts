@@ -76,6 +76,17 @@ describe('planLanguages', () => {
     expect(plan[2]!.source).toBe('context');
   });
 
+  it('a Chinese paragraph between English ones keeps its language: it is not a "short" reply', async () => {
+    const zh = '我们今天去公园散步。天气很好，孩子们在草地上玩。';
+    const detect: Detector = async (t) => (t === zh ? { language: 'zh', reliable: true } : { language: 'en', reliable: true });
+    const plan = await planLanguages(
+      [p('The children went to the park in the morning.'), p(zh), p('They came home late in the afternoon.')],
+      detect,
+      'en',
+    );
+    expect(plan.map((l) => l.language)).toEqual(['en', 'zh', 'en']);
+  });
+
   it('trusts a local lang attribute over the detector', async () => {
     const plan = await planLanguages([p('Once upon a time there was a chicken.', 'it-IT')], detector, 'en');
     expect(plan[0]).toEqual({ language: 'it', source: 'markup' });
