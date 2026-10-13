@@ -163,7 +163,8 @@ function linesOf(page: PdfPageInput): Line[] {
     .sort((a, b) => b.y - a.y || a.x - b.x);
   if (items.length === 0) return [];
 
-  const splits = findColumnSplits(chunks(items), 0, page.width);
+  const stretches = chunks(items);
+  const splits = findColumnSplits(stretches, 0, page.width);
   const bounds = [0, ...splits, page.width];
   /** Column index, or `null` for a run that crosses a gutter (a title, a spanning caption). */
   const columnOf = (item: PdfTextItem): number | null => {
@@ -188,7 +189,17 @@ function linesOf(page: PdfPageInput): Line[] {
       const gap = Math.max(a.x, b.x) - Math.min(a.x + (a.width || 0), b.x + (b.width || 0));
       return gap <= 0.8 * Math.max(a.height || 10, b.height || 10);
     };
-    const queue = items.filter((it) => columnOf(it) == null);
+    // A stretch of text — runs joined as they read — that crosses a gutter is full-width, all of it.
+    // Judging runs alone missed it where a producer draws one glyph per run (Chromium, for Arabic):
+    // no single glyph need sit on the gutter, and an intro's second line was cut at a word space and
+    // half of it read with the left column.
+    const crossingStretches = stretches.filter(([x0, x1]) => splits.some((x) => x0 < x - 2 && x1 > x + 2));
+    const inCrossingStretch = (it: PdfTextItem): boolean =>
+      crossingStretches.some(
+        ([x0, x1, y]) =>
+          Math.abs(it.y - y) <= Math.max(1, 0.5 * (it.height || 10)) && it.x >= x0 - 0.5 && it.x + (it.width || 0) <= x1 + 0.5,
+      );
+    const queue = items.filter((it) => columnOf(it) == null || inCrossingStretch(it));
     for (const it of queue) fullWidth.add(it);
     while (queue.length) {
       const from = queue.pop()!;
@@ -544,22 +555,39 @@ function findColumnSplits(spans: readonly Span[], from: number, to: number, dept
   // Only the middle of the region can be a column boundary; anything else is a margin.
   for (let f = 0.3; f <= 0.7; f += 0.01) {
     const x = from + f * width;
-    let crossing = 0;
-    let left = 0;
-    let right = 0;
-    for (const [x0, x1] of inside) {
-      if (x0 < x - 2 && x1 > x + 2) crossing++;
-      else if (x1 <= x) left++;
-      else right++;
+    const leftYs: number[] = [];
+    const rightYs: number[] = [];
+    const crossers: number[] = [];
+    for (const [x0, x1, y] of inside) {
+      if (x0 < x - 2 && x1 > x + 2) crossers.push(y);
+      else if (x1 <= x) leftYs.push(y);
+      else rightYs.push(y);
     }
-    if (crossing > 0.04 * inside.length) continue;
-    if (left < 0.25 * inside.length || right < 0.25 * inside.length) continue;
+    // A run across the gutter argues against columns only among them. A title or an intro above
+    // all of the text on either side (or a footer below it) is not a crossing — counted as one, a
+    // centred title narrower than the full-width cut-off sank every short two-column section under
+    // it on A4 and Letter pages, read line by line across the gutter. Anything level with the
+    // columns' text still counts, wherever the two sides' lines happen to fall.
+    const sides = [...leftYs, ...rightYs];
+    const band = sides.length ? { top: Math.max(...sides) + 2, bottom: Math.min(...sides) - 2 } : null;
+    const crossing = band ? crossers.filter((y) => y <= band.top && y >= band.bottom).length : crossers.length;
+    const counted = leftYs.length + rightYs.length + crossing;
+    const left = leftYs.length;
+    const right = rightYs.length;
+    if (crossing > 0.04 * counted) continue;
+    if (left < 0.25 * counted || right < 0.25 * counted) continue;
     const balance = Math.abs(left - right);
     if (!best || crossing < best.crossing || (crossing === best.crossing && balance < best.balance)) {
       best = { x, crossing, balance };
     }
   }
   if (!best) return [];
+  // The split goes in the middle of the empty gap, not wherever the scan first fitted: a line
+  // ending a point or two past the scan's position counted as clear of it there, but as crossing
+  // it when runs were given to columns — and a title-less two-column page was read interleaved.
+  const leftEdge = Math.max(-Infinity, ...inside.filter(([x0, x1]) => x1 <= best!.x + 2 && x0 < best!.x).map(([, x1]) => x1));
+  const rightEdge = Math.min(Infinity, ...inside.filter(([x0, x1]) => x0 >= best!.x - 2 && x1 > best!.x).map(([x0]) => x0));
+  if (Number.isFinite(leftEdge) && Number.isFinite(rightEdge) && leftEdge < rightEdge) best.x = (leftEdge + rightEdge) / 2;
   // Short pages: nothing may cross the gutter, and the two sides must be side by side.
   if (inside.length < 12 && (best.crossing > 0 || !sideBySide(inside, best.x))) return [];
 

@@ -53,4 +53,33 @@ describe('two columns under a full-width title and intro', () => {
     const order = [...text.matchAll(/Paragraph (\d+) of the paper has [^¶]*?and ends here\./g)].map((m) => Number(m[1]));
     expect(order).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
   });
+
+  // The fourteenth pass. A centred title narrower than the full-width cut-off crossed the gutter
+  // and, on a short page, vetoed the columns: on A4 and Letter every short section under a title
+  // was read line by line across the gutter (A5 happened to wrap into enough lines to escape).
+  for (const file of ['en-title-cols-a4.pdf', 'en-title-cols-letter.pdf']) {
+    it(`${file}: the intro whole, then column one, then column two`, async () => {
+      const { blocks: b } = await blocks(file);
+      const text = b.map((x) => x.text).join(' ').replace(/\s+/g, ' ');
+      const intro = text.indexOf('standfirst would');
+      const one = text.indexOf('The first column starts here');
+      const two = text.indexOf('The second column starts here');
+      expect(intro).toBeGreaterThan(0);
+      expect(one).toBeGreaterThan(intro);
+      expect(two).toBeGreaterThan(one);
+      expect(text.slice(one, two)).not.toMatch(/second column|carries on/);
+      // Nothing of either column before column one starts (the old order read "column." first).
+      expect(text.slice(intro, one)).not.toMatch(/of the column\.|ordinary words|carries on/);
+    });
+  }
+
+  it('no title, columns a few points out of line: the split sits in the gap, and nothing is interleaved', async () => {
+    const { blocks: b } = await blocks('en-cols-offset-a5.pdf');
+    const text = b.map((x) => x.text).join(' ').replace(/\s+/g, ' ');
+    expect(text).toBe(
+      'The first column starts here and carries on over several lines of ordinary English text until the first paragraph of this column ends. ' +
+        'The second column starts at the top as well, with different text entirely, read after the first one.',
+    );
+  });
 });
+
