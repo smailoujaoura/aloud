@@ -204,13 +204,14 @@
           <output id="speedOut"></output>
         </label>
 
-        <section class="lang-voice-section" aria-labelledby="langVoiceHeading">
-          <h3 id="langVoiceHeading">Voice for each language</h3>
-          <p class="muted small">A passage in one of these languages is read by the voice shown for it. Automatic uses
-            your voice where it speaks the language, otherwise the best downloaded voice that does — and never a hidden
-            one while another is available.</p>
-          <div id="languageVoiceList"></div>
-        </section>
+        <section class="vb" id="voiceBoard" aria-labelledby="langVoiceHeading"></section>
+        <section class="vb mv" id="myVoices" aria-label="My voices"></section>
+
+        <details id="voiceCatalogue" class="catalogue">
+          <summary>
+            <span class="cat-title"><b>Browse and download voices</b>
+              <span class="muted small">222 voices in 49 languages — Piper, Kokoro and Supertonic. Voices you put away are here too.</span></span>
+          </summary>
 
         <!-- Stays put while the list under it scrolls, so the engine you are looking at and the
              search that filters it are never scrolled away from what they act on. -->
@@ -230,6 +231,7 @@
           <p id="usage" class="muted small">Calculating…</p>
           <button id="clearModels" class="ghost danger btn-sm" type="button">Delete all downloads</button>
         </div>
+        </details>
       </section>
       </div>
 

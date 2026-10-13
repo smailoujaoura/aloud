@@ -23,7 +23,7 @@ import { capabilities } from '@/shared/browser-env';
 import { engineInfo, listEngines, type EngineInfo } from '@/shared/engine-catalog';
 import { isEnglish, listVoices, shortPiperLabel } from '@/shared/voice-catalog';
 import { languageName, primaryLanguage, voiceLanguage, type CandidateVoice } from '@/shared/language-voice';
-import { routeFor } from '@/content/voice-routing';
+import { downloadedVoices, renderMyVoices, renderVoiceBoard } from './voice-board';
 import { cacheClear, cacheDelete, deleteModels } from '@/engine/model-cache';
 import { activeVoice, type EngineId, type Settings } from '@/shared/settings';
 import type { ModelManifest, PiperVoiceEntry } from '@/engine/engines/types';
@@ -71,8 +71,12 @@ export interface PanelContext {
 
 export interface VoiceHosts {
   nowReading: HTMLElement;
-  /** "Voice for each language": the voice each language is read with. */
-  languages: HTMLElement;
+  /** "Who reads what": the switchboard of languages and voices (voice-board.ts). */
+  board: HTMLElement;
+  /** "My voices": the voices kept. */
+  mine: HTMLElement;
+  /** The folded catalogue: browse, download, bring back. */
+  catalogue: HTMLDetailsElement;
   tabs: HTMLElement;
   panel: HTMLElement;
 }
@@ -136,7 +140,19 @@ async function runModelAction(button: HTMLButtonElement, action: () => Promise<v
 
 export function renderVoiceSection(hosts: VoiceHosts, ctx: PanelContext): void {
   renderNowReading(hosts.nowReading, ctx);
-  renderLanguageVoices(hosts.languages, ctx);
+  // The catalogue opens where it is needed: a language to find a voice for, or voices put away.
+  const openCatalogue = (language?: string, hidden?: boolean, engine?: EngineId): void => {
+    if (language) askedLanguage = language;
+    if (engine) askedEngine = engine;
+    if (hidden) showHidden = true;
+    hosts.catalogue.open = true;
+    renderBrowser(hosts, ctx);
+    hosts.catalogue.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  renderVoiceBoard(hosts.board, ctx, openCatalogue);
+  renderMyVoices(hosts.mine, ctx, openCatalogue);
+  // Folded unless there is nothing to read with yet, it was asked for, or a search is under way.
+  if (askedLanguage || ctx.filter || downloadedVoices(ctx).length === 0) hosts.catalogue.open = true;
   renderBrowser(hosts, ctx);
 }
 
@@ -146,13 +162,22 @@ export function renderVoiceSection(hosts: VoiceHosts, ctx: PanelContext): void {
  */
 let askedLanguage: string | null = new URLSearchParams(globalThis.location?.search ?? '').get('language');
 
+/** The engine to open on with `askedLanguage`, when the caller knows which it wants. */
+let askedEngine: EngineId | null = null;
+
 function openAskedLanguage(manifest: ModelManifest): void {
   const code = askedLanguage;
+  const engine = askedEngine;
   askedLanguage = null;
+  askedEngine = null;
   if (!code) return;
   const piper = Object.values(manifest.piper).find((v) => primaryLanguage(v.language) === code);
   const kokoro = sharedVoices('kokoro', manifest).find((v) => primaryLanguage(manifest.kokoro.voices[v.id]?.language) === code);
   if (kokoro) kokoroLanguage = kokoro.group;
+  if (engine === 'kokoro' && kokoro) {
+    openTab = 'kokoro';
+    return;
+  }
   if (piper) {
     openTab = 'piper';
     openLanguage = piper.languageName ?? null;
@@ -411,109 +436,6 @@ function hiddenControls(
     bar.append(hideAll);
   }
   if (bar.childElementCount) list.append(bar);
-}
-
-// ---- the voice for each language ---------------------------------------------
-
-/** Every voice whose files are on this device, with the language it speaks. */
-function downloadedVoices(ctx: PanelContext): CandidateVoice[] {
-  const out: CandidateVoice[] = [];
-  for (const [id, entry] of Object.entries(ctx.manifest.piper)) {
-    if (piperDownloaded(entry, ctx.sizes)) out.push({ engine: 'piper', id, label: shortPiperLabel(entry.label), language: entry.language });
-  }
-  if (sharedModelInstalled('kokoro', ctx.sizes)) {
-    for (const [id, v] of Object.entries(ctx.manifest.kokoro.voices)) out.push({ engine: 'kokoro', id, label: v.label, language: v.language });
-  }
-  if (sharedModelInstalled('supertonic', ctx.sizes)) {
-    for (const [id, v] of Object.entries(ctx.manifest.supertonic?.voices ?? {})) out.push({ engine: 'supertonic', id, label: v.label, language: 'en' });
-  }
-  return out;
-}
-
-/**
- * "Voice for each language": every language a downloaded voice speaks, the voice that reads it,
- * and a choice. Automatic is what the reader does without one — your voice where it speaks the
- * language, otherwise the best downloaded voice that does — and says which voice that is.
- */
-function renderLanguageVoices(host: HTMLElement, ctx: PanelContext): void {
-  const { settings, manifest } = ctx;
-  const installed = downloadedVoices(ctx);
-  const hidden = new Set(settings.hiddenVoices);
-  const savedId = activeVoice(settings);
-  const saved: CandidateVoice = {
-    engine: settings.engine,
-    id: savedId,
-    label: listVoices(settings.engine, manifest).find((v) => v.id === savedId)?.label ?? savedId,
-    language: voiceLanguage(settings.engine, savedId, manifest),
-  };
-  const codes = new Set<string>([...installed.map((v) => primaryLanguage(v.language)), ...Object.keys(settings.languageVoices)]);
-  codes.delete('');
-  const savedLanguage = primaryLanguage(saved.language);
-  const ordered = [...codes].sort((a, b) =>
-    a === savedLanguage ? -1 : b === savedLanguage ? 1 : languageName(a).localeCompare(languageName(b)),
-  );
-
-  const toggle = el(document, 'label', { class: 'row check' });
-  const box = el(document, 'input', { type: 'checkbox', id: 'matchPageLanguage' }) as HTMLInputElement;
-  box.checked = settings.matchPageLanguage;
-  toggle.append(
-    box,
-    el(document, 'span', {}, 'Switch voices with the language — each passage is read by the voice chosen for its language below'),
-  );
-  box.addEventListener('change', () => void ctx.setAutoLanguage(box.checked));
-
-  const list = el(document, 'div', { class: `lang-voices${settings.matchPageLanguage ? '' : ' is-off'}` });
-  if (!ordered.length) list.append(emptyState('Download a voice to choose one for its language.'));
-  for (const code of ordered) {
-    const speakers = installed.filter((v) => primaryLanguage(v.language) === code);
-    const chosen = settings.languageVoices[code];
-    const route = routeFor(code, { auto: true, manual: null, saved, preferences: {}, installed, skip: new Set(), hidden });
-    const automatic = route.kind === 'voice' && route.reason !== 'missing' ? route.voice : null;
-    const current = chosen ? speakers.find((v) => v.engine === chosen.engine && v.id === chosen.voice) ?? null : automatic;
-
-    const row = el(document, 'div', { class: 'lang-voice-row' });
-    row.append(current ? avatar(current.engine, current.id, ctx) : el(document, 'span', { class: 'vi-avatar' }));
-    const label = el(document, 'div', { class: 'vi-main' });
-    label.append(
-      el(document, 'b', { class: 'vi-name' }, languageName(code)),
-      el(
-        document,
-        'span',
-        { class: 'vi-meta' },
-        chosen ? 'Chosen by you' : automatic ? (code === savedLanguage ? 'Your voice' : 'Automatic') : 'No voice downloaded',
-      ),
-    );
-    const select = el(document, 'select', { 'aria-label': `Voice for ${languageName(code)}` }) as HTMLSelectElement;
-    select.append(el(document, 'option', { value: '' }, automatic ? `Automatic — ${shortName(automatic.label)}` : 'Automatic'));
-    for (const v of speakers) {
-      if (hidden.has(voiceKeyOf(v.engine, v.id)) && !(chosen && chosen.engine === v.engine && chosen.voice === v.id)) continue;
-      const option = el(document, 'option', { value: voiceKeyOf(v.engine, v.id) }, `${shortName(v.label)} · ${engineInfo(v.engine).name}${regionLabel(v.language)}`);
-      if (chosen && chosen.engine === v.engine && chosen.voice === v.id) option.selected = true;
-      select.append(option);
-    }
-    select.addEventListener('change', () => {
-      const [engine, voice] = select.value.split(':') as [EngineId, string];
-      void ctx.setLanguageVoice(code, select.value ? { engine, voice } : null);
-    });
-    row.append(label, select);
-    list.append(row);
-  }
-  host.replaceChildren(toggle, list);
-}
-
-function shortName(label: string): string {
-  return label.split(' · ')[0] ?? label;
-}
-
-/** " · British", for a voice whose language tag names a region. */
-function regionLabel(tag: string): string {
-  const region = tag.replace('_', '-').split('-')[1];
-  if (!region) return '';
-  try {
-    return ` · ${new Intl.DisplayNames(['en'], { type: 'region' }).of(region.toUpperCase()) ?? region}`;
-  } catch {
-    return '';
-  }
 }
 
 // ---- Piper -----------------------------------------------------------------

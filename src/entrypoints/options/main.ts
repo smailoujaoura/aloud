@@ -454,7 +454,14 @@ async function renderNow(): Promise<void> {
     },
   };
   renderVoiceSection(
-    { nowReading: $('nowReading'), languages: $('languageVoiceList'), tabs: $('engineTabs'), panel: $('enginePanels') },
+    {
+      nowReading: $('nowReading'),
+      board: $('voiceBoard'),
+      mine: $('myVoices'),
+      catalogue: $<HTMLDetailsElement>('voiceCatalogue'),
+      tabs: $('engineTabs'),
+      panel: $('enginePanels'),
+    },
     ctx,
   );
 
