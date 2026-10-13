@@ -67,7 +67,7 @@ import { TapToSeek } from './tap-to-seek';
 import { MediaControls } from './media-session';
 import { SleepTimer, type SleepChoice } from './sleep-timer';
 import { Mp3Export, audioFileName } from './audio-export';
-import { currentWpm, speedLabel } from '@/shared/reading-rate';
+import { chunkWpm, speedLabel } from '@/shared/reading-rate';
 import { READING_ATTR } from '@/annotate/palette';
 
 interface BeginOptions {
@@ -220,8 +220,6 @@ export class ReaderSession {
   private halted = false;
   /** Seconds of speech in each synthesised sentence, lead silence excluded. */
   private readonly audioSeconds = new Map<number, number>();
-  /** Updates the pace from the audio clock, independently of word highlighting. */
-  private readingRateTimer = 0;
   private sourceHint: BeginOptions['source'] | null = null;
   private keepHistory = true;
   /** Listening not yet written to history, and what this session has measured of the voice's pace. */
@@ -435,7 +433,6 @@ export class ReaderSession {
     });
     this.renderFollow();
     void this.refreshBarVoices();
-    this.showReadingRate();
     this.watchViewport();
 
     this.highlighter = new Highlighter(document, {
@@ -918,25 +915,16 @@ export class ReaderSession {
     this.pushState();
   }
 
-  /** The pace of the audio being heard, never of the synthesis queue or a previous sentence. */
-  private showReadingRate(): void {
-    clearTimeout(this.readingRateTimer);
-    this.readingRateTimer = 0;
-    if (this.disposed) return;
-    const playing = this.state.status === 'playing' && !this.exporter;
-    const position = playing && this.scheduler?.isPlaying() ? this.scheduler.playbackPosition() : null;
-    const item = position && this.playlist[position.playId];
-    this.bar?.setReadingRate(
-      position && item
-        ? currentWpm(
-            item.spokenText,
-            this.audioSeconds.get(position.playId) ?? 0,
-            position.seconds,
-            this.wordTimings.get(position.playId),
-          )
-        : 0,
-    );
-    if (playing) this.readingRateTimer = window.setTimeout(() => this.showReadingRate(), 200);
+  /**
+   * The pace of the chunk being heard — its words over its audio — set as each chunk starts and
+   * held until the next, so the figure is steady (reading-rate.ts: chunkWpm). Never the pace of
+   * the synthesis queue, and never a guess before any audio has played.
+   */
+  private showReadingRate(playId: number): void {
+    if (this.disposed || this.exporter) return;
+    const item = this.playlist[playId];
+    const wpm = item ? chunkWpm(item.spokenText, this.audioSeconds.get(playId) ?? 0) : null;
+    if (wpm != null) this.bar?.setReadingRate(wpm);
   }
 
   async setSpeed(speed: number): Promise<void> {
@@ -954,9 +942,7 @@ export class ReaderSession {
   private applySpeed(speed: number, opts: { flash: boolean }): void {
     this.cancelExport('The speed changed, so the MP3 was stopped');
     this.bar?.setSpeed(speed);
-    // The current sentence finishes at its old speed. Its measured pace remains until the
-    // playback clock reaches audio made at the new speed.
-    this.showReadingRate();
+    // The pace shown stays the current chunk's until a chunk made at the new speed starts.
     if (opts.flash) this.bar?.flash(`Speed ${speedLabel(speed)}`);
     if (!this.engineReady) return;
     // The sentence already playing keeps its old rate; everything after it is re-synthesised.
@@ -1722,6 +1708,7 @@ export class ReaderSession {
     }
 
     this.prepareWords(playId);
+    this.showReadingRate(playId);
     this.ensureSynth(playId + 1);
     this.pushState();
     this.refreshOffScreen();
@@ -2425,7 +2412,6 @@ export class ReaderSession {
   private pushState(): void {
     if (this.disposed) return;
     this.bar?.update(this.state);
-    this.showReadingRate();
     this.media?.setPlaying(this.state.status === 'playing' ? 'playing' : 'paused');
     try {
       // An idle reader leaves the background asleep; one that reads (or is getting ready to)
@@ -2464,8 +2450,6 @@ export class ReaderSession {
     // Anything still working through `begin()` stops at its next checkpoint.
     this.generation++;
 
-    clearTimeout(this.readingRateTimer);
-    this.readingRateTimer = 0;
     this.eligibilityObserver?.disconnect();
     this.eligibilityObserver = null;
     clearTimeout(this.eligibilityTimer);

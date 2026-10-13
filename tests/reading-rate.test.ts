@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { currentWpm, speedLabel } from '@/shared/reading-rate';
+import { chunkWpm, currentWpm, speedLabel } from '@/shared/reading-rate';
 import type { WordTiming } from '@/engine/protocol';
 
 const sentence = 'Once you\'ve covered some of the basics, the best thing you can do is get out there and start using that knowledge in the "real world".';
@@ -52,5 +52,16 @@ describe('current speaking pace', () => {
   it('does not display an invented rate for missing or invalid audio duration', () => {
     expect(currentWpm(sentence, 0, 1)).toBeNull();
     expect(currentWpm(sentence, NaN, 1)).toBeNull();
+  });
+});
+
+describe('the pace of a chunk', () => {
+  it('is its words over its audio, steady for the whole chunk', () => {
+    expect(chunkWpm('One two three four five six.', 2)).toBe(180);
+    expect(chunkWpm('Lasciate che vi racconti la storia di un pollo.', 3)).toBe(180);
+  });
+  it('says nothing for a chunk with no audio or no words', () => {
+    expect(chunkWpm('Words here.', 0)).toBeNull();
+    expect(chunkWpm('—', 1.2)).toBeNull();
   });
 });

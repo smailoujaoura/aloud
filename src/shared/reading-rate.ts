@@ -15,6 +15,17 @@ function countWords(text: string): number {
 }
 
 /**
+ * The pace of one chunk of audio: its words over its length. What the bar shows, from the moment
+ * the chunk starts until the next one does — a steady figure, rather than one that flickers with
+ * every pause between words. A speed change shows when the first chunk made at the new speed plays.
+ */
+export function chunkWpm(text: string, seconds: number): number | null {
+  if (!Number.isFinite(seconds) || seconds <= 0) return null;
+  const words = countWords(text);
+  return words ? Math.round((words / seconds) * 60) : null;
+}
+
+/**
  * Speech pace at the playback position within one sentence. Word timings measure the last two
  * seconds heard, counting the fraction of a word that crosses the window's edge. Future words
  * and queued sentences contribute nothing. Without timings, use this sentence's audio duration.

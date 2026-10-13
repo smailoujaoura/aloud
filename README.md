@@ -65,9 +65,9 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
 - **Said the way people say it** — a reply and its attribution (*"No!" he said.*), a run of short
   exclamations, a French reply with its closing guillemet, are each spoken as one utterance, and
   abbreviations such as *Sig.*, *Sra.* or *z. B.* no longer end a sentence.
-- **Live words a minute** — the bar follows the audio being heard, updating five times a second
-  from the last two seconds of word timings. Voices without timings use the current sentence's
-  audio duration. Pausing or waiting for audio shows zero; the speed slider shows the multiplier.
+- **Live words a minute** — beside the speed, the pace of the passage being heard: its words over
+  its audio, set as each passage starts and held until the next, so the figure is steady. A speed
+  change shows when the first passage made at the new speed begins.
 - **Word by word** — with Piper and Kokoro voices the word being spoken is marked inside the
   sentence, timed from the voice model's own phoneme durations rather than estimated. It is shown
   as a darker shade by default; Settings switches it to an underline, or off.
