@@ -111,24 +111,37 @@ function selfHidden(el: Element): boolean {
 }
 
 /** Libraries that fade text in as it scrolls into view mark it with one of these. */
-const REVEAL_MARK = /^(data-aos|data-sal|data-scroll|data-animate|data-reveal|data-sr)/;
-const REVEAL_CLASS = /(^|\s)(aos-|wow|reveal|fade-?in|animate__|sal-|scroll-?reveal)/i;
+/**
+ * What scroll-reveal libraries leave on the text they will fade in: AOS (`data-aos`, `aos-init`),
+ * Sal (`data-sal`), ScrollReveal (`data-sr-id`), WOW.js (`wow`), Animate.css (`animate__`). Only
+ * their own names: a class merely starting with "reveal" can be a spoiler kept hidden on purpose,
+ * and `data-reveal` is Foundation's modal.
+ */
+const REVEAL_MARK = /^(data-aos|data-sal|data-sr-id)$/;
+const REVEAL_CLASS = /(^|\s)(aos-(init|animate)|wow|animate__\w+|sal-animate)(\s|$)/;
 
 /**
- * Transparent, but only until it is scrolled to. Scroll-reveal pages (AOS and the like) keep every
- * paragraph below the first screen at opacity 0 and fade each in as it arrives — reading only the
- * first screen of such a page was the result of treating them as hidden. Such a paragraph is a
- * full-size box in the flow of the page, and below what is on screen. A collapsed translation has
- * no height; a tooltip or menu floats above the page; text faded out on screen is meant unseen:
- * those stay hidden.
+ * Transparent, but only until it is scrolled to. Scroll-reveal pages keep every paragraph below the
+ * first screen at opacity 0 and fade each in as it arrives — reading only the first screen of such a
+ * page was the result of treating them as hidden.
+ *
+ * Decided by how the element is made, never by where it happens to sit when reading starts (the
+ * same paragraph must not be read or skipped depending on the scroll position): a full-size box in
+ * the flow of the page, and either marked by one of those libraries, or set up to animate in — moved
+ * out of place (`transform`) with a transition waiting to bring it back, which is how they fade text
+ * up into view. A collapsed translation has no height; a tooltip or menu floats above the page; a
+ * spoiler or answer kept transparent has nothing waiting to move it: those stay hidden.
  */
 function awaitingReveal(el: Element, style: CSSStyleDeclaration): boolean {
   if (!(el instanceof HTMLElement)) return false;
   if (el.offsetWidth <= 1 || el.offsetHeight <= 1) return false;
   if (style.position === 'absolute' || style.position === 'fixed') return false;
   if ([...el.attributes].some((a) => REVEAL_MARK.test(a.name)) || REVEAL_CLASS.test(el.className)) return true;
-  const view = el.ownerDocument.defaultView;
-  return !!view && el.getBoundingClientRect().top >= view.innerHeight;
+  const moved = style.transform !== '' && style.transform !== 'none';
+  const durations = style.transitionDuration.split(',').map((d) => Number.parseFloat(d) || 0);
+  const transitions = style.transitionProperty.split(',').map((p) => p.trim());
+  const animates = transitions.some((p, i) => /^(all|opacity|transform)$/.test(p) && (durations[i] ?? durations[0] ?? 0) > 0);
+  return moved && animates;
 }
 
 /** Text in this element is drawn invisibly (`visibility`), unless a child makes itself visible. */
