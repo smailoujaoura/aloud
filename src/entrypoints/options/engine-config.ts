@@ -29,7 +29,7 @@ export function engineConfigFor(
     steps: settings.supertonicSteps,
     // Kokoro's download is the build this machine reads with: on a GPU that is the full-precision
     // one. Fetching the smaller CPU build there downloaded a file reading never used, and the
-    // first preview then fetched 310 MB more with no warning. Supertonic's files are the same
+    // first preview then started the real download with no warning. Supertonic's files are the same
     // either way, so its download stays off the GPU.
     preferWebGPU: opts.purpose === 'download' && engine !== 'kokoro' ? false : settings.preferWebGPU,
     speed: settings.speed,

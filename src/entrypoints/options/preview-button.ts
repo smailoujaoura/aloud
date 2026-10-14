@@ -110,7 +110,7 @@ export function previewFor(
 
   const info = engineInfo(engine);
   // On a GPU, Kokoro speaks only with its full-precision build: with just the CPU build here, a
-  // preview would quietly download 310 MB. The model card offers that download instead.
+  // preview would quietly start that download. The model card offers it instead.
   const needsGpuBuild = engine === 'kokoro' && readsOnGpu(ctx.settings);
   const ready = sharedModelInstalled(engine, ctx.sizes, needsGpuBuild ? { gpu: true } : {});
   return previewButton(

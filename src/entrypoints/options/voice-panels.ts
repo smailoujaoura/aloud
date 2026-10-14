@@ -842,9 +842,10 @@ function modelCard(
   const card = el(document, 'div', { class: `model-card${state.downloaded ? ' is-installed' : ''}` });
 
   // A machine with a GPU reads with Kokoro's full-precision build — the quantised one returns
-  // noise instead of speech on WebGPU — so that is the build its Download fetches, at its size.
-  const onGpu = engine === 'kokoro' && readsOnGpu(ctx.settings) && !!info.gpuApproxSize;
-  const size = (onGpu ? info.gpuApproxSize! : info.approxSize).replace(/\s*\(.*\)/, '');
+  // noise instead of speech on WebGPU — so that is the build its Download fetches. Its size is not
+  // put on the page: the author's call, made when the small build was the only one meant to show.
+  const onGpu = engine === 'kokoro' && readsOnGpu(ctx.settings);
+  const size = info.approxSize.replace(/\s*\(.*\)/, '');
   // Only the CPU build is here (downloaded before, or with the GPU off): reading would fetch the
   // GPU build on its own, so offer it here instead of letting it start on the first preview.
   const gpuMissing = onGpu && state.downloaded && !sharedModelInstalled(engine, ctx.sizes, { gpu: true });
@@ -852,19 +853,10 @@ function modelCard(
   const text = el(document, 'div', { class: 'mc-text' });
   text.append(
     el(document, 'b', {}, state.downloaded ? `${info.name} is on this device` : `${info.name} model`),
-    el(document, 'span', { class: 'vi-meta' }, `${state.downloaded ? humanBytes(state.bytes) : size} · ${licence}`),
+    el(document, 'span', { class: 'vi-meta' }, state.downloaded ? `${humanBytes(state.bytes)} · ${licence}` : onGpu ? licence : `${size} · ${licence}`),
   );
-  if (onGpu && (gpuMissing || !state.downloaded)) {
-    text.append(
-      el(
-        document,
-        'span',
-        { class: 'vi-meta' },
-        gpuMissing
-          ? `Only the CPU build is here. This machine reads with the GPU, which needs Kokoro’s full-precision build (${size}).`
-          : 'This machine reads with the GPU, so this is Kokoro’s full-precision build: larger, and the one that speaks there.',
-      ),
-    );
+  if (gpuMissing) {
+    text.append(el(document, 'span', { class: 'vi-meta' }, 'This machine reads with the GPU, which needs Kokoro’s GPU build. Download it here before you read.'));
   }
 
   const progress = new RowProgress();
@@ -873,7 +865,7 @@ function modelCard(
     document,
     'button',
     { class: isDelete ? 'ghost danger btn-sm' : 'primary', type: 'button' },
-    isDelete ? 'Delete model' : gpuMissing ? `Download GPU build ${size}` : `Download ${size}`,
+    isDelete ? 'Delete model' : gpuMissing ? 'Download GPU build' : onGpu ? `Download ${info.name}` : `Download ${size}`,
   );
 
   const idle = btn.textContent ?? '';
