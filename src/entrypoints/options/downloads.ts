@@ -15,6 +15,7 @@ import { browser } from 'wxt/browser';
 import { cacheHas, fetchModelFile } from '@/engine/model-cache';
 import { readCacheSizes, sharedModelInstalled } from '@/engine/installed-voices';
 import { el } from '@/shared/dom';
+import { humanBytes } from '@/shared/log';
 import type { EngineConfig, WorkerResponse } from '@/engine/protocol';
 import type { PiperVoiceEntry } from '@/engine/engines/types';
 import { downloads, type ProgressSink } from './download-queue';
@@ -280,7 +281,11 @@ export function downloadViaWorker(config: EngineConfig, progress: ProgressSink):
         } else {
           const ratio = m.total > 0 ? m.loaded / m.total : 0;
           progress.set(ratio);
-          progress.note(`Downloading… ${Math.floor(ratio * 100)}%`);
+          progress.note(
+            m.total > 0
+              ? `Downloading… ${Math.floor(ratio * 100)}% · ${humanBytes(m.loaded)} of ${humanBytes(m.total)}`
+              : 'Downloading…',
+          );
         }
       } else if (m.kind === 'ready') {
         // Ready means the engine loaded — from memory if need be. A Download is for offline use,

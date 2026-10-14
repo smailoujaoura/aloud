@@ -26,13 +26,17 @@ export const log = {
 };
 
 /** Format bytes for progress UIs. */
+/**
+ * Bytes in the units the browser and the system show: 1 MB is 1,000,000 bytes. Counting in 1024s
+ * put the same file at 310 MB here and 325 MB in Firefox's own download panel.
+ */
 export function humanBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
+  if (n < 1000) return `${n} B`;
   const units = ['KB', 'MB', 'GB'];
-  let v = n / 1024;
+  let v = n / 1000;
   let i = 0;
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024;
+  while (v >= 1000 && i < units.length - 1) {
+    v /= 1000;
     i++;
   }
   return `${v.toFixed(v < 10 ? 1 : 0)} ${units[i]}`;

@@ -20,7 +20,7 @@ import { voicePortrait } from '@/ui/voice-portraits';
 import { el } from '@/shared/dom';
 import { humanBytes } from '@/shared/log';
 import { capabilities } from '@/shared/browser-env';
-import { engineInfo, listEngines, type EngineInfo } from '@/shared/engine-catalog';
+import { downloadSize, engineInfo, listEngines, type EngineInfo } from '@/shared/engine-catalog';
 import { isEnglish, listVoices, shortPiperLabel } from '@/shared/voice-catalog';
 import { languageName, primaryLanguage, voiceLanguage, type CandidateVoice } from '@/shared/language-voice';
 import { downloadedVoices, renderMyVoices, renderVoiceBoard } from './voice-board';
@@ -298,12 +298,12 @@ function installedSummary(engine: EngineId, ctx: PanelContext): string {
 }
 
 /** What the engine is and what it costs, at the top of its tab. */
-function engineIntro(info: EngineInfo): HTMLElement {
+function engineIntro(info: EngineInfo, onGpu = false): HTMLElement {
   const intro = el(document, 'div', { class: 'engine-intro' });
   const chips = el(document, 'div', { class: 'engine-chips' });
   chips.append(
     el(document, 'span', { class: 'pill accent' }, info.tag),
-    el(document, 'span', { class: 'pill' }, info.approxSize),
+    el(document, 'span', { class: 'pill' }, downloadSize(info, onGpu)),
   );
   intro.append(chips, el(document, 'p', { class: 'muted small' }, info.blurb));
   if (capabilities().touchFirst && info.heavyForMobile) {
@@ -755,7 +755,7 @@ function sharedPanel(engine: 'kokoro' | 'supertonic', ctx: PanelContext, again: 
   const info = engineInfo(engine);
   const bytes = info.cacheHint ? sharedModelBytes(ctx.sizes, info.cacheHint) : 0;
   const downloaded = sharedModelInstalled(engine, ctx.sizes);
-  panel.append(engineIntro(info), modelCard(engine, { downloaded, bytes }, ctx));
+  panel.append(engineIntro(info, readsOnGpu(ctx.settings)), modelCard(engine, { downloaded, bytes }, ctx));
 
   const all = sharedVoices(engine, ctx.manifest);
 
@@ -842,10 +842,9 @@ function modelCard(
   const card = el(document, 'div', { class: `model-card${state.downloaded ? ' is-installed' : ''}` });
 
   // A machine with a GPU reads with Kokoro's full-precision build — the quantised one returns
-  // noise instead of speech on WebGPU — so that is the build its Download fetches. Its size is not
-  // put on the page: the author's call, made when the small build was the only one meant to show.
+  // noise instead of speech on WebGPU — so that is the build its Download fetches, at its size.
   const onGpu = engine === 'kokoro' && readsOnGpu(ctx.settings);
-  const size = info.approxSize.replace(/\s*\(.*\)/, '');
+  const size = downloadSize(info, onGpu);
   // Only the CPU build is here (downloaded before, or with the GPU off): reading would fetch the
   // GPU build on its own, so offer it here instead of letting it start on the first preview.
   const gpuMissing = onGpu && state.downloaded && !sharedModelInstalled(engine, ctx.sizes, { gpu: true });
@@ -853,10 +852,10 @@ function modelCard(
   const text = el(document, 'div', { class: 'mc-text' });
   text.append(
     el(document, 'b', {}, state.downloaded ? `${info.name} is on this device` : `${info.name} model`),
-    el(document, 'span', { class: 'vi-meta' }, state.downloaded ? `${humanBytes(state.bytes)} · ${licence}` : onGpu ? licence : `${size} · ${licence}`),
+    el(document, 'span', { class: 'vi-meta' }, `${state.downloaded ? humanBytes(state.bytes) : size} · ${licence}`),
   );
   if (gpuMissing) {
-    text.append(el(document, 'span', { class: 'vi-meta' }, 'This machine reads with the GPU, which needs Kokoro’s GPU build. Download it here before you read.'));
+    text.append(el(document, 'span', { class: 'vi-meta' }, `This machine reads with the GPU, which needs Kokoro’s GPU build (${size}). Download it here before you read.`));
   }
 
   const progress = new RowProgress();
@@ -865,7 +864,7 @@ function modelCard(
     document,
     'button',
     { class: isDelete ? 'ghost danger btn-sm' : 'primary', type: 'button' },
-    isDelete ? 'Delete model' : gpuMissing ? 'Download GPU build' : onGpu ? `Download ${info.name}` : `Download ${size}`,
+    isDelete ? 'Delete model' : gpuMissing ? `Download GPU build · ${size}` : `Download ${size}`,
   );
 
   const idle = btn.textContent ?? '';
