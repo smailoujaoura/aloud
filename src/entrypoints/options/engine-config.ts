@@ -3,6 +3,7 @@
  * with the reader's own settings, so a preview or a download fetches exactly what reading uses.
  */
 import type { EngineConfig } from '@/engine/protocol';
+import { capabilities } from '@/shared/browser-env';
 import type { EngineId, Settings } from '@/shared/settings';
 
 export type ConfigPurpose =
@@ -26,12 +27,18 @@ export function engineConfigFor(
     engine,
     voice: opts.voice ?? voiceOf[engine],
     steps: settings.supertonicSteps,
-    // A download fetches the build the CPU path uses, which every machine can run and which is
-    // the smaller file. A machine with a GPU fetches its own build on the first read, with the
-    // reading bar showing that download.
-    preferWebGPU: opts.purpose === 'download' ? false : settings.preferWebGPU,
+    // Kokoro's download is the build this machine reads with: on a GPU that is the full-precision
+    // one. Fetching the smaller CPU build there downloaded a file reading never used, and the
+    // first preview then fetched 310 MB more with no warning. Supertonic's files are the same
+    // either way, so its download stays off the GPU.
+    preferWebGPU: opts.purpose === 'download' && engine !== 'kokoro' ? false : settings.preferWebGPU,
     speed: settings.speed,
     // Both purposes are single-shot; the reading pool is sized separately in the synth host.
     workers: 1,
   };
+}
+
+/** Does reading here run Kokoro on the GPU — and so need its full-precision build? */
+export function readsOnGpu(settings: Settings): boolean {
+  return settings.preferWebGPU && capabilities().workerWebGPU;
 }

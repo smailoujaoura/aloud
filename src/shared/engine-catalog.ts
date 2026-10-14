@@ -27,6 +27,8 @@ export interface EngineInfo {
   blurb: string;
   /** Human-readable download footprint. */
   approxSize: string;
+  /** The download when reading on a GPU takes a different, larger file (Kokoro's full precision). */
+  gpuApproxSize?: string;
   /**
    * Substring of a cache key meaning "the shared model is present". Kokoro and Supertonic each
    * download one model that unlocks all their voices; Piper downloads per voice and has none.
@@ -83,6 +85,7 @@ const ENGINES: Record<EngineId, EngineInfo> = {
       'than real time; without one it runs around 3× slower than real time and leans on parallel ' +
       'workers to keep up with playback. One 86 MB download unlocks all 41 voices: English (US and UK), Spanish, French, Italian, Brazilian Portuguese and Hindi.',
     approxSize: '~86 MB',
+    gpuApproxSize: '~310 MB',
     cacheHint: 'Kokoro-82M',
     revision: KOKORO_REVISION,
     voiceRevision: 'main',

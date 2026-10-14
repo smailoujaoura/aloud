@@ -161,7 +161,7 @@ function buildEngineCards(): void {
       card.append(
         head,
         el(document, 'p', { class: 'muted small' }, info.blurb),
-        el(document, 'p', { class: 'muted small' }, `Download: ${info.approxSize}`),
+        el(document, 'p', { class: 'muted small' }, `Download: ${info.approxSize}${info.gpuApproxSize ? `, or ${info.gpuApproxSize} to read on a GPU` : ''}`),
       );
       return card;
     }),

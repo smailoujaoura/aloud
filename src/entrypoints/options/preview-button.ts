@@ -16,7 +16,7 @@ import { playClip, playSynthesized, previewSentence, stopPreview, type PreviewSt
 import { voiceLanguage } from '@/shared/language-voice';
 import type { EngineId, Settings } from '@/shared/settings';
 import type { ModelManifest } from '@/engine/engines/types';
-import { engineConfigFor } from './engine-config';
+import { engineConfigFor, readsOnGpu } from './engine-config';
 import { sharedModelInstalled, type CacheSizes } from '@/engine/installed-voices';
 
 const IDLE_LABEL = '▶ Preview';
@@ -109,7 +109,10 @@ export function previewFor(
   }
 
   const info = engineInfo(engine);
-  const ready = sharedModelInstalled(engine, ctx.sizes);
+  // On a GPU, Kokoro speaks only with its full-precision build: with just the CPU build here, a
+  // preview would quietly download 310 MB. The model card offers that download instead.
+  const needsGpuBuild = engine === 'kokoro' && readsOnGpu(ctx.settings);
+  const ready = sharedModelInstalled(engine, ctx.sizes, needsGpuBuild ? { gpu: true } : {});
   return previewButton(
     (onStatus) =>
       playSynthesized(
@@ -119,6 +122,12 @@ export function previewFor(
         // no sample of anything.
         previewSentence(voiceLanguage(engine, voiceId, ctx.manifest)),
       ),
-    { disabledReason: ready ? undefined : `Download ${info.name} first to preview` },
+    {
+      disabledReason: ready
+        ? undefined
+        : needsGpuBuild && sharedModelInstalled(engine, ctx.sizes)
+          ? `Download ${info.name}’s GPU build first to preview`
+          : `Download ${info.name} first to preview`,
+    },
   );
 }

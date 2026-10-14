@@ -39,7 +39,7 @@ import {
 } from './downloads';
 import { DownloadCancelled, downloads } from './download-queue';
 import { previewFor } from './preview-button';
-import { engineConfigFor } from './engine-config';
+import { engineConfigFor, readsOnGpu } from './engine-config';
 import {
   piperDownloaded,
   piperVoiceBytes,
@@ -841,32 +841,39 @@ function modelCard(
   const licence = engine === 'kokoro' ? ctx.manifest.kokoro.license : (ctx.manifest.supertonic?.license ?? '');
   const card = el(document, 'div', { class: `model-card${state.downloaded ? ' is-installed' : ''}` });
 
+  // A machine with a GPU reads with Kokoro's full-precision build — the quantised one returns
+  // noise instead of speech on WebGPU — so that is the build its Download fetches, at its size.
+  const onGpu = engine === 'kokoro' && readsOnGpu(ctx.settings) && !!info.gpuApproxSize;
+  const size = (onGpu ? info.gpuApproxSize! : info.approxSize).replace(/\s*\(.*\)/, '');
+  // Only the CPU build is here (downloaded before, or with the GPU off): reading would fetch the
+  // GPU build on its own, so offer it here instead of letting it start on the first preview.
+  const gpuMissing = onGpu && state.downloaded && !sharedModelInstalled(engine, ctx.sizes, { gpu: true });
+
   const text = el(document, 'div', { class: 'mc-text' });
   text.append(
     el(document, 'b', {}, state.downloaded ? `${info.name} is on this device` : `${info.name} model`),
-    el(document, 'span', { class: 'vi-meta' }, `${state.downloaded ? humanBytes(state.bytes) : info.approxSize} · ${licence}`),
+    el(document, 'span', { class: 'vi-meta' }, `${state.downloaded ? humanBytes(state.bytes) : size} · ${licence}`),
   );
-  // A machine with a GPU reads with Kokoro's full-precision build — the quantised one returns
-  // noise instead of speech on WebGPU — so say that a larger download happens once, rather than
-  // letting it appear from nowhere on the first page.
-  if (engine === 'kokoro' && ctx.settings.preferWebGPU && capabilities().workerWebGPU) {
+  if (onGpu && (gpuMissing || !state.downloaded)) {
     text.append(
       el(
         document,
         'span',
         { class: 'vi-meta' },
-        'This machine reads with the GPU, which uses Kokoro’s full-precision build: a larger download, once, the first time you read.',
+        gpuMissing
+          ? `Only the CPU build is here. This machine reads with the GPU, which needs Kokoro’s full-precision build (${size}).`
+          : 'This machine reads with the GPU, so this is Kokoro’s full-precision build: larger, and the one that speaks there.',
       ),
     );
   }
 
   const progress = new RowProgress();
-  const isDelete = state.downloaded;
+  const isDelete = state.downloaded && !gpuMissing;
   const btn = el(
     document,
     'button',
     { class: isDelete ? 'ghost danger btn-sm' : 'primary', type: 'button' },
-    isDelete ? 'Delete model' : `Download ${info.approxSize.replace(/\s*\(.*\)/, '')}`,
+    isDelete ? 'Delete model' : gpuMissing ? `Download GPU build ${size}` : `Download ${size}`,
   );
 
   const idle = btn.textContent ?? '';
