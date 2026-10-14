@@ -261,6 +261,11 @@ export class ReaderSession {
   private shownLanguageKey = '';
   /** Seconds of the sentence playing now already counted as heard (statistics). */
   private readonly heardCounted = new Map<number, number>();
+  /**
+   * Words of the page each sentence's audio was asked for with: what it says, not its words
+   * hidden on the page — taken when it is asked for, since the page can change after.
+   */
+  private readonly madeWords = new Map<number, number>();
   /** Heard but not yet written to the statistics. */
   private heardQueue: Heard[] = [];
   private lastStatsWrite = 0;
@@ -898,6 +903,7 @@ export class ReaderSession {
     const touches = (span: { start: number; end: number }): boolean => ranges.some(([a, b]) => span.start < b && a < span.end);
     const changed: number[] = [];
     let here = false;
+    let hereReworded = false;
     // Only the sentences over what changed — a book-length page has thousands.
     for (const item of this.playlist) {
       if (!item.span || !touches(item.span)) continue;
@@ -909,7 +915,10 @@ export class ReaderSession {
       item.visibleSource = visible;
       if (now) item.spokenText = this.normalizeAs(visible, item.spokenAs ?? this.spokenLanguageOf(item));
       if (item.playId > current) changed.push(item.playId);
-      else if (item.playId === current) here = true;
+      else if (item.playId === current) {
+        here = true;
+        hereReworded = now;
+      }
     }
     if (!changed.length && !here) return;
     log.info(`[eligibility] the page changed: ${this.playlist.filter((p) => p.eligible).length} of ${this.playlist.length} sentences readable`);
@@ -923,6 +932,9 @@ export class ReaderSession {
       this.moveOnFrom(current + 1);
       return;
     }
+    // Words hidden in the sentence being read, before its audio started (paused on it, or still
+    // buffering): its prepared audio says them, so it is made again. Once it sounds, it finishes.
+    if (hereReworded && this.scheduler.discard(current)) changed.unshift(current);
     this.remake(changed);
   }
 
@@ -944,10 +956,11 @@ export class ReaderSession {
       }
       this.worker.drop(id);
       this.requested.delete(id);
-      this.audioSeconds.delete(id);
-      this.wordTimings.delete(id);
+      this.forgetAudio(id);
     }
-    this.ensureSynth(this.currentPlayId + 1);
+    // The sentence being read is in `playIds` only when its audio has not started (see
+    // onEligibilityChanged); then it is asked for again too.
+    this.ensureSynth(playIds.includes(this.currentPlayId) ? this.currentPlayId : this.currentPlayId + 1);
     this.pushState();
   }
 
@@ -1373,18 +1386,28 @@ export class ReaderSession {
   private async planPassageLanguages(): Promise<void> {
     const index = this.textIndex;
     const passages: PassageInput[] = [];
+    // What each passage shows, apart from all it holds: hidden words inside a shown passage (an
+    // Italian aside kept `hidden`) would decide the language of the English around them. A passage
+    // hidden entirely is judged by all its text, ready for when it is revealed.
+    const shown: string[] = [];
     let prevBlock: Element | null = null;
     for (const item of this.playlist) {
       const node = item.range?.startContainer ?? null;
       const block = node && index ? nearestBlock(node, index.root) : null;
       if (passages.length === 0 || item.startsBlock || !block || block !== prevBlock) {
         passages.push({ text: '', markup: markupLanguage(node, index?.root ?? null) });
+        shown.push('');
       }
       prevBlock = block;
-      const passage = passages[passages.length - 1]!;
+      const at = passages.length - 1;
+      const passage = passages[at]!;
       passage.text += (passage.text ? ' ' : '') + item.sourceText;
-      item.passage = passages.length - 1;
+      if (item.eligible) shown[at] += (shown[at] ? ' ' : '') + (item.visibleSource ?? item.sourceText);
+      item.passage = at;
     }
+    passages.forEach((passage, i) => {
+      if (/\p{L}/u.test(shown[i]!)) passage.text = shown[i]!;
+    });
     let page = '';
     try {
       page = await this.detectPageLanguage();
@@ -1732,9 +1755,13 @@ export class ReaderSession {
       // Hidden on the page now (a collapsed translation), or in a language the reader skips:
       // passed over in silence, with no pause.
       if (!this.readable(item)) {
+        // Nothing of it is heard: forget the length of audio made for it before it was hidden,
+        // which `onChunkEnd` would otherwise count when this silence ends.
+        this.forgetAudio(i);
         this.scheduler.provide(i, new Float32Array(0), this.sampleRate, 0);
         continue;
       }
+      this.madeWords.set(i, countWords(item.visibleSource ?? item.sourceText, item.language));
       this.worker.request(i, item.spokenText, this.settings.speed, this.voiceFor(item));
     }
   }
@@ -1901,7 +1928,17 @@ export class ReaderSession {
     // sentence again, which failed the same way — two or three doomed requests per sentence.
     // A seek clears `requested`, so jumping back to it still gives it a fresh try.
     if (this.exporter) this.exporter.accept(playId, new Float32Array(0), this.sampleRate);
-    else this.scheduler.provide(playId, new Float32Array(0), this.sampleRate, 0);
+    else {
+      this.forgetAudio(playId);
+      this.scheduler.provide(playId, new Float32Array(0), this.sampleRate, 0);
+    }
+  }
+
+  /** What was known of audio made for `playId` that will not be heard. */
+  private forgetAudio(playId: number): void {
+    this.audioSeconds.delete(playId);
+    this.wordTimings.delete(playId);
+    this.madeWords.delete(playId);
   }
 
   private onChunkEnd(playId: number): void {
@@ -1969,7 +2006,7 @@ export class ReaderSession {
     this.heardQueue.push({
       at: Date.now(),
       seconds: to - already,
-      words: countWords(item.sourceText, item.language) * share,
+      words: (this.madeWords.get(playId) ?? countWords(item.visibleSource ?? item.sourceText, item.language)) * share,
       site: this.docSource().site ?? '',
       language: item.language ?? '',
     });
