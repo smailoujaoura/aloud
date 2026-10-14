@@ -16,8 +16,9 @@ describe('what a Download fetches', () => {
   });
 
   it('states the size of the file this machine downloads, in the units the browser shows', () => {
-    expect(downloadSize(engineInfo('kokoro'), true)).toBe('~326 MB');
-    expect(downloadSize(engineInfo('kokoro'), false)).toBe('~92 MB');
+    // The weights and all 41 voices' own files, which come in the same download.
+    expect(downloadSize(engineInfo('kokoro'), true)).toBe('~347 MB');
+    expect(downloadSize(engineInfo('kokoro'), false)).toBe('~114 MB');
     expect(downloadSize(engineInfo('supertonic'), true)).toBe(engineInfo('supertonic').approxSize);
     // Firefox showed Kokoro's GPU file as 325.53 MB; counting in 1024s said 310.
     expect(humanBytes(325_532_232)).toBe('326 MB');

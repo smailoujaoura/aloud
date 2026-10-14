@@ -84,10 +84,11 @@ const ENGINES: Record<EngineId, EngineInfo> = {
       'The most natural and expressive of the three. With GPU acceleration it is comfortably faster ' +
       'than real time; without one it runs around 3× slower than real time and leans on parallel ' +
       'workers to keep up with playback. One download unlocks all 41 voices: English (US and UK), Spanish, French, Italian, Brazilian Portuguese and Hindi.',
-    // The quantised build the CPU reads (92,361,116 bytes), and the full-precision one a GPU needs
-    // (325,532,232): the quantised one returns noise instead of speech on WebGPU.
-    approxSize: '~92 MB',
-    gpuApproxSize: '~326 MB',
+    // The quantised build the CPU reads (92,361,116 bytes) or the full-precision one a GPU needs
+    // (325,532,232) — the quantised one returns noise instead of speech on WebGPU — plus all 41
+    // voices' own files (41 × 522,240), which come in the same download.
+    approxSize: '~114 MB',
+    gpuApproxSize: '~347 MB',
     cacheHint: 'Kokoro-82M',
     revision: KOKORO_REVISION,
     voiceRevision: 'main',
@@ -146,3 +147,13 @@ export function listEngines(): EngineInfo[] {
 export function downloadSize(info: EngineInfo, onGpu: boolean): string {
   return (onGpu && info.gpuApproxSize ? info.gpuApproxSize : info.approxSize).replace(/\s*\(.*\)/, '');
 }
+
+/**
+ * A Kokoro voice's own file (its style vectors, 522,240 bytes each), at the address kokoro-js reads
+ * it from and keeps it under in its Cache Storage store, `kokoro-voices`. kokoro-js fetches it the
+ * first time a voice speaks; Aloud fetches every voice's with the model instead, so that after the
+ * one download no preview and no page reaches the network again.
+ */
+export const KOKORO_VOICE_BYTES = 522_240;
+export const kokoroVoiceUrl = (voice: string): string =>
+  `https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/voices/${voice}.bin`;

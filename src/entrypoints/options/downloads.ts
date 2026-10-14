@@ -12,10 +12,11 @@
  * a content script, which has to go through the synth-host iframe (see engine/worker-client.ts).
  */
 import { browser } from 'wxt/browser';
-import { cacheHas, fetchModelFile } from '@/engine/model-cache';
+import { asModelWriter, cacheHas, fetchModelFile } from '@/engine/model-cache';
 import { readCacheSizes, sharedModelInstalled } from '@/engine/installed-voices';
 import { el } from '@/shared/dom';
 import { humanBytes } from '@/shared/log';
+import { KOKORO_VOICE_BYTES, kokoroVoiceUrl } from '@/shared/engine-catalog';
 import type { EngineConfig, WorkerResponse } from '@/engine/protocol';
 import type { PiperVoiceEntry } from '@/engine/engines/types';
 import { downloads, type ProgressSink } from './download-queue';
@@ -233,13 +234,65 @@ export async function downloadPiperVoice(entry: PiperVoiceEntry, progress: Progr
   if (!config || !voice) throw new Error('The voice downloaded but could not be saved on this device — its storage may be full or blocked');
 }
 
+/** The store kokoro-js keeps its voices' files in (see `kokoroVoiceUrl`). */
+const KOKORO_VOICE_STORE = 'kokoro-voices';
+
+/** Which of `voices` have no file on this device yet. */
+async function missingKokoroVoices(voices: readonly string[]): Promise<string[]> {
+  if (typeof caches === 'undefined') return [];
+  const store = await caches.open(KOKORO_VOICE_STORE);
+  const missing: string[] = [];
+  for (const voice of voices) if (!(await store.match(kokoroVoiceUrl(voice)))) missing.push(voice);
+  return missing;
+}
+
+/** Fetch voices' files into kokoro-js's store, four at a time, reporting the bytes of each. */
+async function fetchKokoroVoices(voices: readonly string[], onBytes: (bytes: number) => void): Promise<void> {
+  const store = await caches.open(KOKORO_VOICE_STORE);
+  let next = 0;
+  const fetchNext = async (): Promise<void> => {
+    while (next < voices.length) {
+      const voice = voices[next++]!;
+      const url = kokoroVoiceUrl(voice);
+      const res = await fetch(url, { credentials: 'omit' });
+      if (!res.ok) throw new Error(`Download failed (${res.status}) for the voice ${voice}`);
+      const bytes = await res.arrayBuffer();
+      // As kokoro-js stores it, so its own lookup finds it.
+      await store.put(url, new Response(bytes, { headers: res.headers }));
+      onBytes(bytes.byteLength);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(4, voices.length) }, fetchNext));
+}
+
+/**
+ * Download a shared model — for Kokoro, with every voice's own file alongside it, under one count.
+ * Each Kokoro voice needs a small file of its own, which used to be fetched the first time that
+ * voice spoke: every voice tried was another request after the "download" was done.
+ */
+export async function downloadSharedModel(config: EngineConfig, kokoroVoices: readonly string[], progress: ProgressSink): Promise<void> {
+  const missing = config.engine === 'kokoro' ? await missingKokoroVoices(kokoroVoices) : [];
+  if (!missing.length) return downloadViaWorker(config, progress);
+  return downloadViaWorker(config, progress, {
+    total: missing.length * KOKORO_VOICE_BYTES,
+    start: (onBytes) => asModelWriter(() => fetchKokoroVoices(missing, onBytes)),
+  });
+}
+
+/** Files fetched alongside a model, counted in its progress and finished before it is ready. */
+interface Alongside {
+  total: number;
+  start: (onBytes: (bytes: number) => void) => Promise<void>;
+}
+
 /**
  * Download a shared model by initialising it once in a throwaway Worker.
  *
- * Resolves when the engine reports `ready` (downloaded, verified and compiled), rejects on the
- * first fatal error. The Worker is always terminated, including on the error path.
+ * Resolves when the engine reports `ready` (downloaded, verified and compiled) and anything
+ * `alongside` has arrived; rejects on the first fatal error. The Worker is always terminated,
+ * including on the error path.
  */
-export function downloadViaWorker(config: EngineConfig, progress: ProgressSink): Promise<void> {
+export function downloadViaWorker(config: EngineConfig, progress: ProgressSink, alongside?: Alongside): Promise<void> {
   return new Promise((resolve, reject) => {
     let worker: Worker;
     try {
@@ -271,26 +324,58 @@ export function downloadViaWorker(config: EngineConfig, progress: ProgressSink):
       finish(new Error(ev.message || ev.error?.message || 'worker crashed while downloading'));
     };
     worker.onmessageerror = () => finish(new Error('worker sent an unreadable message'));
+    // One count for what is really downloading: the model's files that arrive over the network, and
+    // what comes alongside them. A file already on the device reports itself complete at once and
+    // is not counted — the button said what this would download, and the count must agree.
+    const streaming = new Map<string, { loaded: number; total: number }>();
+    const alreadyHere = new Set<string>();
+    let compiled = false;
+    let alongLoaded = 0;
+    let alongDone = !alongside;
+    const report = (): void => {
+      if (compiled && alongDone) {
+        progress.set(1);
+        progress.note('Downloaded — preparing the model…');
+        return;
+      }
+      let loaded = alongLoaded;
+      let total = alongside?.total ?? 0;
+      for (const file of streaming.values()) {
+        loaded += compiled ? file.total : file.loaded;
+        total += file.total;
+      }
+      const ratio = total > 0 ? Math.min(1, loaded / total) : 0;
+      progress.set(ratio);
+      progress.note(total > 0 ? `Downloading… ${Math.floor(ratio * 100)}% · ${humanBytes(loaded)} of ${humanBytes(total)}` : 'Downloading…');
+    };
+    const along = alongside?.start((bytes) => {
+      alongLoaded += bytes;
+      report();
+    });
+    along?.then(
+      () => {
+        alongDone = true;
+        report();
+      },
+      (err: unknown) => finish(err instanceof Error ? err : new Error(String(err))),
+    );
+
     worker.onmessage = (ev: MessageEvent<WorkerResponse>) => {
       const m = ev.data;
       if (!m || typeof m !== 'object') return;
       if (m.kind === 'model-progress') {
-        if (m.phase === 'compile') {
-          progress.set(1);
-          progress.note('Downloaded — preparing the model…');
-        } else {
-          const ratio = m.total > 0 ? m.loaded / m.total : 0;
-          progress.set(ratio);
-          progress.note(
-            m.total > 0
-              ? `Downloading… ${Math.floor(ratio * 100)}% · ${humanBytes(m.loaded)} of ${humanBytes(m.total)}`
-              : 'Downloading…',
-          );
+        if (m.phase === 'compile') compiled = true;
+        else if (m.total > 0 && !alreadyHere.has(m.file)) {
+          if (streaming.has(m.file)) streaming.set(m.file, { loaded: m.loaded, total: m.total });
+          else if (m.loaded >= m.total) alreadyHere.add(m.file);
+          else streaming.set(m.file, { loaded: m.loaded, total: m.total });
         }
+        report();
       } else if (m.kind === 'ready') {
         // Ready means the engine loaded — from memory if need be. A Download is for offline use,
-        // so it is done only once the model is really in the cache.
-        void readCacheSizes()
+        // so it is done only once the model is really in the cache, with its voices.
+        void (along ?? Promise.resolve())
+          .then(() => readCacheSizes())
           .then((sizes) =>
             finish(
               sharedModelInstalled(config.engine, sizes)

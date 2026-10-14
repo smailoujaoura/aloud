@@ -13,7 +13,7 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
 - **Extraction** — [Mozilla Readability](https://github.com/mozilla/readability) strips nav / ads
   and grabs the article text.
 - **Voices** — [Piper](https://github.com/rhasspy/piper) (fast, ~21–137 MB per voice: `medium` around 60 MB, `high` around 110),
-  [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (best quality; ~326 MB with a graphics card, ~92 MB without) and
+  [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (best quality; ~347 MB with a graphics card, ~114 MB without) and
   Supertonic-2 (~262 MB). Inference runs on [ONNX Runtime Web](https://onnxruntime.ai/):
   WebGPU where the browser allows it, WebAssembly everywhere else.
 - **Gapless playback** — sentences are synthesised a few ahead of the playhead and scheduled

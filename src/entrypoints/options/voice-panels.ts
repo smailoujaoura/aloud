@@ -20,7 +20,7 @@ import { voicePortrait } from '@/ui/voice-portraits';
 import { el } from '@/shared/dom';
 import { humanBytes } from '@/shared/log';
 import { capabilities } from '@/shared/browser-env';
-import { downloadSize, engineInfo, listEngines, type EngineInfo } from '@/shared/engine-catalog';
+import { downloadSize, engineInfo, KOKORO_VOICE_BYTES, kokoroVoiceUrl, listEngines, type EngineInfo } from '@/shared/engine-catalog';
 import { isEnglish, listVoices, shortPiperLabel } from '@/shared/voice-catalog';
 import { languageName, primaryLanguage, voiceLanguage, type CandidateVoice } from '@/shared/language-voice';
 import { downloadedVoices, renderMyVoices, renderVoiceBoard } from './voice-board';
@@ -33,7 +33,7 @@ import {
   announceModelsChanged,
   downloadPiperVoice,
   downloadTray,
-  downloadViaWorker,
+  downloadSharedModel,
   followDownload,
   newDownloadScope,
 } from './downloads';
@@ -848,6 +848,10 @@ function modelCard(
   // Only the CPU build is here (downloaded before, or with the GPU off): reading would fetch the
   // GPU build on its own, so offer it here instead of letting it start on the first preview.
   const gpuMissing = onGpu && state.downloaded && !sharedModelInstalled(engine, ctx.sizes, { gpu: true });
+  // Kokoro's voices come with the model; one downloaded before they did is missing some of them.
+  const voices = engine === 'kokoro' ? Object.keys(ctx.manifest.kokoro.voices) : [];
+  const voicesMissing = state.downloaded ? voices.filter((v) => !ctx.sizes.has(kokoroVoiceUrl(v))).length : 0;
+  const voicesSize = `~${humanBytes(voicesMissing * KOKORO_VOICE_BYTES)}`;
 
   const text = el(document, 'div', { class: 'mc-text' });
   text.append(
@@ -856,15 +860,19 @@ function modelCard(
   );
   if (gpuMissing) {
     text.append(el(document, 'span', { class: 'vi-meta' }, `This machine reads with the GPU, which needs Kokoro’s GPU build (${size}). Download it here before you read.`));
+  } else if (voicesMissing) {
+    text.append(
+      el(document, 'span', { class: 'vi-meta' }, `${voicesMissing} of its ${voices.length} voices are not on this device yet. Download them here, and nothing more is fetched when you try one.`),
+    );
   }
 
   const progress = new RowProgress();
-  const isDelete = state.downloaded && !gpuMissing;
+  const isDelete = state.downloaded && !gpuMissing && !voicesMissing;
   const btn = el(
     document,
     'button',
     { class: isDelete ? 'ghost danger btn-sm' : 'primary', type: 'button' },
-    isDelete ? 'Delete model' : gpuMissing ? `Download GPU build · ${size}` : `Download ${size}`,
+    isDelete ? 'Delete model' : gpuMissing ? `Download GPU build · ${size}` : voicesMissing ? `Download the voices · ${voicesSize}` : `Download ${size}`,
   );
 
   const idle = btn.textContent ?? '';
@@ -873,7 +881,7 @@ function modelCard(
     if (!isDelete) {
       // Queued behind any download already running; the card says so (followDownload).
       downloads.enqueue(key, `${info.name} model`, (p) =>
-        downloadViaWorker(engineConfigFor(ctx.settings, { engine, purpose: 'download' }), p),
+        downloadSharedModel(engineConfigFor(ctx.settings, { engine, purpose: 'download' }), voices, p),
       ).then(
         async () => {
           announceModelsChanged();

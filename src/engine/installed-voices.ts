@@ -22,7 +22,12 @@ export async function readCacheSizes(): Promise<CacheSizes> {
   // Cache Storage. Without them here, a voice never used looked ready to read offline.
   try {
     const cache = await caches.open('kokoro-voices');
-    for (const request of await cache.keys()) if (!sizes.has(request.url)) sizes.set(request.url, 1);
+    for (const request of await cache.keys()) {
+      if (sizes.has(request.url)) continue;
+      // Their real size, so "on this device" counts them: they are part of Kokoro's download.
+      const declared = Number((await cache.match(request))?.headers.get('content-length'));
+      sizes.set(request.url, Number.isFinite(declared) && declared > 0 ? declared : 1);
+    }
   } catch {
     /* no Cache Storage in this context */
   }

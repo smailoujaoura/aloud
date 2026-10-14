@@ -23,7 +23,7 @@ import { piperDownloaded, readCacheSizes, sharedModelInstalled } from '@/engine/
 import type { ModelManifest } from '@/engine/engines/types';
 import { getSettings, type Settings } from '@/shared/settings';
 import { engineConfigFor } from './engine-config';
-import { RowProgress, downloadPiperVoice, downloadViaWorker } from './downloads';
+import { RowProgress, downloadPiperVoice, downloadSharedModel } from './downloads';
 import { downloads, type ProgressSink } from './download-queue';
 
 export interface BackupPanelOptions {
@@ -230,7 +230,7 @@ function downloadStep(piper: string[], shared: Array<'kokoro' | 'supertonic'>, s
       ...shared.map((engine): Job => [
         `model:${engine}`,
         `${engine === 'kokoro' ? 'Kokoro-82M' : 'Supertonic-2'} model`,
-        (p) => downloadViaWorker(engineConfigFor(settings, { engine, purpose: 'download' }), p),
+        (p) => downloadSharedModel(engineConfigFor(settings, { engine, purpose: 'download' }), Object.keys(opts.manifest.kokoro.voices), p),
       ]),
     ];
     const show = (): void => {
