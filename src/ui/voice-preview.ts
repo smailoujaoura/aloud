@@ -22,6 +22,7 @@
  */
 import { browser } from 'wxt/browser';
 import type { EngineConfig, WorkerResponse } from '@/engine/protocol';
+import { PREVIEW_NATIVE } from './preview-sentences';
 
 /** Kept short on purpose — every extra word is ~0.4 s more synthesis on the WASM path. */
 export const PREVIEW_SENTENCE = 'This is a short sample of how the voice sounds.';
@@ -37,7 +38,8 @@ const PREVIEW_BY_LANGUAGE: Record<string, string> = {
 
 /** The preview sentence for a voice speaking `language` (a tag like "pt-BR"); English otherwise. */
 export function previewSentence(language: string | undefined): string {
-  return PREVIEW_BY_LANGUAGE[(language ?? '').toLowerCase().split(/[-_]/)[0]!] ?? PREVIEW_SENTENCE;
+  const code = (language ?? '').toLowerCase().split(/[-_]/)[0]!;
+  return PREVIEW_BY_LANGUAGE[code] ?? PREVIEW_NATIVE[code] ?? PREVIEW_SENTENCE;
 }
 
 export type PreviewPhase = 'idle' | 'loading' | 'synthesizing' | 'playing';

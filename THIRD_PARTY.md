@@ -18,6 +18,7 @@ build inside the `phonemizer` package that kokoro-js uses.
 | [`@mozilla/readability`](https://github.com/mozilla/readability) | 0.6.0 | Apache-2.0 | Article extraction | `reader-inject.js` |
 | [`@breezystack/lamejs`](https://github.com/gideonstele/lamejs) (JavaScript port of LAME) | 1.2.7 | **LGPL-3.0** | MP3 encoding for “Save as MP3” | `reader-inject.js`, and the shared reader chunk the PDF and queue pages load |
 | [Inter](https://rsms.me/inter/) via [`@fontsource-variable/inter`](https://fontsource.org/fonts/inter) | 5.3.0 | **OFL-1.1** | The interface typeface of Aloud's own pages (Latin subsets) | `fonts/` |
+| Preview sentences: one sentence each from the Wikipedia articles on the rainbow, as [Piper](https://github.com/rhasspy/piper) collects them for its samples | — | **CC BY-SA 4.0** (Wikipedia) | What a voice says when previewed, in 39 languages | `src/ui/preview-sentences.ts` |
 | [flag-icons](https://github.com/lipis/flag-icons) | 7.5.0 | MIT | The small flag beside each language on the Voice page (47 of its SVGs, copied in) | `flags/` |
 | [`pdf-lib`](https://github.com/Hopding/pdf-lib) | 1.17.1 | MIT | Writing highlights and notes into PDF files | a chunk of the PDF page, loaded on first save |
 | [pdf.js](https://github.com/mozilla/pdf.js) (legacy build) | as shipped in `pdfjs-dist` | Apache-2.0 | Rendering and text extraction for PDFs | `vendor/pdfjs/*` (loaded at runtime, with its own worker, CMaps and standard fonts) |

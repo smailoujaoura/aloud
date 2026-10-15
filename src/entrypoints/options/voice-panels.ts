@@ -20,7 +20,7 @@ import { voicePortrait } from '@/ui/voice-portraits';
 import { el } from '@/shared/dom';
 import { humanBytes } from '@/shared/log';
 import { capabilities } from '@/shared/browser-env';
-import { downloadSize, engineInfo, KOKORO_VOICE_BYTES, kokoroVoiceUrl, listEngines, type EngineInfo } from '@/shared/engine-catalog';
+import { downloadSize, engineInfo, kokoroVoiceUrl, listEngines, type EngineInfo } from '@/shared/engine-catalog';
 import { isEnglish, listVoices, shortPiperLabel } from '@/shared/voice-catalog';
 import { languageName, primaryLanguage, voiceLanguage, type CandidateVoice } from '@/shared/language-voice';
 import { downloadedVoices, renderMyVoices, renderVoiceBoard } from './voice-board';
@@ -832,6 +832,9 @@ function sharedPanel(engine: 'kokoro' | 'supertonic', ctx: PanelContext, again: 
   return panel;
 }
 
+/** Models whose download this page has finished (or tried to): once per page, never in a loop. */
+const finishedOnce = new Set<string>();
+
 function modelCard(
   engine: 'kokoro' | 'supertonic',
   state: { downloaded: boolean; bytes: number },
@@ -851,7 +854,6 @@ function modelCard(
   // Kokoro's voices come with the model; one downloaded before they did is missing some of them.
   const voices = engine === 'kokoro' ? Object.keys(ctx.manifest.kokoro.voices) : [];
   const voicesMissing = state.downloaded ? voices.filter((v) => !ctx.sizes.has(kokoroVoiceUrl(v))).length : 0;
-  const voicesSize = `~${humanBytes(voicesMissing * KOKORO_VOICE_BYTES)}`;
 
   const text = el(document, 'div', { class: 'mc-text' });
   text.append(
@@ -863,8 +865,7 @@ function modelCard(
   }
 
   const progress = new RowProgress();
-  // The model is here: its card says so and offers to delete it. Voices never used are a small
-  // extra, offered beside — not a "Download" that made a downloaded model look missing.
+  // The model is here: its card says so and offers to delete it.
   const isDelete = state.downloaded && !gpuMissing;
   const btn = el(
     document,
@@ -889,12 +890,12 @@ function modelCard(
       },
     );
   };
-  let extra: HTMLButtonElement | null = null;
-  if (isDelete && voicesMissing) {
-    extra = el(document, 'button', { type: 'button', class: 'link-btn mc-extra' }, `Get the other ${voicesMissing} voices · ${voicesSize}`) as HTMLButtonElement;
-    extra.title = 'Each voice has a small file of its own; these are the ones you have not used yet. Without them, a voice’s file is fetched the first time you use it.';
-    extra.addEventListener('click', startDownload);
-    text.append(extra);
+  // Kokoro is one download, voices included. A model downloaded before its voices came with it is
+  // finished here, once, without asking: offering the rest as an extra made one download two.
+  const finishing = isDelete && voicesMissing > 0;
+  if (finishing && !finishedOnce.has(key)) {
+    finishedOnce.add(key);
+    startDownload();
   }
 
   const idle = btn.textContent ?? '';
@@ -915,8 +916,7 @@ function modelCard(
       }
     });
   });
-  if (!isDelete) followDownload(key, progress, btn, idle);
-  else if (extra) followDownload(key, progress, extra, extra.textContent ?? '');
+  if (!isDelete || finishing) followDownload(key, progress, btn, idle);
 
   card.append(text, btn, progress.wrap, progress.msg);
   return card;

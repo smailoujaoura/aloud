@@ -1,0 +1,52 @@
+/**
+ * What a voice says when previewed, in its own language: a German voice read the English sample
+ * sentence. Most are a sentence of the Wikipedia article on the rainbow in that language (CC BY-SA
+ * 4.0, compatible one way with Aloud's GPL-3.0), as Piper collects them for its voice samples —
+ * the first one short and whole, so a preview lasts a few seconds. Polish, Chinese, Estonian and
+ * Swedish say the English sample sentence, translated.
+ */
+export const PREVIEW_NATIVE: Readonly<Record<string, string>> = {
+  ar: "يَظْهَرُ قَوْسُ الْمَطَرِ بَعْدَ سُقُوطِ الْمَطَرِ أَوْ خِلالَ سُقُوطِ الْمَطَرِ وَالشَّمْسُ مُشْرِقَةٌ.",
+  bg: "За да се наблюдава дъгата, слънцето трябва да е зад наблюдателя под определен ъгъл.",
+  bn: "রংধনু বা রামধনু , হল একটি আলোকীয় ঘটনা।",
+  ca: "Els colors van des del violeta a l'interior (amb un radi de 40°) al vermell a l'exterior, amb un radi de 42°.",
+  cs: "Podobný úkaz může vzniknout i v drobných ledových krystalech v atmosféře.",
+  cy: "Mae'n ymddangos ar ffurf bwa amryliw, gyda choch ar ran allanol y bwa, a dulas ar y rhan fewnol.",
+  da: "En regnbue er et optisk fænomen; en \"lyseffekt\", som skabes på himlen, når lys fra Solen rammer små vanddråber i luften, f.eks. faldende regn.",
+  de: "Sein radialer Farbverlauf ist das mehr oder weniger verweißlichte sichtbare Licht des Sonnenspektrums.",
+  el: "Οι επιστήμονες μελετούν ακόμη το ουράνιο τόξο.",
+  et: "See on lühike näide sellest, kuidas hääl kõlab.",
+  eu: "Forma, arku kolore anitz batena da, gorria kanpoalderantz duena eta morea barnealderantz.",
+  fa: "رنگین‌کمان پدیده‌ای نوری و کمانی است که زمانی که خورشید به قطرات نم و رطوبت جو زمین می‌تابد باعث ایجاد طیفی از نور در آسمان می‌شود.",
+  fi: "Sateenkaari on spektrin väreissä esiintyvä ilmakehän optinen ilmiö.",
+  hu: "Az ív külső része vörös, míg a belső ibolya.",
+  hy: "Ծիածան, անձրևից հետո երկնքում հայտնվող բազմերանգ կամարի տեսքով մթնոլորտի տեսողական երևույթ է։",
+  id: "Pelangi biasanya berbentuk busur melingkar yang berwarna-warni.",
+  is: "Hann er marglitur með rauðan að utanverðu og fjólubláan að innanverðu.",
+  ka: "ცისარტყელა — ატმოსფერული ოპტიკური და მეტეოროლოგიური მოვლენა, რომელიც ხშირად წვიმის შემდეგ ჩნდება.",
+  kk: "Кемпірқосақ – аспан күмбезінде түрлі түсті доға түрінде көрінетін атмосферадағы оптикалық құбылыс.",
+  ko: "무지개는 하늘에서, 눈에 보이는 반원형의 호를 이루는 일곱 가지 색의 띠를 말한다.",
+  ku: "Keskesor diyardeyek atmosferî-optîkî ye ku di barîna baranê de ku ji hêla rojê ve hatî ronî kirin de wekî kevanek dorhêl a ronahiya rengîn xuya dike.",
+  lb: "Et freet mech, Iech kennen ze léieren.",
+  lv: "Varavīksne ir optiska parādība atmosfērā, kuru rada Saules staru laušana un atstarošana krītošos lietus pilienos.",
+  ml: "അന്തരീക്ഷത്തിലെ ജലകണികകളിൽ പതിക്കുന്ന പ്രകാശത്തിന്‌ പ്രകീർണ്ണനം സംഭവിക്കുന്നതുമൂലം കാണാൻ കഴിയുന്ന ഒരു പ്രതിഭാസമാണ്‌ മഴവില്ല്.",
+  mr: "हा वर्णपट धनुष्याकृतीप्रमाणे दिसतो.",
+  ne: "इन्द्रेणी वा इन्द्रधनुष प्रकाश र रंगबाट उत्पन्न भएको यस्तो घटना हो जसमा रंगीन प्रकाशको एउटा अर्धवृत आकाशमा देखिन्छ।",
+  nl: "Het is een optisch effect dat wordt veroorzaakt door de breking en weerspiegeling van licht in de waterdruppels.",
+  no: "Regnbuen eller regnbogen er et optisk fenomen som oppstår når solen skinner gjennom regndråper i atmosfæren og betrakteren står med solen i ryggen.",
+  pl: "To jest krótka próbka tego, jak brzmi głos.",
+  ro: "De cele mai multe ori curcubeul se observă după ploaie, când soarele este apropiat de orizont.",
+  ru: "Радуга, атмосферное, оптическое и метеорологическое явление, наблюдаемое при освещении ярким источником света множества водяных капель.",
+  sk: "Dúha je optický úkaz vznikajúci v atmosfére Zeme.",
+  sl: "Mavrica je svetlobni pojav v ozračju, ki ga vidimo v obliki loka spektralnih barv.",
+  sq: "Ylberi është një dukuri optike dhe meteorologjike i cili paraqitet në atmosferën e tokës, pas shiut, kur rrezet e diellit shkëlqejnë në pikat e imta të ujit.",
+  sr: "Дуга је оптичка и метеоролошка појава који се појављује на небу, када се сунчеви зраци преламају кроз ситне водене капи, најчешће након кише.",
+  sv: "Det här är ett kort exempel på hur rösten låter.",
+  sw: "Upinde wa mvua ni tao la rangi mbalimbali angani ambalo linaweza kuonekana wakati Jua huangaza kupitia matone ya mvua inayoanguka.",
+  te: "అది నీటిబిందువులపై కాంతి పరావర్తనం, వక్రీభవనం ద్వారా సంబవిస్తుంది.",
+  tr: "Gökkuşağındaki renkler bir spektrum oluşturur.",
+  uk: "Червоний колір ми бачимо з зовнішнього боку первинної веселки, а фіолетовий — із внутрішнього.",
+  ur: "دھنک یا قوس قزح فطرت کا ایک مظہر ہے۔",
+  vi: "Cầu vồng hay mống cũng như quang phổ là hiện tượng tán sắc của các ánh sáng từ Mặt Trời khi khúc xạ và phản xạ qua các giọt nước mưa.",
+  zh: "这是这个声音的一段简短示例。",
+};
