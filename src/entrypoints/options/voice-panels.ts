@@ -21,9 +21,9 @@ import { el } from '@/shared/dom';
 import { humanBytes } from '@/shared/log';
 import { capabilities } from '@/shared/browser-env';
 import { downloadSize, engineInfo, kokoroVoiceUrl, listEngines, type EngineInfo } from '@/shared/engine-catalog';
-import { isEnglish, listVoices, shortPiperLabel } from '@/shared/voice-catalog';
-import { languageName, primaryLanguage, voiceLanguage, type CandidateVoice } from '@/shared/language-voice';
-import { downloadedVoices, renderMyVoices, renderVoiceBoard } from './voice-board';
+import { isEnglish, shortPiperLabel } from '@/shared/voice-catalog';
+import { languageName, primaryLanguage, voiceLanguage } from '@/shared/language-voice';
+import { downloadedVoices, renderVoiceBoard } from './voice-board';
 import { cacheClear, cacheDelete, deleteModels } from '@/engine/model-cache';
 import { activeVoice, type EngineId, type Settings } from '@/shared/settings';
 import type { ModelManifest, PiperVoiceEntry } from '@/engine/engines/types';
@@ -62,6 +62,10 @@ export interface PanelContext {
   chooseVoice(language: string, engine: EngineId, voiceId: string): Promise<void>;
   /** A language no downloaded voice speaks: read in English, or skipped. */
   setUnvoiced(choice: 'english' | 'skip'): Promise<void>;
+  /** Take a language off the board (read like every other language), or bring it back. */
+  setLanguageRemoved(language: string, removed: boolean): Promise<void>;
+  /** The voice for every other language (null: automatic, the voice English gets). */
+  setOtherVoice(voice: { engine: EngineId; voice: string } | null): Promise<void>;
   flashSaved(message?: string): void;
   /** Say what went wrong. */
   flashError(message: string): void;
@@ -76,8 +80,6 @@ export interface PanelContext {
 export interface VoiceHosts {
   /** "Who reads what": the switchboard of languages and voices (voice-board.ts). */
   board: HTMLElement;
-  /** "My voices": the voices kept. */
-  mine: HTMLElement;
   /** The folded catalogue: browse, download, bring back. */
   catalogue: HTMLDetailsElement;
   tabs: HTMLElement;
@@ -152,8 +154,7 @@ export function renderVoiceSection(hosts: VoiceHosts, ctx: PanelContext): void {
     hosts.catalogue.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
   renderVoiceBoard(hosts.board, ctx, openCatalogue);
-  renderMyVoices(hosts.mine, ctx, openCatalogue);
-  // Folded unless there is nothing to read with yet, it was asked for, or a search is under way.
+  // Open from the start (index.html), and folded only by the reader; opened again when asked for.
   if (askedLanguage || ctx.filter || downloadedVoices(ctx).length === 0) hosts.catalogue.open = true;
   renderBrowser(hosts, ctx);
 }
@@ -294,20 +295,53 @@ function emptyState(text: string): HTMLElement {
   return el(document, 'p', { class: 'voice-empty' }, text);
 }
 
-/** "In use", or the button that makes it so — for the voice's language, as on the board. */
+/**
+ * "Reads Italian" for a voice that does, or "Use", which asks what for: the voice's own language,
+ * or every other language. One click chose a voice a second way, for a purpose it did not say.
+ */
 function useControl(engine: EngineId, id: string, name: string, ctx: PanelContext, disabledReason?: string): HTMLElement {
   const language = primaryLanguage(voiceLanguage(engine, id, ctx.manifest));
   const chosen = ctx.settings.languageVoices[language];
-  const inUse = chosen ? chosen.engine === engine && chosen.voice === id : ctx.settings.engine === engine && activeVoice(ctx.settings) === id;
-  if (inUse) return el(document, 'span', { class: 'pill in-use' }, 'In use');
-  const btn = el(document, 'button', { class: 'primary btn-sm', type: 'button', 'aria-label': `Use ${name}` }, 'Use');
+  const other = ctx.settings.otherVoice;
+  const readsOwn = chosen ? chosen.engine === engine && chosen.voice === id : ctx.settings.engine === engine && activeVoice(ctx.settings) === id;
+  const readsOther = !!other && other.engine === engine && other.voice === id;
   if (disabledReason) {
+    const btn = el(document, 'button', { class: 'primary btn-sm', type: 'button', 'aria-label': `Use ${name}`, title: disabledReason }, 'Use');
     btn.disabled = true;
-    btn.title = disabledReason;
+    return btn;
   }
-  btn.title = `Read ${languageName(language)} with ${name}`;
-  btn.addEventListener('click', () => void ctx.chooseVoice(language, engine, id));
-  return btn;
+  const wrap = el(document, 'span', { class: 'use-wrap' });
+  if (readsOwn || readsOther) {
+    wrap.append(el(document, 'span', { class: 'pill in-use' }, readsOwn ? `Reads ${languageName(language)}` : 'Reads other languages'));
+  }
+  const menu = el(document, 'details', { class: 'use-menu' }) as HTMLDetailsElement;
+  const summary = el(document, 'summary', { class: 'btn primary btn-sm', 'aria-label': `Use ${name} for…` }, 'Use');
+  const list = el(document, 'div', { class: 'use-list', role: 'menu' });
+  const option = (label: string, run: () => void): void => {
+    const item = el(document, 'button', { type: 'button', role: 'menuitem' }, label);
+    item.addEventListener('click', () => {
+      menu.open = false;
+      run();
+    });
+    list.append(item);
+  };
+  if (!readsOwn) option(`For ${languageName(language)}`, () => void ctx.chooseVoice(language, engine, id));
+  if (!readsOther) option('For every other language', () => void ctx.chooseVoice('*', engine, id));
+  // One open at a time, and closed by a click anywhere else.
+  menu.addEventListener('toggle', () => {
+    if (!menu.open) return;
+    for (const m of document.querySelectorAll<HTMLDetailsElement>('details.use-menu[open]')) if (m !== menu) m.open = false;
+    const close = (e: Event): void => {
+      if (!menu.contains(e.target as Node)) {
+        menu.open = false;
+        document.removeEventListener('click', close, true);
+      }
+    };
+    document.addEventListener('click', close, true);
+  });
+  menu.append(summary, list);
+  wrap.append(menu);
+  return wrap;
 }
 
 // ---- putting voices away ---------------------------------------------------

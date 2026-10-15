@@ -16,7 +16,8 @@ import { probeGpu, gpuProbeIfKnown } from '@/shared/gpu-probe';
 import { loadWorkerGpu } from '@/shared/backend-memory';
 import { probeWorkerGpu, type WorkerGpuResult } from './gpu-check';
 import { listVoices } from '@/shared/voice-catalog';
-import { languageName, primaryLanguage, voiceLanguage } from '@/shared/language-voice';
+import { languageName } from '@/shared/language-voice';
+import { OTHER_LANGUAGES } from './voice-board';
 import { cacheClear, cacheEntries, cacheUsageBytes, deleteModels } from '@/engine/model-cache';
 import {
   DEFAULT_SETTINGS,
@@ -24,7 +25,6 @@ import {
   watchSettings,
   setSettings,
   voiceKeyFor,
-  activeVoice,
   type EngineId,
   type Settings,
   type ThemeChoice,
@@ -144,28 +144,23 @@ async function save(patch: Partial<Settings>): Promise<void> {
 
 /** Switch engine and/or voice from anywhere on the page, then redraw. */
 /**
- * Choose who reads `language` — the one way a voice is chosen on the Voice page. For your own
- * voice's language it is your voice itself: a separate choice for English beside "your voice"
- * meant two controls for one thing, and the first one seemed to do nothing. For any other language,
- * that language's voice.
+ * Choose who reads `language` — the one way a voice is chosen on the Voice page, the same for every
+ * language, English included. `OTHER_LANGUAGES` is every language without a voice of its own.
  */
 async function chooseVoice(language: string, engine: EngineId, voiceId: string): Promise<void> {
   stopPreview();
-  const own = primaryLanguage(voiceLanguageOf(settings.engine, activeVoice(settings)));
-  const next = { ...settings.languageVoices };
-  if (!language || language === own || !settings.matchPageLanguage) {
-    delete next[primaryLanguage(voiceLanguageOf(engine, voiceId))];
-    settings = await setSettings({ engine, [voiceKeyFor(engine)]: voiceId, languageVoices: next });
-  } else {
-    next[language] = { engine, voice: voiceId };
-    settings = await setSettings({ languageVoices: next });
+  if (language === OTHER_LANGUAGES) {
+    settings = await setSettings({ otherVoice: { engine, voice: voiceId }, unvoicedLanguages: 'english' });
+    await render();
+    flashSaved(`Every other language is read by ${voiceLabel(engine, voiceId)}`);
+    return;
   }
+  settings = await setSettings({
+    languageVoices: { ...settings.languageVoices, [language]: { engine, voice: voiceId } },
+    removedLanguages: settings.removedLanguages.filter((l) => l !== language),
+  });
   await render();
-  flashSaved(`${languageName(primaryLanguage(voiceLanguageOf(engine, voiceId)) || language)} is read by ${voiceLabel(engine, voiceId)}`);
-}
-
-function voiceLanguageOf(engine: EngineId, voiceId: string): string {
-  return manifestCache ? voiceLanguage(engine, voiceId, manifestCache) : '';
+  flashSaved(`${languageName(language)} is read by ${voiceLabel(engine, voiceId)}`);
 }
 
 async function useVoice(engine: EngineId, voiceId: string): Promise<void> {
@@ -455,6 +450,17 @@ async function renderNow(): Promise<void> {
       await render();
       flashSaved(voice ? `${languageName(language)} will be read by ${voiceLabel(voice.engine, voice.voice)}` : `${languageName(language)}: automatic`);
     },
+    setLanguageRemoved: async (language, removed) => {
+      const rest = settings.removedLanguages.filter((l) => l !== language);
+      settings = await setSettings({ removedLanguages: removed ? [...rest, language] : rest });
+      await render();
+      flashSaved(removed ? `${languageName(language)} is read like every other language` : `${languageName(language)} has its own voices again`);
+    },
+    setOtherVoice: async (voice) => {
+      settings = await setSettings({ otherVoice: voice, unvoicedLanguages: 'english' });
+      await render();
+      flashSaved('Every other language: automatic');
+    },
     setUnvoiced: async (choice) => {
       settings = await setSettings({ unvoicedLanguages: choice });
       await render();
@@ -469,7 +475,6 @@ async function renderNow(): Promise<void> {
   renderVoiceSection(
     {
       board: $('voiceBoard'),
-      mine: $('myVoices'),
       catalogue: $<HTMLDetailsElement>('voiceCatalogue'),
       tabs: $('engineTabs'),
       panel: $('enginePanels'),

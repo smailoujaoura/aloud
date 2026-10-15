@@ -1373,6 +1373,8 @@ export class ReaderSession {
       skip: this.skipLanguages,
       hidden: new Set(this.settings.hiddenVoices),
       unvoiced: this.settings.unvoicedLanguages,
+      removed: new Set(this.settings.removedLanguages),
+      other: this.settings.otherVoice,
     };
   }
 

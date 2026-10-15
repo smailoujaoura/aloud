@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi } from 'vitest';
-import { renderMyVoices, renderVoiceBoard, wiredVoices } from '@/entrypoints/options/voice-board';
+import { OTHER_LANGUAGES, renderVoiceBoard } from '@/entrypoints/options/voice-board';
 import type { PanelContext } from '@/entrypoints/options/voice-panels';
 import { DEFAULT_SETTINGS, type Settings } from '@/shared/settings';
 import type { ModelManifest } from '@/engine/engines/types';
@@ -32,6 +32,8 @@ function ctx(over: Partial<Settings> = {}): PanelContext {
     setLanguageVoice: vi.fn(),
     chooseVoice: vi.fn(),
     setUnvoiced: vi.fn(),
+    setLanguageRemoved: vi.fn(),
+    setOtherVoice: vi.fn(),
     setAutoLanguage: vi.fn(),
   } as unknown as PanelContext;
 }
@@ -39,50 +41,57 @@ function ctx(over: Partial<Settings> = {}): PanelContext {
 vi.mock('@/engine/installed-voices', () => ({ piperDownloaded: () => false, sharedModelInstalled: (e: string) => e === 'kokoro' }));
 
 describe('who reads what', () => {
-  it('a row per language, the voice reading it marked, a pick rewires it', () => {
-    const c = ctx({ languageVoices: { it: { engine: 'kokoro', voice: 'im_nicola' } } });
+  const render = (c: PanelContext): HTMLElement => {
     const host = document.createElement('div');
     renderVoiceBoard(host, c, vi.fn());
-    const rows = [...host.querySelectorAll('.vb-row:not(.vb-others)')];
-    expect(rows.map((r) => r.querySelector('.vb-lang b')!.textContent)).toEqual(['English', 'Italian']);
-    // A flag from the voice reading it (Heart is American English), and a preview on every face.
-    expect(rows[0]!.querySelector<HTMLImageElement>('.vb-flag')!.getAttribute('src')).toBe('/flags/us.svg');
+    return host;
+  };
+  const rows = (host: HTMLElement) => [...host.querySelectorAll('.vb-row:not(.vb-others)')];
+
+  it('a row per language, each with Auto — English too — a flag, and a play button on every face', () => {
+    const host = render(ctx());
+    expect(rows(host).map((r) => r.querySelector('.vb-lang b')!.textContent)).toEqual(['English', 'Italian']);
+    for (const row of rows(host)) expect(row.querySelector('.vb-auto')).not.toBeNull();
+    expect(rows(host)[0]!.querySelector<HTMLImageElement>('.vb-flag')!.getAttribute('src')).toBe('/flags/us.svg');
     expect(host.querySelectorAll('.vb-pick').length).toBe(host.querySelectorAll('.vb-pick .vb-play').length);
-    const italian = rows[1]!;
+    // No switch to turn language switching off: a language is removed instead.
+    expect(host.querySelector('#matchPageLanguage')).toBeNull();
+  });
+
+  it('a pick chooses for that language; Auto gives it back', () => {
+    const c = ctx({ languageVoices: { it: { engine: 'kokoro', voice: 'im_nicola' } } });
+    const italian = rows(render(c))[1]!;
     expect(italian.querySelector('.vb-face.is-reading')!.textContent).toContain('Nicola');
-    expect(italian.querySelector('.vb-auto')!.getAttribute('aria-checked')).toBe('false');
     [...italian.querySelectorAll<HTMLButtonElement>('.vb-face')].find((f) => f.textContent!.includes('Sara'))!.click();
     expect(c.chooseVoice).toHaveBeenCalledWith('it', 'kokoro', 'if_sara');
     italian.querySelector<HTMLButtonElement>('.vb-auto')!.click();
     expect(c.setLanguageVoice).toHaveBeenCalledWith('it', null);
   });
 
-  it('"keep only the ones I use" keeps one voice per language — the wired ones', () => {
+  it('a language can be removed, and is then listed under every other language to bring back', () => {
     const c = ctx();
-    expect([...wiredVoices(c)].sort()).toEqual(['kokoro:af_heart', 'kokoro:if_sara']);
-    const host = document.createElement('div');
-    renderMyVoices(host, c, vi.fn());
-    [...host.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === 'Keep only the ones I use')!.click();
-    expect(c.setHiddenVoices).toHaveBeenCalledWith(['kokoro:af_bella', 'kokoro:im_nicola']);
+    rows(render(c))[1]!.querySelector<HTMLButtonElement>('.vb-remove')!.click();
+    expect(c.setLanguageRemoved).toHaveBeenCalledWith('it', true);
+    const gone = ctx({ removedLanguages: ['it'] });
+    const host = render(gone);
+    expect(rows(host).map((r) => r.querySelector('.vb-lang b')!.textContent)).toEqual(['English']);
+    host.querySelector<HTMLButtonElement>('.vb-others .vb-back')!.click();
+    expect(gone.setLanguageRemoved).toHaveBeenCalledWith('it', false);
   });
 
-  it('every other language is read in English, and the board says so', () => {
-    const host = document.createElement('div');
-    renderVoiceBoard(host, ctx(), vi.fn());
-    const others = host.querySelector('.vb-others')!;
-    expect(others.textContent).toContain('Every other language');
-    expect(others.querySelector('.vb-face')!.getAttribute('title')).toContain('Heart');
+  it('every other language: any voice can read it, Auto, or Skip', () => {
+    const c = ctx();
+    const others = render(c).querySelector('.vb-others')!;
+    expect(others.querySelectorAll('.vb-pick').length).toBe(4);
+    [...others.querySelectorAll<HTMLButtonElement>('.vb-face')].find((f) => f.textContent!.includes('Sara'))!.click();
+    expect(c.chooseVoice).toHaveBeenCalledWith(OTHER_LANGUAGES, 'kokoro', 'if_sara');
+    [...others.querySelectorAll<HTMLButtonElement>('.vb-auto')].find((b) => b.textContent === 'Skip')!.click();
+    expect(c.setUnvoiced).toHaveBeenCalledWith('skip');
   });
 
-  it('put-away voices leave the gallery, and stay on the board to choose from, dimmed', () => {
-    // After "keep only the ones I use", each language had one face left and nothing to rewire to.
-    const c = ctx({ hiddenVoices: ['kokoro:af_bella'] });
-    const board = document.createElement('div');
-    renderVoiceBoard(board, c, vi.fn());
-    const bella = [...board.querySelectorAll('.vb-pick')].find((p) => p.textContent!.includes('Bella'))!;
+  it('put-away voices stay on the board to choose from, dimmed', () => {
+    const board = render(ctx({ hiddenVoices: ['kokoro:af_bella'] }));
+    const bella = [...rows(board)[0]!.querySelectorAll('.vb-pick')].find((p) => p.textContent!.includes('Bella'))!;
     expect(bella.classList.contains('is-away')).toBe(true);
-    const mine = document.createElement('div');
-    renderMyVoices(mine, c, vi.fn());
-    expect(mine.textContent).toContain('1 put away');
   });
 });

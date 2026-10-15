@@ -18,7 +18,7 @@
 import type { VoiceRef } from '@/shared/settings';
 import { pickVoiceForLanguage, primaryLanguage, type CandidateVoice } from '@/shared/language-voice';
 
-export type RouteReason = 'manual' | 'off' | 'unknown' | 'preference' | 'saved' | 'match' | 'missing';
+export type RouteReason = 'manual' | 'off' | 'unknown' | 'preference' | 'saved' | 'match' | 'missing' | 'other';
 
 export type Route =
   | { kind: 'voice'; voice: CandidateVoice; reason: RouteReason; language: string }
@@ -42,6 +42,10 @@ export interface RouteContext {
   hidden?: ReadonlySet<string>;
   /** A language no downloaded voice speaks: read in English (default), or skipped. */
   unvoiced?: 'english' | 'skip';
+  /** Languages taken off the board: read like every other language, by choice — not "missing". */
+  removed?: ReadonlySet<string>;
+  /** The voice chosen for every other language; absent for the voice English gets. */
+  other?: VoiceRef | null;
 }
 
 export function voiceKey(v: { engine: string; id?: string; voice?: string }): string {
@@ -54,6 +58,11 @@ export function routeFor(languageTag: string, ctx: RouteContext): Route {
   if (!ctx.auto) return { kind: 'voice', voice: ctx.saved, reason: 'off', language };
   if (!language) return { kind: 'voice', voice: ctx.saved, reason: 'unknown', language };
 
+  // Taken off the board: read like every other language, and not reported as a missing voice.
+  if (ctx.removed?.has(language)) {
+    if (ctx.unvoiced === 'skip') return { kind: 'skip', language };
+    return { kind: 'voice', voice: fallbackVoice(ctx), reason: 'other', language };
+  }
   const preferred = ctx.preferences[language];
   if (preferred) {
     const found = ctx.installed.find((v) => v.engine === preferred.engine && v.id === preferred.voice);
@@ -71,6 +80,8 @@ export function routeFor(languageTag: string, ctx: RouteContext): Route {
 
 /** Who reads a language no downloaded voice speaks: the voice English gets, else the saved one. */
 export function fallbackVoice(ctx: RouteContext): CandidateVoice {
-  const english = routeFor('en', { ...ctx, skip: new Set() });
+  const chosen = ctx.other ? ctx.installed.find((v) => v.engine === ctx.other!.engine && v.id === ctx.other!.voice) : undefined;
+  if (chosen) return chosen;
+  const english = routeFor('en', { ...ctx, skip: new Set(), removed: new Set() });
   return english.kind === 'voice' && english.reason !== 'missing' ? english.voice : ctx.saved;
 }

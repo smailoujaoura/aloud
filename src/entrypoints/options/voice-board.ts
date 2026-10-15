@@ -31,6 +31,9 @@ import { shortPiperLabel } from '@/shared/voice-catalog';
 import { previewFor } from './preview-button';
 import type { PanelContext } from './voice-panels';
 
+/** The board's last row: every language without voices of its own. */
+export const OTHER_LANGUAGES = '*';
+
 export const voiceKeyOf = (engine: EngineId, id: string): string => `${engine}:${id}`;
 
 /** A voice's face: its portrait, or the one stand-in avatar. */
@@ -120,13 +123,11 @@ function savedVoice(ctx: PanelContext): CandidateVoice {
   };
 }
 
-/** Tiles shown in My voices before "Show all". */
-const TILES_SHOWN = 12;
-let showAllMine = false;
-
 /**
- * The switchboard. One row per language a kept voice speaks (and any language a voice was
- * chosen for): the language, its candidates as faces, and a wire to the one reading it.
+ * The switchboard. One row per language a downloaded voice speaks (and any a voice was chosen
+ * for), unless taken off: the language, Auto, every voice that can read it in a strip that scrolls
+ * sideways, and a wire to the one reading it. The last row is every other language: read by the
+ * voice English gets, by any voice chosen, or not at all — and it lists the languages taken off.
  */
 export function renderVoiceBoard(
   host: HTMLElement,
@@ -138,32 +139,37 @@ export function renderVoiceBoard(
   const hidden = new Set(settings.hiddenVoices);
   const saved = savedVoice(ctx);
   const savedLanguage = primaryLanguage(saved.language);
-  const kept = installed.filter((v) => !hidden.has(voiceKeyOf(v.engine, v.id)));
+  const removed = new Set(settings.removedLanguages);
+  const routing = {
+    auto: true,
+    manual: null,
+    saved,
+    preferences: settings.languageVoices,
+    installed,
+    skip: new Set<string>(),
+    hidden,
+    other: settings.otherVoice,
+  };
+  const skipping = settings.unvoicedLanguages === 'skip';
+  const away = (v: CandidateVoice): boolean => hidden.has(voiceKeyOf(v.engine, v.id));
 
   const head = el(document, 'div', { class: 'vb-head' });
   const title = el(document, 'div', {});
   title.append(
     el(document, 'h3', { id: 'langVoiceHeading' }, 'Who reads what'),
-    el(document, 'p', { class: 'muted small' }, 'Each language is read by the voice its wire leads to. Click a face to rewire it.'),
+    el(document, 'p', { class: 'muted small' }, 'Click a face to choose who reads a language; ▶ to hear it first.'),
   );
-  const toggle = el(document, 'label', { class: 'switch' });
-  const box = el(document, 'input', { type: 'checkbox', id: 'matchPageLanguage', role: 'switch' }) as HTMLInputElement;
-  box.checked = settings.matchPageLanguage;
-  box.addEventListener('change', () => void ctx.setAutoLanguage(box.checked));
-  toggle.append(box, el(document, 'span', { class: 'switch-track', 'aria-hidden': 'true' }), el(document, 'span', {}, 'Switch voices with the language'));
-  head.append(title, toggle);
+  head.append(title);
 
-  const board = el(document, 'div', { class: `vb-board${settings.matchPageLanguage ? '' : ' is-off'}` });
+  const board = el(document, 'div', { class: 'vb-board' });
   const wires = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   wires.classList.add('vb-wires');
   wires.setAttribute('aria-hidden', 'true');
   board.append(wires);
 
   const codes = new Set<string>([...installed.map((v) => primaryLanguage(v.language)), ...Object.keys(settings.languageVoices)]);
-  const routing = { auto: true, manual: null, saved, preferences: settings.languageVoices, installed, skip: new Set<string>(), hidden };
-  /** Who reads a language with no voice: the English voice (voice-routing.ts: fallbackVoice). */
-  const english = fallbackVoice(routing);
   codes.delete('');
+  for (const code of removed) codes.delete(code);
   const ordered = [...codes].sort((a, b) =>
     a === savedLanguage ? -1 : b === savedLanguage ? 1 : languageName(a).localeCompare(languageName(b)),
   );
@@ -171,72 +177,53 @@ export function renderVoiceBoard(
   const links: Array<{ from: HTMLElement; to: HTMLElement; auto: boolean }> = [];
   for (const code of ordered) {
     const chosen = settings.languageVoices[code];
-    const route = routeFor(code, { auto: true, manual: null, saved, preferences: {}, installed, skip: new Set(), hidden });
+    const route = routeFor(code, { ...routing, preferences: {} });
     const automatic = route.kind === 'voice' && route.reason !== 'missing' ? route.voice : null;
     const isChosen = (v: CandidateVoice): boolean => !!chosen && chosen.engine === v.engine && chosen.voice === v.id;
-    const reading = chosen ? installed.find(isChosen) ?? null : automatic;
-
-    // Candidates: the kept voices that speak it, the one reading first among equals.
-    // Every downloaded voice for it — the reading one first, then the kept, then those put away.
-    const away = (v: CandidateVoice): boolean => hidden.has(voiceKeyOf(v.engine, v.id));
-    const speakers = installed.filter((v) => primaryLanguage(v.language) === code);
+    const reading = chosen ? installed.find(isChosen) ?? automatic : automatic;
     const isReading = (v: CandidateVoice): boolean => !!reading && reading.engine === v.engine && reading.id === v.id;
-    speakers.sort((a, b) => Number(isReading(b)) - Number(isReading(a)) || Number(away(a)) - Number(away(b)));
+    // Every downloaded voice for it — the reading one first, then the kept, then those put away.
+    const speakers = installed
+      .filter((v) => primaryLanguage(v.language) === code)
+      .sort((a, b) => Number(isReading(b)) - Number(isReading(a)) || Number(away(a)) - Number(away(b)));
 
     const row = el(document, 'div', { class: 'vb-row', role: 'radiogroup', 'aria-label': `Voice for ${languageName(code)}` });
     const lang = el(document, 'div', { class: 'vb-lang' });
     const named = el(document, 'b', {}, languageName(code));
     const flag = flagFor(code, reading ?? speakers[0] ?? null);
     if (flag) named.prepend(flag);
-    lang.append(
-      named,
-      el(document, 'span', {}, chosen && reading ? 'Chosen by you' : code === savedLanguage && automatic?.id === saved.id ? 'Your voice' : automatic ? 'Auto' : 'No voice — read in English'),
-    );
     const node = el(document, 'span', { class: 'vb-node', 'aria-hidden': 'true' });
-
-    const faces = el(document, 'div', { class: 'vb-faces' });
     const auto = el(document, 'button', {
       type: 'button',
       class: `vb-auto${chosen ? '' : ' is-on'}`,
       role: 'radio',
       'aria-checked': String(!chosen),
-      title: automatic ? `Auto — ${shortName(automatic.label)} now; it follows your voice and what you download` : 'Auto',
+      title: automatic ? `Auto: ${shortName(automatic.label)} now — Aloud picks, and follows what you download` : 'Auto',
     }, 'Auto');
     auto.addEventListener('click', () => {
       if (chosen) void ctx.setLanguageVoice(code, null);
     });
-    // In the language's own box, so the wire runs clear from the language to its face. Not on your
-    // own language's row: there the voice chosen *is* your voice, so "Auto" would mean nothing.
-    if (code !== savedLanguage || chosen) lang.append(auto);
-    else lang.classList.add('no-auto');
-    lang.append(node);
+    const remove = el(document, 'button', {
+      type: 'button',
+      class: 'vb-remove',
+      'aria-label': `Remove ${languageName(code)}`,
+      title: `Don't read ${languageName(code)} with its own voices: read it like every other language`,
+    }, '✕');
+    remove.addEventListener('click', () => void ctx.setLanguageRemoved(code, true));
+    lang.append(named, el(document, 'span', {}, chosen && reading ? 'Chosen by you' : reading ? 'Auto' : 'No voice yet'), auto, remove, node);
 
+    const faces = el(document, 'div', { class: 'vb-faces' });
     let target: HTMLElement | null = null;
-    // Every voice for the language, in one strip that scrolls sideways: English has 25, and a
-    // "+25" that opened the catalogue chose them a second way.
     for (const v of speakers) {
       const on = isReading(v);
-      const { pick, btn } = faceChoice(v, ctx, {
-        on,
-        auto: on && !chosen,
-        // The voice reading the language is never drawn as put away, even when it is.
-        away: away(v) && !on,
-        checked: on && !!chosen,
-      });
+      const { pick, btn } = faceChoice(v, ctx, { on, auto: on && !chosen, away: away(v) && !on, checked: on && !!chosen });
       btn.addEventListener('click', () => {
-        if (!on || (code === savedLanguage && chosen)) void ctx.chooseVoice(code, v.engine, v.id);
+        if (!(on && chosen)) void ctx.chooseVoice(code, v.engine, v.id);
       });
       faces.append(pick);
       if (on) target = btn;
     }
     if (!speakers.length) {
-      // Read in English meanwhile: the English voice's face, wired, and the way to a real one.
-      if (settings.matchPageLanguage && primaryLanguage(english.language) === 'en') {
-        const { pick, btn } = faceChoice(english, ctx, { on: true, auto: true, away: false, checked: false, caption: 'in English' });
-        btn.disabled = true;
-        faces.append(pick);
-        target = btn;
-      }
       const get = el(document, 'button', { type: 'button', class: 'ghost btn-sm' }, `Get a ${languageName(code)} voice`);
       get.addEventListener('click', () => openCatalogue(code));
       faces.append(get);
@@ -246,64 +233,83 @@ export function renderVoiceBoard(
     board.append(row);
   }
 
-  // Every language with no voice: read in English, and said so where it can be seen.
-  if (ordered.length && settings.matchPageLanguage && primaryLanguage(english.language) === 'en') {
-    const row = el(document, 'div', { class: 'vb-row vb-others' });
+  // Every other language: any voice may read it, Auto (the voice English gets), or none.
+  if (installed.length) {
+    const others = fallbackVoice(routing);
+    const row = el(document, 'div', { class: 'vb-row vb-others', role: 'radiogroup', 'aria-label': 'Voice for every other language' });
     const lang = el(document, 'div', { class: 'vb-lang' });
     const node = el(document, 'span', { class: 'vb-node', 'aria-hidden': 'true' });
-    const skipping = settings.unvoicedLanguages === 'skip';
+    const auto = el(document, 'button', {
+      type: 'button',
+      class: `vb-auto${!settings.otherVoice && !skipping ? ' is-on' : ''}`,
+      role: 'radio',
+      'aria-checked': String(!settings.otherVoice && !skipping),
+      title: 'Auto: the voice that reads English',
+    }, 'Auto');
+    auto.addEventListener('click', () => void ctx.setOtherVoice(null));
+    const skip = el(document, 'button', {
+      type: 'button',
+      class: `vb-auto${skipping ? ' is-on' : ''}`,
+      role: 'radio',
+      'aria-checked': String(skipping),
+      title: 'Not read at all',
+    }, 'Skip');
+    skip.addEventListener('click', () => {
+      if (!skipping) void ctx.setUnvoiced('skip');
+    });
+    const chips = el(document, 'span', { class: 'vb-modes' });
+    chips.append(auto, skip);
     lang.append(
       el(document, 'b', {}, 'Every other language'),
-      el(document, 'span', {}, skipping ? 'Not read until you get a voice for it' : 'Read in English until you get a voice for it'),
+      el(document, 'span', {}, skipping ? 'Not read' : `Read by ${shortName(others.label)}`),
+      chips,
       node,
     );
-    const faces = el(document, 'div', { class: 'vb-faces' });
-    const choice = el(document, 'div', { class: 'vb-choice', role: 'radiogroup', 'aria-label': 'Languages without a voice' });
-    for (const [value, label] of [['english', 'Read in English'], ['skip', 'Skip them']] as const) {
-      const on = settings.unvoicedLanguages === value;
-      const chip = el(document, 'button', { type: 'button', class: `vb-chip${on ? ' is-on' : ''}`, role: 'radio', 'aria-checked': String(on) }, label);
-      chip.addEventListener('click', () => {
-        if (!on) void ctx.setUnvoiced(value);
+    if (removed.size) {
+      const back = el(document, 'span', { class: 'vb-removed' });
+      for (const code of [...removed].sort()) {
+        const chip = el(document, 'button', { type: 'button', class: 'vb-back', title: `Give ${languageName(code)} its own voices again` }, `${languageName(code)} ↩`);
+        chip.addEventListener('click', () => void ctx.setLanguageRemoved(code, false));
+        back.append(chip);
+      }
+      lang.append(back);
+    }
+    const faces = el(document, 'div', { class: `vb-faces${skipping ? ' is-off' : ''}` });
+    const isOther = (v: CandidateVoice): boolean => !skipping && others.engine === v.engine && others.id === v.id;
+    const everyone = [...installed].sort(
+      (a, b) =>
+        Number(isOther(b)) - Number(isOther(a)) ||
+        Number(away(a)) - Number(away(b)) ||
+        languageName(primaryLanguage(a.language)).localeCompare(languageName(primaryLanguage(b.language))),
+    );
+    let target: HTMLElement | null = null;
+    for (const v of everyone) {
+      const on = isOther(v);
+      const { pick, btn } = faceChoice(v, ctx, { on, auto: on && !settings.otherVoice, away: away(v) && !on, checked: on && !!settings.otherVoice });
+      btn.addEventListener('click', () => {
+        if (!(on && settings.otherVoice)) void ctx.chooseVoice(OTHER_LANGUAGES, v.engine, v.id);
       });
-      choice.append(chip);
-    }
-    if (!skipping) {
-      const { pick, btn } = faceChoice(english, ctx, { on: true, auto: true, away: false, checked: false, caption: 'in English' });
-      btn.disabled = true;
       faces.append(pick);
-      links.push({ from: node, to: btn, auto: true });
+      if (on) target = btn;
     }
-    faces.append(choice);
+    if (target) links.push({ from: node, to: target, auto: !settings.otherVoice });
     row.append(lang, faces);
     board.append(row);
-  }
-
-  if (!ordered.length) {
+  } else {
     const empty = el(document, 'div', { class: 'vb-empty' });
-    empty.append(el(document, 'p', {}, 'No voices on this device yet. Download one and it appears here, wired to its language.'));
-    const go = el(document, 'button', { type: 'button', class: 'primary' }, 'Browse voices');
-    go.addEventListener('click', () => openCatalogue());
-    empty.append(go);
+    empty.append(el(document, 'p', {}, 'No voices on this device yet. Download one below and it appears here, wired to its language.'));
     board.append(empty);
   }
 
   const add = el(document, 'button', { type: 'button', class: 'ghost btn-sm vb-add' }, '+ Another language');
   add.addEventListener('click', () => openCatalogue());
-  const note = el(
-    document,
-    'p',
-    { class: 'muted small vb-note' },
-    settings.matchPageLanguage
-      ? 'Auto: your voice where it speaks the language, otherwise the best voice you keep that does.'
-      : `Switching is off — every language is read by ${shortName(saved.label)}.`,
-  );
   const foot = el(document, 'div', { class: 'vb-foot' });
-  foot.append(note, add);
+  foot.append(add);
 
   host.replaceChildren(head, board, foot);
   drawWires(board, wires, links);
   for (const strip of board.querySelectorAll('.vb-faces')) strip.addEventListener('scroll', () => drawWires(board, wires, links), { passive: true });
-  // Wires follow the layout: a narrower window wraps the faces.
+  // Wires follow the layout: a narrower window moves the faces.
   boardObserver?.disconnect();
   boardObserver = null;
   if (typeof ResizeObserver === 'undefined') return;
@@ -364,112 +370,4 @@ function drawWires(board: HTMLElement, svg: SVGSVGElement, links: Array<{ from: 
     return path;
   });
   svg.replaceChildren(...paths);
-}
-
-/**
- * "My voices": the downloaded voices you keep, as faces to try, use, or put away. What is put away
- * leaves the reading bar and the switchboard; it stays downloaded, and comes back from the
- * catalogue.
- */
-/** Every voice wired on the switchboard: your voice, the ones chosen, the ones Auto picks now. */
-export function wiredVoices(ctx: PanelContext): Set<string> {
-  const { settings } = ctx;
-  const installed = downloadedVoices(ctx);
-  const hidden = new Set(settings.hiddenVoices);
-  const saved = savedVoice(ctx);
-  const keys = new Set([voiceKeyOf(saved.engine, saved.id), ...Object.values(settings.languageVoices).map((r) => voiceKeyOf(r.engine, r.voice))]);
-  for (const code of new Set(installed.map((v) => primaryLanguage(v.language)))) {
-    if (!code || settings.languageVoices[code]) continue;
-    const route = routeFor(code, { auto: true, manual: null, saved, preferences: {}, installed, skip: new Set(), hidden });
-    if (route.kind === 'voice' && route.reason !== 'missing') keys.add(voiceKeyOf(route.voice.engine, route.voice.id));
-  }
-  return keys;
-}
-
-export function renderMyVoices(host: HTMLElement, ctx: PanelContext, openCatalogue: (language?: string, showHidden?: boolean) => void): void {
-  const { settings } = ctx;
-  const installed = downloadedVoices(ctx);
-  const hidden = new Set(settings.hiddenVoices);
-  const saved = savedVoice(ctx);
-  const kept = installed.filter((v) => !hidden.has(voiceKeyOf(v.engine, v.id)));
-  const putAway = installed.length - kept.length;
-
-  const head = el(document, 'div', { class: 'vb-head' });
-  const title = el(document, 'div', {});
-  title.append(
-    el(document, 'h3', {}, `My voices${kept.length ? ` · ${kept.length}` : ''}`),
-    el(document, 'p', { class: 'muted small' }, 'The voices the reading bar offers. Try them, keep the ones you like, put the rest away.'),
-  );
-  head.append(title);
-  const wired = wiredVoices(ctx);
-  if (kept.some((v) => !wired.has(voiceKeyOf(v.engine, v.id)))) {
-    const tidy = el(document, 'button', { type: 'button', class: 'ghost btn-sm' }, 'Keep only the ones I use');
-    tidy.title = 'Put away every voice that is not wired to a language above: off the reading bar, still on the board to choose from';
-    tidy.addEventListener('click', () => {
-      const keep = wiredVoices(ctx);
-      void ctx.setHiddenVoices([...hidden, ...kept.map((v) => voiceKeyOf(v.engine, v.id)).filter((k) => !keep.has(k))]);
-    });
-    head.append(tidy);
-  }
-
-  const grid = el(document, 'div', { class: 'mv-grid' });
-  const byLanguage = [...kept].sort(
-    (a, b) =>
-      Number(b.id === saved.id && b.engine === saved.engine) - Number(a.id === saved.id && a.engine === saved.engine) ||
-      languageName(primaryLanguage(a.language)).localeCompare(languageName(primaryLanguage(b.language))) ||
-      a.label.localeCompare(b.label),
-  );
-  for (const v of byLanguage) {
-    const mine = v.engine === saved.engine && v.id === saved.id;
-    const tile = el(document, 'div', { class: `mv-tile${mine ? ' is-mine' : ''}` });
-    const text = el(document, 'div', { class: 'mv-text' });
-    text.append(
-      el(document, 'b', {}, shortName(v.label)),
-      el(document, 'span', {}, `${languageLabel(v.language)} · ${engineInfo(v.engine).name}`),
-    );
-    const actions = el(document, 'div', { class: 'mv-actions' });
-    const preview = previewFor(v.engine, v.id, ctx);
-    preview.classList.add('mv-play');
-    actions.append(preview);
-    const language = primaryLanguage(v.language);
-    const chosen = settings.languageVoices[language];
-    // Reading its language: your voice, or the one chosen for it — as the board wires them.
-    const reads = mine || (!!chosen && chosen.engine === v.engine && chosen.voice === v.id);
-    if (reads) actions.append(el(document, 'span', { class: 'pill in-use' }, mine ? 'Your voice' : `Reads ${languageName(language)}`));
-    if (!mine) {
-      if (!reads) {
-        const use = el(document, 'button', { type: 'button', class: 'ghost btn-sm' }, 'Use');
-        use.title = `Read ${languageName(language)} with ${shortName(v.label)}`;
-        use.addEventListener('click', () => void ctx.chooseVoice(language, v.engine, v.id));
-        actions.append(use);
-      }
-      const away = el(document, 'button', { type: 'button', class: 'ghost btn-sm mv-away', 'aria-label': `Put ${shortName(v.label)} away`, title: 'Put away — off the reading bar and this page; still downloaded' }, '✕');
-      away.addEventListener('click', () => void ctx.setHiddenVoices([...hidden, voiceKeyOf(v.engine, v.id)]));
-      actions.append(away);
-    }
-    tile.append(face(v.engine, v.id, 44), text, actions);
-    grid.append(tile);
-  }
-  // A model with forty voices is forty tiles: the first dozen, then the rest on asking.
-  const tiles = [...grid.children];
-  if (!showAllMine && tiles.length > TILES_SHOWN + 2) {
-    for (const t of tiles.slice(TILES_SHOWN)) (t as HTMLElement).hidden = true;
-  }
-  if (!kept.length) grid.append(el(document, 'p', { class: 'muted small' }, installed.length ? 'Every voice is put away.' : 'None yet.'));
-
-  const foot = el(document, 'div', { class: 'vb-foot' });
-  if (kept.length > TILES_SHOWN + 2) {
-    const all = el(document, 'button', { type: 'button', class: 'ghost btn-sm' }, showAllMine ? 'Show fewer' : `Show all ${kept.length}`);
-    all.addEventListener('click', () => {
-      showAllMine = !showAllMine;
-      renderMyVoices(host, ctx, openCatalogue);
-    });
-    foot.append(all);
-  }
-  if (putAway) {
-    const back = el(document, 'button', { type: 'button', class: 'ghost btn-sm' }, `${putAway} put away — see them`);
-    back.addEventListener('click', () => openCatalogue(undefined, true));
-    foot.append(back);
-  }
-  host.replaceChildren(head, grid, foot);
 }

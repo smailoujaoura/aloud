@@ -264,6 +264,13 @@ export interface Settings {
    */
   unvoicedLanguages: 'english' | 'skip';
   /**
+   * Languages taken off the board: not read by voices of their own, but like every other
+   * language (by `otherVoice`, or skipped).
+   */
+  removedLanguages: string[];
+  /** The voice for every other language; null for the voice English gets. */
+  otherVoice: VoiceRef | null;
+  /**
    * Voices put away (`engine:voice`): left out of the reading bar's voice menu and folded away in
    * Settings, so a model with dozens of voices shows only the ones kept. Still downloaded, and
    * still used when chosen for a language or as the voice reading.
@@ -314,6 +321,8 @@ export const DEFAULT_SETTINGS: Settings = {
   matchPageLanguage: true,
   languageVoices: {},
   unvoicedLanguages: 'english',
+  removedLanguages: [],
+  otherVoice: null,
   hiddenVoices: [],
   barAutoHide: false,
   theme: 'system',
@@ -458,6 +467,13 @@ export function sanitizeSettings(raw: Settings): Settings {
     highlightColor: typeof raw.highlightColor === 'string' && raw.highlightColor ? raw.highlightColor : DEFAULT_SETTINGS.highlightColor,
     languageVoices: languageVoices(raw.languageVoices),
     unvoicedLanguages: oneOf(raw.unvoicedLanguages, ['english', 'skip'] as const, DEFAULT_SETTINGS.unvoicedLanguages),
+    removedLanguages: Array.isArray(raw.removedLanguages)
+      ? [...new Set(raw.removedLanguages.filter((l): l is string => typeof l === 'string' && /^[a-z]{2,3}$/.test(l)))]
+      : [],
+    otherVoice: languageVoices({ xx: raw.otherVoice }).xx ?? null,
+    // Voices always follow each passage's language: a language not wanted in its own voice is
+    // taken off the board instead (removedLanguages). The old switch is not honoured.
+    matchPageLanguage: true,
     hiddenVoices: Array.isArray(raw.hiddenVoices)
       ? [...new Set(raw.hiddenVoices.filter((v): v is string => typeof v === 'string' && /^(piper|kokoro|supertonic):[\w.-]{1,80}$/.test(v)))]
       : [],

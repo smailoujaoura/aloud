@@ -66,6 +66,17 @@ describe('routeFor', () => {
     expect(voiceOf(routeFor('en', ctx({ saved: paola, installed: [paola, sara] })))).toBe('it_IT-paola-medium:missing');
   });
 
+  it('a removed language is read like every other language, by choice — not reported missing', () => {
+    expect(voiceOf(routeFor('it', ctx({ removed: new Set(['it']) })))).toBe('en_GB-alba-medium:other');
+    expect(routeFor('it', ctx({ removed: new Set(['it']), unvoiced: 'skip' }))).toEqual({ kind: 'skip', language: 'it' });
+  });
+
+  it('every other language is read by the voice chosen for it', () => {
+    const other = { engine: 'kokoro' as const, voice: 'if_sara' };
+    expect(voiceOf(routeFor('de', ctx({ other })))).toBe('if_sara:missing');
+    expect(voiceOf(routeFor('it', ctx({ other, removed: new Set(['it']) })))).toBe('if_sara:other');
+  });
+
   it('an unknown language is read by the saved voice, and says it is unknown', () => {
     expect(voiceOf(routeFor('', ctx()))).toBe('en_GB-alba-medium:unknown');
   });
