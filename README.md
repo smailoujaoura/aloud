@@ -4,7 +4,7 @@ Read any article aloud with a **fully local** neural voice. No servers, no accou
 your notes, your highlights and your reading positions never leave this device.
 
 What *does* go over the network, once each and only when you ask for it: downloading a voice
-model, previewing a Piper voice (a short hosted clip), and fetching a page or PDF you told Aloud
+model, previewing a Piper voice you have not downloaded (a short hosted clip), and fetching a page or PDF you told Aloud
 to read or queue. A saved article's images stay unfetched until you press "Load images", so
 reopening one tells nobody you are reading it.
 
@@ -38,7 +38,7 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
   and it says so, jump and it names the sentence you landed on.
 - **Light, dark, or whatever your system says** — one setting, applied to the reading bar, the
   settings page, the PDF reader and the walkthrough alike.
-- **A walkthrough on first run** — five short steps that end with Aloud reading the walkthrough
+- **A walkthrough on first run** — six short steps, one of them Aloud reading the walkthrough
   itself aloud, so the bar is familiar before it appears over something you actually wanted to
   read. Reopen it any time from the settings page; a one-time card above the bar names the
   controls the first time you read a real page.
@@ -60,8 +60,10 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
   a name), and each is read by a downloaded voice that speaks it: an Italian story with English
   translations switches between an Italian and an English voice. Pick a voice on the bar during
   a passage to make it that language's voice on every page, lock a page to one voice, or correct
-  a passage's language, from the language button on the bar. A language with no voice is said to
-  have none — with a link to its voices, or a way to skip it — never quietly read as another.
+  a passage's language, from the language button on the bar. A language with no voice is read in
+  English, and the bar says so, with a link to its voices; Settings can have such languages skipped
+  instead. Settings → *Voice* shows it all on one board: each language wired to the voice that reads
+  it, each voice a click to choose and ▶ to hear in its own language.
 - **Said the way people say it** — a reply and its attribution (*"No!" he said.*), a run of short
   exclamations, a French reply with its closing guillemet, are each spoken as one utterance, and
   abbreviations such as *Sig.*, *Sra.* or *z. B.* no longer end a sentence.
@@ -86,8 +88,9 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
 - **Your keys** — the shortcuts deliberately avoid <kbd>Alt</kbd>+<kbd>Shift</kbd>+letter, which
   is the chord Firefox gives web pages for their own access keys. Settings → *Shortcuts* shows
   what each key is set to and, on Firefox, sets it to whatever you press.
-- **Drifted off?** <kbd>Alt</kbd>+<kbd>,</kbd> (or <kbd>B</kbd> on the bar)
-  goes back about ten seconds and shows you where that is.
+- **Drifted off?** <kbd>Alt</kbd>+<kbd>,</kbd> on Firefox (or <kbd>B</kbd> on the bar)
+  goes back about ten seconds and shows you where that is. Chromium allows an add-on only four
+  default shortcuts, so there you choose this one's key yourself, in `chrome://extensions/shortcuts`.
 - **One page for everything** — the Library (*Continue*, *Up next*, *Notes*, *History*, *Statistics*) and every
   setting sit side by side in Aloud's page, one click apart. *Continue* lists what you stopped
   part-way through with how much is left, *Up next* is the reading queue with listening times,
@@ -169,7 +172,7 @@ npm run build          # builds BOTH .output/firefox-mv3 and .output/chrome-mv3
 > `'background.scripts' requires manifest version of 2 or lower`, and because the background then
 > never runs, the toolbar icon appears but does nothing.
 
-Installing opens the **walkthrough** — five steps, including a live demo that reads the page
+Installing opens the **walkthrough** — six steps, including a live demo that reads the page
 itself aloud. Then open an article and click the **Aloud** toolbar button (or press
 `Alt+R`, which you can change). The first run downloads the voice; after that it works offline. Right-click gives
 **Read selection aloud** and **Read from here**. Settings — theme, engine, voice, speed,
@@ -221,4 +224,9 @@ Full rationale: [`docs/DESIGN.md`](docs/DESIGN.md). Build details: [`BUILD.md`](
 ## Licence
 
 **GPL-3.0-or-later** — because eSpeak-NG (the phonemizer) is GPLv3. See
-[`THIRD_PARTY.md`](THIRD_PARTY.md) for every bundled component and every voice's dataset licence.
+[`THIRD_PARTY.md`](THIRD_PARTY.md) for every bundled component, and
+[`PIPER_VOICE_LICENCES.md`](PIPER_VOICE_LICENCES.md) for what each Piper voice was trained on and
+under what licence — they differ, and some are for non-commercial use only. Voices are never
+bundled: each is downloaded from Hugging Face when you choose it.
+
+Made by Smail Oujaoura, with [Claude Code](https://claude.com/product/claude-code).

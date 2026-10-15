@@ -61,7 +61,8 @@ The complete corresponding source code is available at:
 
 Below are the licences and notices of the open-source packages Aloud is built from, as each
 package states them. Voice models are not part of this package; they are downloaded on first use
-from Hugging Face, each under its own licence (see the repository's THIRD_PARTY.md).
+from Hugging Face, each under its own licence: see THIRD_PARTY.md, and for every Piper voice
+PIPER_VOICE_LICENCES.md, in the source repository.
 `;
   // Components compiled into other packages, with no package.json of their own to read from.
   sections.unshift(
@@ -75,6 +76,25 @@ from Hugging Face, each under its own licence (see the repository's THIRD_PARTY.
       'Copyright Jonathan Duddington, Reece H. Dunn, and the eSpeak NG contributors.',
       'Source: https://github.com/espeak-ng/espeak-ng and https://github.com/rhasspy/espeak-ng',
       'Licence: GNU General Public License v3 or later — the full text is LICENSE.txt beside this file.',
+    ].join('\n'),
+    [
+      '='.repeat(78),
+      'Voice preview sentences — CC BY-SA 4.0',
+      '='.repeat(78),
+      '',
+      'The sentence a voice says when previewed is, in 39 languages, a sentence from',
+      'the Wikipedia article on the rainbow in that language (as Piper collects them for its voice',
+      'samples), by Wikipedia contributors, under the Creative Commons Attribution-ShareAlike 4.0',
+      'licence: https://creativecommons.org/licenses/by-sa/4.0/',
+      'Polish, Chinese, Estonian and Swedish say a translation of Aloud\'s own English sample sentence.',
+    ].join('\n'),
+    [
+      '='.repeat(78),
+      'Voice portraits',
+      '='.repeat(78),
+      '',
+      'The faces beside some voices are generated images of people who do not exist, made for Aloud',
+      'with SDXL and the SDXL-Lightning UNet (both under the CreativeML OpenRAIL++-M licence).',
     ].join('\n'),
     [
       '='.repeat(78),

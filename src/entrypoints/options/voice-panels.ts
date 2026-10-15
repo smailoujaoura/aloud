@@ -115,7 +115,6 @@ let openTab: EngineId | null = null;
 let openLanguage: string | null = null;
 /** The language open in the Kokoro list — its own, so switching tabs does not cross them. */
 let kokoroLanguage: string | null = null;
-/** Voices put away in Settings are listed too (dimmed, with Show), rather than folded away. */
 /** Which quality of a multi-quality Piper voice each row is showing, by voice label. */
 const variantChoice = new Map<string, string>();
 

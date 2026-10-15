@@ -3,7 +3,7 @@
  *
  * Aloud has no window of its own — a toolbar button, a bar drawn over someone else's page, and a
  * settings page nobody opens first. Installation is therefore the one moment it can explain
- * itself, and this is that explanation: five short steps, the control bar drawn and labelled,
+ * itself, and this is that explanation: six short steps, the control bar drawn and labelled,
  * and — the part that actually teaches it — a real reader session running on this very page, so
  * the first time anyone meets the bar it is over text that does not matter.
  *

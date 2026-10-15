@@ -461,9 +461,6 @@ footer .by b { color: var(--ink); }
 .board .lang small { display: block; font-weight: 400; font-size: 0.72rem; color: var(--ink-faint); }
 .board svg { width: 64px; height: 36px; overflow: visible; }
 .board path { fill: none; stroke: var(--amber-solid); stroke-width: 2.5; stroke-linecap: round; }
-.board path.auto { stroke-dasharray: 5 6; animation: flow 1.6s linear infinite; }
-@keyframes flow { to { stroke-dashoffset: -22; } }
-@media (prefers-reduced-motion: reduce) { .board path.auto { animation: none; } }
 .board .who { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; font-weight: 600; }
 .board .who img { width: 40px; height: 40px; border-radius: 50%; box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--amber-solid); }
 .board .who span small { display: block; font-weight: 400; font-size: 0.72rem; color: var(--ink-faint); }
@@ -548,7 +545,7 @@ footer .by b { color: var(--ink); }
       <div class="head measure center">
         <p class="eyebrow">Voices</p>
         <h2>Pick a voice you'd happily listen to for an hour.</h2>
-        <p class="lede">Every face below is a voice Aloud ships. Click one to hear it. Every clip is Aloud's own output, made by the extension itself. Nothing here is a studio recording.</p>
+        <p class="lede">Every face below is a voice Aloud offers. Click one to hear it. Every clip is Aloud's own output, made by the extension itself. Nothing here is a studio recording.</p>
       </div>
 
       <div class="faces" id="faces">
@@ -636,13 +633,13 @@ footer .by b { color: var(--ink); }
         </div>
         <div>
           <div class="board" id="lang-board" aria-label="Which voice reads which language">
-            <div class="row" data-lang="en"><span class="lang">English<small>your voice</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path class="auto" d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/kokoro-af_heart.webp" alt=""><span>Heart<small>Kokoro · US</small></span></span></div>
+            <div class="row" data-lang="en"><span class="lang">English<small>auto</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/kokoro-af_heart.webp" alt=""><span>Heart<small>Kokoro · US</small></span></span></div>
             <div class="row" data-lang="it"><span class="lang">Italian<small>chosen by you</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/kokoro-if_sara.webp" alt=""><span>Sara<small>Kokoro · IT</small></span></span></div>
-            <div class="row" data-lang="fr"><span class="lang">French<small>auto</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path class="auto" d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/kokoro-ff_siwis.webp" alt=""><span>Siwis<small>Kokoro · FR</small></span></span></div>
-            <div class="row" data-lang="es"><span class="lang">Spanish<small>auto</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path class="auto" d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/kokoro-ef_dora.webp" alt=""><span>Dora<small>Kokoro · ES</small></span></span></div>
-            <div class="row" data-lang="hi"><span class="lang">Hindi<small>auto</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path class="auto" d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/kokoro-hf_alpha.webp" alt=""><span>Alpha<small>Kokoro · IN</small></span></span></div>
+            <div class="row" data-lang="fr"><span class="lang">French<small>auto</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/kokoro-ff_siwis.webp" alt=""><span>Siwis<small>Kokoro · FR</small></span></span></div>
+            <div class="row" data-lang="es"><span class="lang">Spanish<small>auto</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/kokoro-ef_dora.webp" alt=""><span>Dora<small>Kokoro · ES</small></span></span></div>
+            <div class="row" data-lang="hi"><span class="lang">Hindi<small>auto</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/kokoro-hf_alpha.webp" alt=""><span>Alpha<small>Kokoro · IN</small></span></span></div>
           </div>
-          <p class="board-note">Aloud's voice settings, in miniature: each language wired to the voice that reads it. A solid wire is your choice; a moving one is Auto, which picks your voice where it speaks the language and the best one you keep where it doesn't.</p>
+          <p class="board-note">Aloud's voice settings, in miniature: each language wired to the voice that reads it. On Auto, a language is read by your voice if it speaks it, and otherwise by a downloaded voice that does; or click a face to choose one.</p>
         </div>
       </div>
       <div class="lang-points">
@@ -858,7 +855,7 @@ footer .by b { color: var(--ink); }
 <footer>
   <div class="wrap">
     <div>
-      <p><b>Aloud</b> is free software under GPL-3.0-or-later, because eSpeak NG, its phonemiser, is GPLv3. Voices come from Piper, Kokoro-82M and Supertonic-2, each under its own licence.</p>
+      <p><b>Aloud</b> is free software under GPL-3.0-or-later, because eSpeak NG, its phonemiser, is GPLv3. Voices come from Piper, Kokoro-82M and Supertonic-2, each under <a href="https://github.com/smailoujaoura/aloud/blob/main/PIPER_VOICE_LICENCES.md">its own licence</a>, and are downloaded when you choose them, never bundled.</p>
       <p>Built on Mozilla Readability, ONNX Runtime Web and pdf.js. <a href="privacy.html">Privacy policy</a>: Aloud collects nothing. <a href="gpu.html">Using your graphics card</a>. <a class="source-link" href="https://github.com/smailoujaoura/aloud">Source code</a>.</p>
     </div>
     <p class="by">Made by <a href="https://souj.dev"><b>Smail Oujaoura</b></a><br>with <a href="https://claude.com/product/claude-code">Claude Code</a></p>

@@ -14,7 +14,8 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 
 > Listen to the web in a natural voice that lives on your device.
 >
-> Aloud turns any article or PDF into natural speech and lights up every word as it is read. The
+> Aloud turns any article or PDF into natural speech and lights up each sentence, and with most
+> voices each word, as it is read. The
 > voice is a neural network running inside your browser, so it works offline and nothing you read
 > is ever sent anywhere. No account, no subscription.
 >
@@ -56,7 +57,7 @@ search, shopping, new-tab or ad features).
 | activeTab | Runs the reader, highlighter or media controls only on the tab where the user starts Aloud (toolbar button, shortcut or context menu). No access to other tabs. |
 | scripting | Injects the reader and highlighter into that tab when the user starts them, instead of running content scripts on every site. |
 | storage | Keeps settings, notes, reading queue, history and reading positions locally. |
-| unlimitedStorage | Voice models are 21–262 MB each and are cached locally so reading works offline. |
+| unlimitedStorage | Voice models are 21–347 MB each and are cached locally so reading works offline. |
 | contextMenus | Right-click items: read the selection or from a point, keep a highlight, show notes, add a page or link to the reading queue. |
 | Host: huggingface.co and its download hosts (hf.co, cdn-lfs*.huggingface.co) | Downloading the voice model the user picks. No other data is sent. |
 | Host: file:///* | Lets the PDF reader open PDFs saved on the user's computer, once they enable "Allow access to file URLs". |
@@ -85,5 +86,5 @@ Certify all three statements (no sale, no unrelated use, no creditworthiness use
 ## Before pressing submit
 
 - [ ] `data-stores="live"` on `website/index.html` `<body>`, and the three store URLs checked
-- [ ] The Piper voice licences reviewed (THIRD_PARTY.md)
+- [ ] The Piper voice licences reviewed (PIPER_VOICE_LICENCES.md; regenerate with `node scripts/piper-licences.mjs` if the catalogue changed)
 - [ ] Screenshots: Chrome needs 1280×800 or 640×400; a 440×280 promo tile is optional but recommended
