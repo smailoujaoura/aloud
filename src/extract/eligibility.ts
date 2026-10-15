@@ -180,12 +180,22 @@ function awaitingReveal(el: Element, style: CSSStyleDeclaration): boolean {
   const transitions = style.transitionProperty.split(',').map((p) => p.trim());
   const transitioning = (re: RegExp, minSeconds = 0): boolean =>
     transitions.some((p, i) => re.test(p) && (durations[i % durations.length] ?? 0) > minSeconds);
-  // A fade waiting to happen: a visible transition on opacity. A spoiler kept transparent by a class
-  // has none — and of the two ways to be wrong, reading a fading spoiler aloud costs far less than
-  // losing every paragraph of an article below its first screen.
-  if (transitioning(/^(all|opacity)$/, 0.15)) return true;
+  // A fade waiting to happen: a visible transition on opacity — but only below the screen. A
+  // scroll-reveal page fades in what is on screen as it loads, so text on screen and still fully
+  // transparent is not waiting to be scrolled to: it is a disclosure (a translation, an answer)
+  // that fades in when asked, and was read and saved before anyone asked. Below the screen the two
+  // cannot be told apart, and reading a fading answer costs far less than losing every paragraph
+  // of an article below its first screen.
+  if (transitioning(/^(all|opacity)$/, 0.15) && belowScreen(el)) return true;
   const moved = set(style.transform) || set(style.getPropertyValue('translate')) || set(style.getPropertyValue('scale'));
   return moved && (transitioning(/^(all|opacity|transform|translate|scale)$/) || set(style.animationName));
+}
+
+/** Starts below what the window shows now. */
+function belowScreen(el: HTMLElement): boolean {
+  const view = el.ownerDocument.defaultView;
+  if (!view) return false;
+  return el.getBoundingClientRect().top >= view.innerHeight;
 }
 
 /**
