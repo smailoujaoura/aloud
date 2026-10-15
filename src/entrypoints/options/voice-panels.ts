@@ -5,8 +5,8 @@
  * a voice dropdown, and "Voices & downloads" further down, with tabs and radio buttons that did
  * the same thing a second way. Now it is one section, top to bottom:
  *
- *  1. **Reading with** — the current voice, large, with whether it is on this device and a
- *     preview. The one thing most visitors came to check.
+ *  1. **Who reads what** — the switchboard (voice-board.ts): each language and the voice reading
+ *     it, chosen right there. It replaced a "Reading with" card that chose a second way.
  *  2. **Tabs** — one per engine, in a bar that sticks while the list scrolls, beside a search box.
  *  3. **The list** — every voice as a row with exactly one obvious next step: Download, Use, or
  *     "In use". Choosing a voice is always the same button, in every engine.
@@ -58,6 +58,10 @@ export interface PanelContext {
   refresh(): Promise<void>;
   /** Make (engine, voiceId) the active voice, then redraw. */
   useVoice(engine: EngineId, voiceId: string): Promise<void>;
+  /** Choose who reads `language` (for your own voice's language: your voice), then redraw. */
+  chooseVoice(language: string, engine: EngineId, voiceId: string): Promise<void>;
+  /** A language no downloaded voice speaks: read in English, or skipped. */
+  setUnvoiced(choice: 'english' | 'skip'): Promise<void>;
   flashSaved(message?: string): void;
   /** Say what went wrong. */
   flashError(message: string): void;
@@ -70,7 +74,6 @@ export interface PanelContext {
 }
 
 export interface VoiceHosts {
-  nowReading: HTMLElement;
   /** "Who reads what": the switchboard of languages and voices (voice-board.ts). */
   board: HTMLElement;
   /** "My voices": the voices kept. */
@@ -139,7 +142,6 @@ async function runModelAction(button: HTMLButtonElement, action: () => Promise<v
 // ---- the section -----------------------------------------------------------
 
 export function renderVoiceSection(hosts: VoiceHosts, ctx: PanelContext): void {
-  renderNowReading(hosts.nowReading, ctx);
   // The catalogue opens where it is needed: a language to find a voice for, or voices put away.
   const openCatalogue = (language?: string, hidden?: boolean, engine?: EngineId): void => {
     if (language) askedLanguage = language;
@@ -210,63 +212,6 @@ function renderBrowser(hosts: VoiceHosts, ctx: PanelContext): void {
 }
 
 // ---- reading with ----------------------------------------------------------
-
-function renderNowReading(host: HTMLElement, ctx: PanelContext): void {
-  const { settings, manifest, sizes } = ctx;
-  const engine = settings.engine;
-  const id = activeVoice(settings);
-  const info = engineInfo(engine);
-
-  let name = id;
-  let meta = info.name;
-  let installed = false;
-
-  if (engine === 'piper') {
-    const entry = manifest.piper[id];
-    if (entry) {
-      name = shortPiperLabel(entry.label);
-      meta = `${info.name} · ${regionOf(entry)} · ${entry.quality}`;
-      installed = piperDownloaded(entry, sizes);
-    }
-  } else if (engine === 'kokoro') {
-    const v = manifest.kokoro.voices[id];
-    if (v) {
-      name = v.label;
-      meta = `${info.name} · ${accentName(v.language)} · ${v.gender}`;
-    }
-    installed = sharedModelInstalled(engine, sizes);
-  } else {
-    const v = manifest.supertonic?.voices[id];
-    if (v) {
-      name = v.label;
-      meta = `${info.name} · ${v.gender}`;
-    }
-    installed = sharedModelInstalled(engine, sizes);
-  }
-
-  const text = el(document, 'div', { class: 'now-text' });
-  text.append(
-    el(document, 'span', { class: 'now-label' }, 'Reading with'),
-    el(document, 'b', { class: 'now-name' }, name),
-    el(document, 'span', { class: 'now-meta' }, meta),
-  );
-
-  const status = el(
-    document,
-    'span',
-    { class: `pill ${installed ? 'ok' : 'warn'}` },
-    installed
-      ? 'On this device'
-      : engine === 'piper'
-        ? 'Downloads the first time you read'
-        : 'Model not downloaded yet',
-  );
-
-  const side = el(document, 'div', { class: 'now-side' });
-  side.append(status, previewFor(engine, id, ctx));
-
-  host.replaceChildren(avatar(engine, id, ctx, 'now-avatar'), text, side);
-}
 
 // ---- tabs ------------------------------------------------------------------
 
@@ -349,16 +294,19 @@ function emptyState(text: string): HTMLElement {
   return el(document, 'p', { class: 'voice-empty' }, text);
 }
 
-/** "In use", or the button that makes it so. */
+/** "In use", or the button that makes it so — for the voice's language, as on the board. */
 function useControl(engine: EngineId, id: string, name: string, ctx: PanelContext, disabledReason?: string): HTMLElement {
-  const inUse = ctx.settings.engine === engine && activeVoice(ctx.settings) === id;
+  const language = primaryLanguage(voiceLanguage(engine, id, ctx.manifest));
+  const chosen = ctx.settings.languageVoices[language];
+  const inUse = chosen ? chosen.engine === engine && chosen.voice === id : ctx.settings.engine === engine && activeVoice(ctx.settings) === id;
   if (inUse) return el(document, 'span', { class: 'pill in-use' }, 'In use');
   const btn = el(document, 'button', { class: 'primary btn-sm', type: 'button', 'aria-label': `Use ${name}` }, 'Use');
   if (disabledReason) {
     btn.disabled = true;
     btn.title = disabledReason;
   }
-  btn.addEventListener('click', () => void ctx.useVoice(engine, id));
+  btn.title = `Read ${languageName(language)} with ${name}`;
+  btn.addEventListener('click', () => void ctx.chooseVoice(language, engine, id));
   return btn;
 }
 

@@ -259,6 +259,11 @@ export interface Settings {
    */
   languageVoices: Record<string, VoiceRef>;
   /**
+   * A language no downloaded voice speaks: read in English (by the voice English gets), or not
+   * read at all.
+   */
+  unvoicedLanguages: 'english' | 'skip';
+  /**
    * Voices put away (`engine:voice`): left out of the reading bar's voice menu and folded away in
    * Settings, so a model with dozens of voices shows only the ones kept. Still downloaded, and
    * still used when chosen for a language or as the voice reading.
@@ -308,6 +313,7 @@ export const DEFAULT_SETTINGS: Settings = {
   skip: DEFAULT_SKIP,
   matchPageLanguage: true,
   languageVoices: {},
+  unvoicedLanguages: 'english',
   hiddenVoices: [],
   barAutoHide: false,
   theme: 'system',
@@ -451,6 +457,7 @@ export function sanitizeSettings(raw: Settings): Settings {
     wordHighlight: oneOf(raw.wordHighlight, ['darker', 'underline', 'off'] as const, DEFAULT_SETTINGS.wordHighlight),
     highlightColor: typeof raw.highlightColor === 'string' && raw.highlightColor ? raw.highlightColor : DEFAULT_SETTINGS.highlightColor,
     languageVoices: languageVoices(raw.languageVoices),
+    unvoicedLanguages: oneOf(raw.unvoicedLanguages, ['english', 'skip'] as const, DEFAULT_SETTINGS.unvoicedLanguages),
     hiddenVoices: Array.isArray(raw.hiddenVoices)
       ? [...new Set(raw.hiddenVoices.filter((v): v is string => typeof v === 'string' && /^(piper|kokoro|supertonic):[\w.-]{1,80}$/.test(v)))]
       : [],

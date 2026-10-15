@@ -40,6 +40,8 @@ export interface RouteContext {
    * view speaks the language; one chosen for the language, or the saved voice, is used anyway.
    */
   hidden?: ReadonlySet<string>;
+  /** A language no downloaded voice speaks: read in English (default), or skipped. */
+  unvoiced?: 'english' | 'skip';
 }
 
 export function voiceKey(v: { engine: string; id?: string; voice?: string }): string {
@@ -62,7 +64,7 @@ export function routeFor(languageTag: string, ctx: RouteContext): Route {
   const visible = hidden?.size ? ctx.installed.filter((v) => !hidden.has(voiceKey(v))) : ctx.installed;
   const match = pickVoiceForLanguage(language, ctx.saved, visible) ?? pickVoiceForLanguage(language, ctx.saved, ctx.installed);
   if (match) return { kind: 'voice', voice: match, reason: 'match', language };
-  if (ctx.skip.has(language)) return { kind: 'skip', language };
+  if (ctx.skip.has(language) || (ctx.unvoiced === 'skip' && language !== 'en')) return { kind: 'skip', language };
   // English itself missing: the saved voice (asking for the English fallback here would loop).
   return { kind: 'voice', voice: language === 'en' ? ctx.saved : fallbackVoice(ctx), reason: 'missing', language };
 }

@@ -120,8 +120,6 @@ function savedVoice(ctx: PanelContext): CandidateVoice {
   };
 }
 
-/** Faces shown per language before "+ more" — enough to choose from, never a wall. */
-const FACES_PER_ROW = 5;
 /** Tiles shown in My voices before "Show all". */
 const TILES_SHOWN = 12;
 let showAllMine = false;
@@ -207,13 +205,16 @@ export function renderVoiceBoard(
     auto.addEventListener('click', () => {
       if (chosen) void ctx.setLanguageVoice(code, null);
     });
-    // In the language's own box, so the wire runs clear from the language to its face.
-    lang.append(auto, node);
+    // In the language's own box, so the wire runs clear from the language to its face. Not on your
+    // own language's row: there the voice chosen *is* your voice, so "Auto" would mean nothing.
+    if (code !== savedLanguage || chosen) lang.append(auto);
+    else lang.classList.add('no-auto');
+    lang.append(node);
 
     let target: HTMLElement | null = null;
-    // Room for "+N" on the same line when there are more than fit.
-    const showing = speakers.length > FACES_PER_ROW ? FACES_PER_ROW - 1 : FACES_PER_ROW;
-    for (const v of speakers.slice(0, showing)) {
+    // Every voice for the language, in one strip that scrolls sideways: English has 25, and a
+    // "+25" that opened the catalogue chose them a second way.
+    for (const v of speakers) {
       const on = isReading(v);
       const { pick, btn } = faceChoice(v, ctx, {
         on,
@@ -223,21 +224,10 @@ export function renderVoiceBoard(
         checked: on && !!chosen,
       });
       btn.addEventListener('click', () => {
-        if (!(chosen && isChosen(v))) void ctx.setLanguageVoice(code, { engine: v.engine, voice: v.id });
+        if (!on || (code === savedLanguage && chosen)) void ctx.chooseVoice(code, v.engine, v.id);
       });
       faces.append(pick);
       if (on) target = btn;
-    }
-    if (speakers.length > showing) {
-      const more = el(document, 'button', { type: 'button', class: 'vb-more' }, `+${speakers.length - showing}`);
-      more.title = `All ${languageName(code)} voices`;
-      // The catalogue opens on the engine most of the rest belong to.
-      const rest = speakers.slice(showing);
-      const engine = (['kokoro', 'piper', 'supertonic'] as const).reduce((a, b) =>
-        rest.filter((v) => v.engine === b).length > rest.filter((v) => v.engine === a).length ? b : a,
-      );
-      more.addEventListener('click', () => openCatalogue(code, false, engine));
-      faces.append(more);
     }
     if (!speakers.length) {
       // Read in English meanwhile: the English voice's face, wired, and the way to a real one.
@@ -261,12 +251,29 @@ export function renderVoiceBoard(
     const row = el(document, 'div', { class: 'vb-row vb-others' });
     const lang = el(document, 'div', { class: 'vb-lang' });
     const node = el(document, 'span', { class: 'vb-node', 'aria-hidden': 'true' });
-    lang.append(el(document, 'b', {}, 'Every other language'), el(document, 'span', {}, 'Read in English until you get a voice for it'), node);
+    const skipping = settings.unvoicedLanguages === 'skip';
+    lang.append(
+      el(document, 'b', {}, 'Every other language'),
+      el(document, 'span', {}, skipping ? 'Not read until you get a voice for it' : 'Read in English until you get a voice for it'),
+      node,
+    );
     const faces = el(document, 'div', { class: 'vb-faces' });
-    const { pick, btn } = faceChoice(english, ctx, { on: true, auto: true, away: false, checked: false, caption: 'in English' });
-    btn.disabled = true;
-    faces.append(pick);
-    links.push({ from: node, to: btn, auto: true });
+    const choice = el(document, 'div', { class: 'vb-choice', role: 'radiogroup', 'aria-label': 'Languages without a voice' });
+    for (const [value, label] of [['english', 'Read in English'], ['skip', 'Skip them']] as const) {
+      const on = settings.unvoicedLanguages === value;
+      const chip = el(document, 'button', { type: 'button', class: `vb-chip${on ? ' is-on' : ''}`, role: 'radio', 'aria-checked': String(on) }, label);
+      chip.addEventListener('click', () => {
+        if (!on) void ctx.setUnvoiced(value);
+      });
+      choice.append(chip);
+    }
+    if (!skipping) {
+      const { pick, btn } = faceChoice(english, ctx, { on: true, auto: true, away: false, checked: false, caption: 'in English' });
+      btn.disabled = true;
+      faces.append(pick);
+      links.push({ from: node, to: btn, auto: true });
+    }
+    faces.append(choice);
     row.append(lang, faces);
     board.append(row);
   }
@@ -295,6 +302,7 @@ export function renderVoiceBoard(
 
   host.replaceChildren(head, board, foot);
   drawWires(board, wires, links);
+  for (const strip of board.querySelectorAll('.vb-faces')) strip.addEventListener('scroll', () => drawWires(board, wires, links), { passive: true });
   // Wires follow the layout: a narrower window wraps the faces.
   boardObserver?.disconnect();
   boardObserver = null;
@@ -343,9 +351,11 @@ function drawWires(board: HTMLElement, svg: SVGSVGElement, links: Array<{ from: 
   const paths = links.map(({ from, to, auto }) => {
     const a = from.getBoundingClientRect();
     const b = to.querySelector('.vi-avatar')?.getBoundingClientRect() ?? to.getBoundingClientRect();
+    // Scrolled out of its strip: the wire ends at the strip's edge.
+    const strip = to.closest('.vb-faces')?.getBoundingClientRect();
     const x1 = a.left + a.width / 2 - box.left;
     const y1 = a.top + a.height / 2 - box.top;
-    const x2 = b.left - box.left;
+    const x2 = (strip ? Math.min(Math.max(b.left, strip.left), strip.right) : b.left) - box.left;
     const y2 = b.top + b.height / 2 - box.top;
     const bend = Math.max(24, (x2 - x1) * 0.45);
     const path = document.createElementNS(ns, 'path');
@@ -421,12 +431,18 @@ export function renderMyVoices(host: HTMLElement, ctx: PanelContext, openCatalog
     const preview = previewFor(v.engine, v.id, ctx);
     preview.classList.add('mv-play');
     actions.append(preview);
-    if (mine) actions.append(el(document, 'span', { class: 'pill in-use' }, 'Your voice'));
-    else {
-      const use = el(document, 'button', { type: 'button', class: 'ghost btn-sm' }, 'Use');
-      use.title = `Make ${shortName(v.label)} your voice — the one that reads by default`;
-      use.addEventListener('click', () => void ctx.useVoice(v.engine, v.id));
-      actions.append(use);
+    const language = primaryLanguage(v.language);
+    const chosen = settings.languageVoices[language];
+    // Reading its language: your voice, or the one chosen for it — as the board wires them.
+    const reads = mine || (!!chosen && chosen.engine === v.engine && chosen.voice === v.id);
+    if (reads) actions.append(el(document, 'span', { class: 'pill in-use' }, mine ? 'Your voice' : `Reads ${languageName(language)}`));
+    if (!mine) {
+      if (!reads) {
+        const use = el(document, 'button', { type: 'button', class: 'ghost btn-sm' }, 'Use');
+        use.title = `Read ${languageName(language)} with ${shortName(v.label)}`;
+        use.addEventListener('click', () => void ctx.chooseVoice(language, v.engine, v.id));
+        actions.append(use);
+      }
       const away = el(document, 'button', { type: 'button', class: 'ghost btn-sm mv-away', 'aria-label': `Put ${shortName(v.label)} away`, title: 'Put away — off the reading bar and this page; still downloaded' }, '✕');
       away.addEventListener('click', () => void ctx.setHiddenVoices([...hidden, voiceKeyOf(v.engine, v.id)]));
       actions.append(away);

@@ -16,7 +16,7 @@ import { probeGpu, gpuProbeIfKnown } from '@/shared/gpu-probe';
 import { loadWorkerGpu } from '@/shared/backend-memory';
 import { probeWorkerGpu, type WorkerGpuResult } from './gpu-check';
 import { listVoices } from '@/shared/voice-catalog';
-import { languageName } from '@/shared/language-voice';
+import { languageName, primaryLanguage, voiceLanguage } from '@/shared/language-voice';
 import { cacheClear, cacheEntries, cacheUsageBytes, deleteModels } from '@/engine/model-cache';
 import {
   DEFAULT_SETTINGS,
@@ -24,6 +24,7 @@ import {
   watchSettings,
   setSettings,
   voiceKeyFor,
+  activeVoice,
   type EngineId,
   type Settings,
   type ThemeChoice,
@@ -142,6 +143,31 @@ async function save(patch: Partial<Settings>): Promise<void> {
 }
 
 /** Switch engine and/or voice from anywhere on the page, then redraw. */
+/**
+ * Choose who reads `language` — the one way a voice is chosen on the Voice page. For your own
+ * voice's language it is your voice itself: a separate choice for English beside "your voice"
+ * meant two controls for one thing, and the first one seemed to do nothing. For any other language,
+ * that language's voice.
+ */
+async function chooseVoice(language: string, engine: EngineId, voiceId: string): Promise<void> {
+  stopPreview();
+  const own = primaryLanguage(voiceLanguageOf(settings.engine, activeVoice(settings)));
+  const next = { ...settings.languageVoices };
+  if (!language || language === own || !settings.matchPageLanguage) {
+    delete next[primaryLanguage(voiceLanguageOf(engine, voiceId))];
+    settings = await setSettings({ engine, [voiceKeyFor(engine)]: voiceId, languageVoices: next });
+  } else {
+    next[language] = { engine, voice: voiceId };
+    settings = await setSettings({ languageVoices: next });
+  }
+  await render();
+  flashSaved(`${languageName(primaryLanguage(voiceLanguageOf(engine, voiceId)) || language)} is read by ${voiceLabel(engine, voiceId)}`);
+}
+
+function voiceLanguageOf(engine: EngineId, voiceId: string): string {
+  return manifestCache ? voiceLanguage(engine, voiceId, manifestCache) : '';
+}
+
 async function useVoice(engine: EngineId, voiceId: string): Promise<void> {
   stopPreview();
   const name = voiceLabel(engine, voiceId);
@@ -407,6 +433,7 @@ async function renderNow(): Promise<void> {
     filter: $<HTMLInputElement>('voiceFilter').value.trim().toLowerCase(),
     refresh: render,
     useVoice,
+    chooseVoice,
     flashSaved,
     flashError: (message: string) => toast(message, 'error'),
     setHiddenVoices: async (next) => {
@@ -428,6 +455,11 @@ async function renderNow(): Promise<void> {
       await render();
       flashSaved(voice ? `${languageName(language)} will be read by ${voiceLabel(voice.engine, voice.voice)}` : `${languageName(language)}: automatic`);
     },
+    setUnvoiced: async (choice) => {
+      settings = await setSettings({ unvoicedLanguages: choice });
+      await render();
+      flashSaved(choice === 'skip' ? 'Languages without a voice are skipped' : 'Languages without a voice are read in English');
+    },
     setAutoLanguage: async (on) => {
       settings = await setSettings({ matchPageLanguage: on });
       await render();
@@ -436,7 +468,6 @@ async function renderNow(): Promise<void> {
   };
   renderVoiceSection(
     {
-      nowReading: $('nowReading'),
       board: $('voiceBoard'),
       mine: $('myVoices'),
       catalogue: $<HTMLDetailsElement>('voiceCatalogue'),

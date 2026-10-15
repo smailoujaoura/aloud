@@ -1372,6 +1372,7 @@ export class ReaderSession {
       installed: this.installedVoiceList.filter((v) => !this.worker || this.worker.usable({ engine: v.engine, voice: v.id })),
       skip: this.skipLanguages,
       hidden: new Set(this.settings.hiddenVoices),
+      unvoiced: this.settings.unvoicedLanguages,
     };
   }
 

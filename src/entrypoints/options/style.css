@@ -631,13 +631,11 @@ code {
 .switch input:checked + .switch-track::after { transform: translateX(16px); }
 .switch input:focus-visible + .switch-track { outline: 2px solid var(--accent-solid); outline-offset: 2px; }
 
+/* One surface: the board sits on the section's card, with no frame of its own and no box per
+   language — a card in a card in a card, in near-identical greys, read as clutter. */
 .vb-board {
   position: relative;
-  padding: 10px 12px; border-radius: 16px;
-  background:
-    radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--fg) 9%, transparent) 1px, transparent 0) 0 0 / 18px 18px,
-    var(--surface);
-  border: 1px solid var(--border);
+  padding: 2px 0;
 }
 .vb-board.is-off .vb-wire { stroke: var(--fg-muted); opacity: .35; }
 .vb-board.is-off .vb-row { opacity: .6; }
@@ -655,14 +653,14 @@ code {
 
 .vb-row {
   position: relative; z-index: 1;
-  display: grid; grid-template-columns: minmax(160px, 210px) minmax(0, 1fr);
-  align-items: center; column-gap: 48px;
-  padding: 8px 0; border-bottom: 1px dashed color-mix(in srgb, var(--border) 70%, transparent);
+  display: grid; grid-template-columns: minmax(150px, 190px) minmax(0, 1fr);
+  align-items: center; column-gap: 40px;
+  padding: 10px 0; border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
 }
 .vb-row:last-of-type { border-bottom: 0; }
 .vb-lang {
   position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 8px;
-  align-items: center; padding: 8px 18px 8px 12px; border-radius: 12px; background: var(--surface-2);
+  align-items: center; padding: 4px 14px 4px 0;
 }
 .vb-lang .vb-auto { grid-column: 2; grid-row: 1 / 3; }
 .vb-lang b { font-size: 14px; white-space: nowrap; }
@@ -671,7 +669,14 @@ code {
   position: absolute; right: -5px; top: 50%; width: 10px; height: 10px; margin-top: -5px; border-radius: 50%;
   background: var(--accent-solid); box-shadow: 0 0 0 3px var(--surface);
 }
-.vb-faces { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; }
+/* Every voice for a language in one strip that scrolls sideways; the edge fades to say there is more. */
+.vb-faces {
+  display: flex; align-items: center; flex-wrap: nowrap; gap: 6px 10px;
+  overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity;
+  padding: 6px 8px 4px 2px; scrollbar-width: thin;
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+}
+.vb-faces > * { flex: 0 0 auto; scroll-snap-align: start; }
 .vb-face, .vb-auto, .vb-more {
   display: inline-flex; flex-direction: column; align-items: center; gap: 3px;
   padding: 4px 4px 2px; border: 0; border-radius: 12px; background: none; color: var(--fg-muted);
@@ -702,7 +707,15 @@ code {
 .preview-btn.compact.busy { background: var(--fg); color: var(--surface); }
 .preview-btn.compact[disabled] { background: var(--surface-3); color: var(--fg-muted); box-shadow: none; }
 .vb-play { position: absolute; top: -3px; right: -7px; outline: 2px solid var(--surface); }
-.vb-others .vb-lang { grid-template-columns: minmax(0, 1fr); background: none; box-shadow: inset 0 0 0 1px var(--border); }
+.vb-others .vb-lang { grid-template-columns: minmax(0, 1fr); }
+.vb-others .vb-lang b { font-weight: 600; color: var(--fg-muted); }
+.vb-choice { display: inline-flex; gap: 6px; margin-left: 8px; }
+.vb-chip {
+  padding: 6px 12px; border: 0; border-radius: 999px; background: none; color: var(--fg-muted);
+  font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; box-shadow: inset 0 0 0 1px var(--border);
+}
+.vb-chip:hover { color: var(--fg); }
+.vb-chip.is-on { background: var(--accent-soft); color: var(--fg); box-shadow: inset 0 0 0 1.5px var(--accent-solid); }
 .vb-auto {
   flex-direction: row; padding: 6px 11px; border-radius: 999px; font-size: 12px; font-weight: 600;
   box-shadow: inset 0 0 0 1px var(--border);
@@ -725,10 +738,10 @@ code {
 .mv-tile[hidden] { display: none; }
 .mv-tile {
   display: grid; grid-template-columns: 44px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 10px; row-gap: 4px;
-  align-items: center; padding: 8px 10px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border);
-  transition: border-color var(--speed) ease, transform var(--speed) ease;
+  align-items: center; padding: 8px 10px; border-radius: 12px; background: none; border: 1px solid transparent;
+  transition: background var(--speed) ease, border-color var(--speed) ease;
 }
-.mv-tile:hover { border-color: color-mix(in srgb, var(--accent-solid) 50%, var(--border)); }
+.mv-tile:hover { background: var(--surface-2); }
 .mv-tile.is-mine { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent-solid) 55%, var(--border)); }
 .mv-tile .vi-avatar { grid-row: 1 / 3; }
 .mv-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
@@ -755,3 +768,8 @@ code {
 .catalogue > summary:hover { background: var(--surface-2); }
 .cat-title { display: flex; flex-direction: column; gap: 2px; }
 .vb-flag { width: 20px; height: 15px; margin-right: 7px; vertical-align: -2px; border-radius: 2px; object-fit: cover; box-shadow: 0 0 0 1px color-mix(in srgb, var(--fg) 14%, transparent); }
+
+/* The Voice section's parts are not cards of their own inside it: a divider between them. */
+.view:not(.lib-view) .voice-section section { background: none; border: 0; border-radius: 0; padding: 0; margin-bottom: 0; box-shadow: none; }
+.view:not(.lib-view) .voice-section .vb + .vb { margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--border); }
+.vb-lang.no-auto { grid-template-columns: minmax(0, 1fr); }

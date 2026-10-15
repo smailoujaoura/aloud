@@ -30,6 +30,8 @@ function ctx(over: Partial<Settings> = {}): PanelContext {
     flashError: vi.fn(),
     setHiddenVoices: vi.fn(),
     setLanguageVoice: vi.fn(),
+    chooseVoice: vi.fn(),
+    setUnvoiced: vi.fn(),
     setAutoLanguage: vi.fn(),
   } as unknown as PanelContext;
 }
@@ -50,7 +52,7 @@ describe('who reads what', () => {
     expect(italian.querySelector('.vb-face.is-reading')!.textContent).toContain('Nicola');
     expect(italian.querySelector('.vb-auto')!.getAttribute('aria-checked')).toBe('false');
     [...italian.querySelectorAll<HTMLButtonElement>('.vb-face')].find((f) => f.textContent!.includes('Sara'))!.click();
-    expect(c.setLanguageVoice).toHaveBeenCalledWith('it', { engine: 'kokoro', voice: 'if_sara' });
+    expect(c.chooseVoice).toHaveBeenCalledWith('it', 'kokoro', 'if_sara');
     italian.querySelector<HTMLButtonElement>('.vb-auto')!.click();
     expect(c.setLanguageVoice).toHaveBeenCalledWith('it', null);
   });
