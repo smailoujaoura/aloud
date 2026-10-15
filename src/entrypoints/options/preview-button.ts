@@ -17,9 +17,22 @@ import { voiceLanguage } from '@/shared/language-voice';
 import type { EngineId, Settings } from '@/shared/settings';
 import type { ModelManifest } from '@/engine/engines/types';
 import { engineConfigFor, readsOnGpu } from './engine-config';
-import { sharedModelInstalled, type CacheSizes } from '@/engine/installed-voices';
+import { piperDownloaded, sharedModelInstalled, type CacheSizes } from '@/engine/installed-voices';
 
 const IDLE_LABEL = '▶ Preview';
+
+/** What the button says in each state; `compact` is icons alone, for a voice's face. */
+const LABELS = {
+  full: { idle: IDLE_LABEL, preparing: '⚙ Preparing…', synthesising: '♪ Synthesising…', playing: '■ Stop', download: (p: number) => `⬇ ${p}%` },
+  compact: { idle: '▶', preparing: '…', synthesising: '…', playing: '■', download: (p: number) => `${p}%` },
+};
+
+export interface PreviewOptions {
+  /** Icons only, round: for the switchboard's faces. */
+  compact?: boolean;
+  /** What a screen reader hears: "Preview Alba". */
+  label?: string;
+}
 
 /**
  * Build a preview button driven by `run`, which reports progress through the callback it is
@@ -27,9 +40,11 @@ const IDLE_LABEL = '▶ Preview';
  */
 export function previewButton(
   run: (onStatus: (s: PreviewStatus) => void) => Promise<void>,
-  opts: { disabledReason?: string } = {},
+  opts: { disabledReason?: string } & PreviewOptions = {},
 ): HTMLButtonElement {
-  const btn = el(document, 'button', { class: 'model-btn preview-btn' }, IDLE_LABEL);
+  const L = opts.compact ? LABELS.compact : LABELS.full;
+  const btn = el(document, 'button', { type: 'button', class: `model-btn preview-btn${opts.compact ? ' compact' : ''}` }, L.idle);
+  if (opts.label) btn.setAttribute('aria-label', opts.label);
   if (opts.disabledReason) {
     btn.disabled = true;
     btn.title = opts.disabledReason;
@@ -39,7 +54,7 @@ export function previewButton(
   let active = false;
   const reset = (): void => {
     active = false;
-    btn.textContent = IDLE_LABEL;
+    btn.textContent = L.idle;
     btn.classList.remove('busy', 'loading');
   };
 
@@ -61,20 +76,18 @@ export function previewButton(
         active = true;
         btn.classList.add('busy', 'loading');
         btn.textContent =
-          s.progress != null && s.loadKind === 'download'
-            ? `⬇ ${Math.round(s.progress * 100)}%`
-            : '⚙ Preparing…';
+          s.progress != null && s.loadKind === 'download' ? L.download(Math.round(s.progress * 100)) : L.preparing;
         break;
       case 'synthesizing':
         active = true;
         btn.classList.add('busy', 'loading');
-        btn.textContent = '♪ Synthesising…';
+        btn.textContent = L.synthesising;
         break;
       case 'playing':
         active = true;
         btn.classList.remove('loading');
         btn.classList.add('busy');
-        btn.textContent = '■ Stop';
+        btn.textContent = L.playing;
         break;
     }
   };
@@ -87,7 +100,7 @@ export function previewButton(
     active = true;
     btn.classList.remove('error');
     btn.classList.add('busy', 'loading');
-    btn.textContent = '⚙ Preparing…';
+    btn.textContent = L.preparing;
     void run(onStatus);
   });
 
@@ -99,13 +112,21 @@ export function previewFor(
   engine: EngineId,
   voiceId: string,
   ctx: { settings: Settings; manifest: ModelManifest; sizes: CacheSizes },
+  look: PreviewOptions = {},
 ): HTMLButtonElement {
+  const said = (): string => previewSentence(voiceLanguage(engine, voiceId, ctx.manifest));
   if (engine === 'piper') {
-    const sample = ctx.manifest.piper[voiceId]?.sample;
-    if (!sample) {
-      return previewButton(async () => {}, { disabledReason: 'No preview clip for this voice' });
+    const entry = ctx.manifest.piper[voiceId];
+    // On this device already: spoken here, as reading would — the hosted sample clip was a
+    // request to Hugging Face on every preview of a voice that needed none.
+    if (entry && piperDownloaded(entry, ctx.sizes)) {
+      return previewButton((onStatus) => playSynthesized(engineConfigFor(ctx.settings, { engine, voice: voiceId, purpose: 'preview' }), onStatus, said()), look);
     }
-    return previewButton((onStatus) => playClip(sample, onStatus));
+    const sample = entry?.sample;
+    if (!sample) {
+      return previewButton(async () => {}, { ...look, disabledReason: 'No preview clip for this voice' });
+    }
+    return previewButton((onStatus) => playClip(sample, onStatus), look);
   }
 
   const info = engineInfo(engine);
@@ -120,9 +141,10 @@ export function previewFor(
         onStatus,
         // An Italian voice previews in Italian: the English sentence read with Italian rules is
         // no sample of anything.
-        previewSentence(voiceLanguage(engine, voiceId, ctx.manifest)),
+        said(),
       ),
     {
+      ...look,
       disabledReason: ready
         ? undefined
         : needsGpuBuild && sharedModelInstalled(engine, ctx.sizes)

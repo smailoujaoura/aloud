@@ -860,38 +860,47 @@ function modelCard(
   );
   if (gpuMissing) {
     text.append(el(document, 'span', { class: 'vi-meta' }, `This machine reads with the GPU, which needs Kokoro’s GPU build (${size}). Download it here before you read.`));
-  } else if (voicesMissing) {
-    text.append(
-      el(document, 'span', { class: 'vi-meta' }, `${voicesMissing} of its ${voices.length} voices are not on this device yet. Download them here, and nothing more is fetched when you try one.`),
-    );
   }
 
   const progress = new RowProgress();
-  const isDelete = state.downloaded && !gpuMissing && !voicesMissing;
+  // The model is here: its card says so and offers to delete it. Voices never used are a small
+  // extra, offered beside — not a "Download" that made a downloaded model look missing.
+  const isDelete = state.downloaded && !gpuMissing;
   const btn = el(
     document,
     'button',
     { class: isDelete ? 'ghost danger btn-sm' : 'primary', type: 'button' },
-    isDelete ? 'Delete model' : gpuMissing ? `Download GPU build · ${size}` : voicesMissing ? `Download the voices · ${voicesSize}` : `Download ${size}`,
+    isDelete ? 'Delete model' : gpuMissing ? `Download GPU build · ${size}` : `Download ${size}`,
   );
 
-  const idle = btn.textContent ?? '';
   const key = `model:${engine}`;
+  const startDownload = (): void => {
+    // Queued behind any download already running; the card says so (followDownload).
+    downloads.enqueue(key, `${info.name} model`, (p) =>
+      downloadSharedModel(engineConfigFor(ctx.settings, { engine, purpose: 'download' }), voices, p),
+    ).then(
+      async () => {
+        announceModelsChanged();
+        ctx.flashSaved(`${info.name} is ready — pick a voice below`);
+        await ctx.refresh();
+      },
+      (err: unknown) => {
+        if (err instanceof DownloadCancelled) ctx.flashSaved(`${info.name} taken out of the download line`);
+      },
+    );
+  };
+  let extra: HTMLButtonElement | null = null;
+  if (isDelete && voicesMissing) {
+    extra = el(document, 'button', { type: 'button', class: 'link-btn mc-extra' }, `Get the other ${voicesMissing} voices · ${voicesSize}`) as HTMLButtonElement;
+    extra.title = 'Each voice has a small file of its own; these are the ones you have not used yet. Without them, a voice’s file is fetched the first time you use it.';
+    extra.addEventListener('click', startDownload);
+    text.append(extra);
+  }
+
+  const idle = btn.textContent ?? '';
   btn.addEventListener('click', () => {
     if (!isDelete) {
-      // Queued behind any download already running; the card says so (followDownload).
-      downloads.enqueue(key, `${info.name} model`, (p) =>
-        downloadSharedModel(engineConfigFor(ctx.settings, { engine, purpose: 'download' }), voices, p),
-      ).then(
-        async () => {
-          announceModelsChanged();
-          ctx.flashSaved(`${info.name} is ready — pick a voice below`);
-          await ctx.refresh();
-        },
-        (err: unknown) => {
-          if (err instanceof DownloadCancelled) ctx.flashSaved(`${info.name} taken out of the download line`);
-        },
-      );
+      startDownload();
       return;
     }
     void runModelAction(btn, async () => {
@@ -907,6 +916,7 @@ function modelCard(
     });
   });
   if (!isDelete) followDownload(key, progress, btn, idle);
+  else if (extra) followDownload(key, progress, extra, extra.textContent ?? '');
 
   card.append(text, btn, progress.wrap, progress.msg);
   return card;

@@ -41,8 +41,11 @@ describe('who reads what', () => {
     const c = ctx({ languageVoices: { it: { engine: 'kokoro', voice: 'im_nicola' } } });
     const host = document.createElement('div');
     renderVoiceBoard(host, c, vi.fn());
-    const rows = [...host.querySelectorAll('.vb-row')];
+    const rows = [...host.querySelectorAll('.vb-row:not(.vb-others)')];
     expect(rows.map((r) => r.querySelector('.vb-lang b')!.textContent)).toEqual(['English', 'Italian']);
+    // A flag from the voice reading it (Heart is American English), and a preview on every face.
+    expect(rows[0]!.querySelector<HTMLImageElement>('.vb-flag')!.getAttribute('src')).toBe('/flags/us.svg');
+    expect(host.querySelectorAll('.vb-pick').length).toBe(host.querySelectorAll('.vb-pick .vb-play').length);
     const italian = rows[1]!;
     expect(italian.querySelector('.vb-face.is-reading')!.textContent).toContain('Nicola');
     expect(italian.querySelector('.vb-auto')!.getAttribute('aria-checked')).toBe('false');
@@ -61,11 +64,21 @@ describe('who reads what', () => {
     expect(c.setHiddenVoices).toHaveBeenCalledWith(['kokoro:af_bella', 'kokoro:im_nicola']);
   });
 
-  it('put-away voices leave the board and the gallery', () => {
+  it('every other language is read in English, and the board says so', () => {
+    const host = document.createElement('div');
+    renderVoiceBoard(host, ctx(), vi.fn());
+    const others = host.querySelector('.vb-others')!;
+    expect(others.textContent).toContain('Every other language');
+    expect(others.querySelector('.vb-face')!.getAttribute('title')).toContain('Heart');
+  });
+
+  it('put-away voices leave the gallery, and stay on the board to choose from, dimmed', () => {
+    // After "keep only the ones I use", each language had one face left and nothing to rewire to.
     const c = ctx({ hiddenVoices: ['kokoro:af_bella'] });
     const board = document.createElement('div');
     renderVoiceBoard(board, c, vi.fn());
-    expect(board.textContent).not.toContain('Bella');
+    const bella = [...board.querySelectorAll('.vb-pick')].find((p) => p.textContent!.includes('Bella'))!;
+    expect(bella.classList.contains('is-away')).toBe(true);
     const mine = document.createElement('div');
     renderMyVoices(mine, c, vi.fn());
     expect(mine.textContent).toContain('1 put away');

@@ -123,6 +123,8 @@ async function handleInit(req: Extract<WorkerRequest, { kind: 'init' }>): Promis
     const m = await loadManifest();
 
     const progressByFile = new Map<string, { loaded: number; total: number }>();
+    /** Files that were not already on the device: complete at their first report means stored. */
+    const fetching = new Set<string>();
     let compiling = false;
     const onProgress: InitContext['onProgress'] = (p) => {
       if (p.phase === 'compile') {
@@ -132,13 +134,20 @@ async function handleInit(req: Extract<WorkerRequest, { kind: 'init' }>): Promis
         // file, say): show it. A flag that stuck once set used to leave the settings page on
         // "Preparing model…" at 0% for a whole 86 MB download.
         compiling = false;
+        if (!progressByFile.has(p.file) && p.loaded < p.total) fetching.add(p.file);
         progressByFile.set(p.file, { loaded: p.loaded, total: Math.max(p.total, p.loaded, 1) });
       }
       let loaded = 0;
       let total = 0;
-      for (const v of progressByFile.values()) {
+      let freshLoaded = 0;
+      let freshTotal = 0;
+      for (const [file, v] of progressByFile) {
         loaded += v.loaded;
         total += v.total;
+        if (fetching.has(file)) {
+          freshLoaded += v.loaded;
+          freshTotal += v.total;
+        }
       }
       const ratio = total > 0 ? loaded / total : 0;
       post({
@@ -147,6 +156,8 @@ async function handleInit(req: Extract<WorkerRequest, { kind: 'init' }>): Promis
         progress: compiling ? Math.max(0.97, ratio) : Math.min(0.96, ratio),
         loaded,
         total,
+        freshLoaded,
+        freshTotal,
         file: p.file,
         phase: compiling ? 'compile' : p.phase === 'cache' ? 'cache' : 'download',
       });

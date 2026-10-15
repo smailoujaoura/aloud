@@ -56,6 +56,16 @@ describe('routeFor', () => {
     expect(routeFor('de', ctx({ skip: new Set(['de']) }))).toEqual({ kind: 'skip', language: 'de' });
   });
 
+  it('no voice for a language: read in English even when the saved voice is not English', () => {
+    // An Italian voice saved, a German passage: English (Alba), not Italian.
+    expect(voiceOf(routeFor('de', ctx({ saved: paola })))).toBe('en_GB-alba-medium:missing');
+    // The voice chosen for English reads it.
+    expect(voiceOf(routeFor('de', ctx({ saved: paola, preferences: { en: { engine: 'kokoro', voice: 'af_heart' } } })))).toBe('af_heart:missing');
+    // No English voice at all: the saved voice — and English itself does not loop.
+    expect(voiceOf(routeFor('de', ctx({ saved: paola, installed: [paola, sara] })))).toBe('it_IT-paola-medium:missing');
+    expect(voiceOf(routeFor('en', ctx({ saved: paola, installed: [paola, sara] })))).toBe('it_IT-paola-medium:missing');
+  });
+
   it('an unknown language is read by the saved voice, and says it is unknown', () => {
     expect(voiceOf(routeFor('', ctx()))).toBe('en_GB-alba-medium:unknown');
   });

@@ -239,7 +239,7 @@ function downloadStep(piper: string[], shared: Array<'kokoro' | 'supertonic'>, s
       if (!now) return;
       const left = mine.length;
       if (now.phase === 'waiting') progress.note(`${now.text} · ${left} of ${jobs.length} to go`);
-      else progress.show(`${now.text.replace(/ \d+%$/, '')} ${Math.floor(now.ratio * 100)}% · ${left} of ${jobs.length} to go`, now.ratio);
+      else progress.show(`${now.text.replace(/ \d+%$/, '')} · ${left} of ${jobs.length} to go`, now.ratio);
     };
     const stop = downloads.subscribe(show);
     try {

@@ -393,8 +393,11 @@ code {
 .mc-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; }
 .mc-text b { font-weight: 600; }
 
-.progress-wrap { height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
-.progress-wrap > i { display: block; height: 100%; width: 0%; background: var(--accent-solid); transition: width 0.15s linear; }
+.progress-wrap { display: flex; align-items: center; gap: 8px; }
+.progress-wrap[hidden] { display: none; }
+.progress-track { flex: 1; height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+.progress-track > i { display: block; height: 100%; width: 0%; background: var(--accent-solid); transition: width 0.15s linear; }
+.progress-pct { min-width: 3.2em; text-align: right; font-size: 12px; font-weight: 600; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
 .progress-msg { font-size: 12.5px; color: var(--fg-muted); }
 .progress-msg.error { color: var(--danger); }
 /* In line behind another download: plainly waiting, with a way out. */
@@ -680,6 +683,19 @@ code {
 .vb-face.is-reading .vi-avatar { box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--accent-solid); }
 .vb-face.is-reading.is-auto .vi-avatar { box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px color-mix(in srgb, var(--accent-solid) 55%, transparent); }
 .vb-face-name { max-width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vb-face[disabled] { cursor: default; }
+.vb-face[disabled]:hover { background: none; transform: none; }
+/* A face and its play button: the button sits on the face's corner. */
+.vb-pick { position: relative; display: inline-flex; }
+.vb-pick.is-away .vb-face { opacity: .5; }
+.vb-pick.is-away .vb-face:hover { opacity: .85; }
+.preview-btn.compact {
+  min-width: 0; width: 24px; height: 24px; padding: 0; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 10px; line-height: 1;
+}
+.vb-play { position: absolute; top: -2px; right: -6px; box-shadow: 0 0 0 2px var(--surface); background: var(--surface); }
+.vb-pick:not(:hover):not(:focus-within) .vb-play:not(.busy) { opacity: .75; }
+.vb-others .vb-lang { grid-template-columns: minmax(0, 1fr); background: none; box-shadow: inset 0 0 0 1px var(--border); }
 .vb-auto {
   flex-direction: row; padding: 6px 11px; border-radius: 999px; font-size: 12px; font-weight: 600;
   box-shadow: inset 0 0 0 1px var(--border);
@@ -731,3 +747,6 @@ code {
 .catalogue[open] > summary::before { transform: rotate(90deg); }
 .catalogue > summary:hover { background: var(--surface-2); }
 .cat-title { display: flex; flex-direction: column; gap: 2px; }
+.mc-extra { align-self: flex-start; padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: 12.5px; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.mc-extra[disabled] { color: var(--fg-muted); text-decoration: none; cursor: default; }
+.vb-flag { width: 20px; height: 15px; margin-right: 7px; vertical-align: -2px; border-radius: 2px; object-fit: cover; box-shadow: 0 0 0 1px color-mix(in srgb, var(--fg) 14%, transparent); }

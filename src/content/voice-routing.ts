@@ -7,9 +7,11 @@
  *  - The voice chosen for that language (settings: `languageVoices`), when it is downloaded.
  *  - The saved voice, when it speaks the language.
  *  - Another downloaded voice that speaks it (`pickVoiceForLanguage`'s order).
- *  - None downloaded: skipped, if the reader said so for this language; otherwise read by the
- *    saved voice and *marked missing*, so the bar can say so and offer a download — never
- *    passed off as the right voice.
+ *  - None downloaded: skipped, if the reader said so for this language; otherwise read in
+ *    English — the voice English would get — and *marked missing*, so the bar can say so and
+ *    offer a download, never passing it off as the right voice. English, not the saved voice:
+ *    with an Italian voice saved, a French passage came out in Italian, which helps nobody; and
+ *    with no English voice either, the saved voice.
  *
  * Pure; the session supplies what is downloaded.
  */
@@ -61,5 +63,12 @@ export function routeFor(languageTag: string, ctx: RouteContext): Route {
   const match = pickVoiceForLanguage(language, ctx.saved, visible) ?? pickVoiceForLanguage(language, ctx.saved, ctx.installed);
   if (match) return { kind: 'voice', voice: match, reason: 'match', language };
   if (ctx.skip.has(language)) return { kind: 'skip', language };
-  return { kind: 'voice', voice: ctx.saved, reason: 'missing', language };
+  // English itself missing: the saved voice (asking for the English fallback here would loop).
+  return { kind: 'voice', voice: language === 'en' ? ctx.saved : fallbackVoice(ctx), reason: 'missing', language };
+}
+
+/** Who reads a language no downloaded voice speaks: the voice English gets, else the saved one. */
+export function fallbackVoice(ctx: RouteContext): CandidateVoice {
+  const english = routeFor('en', { ...ctx, skip: new Set() });
+  return english.kind === 'voice' && english.reason !== 'missing' ? english.voice : ctx.saved;
 }

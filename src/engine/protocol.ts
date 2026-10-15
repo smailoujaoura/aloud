@@ -92,6 +92,9 @@ export type WorkerResponse =
       progress: number;
       loaded: number;
       total: number;
+      /** Of the files really being fetched (not already on this device), summed: what a download shows. */
+      freshLoaded?: number;
+      freshTotal?: number;
       file: string;
       phase: 'download' | 'cache' | 'compile';
     }

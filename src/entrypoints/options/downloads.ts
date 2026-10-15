@@ -22,14 +22,21 @@ import type { EngineConfig, WorkerResponse } from '@/engine/protocol';
 import type { PiperVoiceEntry } from '@/engine/engines/types';
 import { downloads, type ProgressSink } from './download-queue';
 
-/** A slim progress bar plus a status line, shown inside a model row while it downloads. */
+/**
+ * A slim progress bar with its share beside it, and a status line under it ("165 MB of 262 MB"),
+ * shown inside a model row while it downloads. The share is said once, on the bar: the line and
+ * the bar both said "15%" — the line twice.
+ */
 export class RowProgress {
   readonly wrap = el(document, 'div', { class: 'progress-wrap', hidden: '' });
   readonly msg = el(document, 'div', { class: 'progress-msg', hidden: '' });
+  private readonly track = el(document, 'div', { class: 'progress-track' });
   private readonly fill = el(document, 'i');
+  private readonly pct = el(document, 'span', { class: 'progress-pct' });
 
   constructor() {
-    this.wrap.appendChild(this.fill);
+    this.track.appendChild(this.fill);
+    this.wrap.append(this.track, this.pct);
   }
 
   start(label: string): void {
@@ -41,7 +48,9 @@ export class RowProgress {
   }
 
   set(ratio: number): void {
-    this.fill.style.width = `${Math.max(0, Math.min(1, ratio)) * 100}%`;
+    const share = Math.max(0, Math.min(1, ratio));
+    this.fill.style.width = `${share * 100}%`;
+    this.pct.textContent = `${Math.floor(share * 100)}%`;
   }
 
   note(text: string): void {
@@ -152,7 +161,7 @@ export function followDownload(key: string, progress: RowProgress, button: HTMLB
       progress.show(view.text, 1);
     } else {
       button.textContent = 'Downloading…';
-      progress.show(`${view.text.replace(/ \d+%$/, '')} ${Math.floor(view.ratio * 100)}%`, view.ratio);
+      progress.show(view.text.replace(/^Downloading… \d+%( · )?/, '').replace(/ \d+%$/, '') || 'Downloading…', view.ratio);
     }
   };
   const stop = downloads.subscribe(render, scope.signal);
@@ -208,6 +217,7 @@ export async function downloadPiperVoice(entry: PiperVoiceEntry, progress: Progr
     // first, and measured on its own it read 100% before the voice itself had begun.
     total = Math.max(total, entry.sizeBytes ?? 0);
     progress.set(total > 0 ? loaded / total : 0);
+    if (total > 0) progress.note(`${humanBytes(loaded)} of ${humanBytes(total)}`);
   };
 
   // Both files are this download's until both have stopped. With Promise.all, a failed config
@@ -313,11 +323,9 @@ export function downloadViaWorker(config: EngineConfig, progress: ProgressSink, 
       finish(new Error(ev.message || ev.error?.message || 'worker crashed while downloading'));
     };
     worker.onmessageerror = () => finish(new Error('worker sent an unreadable message'));
-    // One count for what is really downloading: the model's files that arrive over the network, and
-    // what comes alongside them. A file already on the device reports itself complete at once and
-    // is not counted — the button said what this would download, and the count must agree.
-    const streaming = new Map<string, { loaded: number; total: number }>();
-    const alreadyHere = new Set<string>();
+    // One count for what is really downloading: the model's files fetched over the network (the
+    // worker leaves out those already on the device, and sums the rest), and what comes alongside.
+    const model = { loaded: 0, total: 0 };
     let compiled = false;
     let alongLoaded = 0;
     let alongDone = !alongside;
@@ -327,15 +335,11 @@ export function downloadViaWorker(config: EngineConfig, progress: ProgressSink, 
         progress.note('Downloaded — preparing the model…');
         return;
       }
-      let loaded = alongLoaded;
-      let total = alongside?.total ?? 0;
-      for (const file of streaming.values()) {
-        loaded += compiled ? file.total : file.loaded;
-        total += file.total;
-      }
-      const ratio = total > 0 ? Math.min(1, loaded / total) : 0;
-      progress.set(ratio);
-      progress.note(total > 0 ? `Downloading… ${Math.floor(ratio * 100)}% · ${humanBytes(loaded)} of ${humanBytes(total)}` : 'Downloading…');
+      const loaded = (compiled ? model.total : model.loaded) + alongLoaded;
+      const total = model.total + (alongside?.total ?? 0);
+      progress.set(total > 0 ? Math.min(1, loaded / total) : 0);
+      // The share is on the bar; the line under it says how much.
+      progress.note(total > 0 ? `${humanBytes(loaded)} of ${humanBytes(total)}` : 'Downloading…');
     };
     const along = alongside?.start((bytes) => {
       alongLoaded += bytes;
@@ -354,10 +358,9 @@ export function downloadViaWorker(config: EngineConfig, progress: ProgressSink, 
       if (!m || typeof m !== 'object') return;
       if (m.kind === 'model-progress') {
         if (m.phase === 'compile') compiled = true;
-        else if (m.total > 0 && !alreadyHere.has(m.file)) {
-          if (streaming.has(m.file)) streaming.set(m.file, { loaded: m.loaded, total: m.total });
-          else if (m.loaded >= m.total) alreadyHere.add(m.file);
-          else streaming.set(m.file, { loaded: m.loaded, total: m.total });
+        else {
+          model.loaded = m.freshLoaded ?? m.loaded;
+          model.total = m.freshTotal ?? m.total;
         }
         report();
       } else if (m.kind === 'ready') {

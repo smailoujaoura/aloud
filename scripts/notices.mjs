@@ -41,6 +41,14 @@ export function writeNotices() {
     );
   }
 
+  // Files copied into the extension rather than installed as packages: their licence travels with them.
+  const COPIED = [{ name: 'flag-icons (the language flags, public/flags/)', version: '7.5.0', license: 'MIT', file: 'public/flags/LICENSE.txt' }];
+  for (const c of COPIED) {
+    sections.push(
+      [`${'='.repeat(78)}`, `${c.name} ${c.version} — ${c.license}`, `${'='.repeat(78)}`, '', readFileSync(join(root, c.file), 'utf8').trim()].join('\n'),
+    );
+  }
+
   const header = `Aloud ${pkg.version} — third-party notices
 
 Aloud is free software, distributed under the GNU General Public License, version 3 or (at your

@@ -1512,7 +1512,7 @@ export class ReaderSession {
         this.bar?.flash(`This page is in ${name(lang)} — reading it with ${shortLabel(route.voice.label)}`, 'ok');
       } else if (route.reason === 'missing') {
         this.missingTold.add(lang);
-        this.bar?.flash(`This page is in ${name(lang)}, and no ${name(lang)} voice is downloaded`, 'info', {
+        this.bar?.flash(`This page is in ${name(lang)}, and no ${name(lang)} voice is downloaded — reading it in English`, 'info', {
           label: 'Get one',
           run: () => this.background()?.postMessage({ type: 'open-options', language: lang }),
         });
@@ -1525,8 +1525,9 @@ export class ReaderSession {
       .map(([lang, e]) => (e.route.kind === 'voice' ? `${name(lang)} by ${shortLabel(e.route.voice.label)}` : `${name(lang)} skipped`));
     if (missing.length) {
       for (const lang of missing) this.missingTold.add(lang);
-      const reader = shortLabel(this.savedVoice().label);
-      this.bar?.flash(`No ${missing.map(name).join(' or ')} voice is downloaded, so ${reader} reads it too`, 'info', {
+      const first = summary.find(([l]) => l === missing[0])?.[1].route;
+      const reader = first?.kind === 'voice' ? shortLabel(first.voice.label) : shortLabel(this.savedVoice().label);
+      this.bar?.flash(`No ${missing.map(name).join(' or ')} voice is downloaded, so ${reader} reads it in English`, 'info', {
         label: 'Choose',
         run: () => this.bar?.openLanguageMenu(),
       });
@@ -1551,7 +1552,7 @@ export class ReaderSession {
     }
     if (info.missing && !info.manual && info.auto && info.language && !this.missingTold.has(info.language)) {
       this.missingTold.add(info.language);
-      this.bar.flash(`No ${info.name} voice is downloaded — ${info.voiceLabel} reads this ${info.name} passage`, 'info', {
+      this.bar.flash(`No ${info.name} voice is downloaded — ${info.voiceLabel} reads this ${info.name} passage in English`, 'info', {
         label: 'Choose',
         run: () => this.bar?.openLanguageMenu(),
       });
