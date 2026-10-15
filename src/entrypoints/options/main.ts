@@ -422,7 +422,12 @@ async function renderNow(): Promise<void> {
   renderCapabilityHints();
 
   const ctx: PanelContext = {
-    settings,
+    // The settings as they are when a button is pressed, not when the page was drawn: the speed
+    // slider saves without redrawing, and every preview kept the speed the page was drawn with —
+    // set to 0.5×, a face still played at 1×; set back to 2×, it played at 0.5×.
+    get settings() {
+      return settings;
+    },
     manifest,
     sizes,
     filter: $<HTMLInputElement>('voiceFilter').value.trim().toLowerCase(),

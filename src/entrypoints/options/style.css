@@ -256,8 +256,6 @@ code {
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
 }
 .voice-tabs {
   display: flex;
@@ -632,24 +630,16 @@ code {
   padding: 2px 0;
 }
 .vb-wires { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
-.vb-wire {
-  fill: none; stroke: var(--accent-solid); stroke-width: 2.5; stroke-linecap: round;
-  filter: drop-shadow(0 1px 1px color-mix(in srgb, var(--fg) 18%, transparent));
-  animation: vb-draw 520ms ease-out both;
-  stroke-dasharray: 600; stroke-dashoffset: 0;
-}
-.vb-wire.is-auto { stroke-dasharray: 5 6; animation: vb-flow 1.6s linear infinite; }
-@keyframes vb-draw { from { stroke-dashoffset: 600; } to { stroke-dashoffset: 0; } }
-@keyframes vb-flow { to { stroke-dashoffset: -22; } }
-@media (prefers-reduced-motion: reduce) { .vb-wire, .vb-wire.is-auto { animation: none; } }
+/* One kind of wire, still: a dashed, moving one for Auto beside a solid one for a choice read as
+   two meanings to work out. Whether a language is on Auto is said by its Auto chip. */
+.vb-wire { fill: none; stroke: var(--accent-solid); stroke-width: 2.5; stroke-linecap: round; }
 
 .vb-row {
   position: relative; z-index: 1;
   display: grid; grid-template-columns: minmax(150px, 190px) minmax(0, 1fr);
   align-items: center; column-gap: 40px;
-  padding: 10px 0; border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  padding: 10px 0;
 }
-.vb-row:last-of-type { border-bottom: 0; }
 .vb-lang {
   position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 8px;
   align-items: center; padding: 4px 14px 4px 0;
@@ -716,7 +706,7 @@ code {
 
 /* ---- the catalogue ---- */
 
-.view:not(.lib-view) .voice-section .catalogue { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); }
+.view:not(.lib-view) .voice-section .catalogue { margin-top: 32px; }
 .cat-title { margin: 0 0 12px; font-size: 16px; }
 .mc-delete {
   align-self: center; padding: 4px 0; border: 0; background: none; color: var(--fg-muted);
@@ -727,7 +717,7 @@ code {
 
 /* The Voice section's parts are not cards of their own inside it: a divider between them. */
 .view:not(.lib-view) .voice-section section { background: none; border: 0; border-radius: 0; padding: 0; margin-bottom: 0; box-shadow: none; }
-.view:not(.lib-view) .voice-section .vb + .vb { margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--border); }
+.view:not(.lib-view) .voice-section .vb + .vb { margin-top: 32px; }
 .vb-lang.no-auto { grid-template-columns: minmax(0, 1fr); }
 
 /* "Use" asks what for: a small menu under the button. */
@@ -748,10 +738,12 @@ code {
 .use-list button:hover, .use-list button:focus-visible { background: var(--surface-2); }
 
 /* Removing a language: a small ✕ in the row's left margin, shown when the row is pointed at. */
+/* Removing a language: a small ✕ just after its name, inside the row — faint until pointed at. */
+.vb-name { grid-column: 1; display: flex; align-items: center; gap: 4px; min-width: 0; }
 .vb-remove {
-  position: absolute; left: -26px; top: 50%; margin-top: -11px; width: 22px; height: 22px; padding: 0;
-  border: 0; border-radius: 50%; background: none; color: var(--fg-muted); font-size: 11px; cursor: pointer;
-  opacity: 0; transition: opacity var(--speed) ease;
+  flex: 0 0 auto; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%;
+  background: none; color: var(--fg-muted); font-size: 10px; line-height: 20px; cursor: pointer;
+  opacity: .35; transition: opacity var(--speed) ease, color var(--speed) ease, background var(--speed) ease;
 }
 .vb-row:hover .vb-remove, .vb-remove:focus-visible { opacity: 1; }
 .vb-remove:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); }

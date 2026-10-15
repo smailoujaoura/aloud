@@ -203,7 +203,9 @@ export function renderVoiceBoard(
       title: `Don't read ${languageName(code)} with its own voices: read it like every other language`,
     }, '✕');
     remove.addEventListener('click', () => void ctx.setLanguageRemoved(code, true));
-    lang.append(named, el(document, 'span', {}, chosen && reading ? 'Chosen by you' : reading ? 'Auto' : 'No voice yet'), auto, remove, node);
+    const line = el(document, 'span', { class: 'vb-name' });
+    line.append(named, remove);
+    lang.append(line, el(document, 'span', {}, chosen && reading ? 'Chosen by you' : reading ? 'Auto' : 'No voice yet'), auto, node);
 
     const faces = el(document, 'div', { class: 'vb-faces' });
     let target: HTMLElement | null = null;
