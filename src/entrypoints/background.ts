@@ -17,6 +17,7 @@
  * partway through `main()` and leaving the rest of the listeners unregistered.
  */
 import { browser } from 'wxt/browser';
+import { settingsReplace } from '@/shared/settings-tabs';
 import { defineBackground } from 'wxt/utils/define-background';
 import { PORT_NAME, type ActivateMode, type LibraryTab, type ToBackgroundMessage } from '@/shared/messages';
 import { NOTES_FULL_MESSAGE, addNote } from '@/shared/notes';
@@ -439,24 +440,22 @@ async function activate(tabId: number, mode: ActivateMode, targetElementId?: num
   await sendActivate(tabId, mode, targetElementId, 2);
 }
 
-/** Pages that are only somewhere to start from: opening settings over them loses nothing. */
-const EMPTY_PAGE =
-  /^(about:(newtab|home|blank|privatebrowsing)|chrome:\/\/(newtab|new-tab-page)\/?|edge:\/\/newtab\/?|chrome-search:\/\/local-ntp|chrome:\/\/vivaldi-webui\/startpage)/i;
 
 /**
  * The toolbar button on a page Aloud cannot read: show its settings, with a line saying why.
  *
- * On a new tab page they open right there — there is nothing to lose. Anywhere else (the
- * browser's own settings, an add-on store, a local file without access) they open beside it, so
- * the page the reader was on is not thrown away; an Aloud settings tab already open is reused.
+ * On a new tab page, or one of the browser's own pages (about:preferences, about:debugging), they
+ * open right there, as Back brings that page back. Anywhere else (an add-on store, a local file
+ * without access) they open beside it, so the page the reader was on is not thrown away; an Aloud
+ * settings tab already open is reused.
  */
 async function openSettingsInstead(tab: { id?: number; index?: number; url?: string } | null): Promise<void> {
   const reason = tab?.url?.startsWith('file:') ? 'file' : 'page';
   const url = `${browser.runtime.getURL('/options.html')}#cant-read-${reason}`;
   try {
-    // Only a page known to be empty is replaced. Without the "tabs" permission most addresses are
-    // hidden, and an unknown one is someone's page: open beside it.
-    if (tab?.id != null && tab.url && EMPTY_PAGE.test(tab.url)) {
+    // An empty page, or one of the browser's own, is replaced (settings-tabs.ts). Without the "tabs"
+    // permission most addresses are hidden, and an unknown one is someone's page: open beside it.
+    if (tab?.id != null && settingsReplace(tab.url)) {
       await browser.tabs.update(tab.id, { url });
       return;
     }
