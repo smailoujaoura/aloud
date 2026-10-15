@@ -28,7 +28,6 @@ function ctx(over: Partial<Settings> = {}): PanelContext {
     useVoice: vi.fn(),
     flashSaved: vi.fn(),
     flashError: vi.fn(),
-    setHiddenVoices: vi.fn(),
     setLanguageVoice: vi.fn(),
     chooseVoice: vi.fn(),
     setUnvoiced: vi.fn(),
@@ -89,9 +88,4 @@ describe('who reads what', () => {
     expect(c.setUnvoiced).toHaveBeenCalledWith('skip');
   });
 
-  it('put-away voices stay on the board to choose from, dimmed', () => {
-    const board = render(ctx({ hiddenVoices: ['kokoro:af_bella'] }));
-    const bella = [...rows(board)[0]!.querySelectorAll('.vb-pick')].find((p) => p.textContent!.includes('Bella'))!;
-    expect(bella.classList.contains('is-away')).toBe(true);
-  });
 });

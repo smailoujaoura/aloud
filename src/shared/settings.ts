@@ -270,12 +270,6 @@ export interface Settings {
   removedLanguages: string[];
   /** The voice for every other language; null for the voice English gets. */
   otherVoice: VoiceRef | null;
-  /**
-   * Voices put away (`engine:voice`): left out of the reading bar's voice menu and folded away in
-   * Settings, so a model with dozens of voices shows only the ones kept. Still downloaded, and
-   * still used when chosen for a language or as the voice reading.
-   */
-  hiddenVoices: string[];
   /** The reading bar slides away while you scroll down the page, and comes back when you scroll up. */
   barAutoHide: boolean;
   /** Colour theme for every surface Aloud draws. */
@@ -323,7 +317,6 @@ export const DEFAULT_SETTINGS: Settings = {
   unvoicedLanguages: 'english',
   removedLanguages: [],
   otherVoice: null,
-  hiddenVoices: [],
   barAutoHide: false,
   theme: 'system',
   tipsSeen: false,
@@ -474,9 +467,6 @@ export function sanitizeSettings(raw: Settings): Settings {
     // Voices always follow each passage's language: a language not wanted in its own voice is
     // taken off the board instead (removedLanguages). The old switch is not honoured.
     matchPageLanguage: true,
-    hiddenVoices: Array.isArray(raw.hiddenVoices)
-      ? [...new Set(raw.hiddenVoices.filter((v): v is string => typeof v === 'string' && /^(piper|kokoro|supertonic):[\w.-]{1,80}$/.test(v)))]
-      : [],
     barAutoHide: raw.barAutoHide === true,
     pronunciations: Array.isArray(raw.pronunciations)
       ? raw.pronunciations.filter((r) => !!r && typeof r.from === 'string' && typeof r.to === 'string')

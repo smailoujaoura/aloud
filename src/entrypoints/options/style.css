@@ -600,15 +600,6 @@ code {
 @keyframes page-busy { from { transform: translateX(-100%); } to { transform: translateX(350%); } }
 @media (prefers-reduced-motion: reduce) { .page-busy::after { animation: none; width: 100%; opacity: .5; } }
 
-/* Voices put away: dimmed when listed, folded away otherwise (voice-panels.ts: hideControl). */
-.voice-item.is-hidden { opacity: .55; }
-.voice-item.is-hidden:hover { opacity: .85; }
-.vi-actions .vi-hide { color: var(--fg-muted); }
-.vi-actions .vi-hide.is-hidden { color: var(--fg); }
-.hidden-bar {
-  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
-  margin: 8px 4px 2px; padding-top: 8px; border-top: 1px dashed var(--border);
-}
 
 .row-hint.flush { margin-left: 0; }
 
@@ -693,8 +684,6 @@ code {
 .vb-face[disabled]:hover { background: none; transform: none; }
 /* A face and its play button: the button sits on the face's corner. */
 .vb-pick { position: relative; display: inline-flex; }
-.vb-pick.is-away .vb-face { opacity: .5; }
-.vb-pick.is-away .vb-face:hover { opacity: .85; }
 /* The face's play button: solid, in the accent, always at full strength — a pale corner circle
    went unnoticed. It does not pulse while preparing; "…" says it is working. */
 .preview-btn.compact {
@@ -725,21 +714,15 @@ code {
 }
 
 
-/* ---- the catalogue, folded ---- */
+/* ---- the catalogue ---- */
 
-.catalogue { margin-top: 8px; border-top: 1px solid var(--border); }
-.catalogue > summary {
-  list-style: none; cursor: pointer; display: flex; align-items: center; gap: 12px;
-  padding: 16px 4px; border-radius: 10px;
+.view:not(.lib-view) .voice-section .catalogue { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); }
+.cat-title { margin: 0 0 12px; font-size: 16px; }
+.mc-delete {
+  align-self: center; padding: 4px 0; border: 0; background: none; color: var(--fg-muted);
+  font: inherit; font-size: 12.5px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px;
 }
-.catalogue > summary::-webkit-details-marker { display: none; }
-.catalogue > summary::before {
-  content: '›'; display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
-  background: var(--surface-2); font-size: 18px; transition: transform 180ms ease;
-}
-.catalogue[open] > summary::before { transform: rotate(90deg); }
-.catalogue > summary:hover { background: var(--surface-2); }
-.cat-title { display: flex; flex-direction: column; gap: 2px; }
+.mc-delete:hover { color: var(--danger); }
 .vb-flag { width: 20px; height: 15px; margin-right: 7px; vertical-align: -2px; border-radius: 2px; object-fit: cover; box-shadow: 0 0 0 1px color-mix(in srgb, var(--fg) 14%, transparent); }
 
 /* The Voice section's parts are not cards of their own inside it: a divider between them. */

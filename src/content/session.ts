@@ -1067,9 +1067,7 @@ export class ReaderSession {
     // being answered painted the older choice back over the newer one on the picker.
     const route = this.playlist[this.currentPlayId]?.route;
     const current = route?.kind === 'voice' ? voiceValue(route.voice.engine, route.voice.id) : voiceValue(this.engine, this.voice);
-    // Voices put away in Settings are left out — unless one is reading now.
-    const hidden = new Set(this.settings.hiddenVoices);
-    const shown = perEngine.flat().filter((v) => !hidden.has(voiceValue(v.engine, v.id)) || voiceValue(v.engine, v.id) === current);
+    const shown = perEngine.flat();
     if (!shown.some((v) => voiceValue(v.engine, v.id) === current)) {
       const known = listVoices(this.engine, manifest).find((v) => v.id === this.voice);
       shown.unshift({ engine: this.engine, id: this.voice, label: `${known?.label ?? this.voice} · not downloaded yet`, group: known?.group ?? '' });
@@ -1371,7 +1369,6 @@ export class ReaderSession {
       // A voice that failed to load on this page is not offered again.
       installed: this.installedVoiceList.filter((v) => !this.worker || this.worker.usable({ engine: v.engine, voice: v.id })),
       skip: this.skipLanguages,
-      hidden: new Set(this.settings.hiddenVoices),
       unvoiced: this.settings.unvoicedLanguages,
       removed: new Set(this.settings.removedLanguages),
       other: this.settings.otherVoice,
@@ -2254,10 +2251,6 @@ export class ReaderSession {
     if (prev.theme !== this.settings.theme) this.bar?.setTheme(this.settings.theme);
     if (prev.barAutoHide !== this.settings.barAutoHide) this.bar?.setAutoHide(this.settings.barAutoHide);
     if (prev.scrollMode !== this.settings.scrollMode) this.renderFollow();
-    if (!sameValue(prev.hiddenVoices, this.settings.hiddenVoices)) {
-      void this.refreshBarVoices();
-      void this.reroute();
-    }
 
     if (!sameValue(prev.skip, this.settings.skip)) {
       // Skipping changes which sentences exist, not how they sound, so it cannot be patched into

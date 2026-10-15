@@ -27,11 +27,21 @@ describe('languageVoices setting', () => {
   });
 });
 
-describe('hidden voices and the bar', () => {
-  it('keeps the bar in place by default, and only well-formed hidden voices', () => {
+describe('the bar, and voice choices', () => {
+  it('keeps the bar in place by default', () => {
     expect(DEFAULT_SETTINGS.barAutoHide).toBe(false);
-    const s = sanitizeSettings({ ...DEFAULT_SETTINGS, barAutoHide: 'yes', hiddenVoices: ['kokoro:af_alloy', 'kokoro:af_alloy', 'nope', 3, 'piper:en_US-amy-low'] } as unknown as Settings);
-    expect(s.barAutoHide).toBe(false);
-    expect(s.hiddenVoices).toEqual(['kokoro:af_alloy', 'piper:en_US-amy-low']);
+    expect(sanitizeSettings({ ...DEFAULT_SETTINGS, barAutoHide: 'yes' } as unknown as Settings).barAutoHide).toBe(false);
+  });
+
+  it('voices always follow the language; removed languages and the other-languages voice are kept well-formed', () => {
+    const s = sanitizeSettings({
+      ...DEFAULT_SETTINGS,
+      matchPageLanguage: false,
+      removedLanguages: ['it', 'it', 'Italian', 3],
+      otherVoice: { engine: 'kokoro', voice: 'if_sara' },
+    } as unknown as Settings);
+    expect(s.matchPageLanguage).toBe(true);
+    expect(s.removedLanguages).toEqual(['it']);
+    expect(s.otherVoice).toEqual({ engine: 'kokoro', voice: 'if_sara' });
   });
 });

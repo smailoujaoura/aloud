@@ -9,14 +9,10 @@
  * it speaks the language, otherwise the best one downloaded — and the wire shows which that is.
  *
  * Every downloaded voice that speaks a language is offered on its row, with a play button on its
- * face: putting a voice away takes it off the reading bar, not off the board — after "Keep only
- * the ones I use" each language had one face left, and nothing to rewire it to. Put-away voices
- * come after the kept ones, dimmed. A language no downloaded voice speaks is read in English, and
- * the board draws that: its row (and a last one, for every other language) is wired to the
- * English voice.
+ * face. A language with no voice of its own — none downloaded, or taken off the board — is read
+ * like every other language: the last row, by the voice English gets, any voice chosen, or none.
  *
- * Under it, "My voices": the downloaded voices you keep, as faces. The catalogue below (browse,
- * download, bring back) stays folded until it is wanted.
+ * Under it, the catalogue: every voice there is, to browse and download.
  */
 import { el } from '@/shared/dom';
 import { engineInfo } from '@/shared/engine-catalog';
@@ -136,7 +132,6 @@ export function renderVoiceBoard(
 ): void {
   const { settings } = ctx;
   const installed = downloadedVoices(ctx);
-  const hidden = new Set(settings.hiddenVoices);
   const saved = savedVoice(ctx);
   const savedLanguage = primaryLanguage(saved.language);
   const removed = new Set(settings.removedLanguages);
@@ -147,11 +142,9 @@ export function renderVoiceBoard(
     preferences: settings.languageVoices,
     installed,
     skip: new Set<string>(),
-    hidden,
     other: settings.otherVoice,
   };
   const skipping = settings.unvoicedLanguages === 'skip';
-  const away = (v: CandidateVoice): boolean => hidden.has(voiceKeyOf(v.engine, v.id));
 
   const head = el(document, 'div', { class: 'vb-head' });
   const title = el(document, 'div', {});
@@ -182,10 +175,10 @@ export function renderVoiceBoard(
     const isChosen = (v: CandidateVoice): boolean => !!chosen && chosen.engine === v.engine && chosen.voice === v.id;
     const reading = chosen ? installed.find(isChosen) ?? automatic : automatic;
     const isReading = (v: CandidateVoice): boolean => !!reading && reading.engine === v.engine && reading.id === v.id;
-    // Every downloaded voice for it — the reading one first, then the kept, then those put away.
+    // Every downloaded voice for it, the reading one first.
     const speakers = installed
       .filter((v) => primaryLanguage(v.language) === code)
-      .sort((a, b) => Number(isReading(b)) - Number(isReading(a)) || Number(away(a)) - Number(away(b)));
+      .sort((a, b) => Number(isReading(b)) - Number(isReading(a)));
 
     const row = el(document, 'div', { class: 'vb-row', role: 'radiogroup', 'aria-label': `Voice for ${languageName(code)}` });
     const lang = el(document, 'div', { class: 'vb-lang' });
@@ -216,7 +209,7 @@ export function renderVoiceBoard(
     let target: HTMLElement | null = null;
     for (const v of speakers) {
       const on = isReading(v);
-      const { pick, btn } = faceChoice(v, ctx, { on, auto: on && !chosen, away: away(v) && !on, checked: on && !!chosen });
+      const { pick, btn } = faceChoice(v, ctx, { on, auto: on && !chosen, checked: on && !!chosen });
       btn.addEventListener('click', () => {
         if (!(on && chosen)) void ctx.chooseVoice(code, v.engine, v.id);
       });
@@ -279,13 +272,12 @@ export function renderVoiceBoard(
     const everyone = [...installed].sort(
       (a, b) =>
         Number(isOther(b)) - Number(isOther(a)) ||
-        Number(away(a)) - Number(away(b)) ||
         languageName(primaryLanguage(a.language)).localeCompare(languageName(primaryLanguage(b.language))),
     );
     let target: HTMLElement | null = null;
     for (const v of everyone) {
       const on = isOther(v);
-      const { pick, btn } = faceChoice(v, ctx, { on, auto: on && !settings.otherVoice, away: away(v) && !on, checked: on && !!settings.otherVoice });
+      const { pick, btn } = faceChoice(v, ctx, { on, auto: on && !settings.otherVoice, checked: on && !!settings.otherVoice });
       btn.addEventListener('click', () => {
         if (!(on && settings.otherVoice)) void ctx.chooseVoice(OTHER_LANGUAGES, v.engine, v.id);
       });
@@ -327,18 +319,16 @@ let boardObserver: ResizeObserver | null = null;
 function faceChoice(
   v: CandidateVoice,
   ctx: PanelContext,
-  state: { on: boolean; auto: boolean; away: boolean; checked: boolean; caption?: string },
+  state: { on: boolean; auto: boolean; checked: boolean; caption?: string },
 ): { pick: HTMLElement; btn: HTMLButtonElement } {
   const name = shortName(v.label);
-  const pick = el(document, 'span', { class: `vb-pick${state.away ? ' is-away' : ''}` });
+  const pick = el(document, 'span', { class: 'vb-pick' });
   const btn = el(document, 'button', {
     type: 'button',
     class: `vb-face${state.on ? ' is-reading' : ''}${state.auto ? ' is-auto' : ''}`,
     role: 'radio',
     'aria-checked': String(state.checked),
-    title:
-      `${name} · ${engineInfo(v.engine).name}${regionName(v.language) ? ` · ${regionName(v.language)}` : ''}` +
-      (state.away ? ' · put away: not on the reading bar' : ''),
+    title: `${name} · ${engineInfo(v.engine).name}${regionName(v.language) ? ` · ${regionName(v.language)}` : ''}`,
   }) as HTMLButtonElement;
   btn.append(face(v.engine, v.id, state.on ? 48 : 36), el(document, 'span', { class: 'vb-face-name' }, state.caption ?? name));
   const play = previewFor(v.engine, v.id, ctx, { compact: true, label: `Preview ${name}` });

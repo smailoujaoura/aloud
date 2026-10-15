@@ -431,17 +431,6 @@ async function renderNow(): Promise<void> {
     chooseVoice,
     flashSaved,
     flashError: (message: string) => toast(message, 'error'),
-    setHiddenVoices: async (next) => {
-      const was = settings.hiddenVoices.length;
-      settings = await setSettings({ hiddenVoices: next });
-      await render();
-      toast(
-        next.length > was
-          ? `${next.length - was === 1 ? 'Hidden' : `${next.length - was} voices hidden`} — from this list and the reading bar`
-          : 'Shown again, here and on the reading bar',
-        'info',
-      );
-    },
     setLanguageVoice: async (language, voice) => {
       const next = { ...settings.languageVoices };
       if (voice) next[language] = voice;
@@ -475,7 +464,7 @@ async function renderNow(): Promise<void> {
   renderVoiceSection(
     {
       board: $('voiceBoard'),
-      catalogue: $<HTMLDetailsElement>('voiceCatalogue'),
+      catalogue: $('voiceCatalogue'),
       tabs: $('engineTabs'),
       panel: $('enginePanels'),
     },

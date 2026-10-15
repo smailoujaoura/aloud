@@ -23,7 +23,7 @@ import { capabilities } from '@/shared/browser-env';
 import { downloadSize, engineInfo, kokoroVoiceUrl, listEngines, type EngineInfo } from '@/shared/engine-catalog';
 import { isEnglish, shortPiperLabel } from '@/shared/voice-catalog';
 import { languageName, primaryLanguage, voiceLanguage } from '@/shared/language-voice';
-import { downloadedVoices, renderVoiceBoard } from './voice-board';
+import { renderVoiceBoard } from './voice-board';
 import { cacheClear, cacheDelete, deleteModels } from '@/engine/model-cache';
 import { activeVoice, type EngineId, type Settings } from '@/shared/settings';
 import type { ModelManifest, PiperVoiceEntry } from '@/engine/engines/types';
@@ -69,8 +69,6 @@ export interface PanelContext {
   flashSaved(message?: string): void;
   /** Say what went wrong. */
   flashError(message: string): void;
-  /** Save which voices are put away (`engine:voice`), then redraw. */
-  setHiddenVoices(next: string[]): Promise<void>;
   /** Choose a language's voice (null: automatic), then redraw. */
   setLanguageVoice(language: string, voice: { engine: EngineId; voice: string } | null): Promise<void>;
   /** Switch voices with each passage's language, or not. */
@@ -80,8 +78,8 @@ export interface PanelContext {
 export interface VoiceHosts {
   /** "Who reads what": the switchboard of languages and voices (voice-board.ts). */
   board: HTMLElement;
-  /** The folded catalogue: browse, download, bring back. */
-  catalogue: HTMLDetailsElement;
+  /** The catalogue: every voice, to browse and download. */
+  catalogue: HTMLElement;
   tabs: HTMLElement;
   panel: HTMLElement;
 }
@@ -117,9 +115,7 @@ let openTab: EngineId | null = null;
 let openLanguage: string | null = null;
 /** The language open in the Kokoro list — its own, so switching tabs does not cross them. */
 let kokoroLanguage: string | null = null;
-let piperShow: 'all' | 'installed' = 'all';
 /** Voices put away in Settings are listed too (dimmed, with Show), rather than folded away. */
-let showHidden = false;
 /** Which quality of a multi-quality Piper voice each row is showing, by voice label. */
 const variantChoice = new Map<string, string>();
 
@@ -144,18 +140,14 @@ async function runModelAction(button: HTMLButtonElement, action: () => Promise<v
 // ---- the section -----------------------------------------------------------
 
 export function renderVoiceSection(hosts: VoiceHosts, ctx: PanelContext): void {
-  // The catalogue opens where it is needed: a language to find a voice for, or voices put away.
-  const openCatalogue = (language?: string, hidden?: boolean, engine?: EngineId): void => {
+  // To the catalogue, at a language to find a voice for.
+  const openCatalogue = (language?: string, _hidden?: boolean, engine?: EngineId): void => {
     if (language) askedLanguage = language;
     if (engine) askedEngine = engine;
-    if (hidden) showHidden = true;
-    hosts.catalogue.open = true;
     renderBrowser(hosts, ctx);
     hosts.catalogue.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
   renderVoiceBoard(hosts.board, ctx, openCatalogue);
-  // Open from the start (index.html), and folded only by the reader; opened again when asked for.
-  if (askedLanguage || ctx.filter || downloadedVoices(ctx).length === 0) hosts.catalogue.open = true;
   renderBrowser(hosts, ctx);
 }
 
@@ -184,7 +176,6 @@ function openAskedLanguage(manifest: ModelManifest): void {
   if (piper) {
     openTab = 'piper';
     openLanguage = piper.languageName ?? null;
-    piperShow = 'all';
   } else if (kokoro) {
     openTab = 'kokoro';
   }
@@ -311,9 +302,6 @@ function useControl(engine: EngineId, id: string, name: string, ctx: PanelContex
     return btn;
   }
   const wrap = el(document, 'span', { class: 'use-wrap' });
-  if (readsOwn || readsOther) {
-    wrap.append(el(document, 'span', { class: 'pill in-use' }, readsOwn ? `Reads ${languageName(language)}` : 'Reads other languages'));
-  }
   const menu = el(document, 'details', { class: 'use-menu' }) as HTMLDetailsElement;
   const summary = el(document, 'summary', { class: 'btn primary btn-sm', 'aria-label': `Use ${name} for…` }, 'Use');
   const list = el(document, 'div', { class: 'use-list', role: 'menu' });
@@ -342,82 +330,6 @@ function useControl(engine: EngineId, id: string, name: string, ctx: PanelContex
   menu.append(summary, list);
   wrap.append(menu);
   return wrap;
-}
-
-// ---- putting voices away ---------------------------------------------------
-
-const voiceKeyOf = (engine: EngineId, id: string): string => `${engine}:${id}`;
-
-function isHiddenVoice(ctx: PanelContext, engine: EngineId, ids: readonly string[]): boolean {
-  return ids.length > 0 && ids.every((id) => ctx.settings.hiddenVoices.includes(voiceKeyOf(engine, id)));
-}
-
-function setHidden(ctx: PanelContext, engine: EngineId, ids: readonly string[], hide: boolean): Promise<void> {
-  const keys = ids.map((id) => voiceKeyOf(engine, id));
-  const next = new Set(ctx.settings.hiddenVoices);
-  for (const k of keys) {
-    if (hide) next.add(k);
-    else next.delete(k);
-  }
-  return ctx.setHiddenVoices([...next]);
-}
-
-/** The eye on a voice row: put it away (out of the reading bar and this list), or bring it back. */
-function hideControl(engine: EngineId, ids: readonly string[], name: string, ctx: PanelContext): HTMLElement {
-  const hidden = isHiddenVoice(ctx, engine, ids);
-  const btn = el(
-    document,
-    'button',
-    {
-      type: 'button',
-      class: `ghost btn-sm vi-hide${hidden ? ' is-hidden' : ''}`,
-      'aria-pressed': String(hidden),
-      title: hidden ? `Show ${name} again, here and on the reading bar` : `Hide ${name} — from the reading bar and this list`,
-      'aria-label': hidden ? `Show ${name}` : `Hide ${name}`,
-    },
-    hidden ? 'Show' : 'Hide',
-  );
-  btn.addEventListener('click', () => void setHidden(ctx, engine, ids, !hidden));
-  return btn;
-}
-
-/**
- * Under a list: how many of its voices are put away, a way to see them, and a way to put away
- * all the rest at once — try them, then keep the few you like.
- */
-function hiddenControls(
-  list: HTMLElement,
-  ctx: PanelContext,
-  engine: EngineId,
-  visibleIds: string[],
-  hiddenIds: string[],
-  again: () => void,
-): void {
-  const bar = el(document, 'div', { class: 'hidden-bar' });
-  if (hiddenIds.length) {
-    const toggle = el(
-      document,
-      'button',
-      { type: 'button', class: 'ghost btn-sm' },
-      showHidden ? `Fold away ${hiddenIds.length} hidden` : `${hiddenIds.length} hidden — show them`,
-    );
-    toggle.addEventListener('click', () => {
-      showHidden = !showHidden;
-      again();
-    });
-    const unhide = el(document, 'button', { type: 'button', class: 'ghost btn-sm' }, 'Show all again');
-    unhide.addEventListener('click', () => void setHidden(ctx, engine, hiddenIds, false));
-    bar.append(toggle, unhide);
-  }
-  const inUse = ctx.settings.engine === engine ? activeVoice(ctx.settings) : '';
-  const rest = visibleIds.filter((id) => id !== inUse);
-  if (rest.length > 1) {
-    const hideAll = el(document, 'button', { type: 'button', class: 'ghost btn-sm' }, `Hide these ${rest.length}`);
-    hideAll.title = 'Put every voice listed here away (the one in use stays). Then bring back the ones you want with Show.';
-    hideAll.addEventListener('click', () => void setHidden(ctx, engine, rest, true));
-    bar.append(hideAll);
-  }
-  if (bar.childElementCount) list.append(bar);
 }
 
 // ---- Piper -----------------------------------------------------------------
@@ -500,9 +412,8 @@ function piperPanel(ctx: PanelContext, again: () => void): HTMLElement {
   panel.append(engineIntro(engineInfo('piper')));
 
   const groups = piperGroups(ctx.manifest);
-  const installedCount = groups.filter((g) => anyInstalled(g, ctx)).length;
 
-  // ---- controls: language, and all / downloaded ----
+  // ---- control: language ----
   const languages = piperLanguages(groups);
   const names = languages.map(([lang]) => lang);
   const preferred = ctx.manifest.piper[ctx.settings.piperVoice]?.languageName ?? 'English';
@@ -511,21 +422,8 @@ function piperPanel(ctx: PanelContext, again: () => void): HTMLElement {
     (names.includes(preferred) ? preferred : (names[0] ?? ''));
   openLanguage = language;
 
-  const controls = el(document, 'div', { class: 'panel-controls' });
-
-  const segmented = el(document, 'div', { class: 'segmented', role: 'group', 'aria-label': 'Which voices to show' });
-  const showButton = (mode: 'all' | 'installed', label: string): HTMLElement => {
-    const b = el(document, 'button', { type: 'button', 'aria-pressed': String(piperShow === mode) }, label);
-    b.addEventListener('click', () => {
-      piperShow = mode;
-      again();
-    });
-    return b;
-  };
-  segmented.append(showButton('all', 'All voices'), showButton('installed', `On this device (${installedCount})`));
-  controls.append(segmented);
-
-  if (piperShow === 'all' && !ctx.filter) {
+  if (!ctx.filter) {
+    const controls = el(document, 'div', { class: 'panel-controls' });
     const picker = el(document, 'label', { class: 'lang-picker' });
     const select = el(document, 'select', { 'aria-label': 'Language' });
     select.append(
@@ -541,21 +439,19 @@ function piperPanel(ctx: PanelContext, again: () => void): HTMLElement {
     });
     picker.append(el(document, 'span', { class: 'muted small' }, 'Language'), select);
     controls.append(picker);
+    panel.append(controls);
   }
-  panel.append(controls);
 
-  // ---- which groups ----
-  const hiddenGroup = (g: PiperGroup): boolean => isHiddenVoice(ctx, 'piper', g.variants.map(([id]) => id));
-  const idsOf = (gs: PiperGroup[]): string[] => gs.flatMap((g) => g.variants.map(([id]) => id));
+  // ---- which groups: the ones on this device first, with no heading of their own ----
   const list = el(document, 'div', { class: 'voice-list' });
   panel.append(list);
-  const pool = piperShow === 'installed' ? groups.filter((g) => anyInstalled(g, ctx)) : groups;
+  const downloadedFirst = (a: PiperGroup, b: PiperGroup): number => Number(anyInstalled(b, ctx)) - Number(anyInstalled(a, ctx));
 
   if (ctx.filter) {
     // A search means "find this name wherever it is", so it looks across every language.
-    const matches = pool
+    const matches = groups
       .filter((g) => `${g.key} ${g.language} ${g.variants.map(([id]) => id).join(' ')}`.toLowerCase().includes(ctx.filter))
-      .sort(byQualityThenName(ctx));
+      .sort((a, b) => downloadedFirst(a, b) || byQualityThenName(ctx)(a, b));
     if (matches.length === 0) {
       list.append(emptyState('No voices match that search.'));
       return panel;
@@ -568,27 +464,9 @@ function piperPanel(ctx: PanelContext, again: () => void): HTMLElement {
     return panel;
   }
 
-  if (piperShow === 'installed') {
-    if (pool.length === 0) {
-      list.append(emptyState('No Piper voices on this device yet. Pick one under “All voices” and download it.'));
-      return panel;
-    }
-    const listed = showHidden ? pool : pool.filter((g) => !hiddenGroup(g));
-    const byLanguage = new Map<string, PiperGroup[]>();
-    for (const g of listed) byLanguage.set(g.language, [...(byLanguage.get(g.language) ?? []), g]);
-    for (const [lang, items] of [...byLanguage.entries()].sort(([a], [b]) => a.localeCompare(b))) {
-      if (byLanguage.size > 1) list.append(el(document, 'p', { class: 'voice-group-title' }, lang));
-      for (const g of items.sort(byQualityThenName(ctx))) list.append(piperItem(g, ctx));
-    }
-    hiddenControls(list, ctx, 'piper', idsOf(pool.filter((g) => !hiddenGroup(g))), idsOf(pool.filter(hiddenGroup)), again);
-    return panel;
-  }
-
-  const inLanguage = pool.filter((x) => x.language === language).sort(byQualityThenName(ctx));
-  const shown = showHidden ? inLanguage : inLanguage.filter((g) => !hiddenGroup(g));
-  withQualityHeadings(list, shown, (g) => isBestVoice('piper', g.variants[0]![0]), (g) => piperItem(g, ctx));
-  if (!shown.length) list.append(emptyState(`Every ${language} voice is hidden.`));
-  hiddenControls(list, ctx, 'piper', idsOf(inLanguage.filter((g) => !hiddenGroup(g))), idsOf(inLanguage.filter(hiddenGroup)), again);
+  const inLanguage = groups.filter((x) => x.language === language).sort(byQualityThenName(ctx));
+  for (const g of inLanguage.filter((g) => anyInstalled(g, ctx))) list.append(piperItem(g, ctx));
+  withQualityHeadings(list, inLanguage.filter((g) => !anyInstalled(g, ctx)), (g) => isBestVoice('piper', g.variants[0]![0]), (g) => piperItem(g, ctx));
   return panel;
 }
 
@@ -609,9 +487,8 @@ function piperItem(group: PiperGroup, ctx: PanelContext): HTMLElement {
   const installed = piperDownloaded(entry, ctx.sizes);
   const inUse = ctx.settings.engine === 'piper' && ctx.settings.piperVoice === id;
 
-  const hidden = isHiddenVoice(ctx, 'piper', group.variants.map(([vid]) => vid));
   const item = el(document, 'div', {
-    class: `voice-item${inUse ? ' is-current' : ''}${installed ? ' is-installed' : ''}${hidden ? ' is-hidden' : ''}`,
+    class: `voice-item${inUse ? ' is-current' : ''}${installed ? ' is-installed' : ''}`,
   });
 
   const main = el(document, 'div', { class: 'vi-main' });
@@ -651,7 +528,6 @@ function piperItem(group: PiperGroup, ctx: PanelContext): HTMLElement {
 
   const actions = el(document, 'div', { class: 'vi-actions' });
   if (entry.sample) actions.append(previewFor('piper', id, ctx));
-  actions.append(hideControl('piper', group.variants.map(([vid]) => vid), group.name, ctx));
 
   const progress = new RowProgress();
   if (installed) {
@@ -709,19 +585,16 @@ interface SharedVoice {
 
 function sharedVoices(engine: 'kokoro' | 'supertonic', manifest: ModelManifest): SharedVoice[] {
   if (engine === 'kokoro') {
-    // Best first, then by Kokoro's own grades: the accent is in each row instead of being the
-    // thing the list is sorted by, so the voices worth hearing are the ones at the top.
+    // Every Kokoro voice is a good one: no grades and no "best" heading, just by name.
     return Object.entries(manifest.kokoro.voices)
       .map(([id, v]) => ({
         id,
         name: v.label,
-        meta: [accentName(v.language), v.gender, v.grade ? `grade ${v.grade}` : '']
-          .filter(Boolean)
-          .join(' · '),
-        rank: voiceRank('kokoro', id, manifest),
+        meta: [accentName(v.language), v.gender].filter(Boolean).join(' · '),
+        rank: 0,
         group: v.language.startsWith('en') ? 'English' : accentName(v.language),
       }))
-      .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
+      .sort((a, b) => a.name.localeCompare(b.name));
   }
   return Object.entries(manifest.supertonic?.voices ?? {}).map(([id, v]) => ({
     id,
@@ -775,15 +648,12 @@ function sharedPanel(engine: 'kokoro' | 'supertonic', ctx: PanelContext, again: 
   const inView = all.filter(
     (v) => (picking ? v.group === language : true) && (!ctx.filter || `${v.id} ${v.name} ${v.meta}`.toLowerCase().includes(ctx.filter)),
   );
-  // Put-away voices fold away, except in a search (a search is for finding them) or when asked.
-  const hiddenIds = inView.filter((v) => isHiddenVoice(ctx, engine, [v.id])).map((v) => v.id);
-  const voices = showHidden || ctx.filter ? inView : inView.filter((v) => !hiddenIds.includes(v.id));
+  const voices = inView;
   const list = el(document, 'div', { class: `voice-list${downloaded ? '' : ' is-locked'}` });
   panel.append(list);
 
   if (voices.length === 0) {
-    list.append(emptyState(inView.length ? 'Every voice here is hidden.' : 'No voices match that search.'));
-    if (inView.length) hiddenControls(list, ctx, engine, [], hiddenIds, again);
+    list.append(emptyState('No voices match that search.'));
     return panel;
   }
   if (!downloaded) {
@@ -794,13 +664,12 @@ function sharedPanel(engine: 'kokoro' | 'supertonic', ctx: PanelContext, again: 
 
   const item = (v: SharedVoice): HTMLElement => {
     const inUse = ctx.settings.engine === engine && activeVoice(ctx.settings) === v.id;
-    const row = el(document, 'div', { class: `voice-item${inUse ? ' is-current' : ''}${isHiddenVoice(ctx, engine, [v.id]) ? ' is-hidden' : ''}` });
+    const row = el(document, 'div', { class: `voice-item${inUse ? ' is-current' : ''}` });
     const main = el(document, 'div', { class: 'vi-main' });
     main.append(el(document, 'b', { class: 'vi-name' }, v.name), el(document, 'span', { class: 'vi-meta' }, v.meta));
     const actions = el(document, 'div', { class: 'vi-actions' });
     actions.append(
       previewFor(engine, v.id, ctx),
-      hideControl(engine, [v.id], v.name, ctx),
       useControl(engine, v.id, v.name, ctx, downloaded ? undefined : `Download ${info.name} first`),
     );
     row.append(avatar(engine, v.id, ctx), main, actions);
@@ -809,8 +678,8 @@ function sharedPanel(engine: 'kokoro' | 'supertonic', ctx: PanelContext, again: 
   if (ctx.filter && languages.length > 1) {
     list.append(el(document, 'p', { class: 'list-note' }, `Matches from every language · ${voices.length}`));
   }
-  withQualityHeadings(list, voices, (v) => isBestVoice(engine, v.id), item);
-  if (!ctx.filter) hiddenControls(list, ctx, engine, inView.filter((v) => !hiddenIds.includes(v.id)).map((v) => v.id), hiddenIds, again);
+  if (engine === 'kokoro') for (const v of voices) list.append(item(v));
+  else withQualityHeadings(list, voices, (v) => isBestVoice(engine, v.id), item);
   return panel;
 }
 
@@ -852,8 +721,9 @@ function modelCard(
   const btn = el(
     document,
     'button',
-    { class: isDelete ? 'ghost danger btn-sm' : 'primary', type: 'button' },
-    isDelete ? 'Delete model' : gpuMissing ? `Download GPU build · ${size}` : `Download ${size}`,
+    // Deleting is a quiet link, not a button the shape and place of "Download".
+    { class: isDelete ? 'mc-delete' : 'primary', type: 'button' },
+    isDelete ? 'Delete from this device' : gpuMissing ? `Download GPU build · ${size}` : `Download ${size}`,
   );
 
   const key = `model:${engine}`;
