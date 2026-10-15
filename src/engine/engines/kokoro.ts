@@ -10,8 +10,8 @@
  * Note: kokoro-js fetches the small per-voice `.bin` style vectors itself via the Cache API —
  * those (a few hundred KB each) are the one exception to "everything in IndexedDB".
  */
-import { KokoroTTS } from 'kokoro-js';
-import { env as hfEnv } from '@huggingface/transformers';
+// Types only: the libraries themselves load in configureTransformersEnv, after ONNX Runtime.
+import type { KokoroTTS } from 'kokoro-js';
 
 import { TransformersCache, cacheDelete, cacheHas, fetchModelFile, setCachedFileTransform } from '@/engine/model-cache';
 import { exposeNodeOutput } from '@/engine/onnx-outputs';
@@ -81,11 +81,20 @@ setCachedFileTransform((key, bytes) => {
   return exposed.model;
 });
 
+/** kokoro-js's model class, once loaded (configureTransformersEnv). */
+let Kokoro: typeof KokoroTTS | null = null;
+
 let envConfigured = false;
 async function configureTransformersEnv(): Promise<void> {
-  // Register our single ORT instance so transformers uses it (globalThis[Symbol.for('onnxruntime')]).
+  // ONNX Runtime first, pointed at the WebAssembly inside the extension (ort-loader.ts).
   await loadOrt();
   if (envConfigured) return;
+  // Loaded only now, when the runtime's WebAssembly path is already set. Imported at the top,
+  // transformers.js ran first, found no path, and set its default — ONNX Runtime from
+  // cdn.jsdelivr.net — which loadOrt then overwrote. Nothing was ever fetched from there, but only
+  // by that ordering; the stores forbid code from anywhere else, so now the default is never set.
+  const [{ env: hfEnv }, kokoroJs] = await Promise.all([import('@huggingface/transformers'), import('kokoro-js')]);
+  Kokoro = kokoroJs.KokoroTTS;
   hfEnv.allowLocalModels = false;
   hfEnv.allowRemoteModels = true;
   hfEnv.useBrowserCache = false;
@@ -132,7 +141,7 @@ export class KokoroEngine implements SynthEngine {
       return loadModel(device);
     };
     const loadModel = (device: KokoroDevice) =>
-      KokoroTTS.from_pretrained(MODEL_ID, {
+      Kokoro!.from_pretrained(MODEL_ID, {
         dtype: dtypeFor(device),
         device,
         progress_callback: (p: {

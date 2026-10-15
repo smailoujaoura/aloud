@@ -45,15 +45,13 @@ export default defineConfig({
     // reusing a tab already open on a note's page. activeTab covers every page the user acts on.
     permissions: ['activeTab', 'scripting', 'storage', 'unlimitedStorage', 'contextMenus'],
 
-    // Model files are served with `Access-Control-Allow-Origin: *`, so downloads work without
-    // these; declaring them removes CORS from the equation for the extension-origin worker and
-    // future-proofs against Hugging Face tightening headers.
+    // No Hugging Face hosts: voices download without them. Hugging Face serves its files, and the
+    // download servers it redirects to, with open CORS headers, and Aloud's requests carry no
+    // cookies — checked in both browsers with these permissions removed (a model card, a Kokoro
+    // voice and a Piper model, both redirected to us.aws.cdn.hf.co). Declared "in case", they
+    // were a "huggingface.co" access warning at install, and the Chrome Web Store forbids
+    // permissions requested to future-proof.
     host_permissions: [
-      'https://huggingface.co/*',
-      'https://*.hf.co/*',
-      'https://cdn-lfs.huggingface.co/*',
-      'https://cdn-lfs-us-1.huggingface.co/*',
-      'https://cdn-lfs-eu-1.huggingface.co/*',
       // Local PDFs. Chromium only: this is what makes `fetch('file:///…')` work *once the user
       // also switches on "Allow access to file URLs"* for the extension — verified empirically;
       // without the permission the fetch fails even with the toggle on. Gecko never grants

@@ -52,9 +52,8 @@ export async function buildWorker(options) {
         // onnxruntime-web / -common are provided at run time as a real ESM module served from
         // the extension package. Keeping them external stops Vite inlining ORT's ~30 MB of
         // .wasm. `output.paths` rewrites the bare specifier to that URL, because module workers
-        // have no import maps in either browser. The transformers bundle only actually touches
-        // this import when globalThis[Symbol.for('onnxruntime')] is unset — which it never is
-        // (see ort-loader).
+        // have no import maps in either browser. It is the same file ort-loader loads, so Kokoro's
+        // transformers.js and Piper share one runtime instance (see ort-loader).
         external: ['onnxruntime-web', 'onnxruntime-common'],
         output: {
           format: 'es',

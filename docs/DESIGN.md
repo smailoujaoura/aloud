@@ -367,10 +367,10 @@ cannot otherwise see.
   `cdn-lfs.hf.co` / Xet with `Access-Control-Allow-Origin: *`. A plain `fetch` from a Worker
   succeeds without any special handling — this is exactly how transformers.js works from web
   pages.
-- Still declare `host_permissions` for `https://huggingface.co/*`, `https://*.hf.co/*`,
-  `https://cdn-lfs*.huggingface.co/*` — it removes CORS from the equation entirely for
-  extension-context fetches and future-proofs against HF tightening headers. Provide a
-  self-hosted mirror URL in config as a backstop.
+- No `host_permissions` for Hugging Face. They were declared at first, "to future-proof", which
+  the Chrome Web Store forbids, and they put a huggingface.co warning on the install prompt.
+  Removed after checking both browsers download without them (October 2026). If Hugging Face
+  ever tightens its headers, downloads fail loudly, and the permission can come back then.
 - **Do downloads from a context that won't be suspended mid-transfer.** The event page can die
   during an 80MB download. Options: (a) download **inside the synthesis Worker** (owned by the
   content script, lives as long as the tab session) — preferred; (b) if download must be
@@ -641,8 +641,7 @@ Pinned dependency versions are chosen at Step 1 and recorded in `THIRD_PARTY.md`
   "permissions": ["activeTab", "scripting", "storage", "unlimitedStorage",
                   "contextMenus"],
   "optional_permissions": ["<all_urls>"],
-  "host_permissions": ["https://huggingface.co/*", "https://*.hf.co/*",
-                       "https://cdn-lfs*.huggingface.co/*"],
+  "host_permissions": ["file:///*"],   // Chromium only: local PDFs
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
   },
@@ -770,7 +769,7 @@ Each step ends in something runnable / testable. **Stop for approval after this 
 | `CSS.highlights` missing (FF < 140) | Span-injection fallback with unwrap-on-advance |
 | Readability offsets don't map to live DOM | Separate "speak text" vs "highlight text"; fuzzy-align to a live-DOM TreeWalker index |
 | SPA re-renders invalidate ranges | MutationObserver on container → re-resolve by text search, not cached Range |
-| HF CORS / rate limiting | `host_permissions` + self-hosted mirror URL in manifest |
+| HF CORS / rate limiting | Open CORS today, no permission needed; add `host_permissions` back if that changes |
 | WebGPU in extension Worker unstable on Firefox | Progressive enhancement only; `wasm` is always the correctness baseline |
 | GPLv3 obligations | Repo public, GPL-3.0 LICENSE, reproducible build docs from day one |
 | Multi-tab RAM blowup | Single active session; terminate previous Worker |

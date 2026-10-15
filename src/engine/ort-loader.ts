@@ -3,9 +3,13 @@
  *
  * onnxruntime-web is *externalised* from the worker bundle (bundling it makes Vite inline every
  * `.wasm` as base64 — a 100 MB+ bundle). Loading `ort.bundle.min.mjs` by URL instead lets ORT
- * resolve its own `.mjs`/`.wasm` siblings from the same directory. We also register the instance
- * on `globalThis[Symbol.for('onnxruntime')]`, which is exactly the hook `@huggingface/transformers`
- * checks — so Piper and Kokoro share one runtime and one set of WASM files.
+ * resolve its own `.mjs`/`.wasm` siblings from the same directory.
+ *
+ * Kokoro's transformers.js imports the very same file (the worker build points its
+ * `onnxruntime-web` import here), so it gets this instance, already pointed at the WebAssembly
+ * inside the extension — and then leaves the path alone instead of setting its default, a CDN.
+ * Not through `globalThis[Symbol.for('onnxruntime')]`: transformers.js does use a runtime
+ * registered there, but offers it no device at all ("Unsupported device: wasm").
  */
 import { assetUrl } from './runtime-env';
 
@@ -42,8 +46,6 @@ export function loadOrt(): Promise<OrtModule> {
     // default change can't silently regress synthesis speed.
     ort.env.wasm.simd = true;
     ort.env.wasm.wasmPaths = assetUrl('vendor/ort/');
-
-    (globalThis as Record<symbol, unknown>)[Symbol.for('onnxruntime')] = ort;
     return ort;
   })().catch((err) => {
     ortPromise = null; // let a later init retry from scratch

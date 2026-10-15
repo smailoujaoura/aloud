@@ -59,12 +59,12 @@ search, shopping, new-tab or ad features).
 | storage | Keeps settings, notes, reading queue, history and reading positions locally. |
 | unlimitedStorage | Voice models are 21–347 MB each and are cached locally so reading works offline. |
 | contextMenus | Right-click items: read the selection or from a point, keep a highlight, show notes, add a page or link to the reading queue. |
-| Host: huggingface.co and its download hosts (hf.co, cdn-lfs*.huggingface.co) | Downloading the voice model the user picks. No other data is sent. |
 | Host: file:///* | Lets the PDF reader open PDFs saved on the user's computer, once they enable "Allow access to file URLs". |
 | Optional host: *://*/* | Requested one site at a time, only when the user adds a site where the media controls or highlights should start by themselves, opens a PDF from that site, or queues a page from it. |
 
-**Remote code:** No. All JavaScript and WebAssembly ship in the package. Voice models
-downloaded at runtime are ONNX data files, not code.
+**Remote code:** No. All JavaScript and WebAssembly ship in the package — including ONNX
+Runtime's, which transformers.js would otherwise take from cdn.jsdelivr.net (Aloud sets the local
+path before it loads). Voice models downloaded at runtime are ONNX data files, not code.
 
 **Data usage:** tick nothing. Aloud does not collect or transmit any of the listed data types.
 Certify all three statements (no sale, no unrelated use, no creditworthiness use).
@@ -78,7 +78,13 @@ Certify all three statements (no sale, no unrelated use, no creditworthiness use
   > `.output/firefox-mv3/`, byte-identical to the uploaded package (verified from a clean copy).
   > Vendored, unmodified third-party files (ONNX Runtime Web, pdf.js, piper-phonemize WASM) are
   > copied from node_modules by `scripts/sync-assets.mjs`; versions are listed in THIRD_PARTY.md.
-  > The `Function`-constructor lint warnings come from those libraries.
+  > The `Function`-constructor lint warnings come from those libraries. The two `innerHTML`
+  > warnings in `reader-inject.js` are inside Mozilla Readability 0.6.0, working on a detached
+  > copy of the page; the `import()` warnings load files from the package itself
+  > (`vendor/ort/`, `vendor/pdfjs/`) by their `runtime.getURL` address. Nothing is loaded from a
+  > CDN: ONNX Runtime's WebAssembly path is set to `vendor/ort/` before transformers.js loads
+  > (`src/engine/ort-loader.ts`, `src/engine/engines/kokoro.ts`). What is downloaded at run time
+  > is voice data from Hugging Face (ONNX weights, JSON, `.bin` style vectors), never code.
 
 - **Android:** the listing is marked compatible with Firefox for Android (`gecko_android`).
   Kokoro and Supertonic are too heavy for phones; Piper voices are the ones to recommend there.
