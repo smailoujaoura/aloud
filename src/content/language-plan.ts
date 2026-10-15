@@ -10,7 +10,11 @@
  *
  *  1. A `lang` attribute on the passage or an element around it, below `<html>`/`<body>`. A local
  *     annotation is deliberate; the page-wide one is often a CMS template's (`lang="en"` on pages
- *     in every language) and only serves as a last resort.
+ *     in every language) and only serves as a last resort. One exception: a site's own interface
+ *     inside a block it marked as another language. Google wraps each Italian result in
+ *     `lang="it"`, and its own "Translate this page" link sits inside — read with an Italian voice.
+ *     When the detector names the page's declared language for a passage of a few words or more,
+ *     that passage is the site's, and takes the page's declaration.
  *  2. The browser's own detector (`i18n.detectLanguage`, CLD), when it says the result is reliable
  *     and the passage has enough letters to judge. Its `percentage` is the share of the input in
  *     that language, not a confidence, so it is not used as one.
@@ -56,6 +60,11 @@ const MIN_LETTERS_TO_DETECT = 12;
  * is a sentence the detector can judge, and a short translation must keep its own language.
  */
 const SHORT_PASSAGE_WORDS = 3;
+/**
+ * Fewest words for a passage marked as another language to be checked against the page's own: a
+ * name ("Wikipedia", "Polizia") says nothing either way and keeps its block's language.
+ */
+const SITE_TEXT_WORDS = 3;
 
 /** Enough different words to be judged: a sentence, not an exclamation said three times. */
 /**
@@ -120,13 +129,21 @@ export async function planLanguages(
   detect: Detector,
   pageLanguage: string,
   cache: Map<string, Detection | null> = new Map(),
+  /** What `<html lang>` declares: the language of the site's own interface. */
+  documentLanguage = '',
 ): Promise<PassageLanguage[]> {
+  const home = primaryLanguage(documentLanguage);
+  /** Marked as another language than the page's, but long enough to check it is not the site's own. */
+  const checkMarkup = (p: PassageInput): boolean => {
+    const markup = primaryLanguage(p.markup);
+    return !!home && !!markup && markup !== home && wordsOf(p.text).length >= SITE_TEXT_WORDS;
+  };
   // Every distinct text that needs the detector, asked at once: one at a time, a long page
   // waited on hundreds of round trips before its first sentence.
   const ask = new Set<string>();
   for (const p of passages) {
     const key = p.text.trim();
-    if (!primaryLanguage(p.markup) && letterCount(key) >= MIN_LETTERS_TO_DETECT && !cache.has(key)) ask.add(key);
+    if ((!primaryLanguage(p.markup) || checkMarkup(p)) && letterCount(key) >= MIN_LETTERS_TO_DETECT && !cache.has(key)) ask.add(key);
   }
   await Promise.all(
     [...ask].map(async (key) => {
@@ -138,7 +155,13 @@ export async function planLanguages(
   for (const passage of passages) {
     const markup = primaryLanguage(passage.markup);
     if (markup) {
-      out.push({ language: markup, source: 'markup' });
+      // The site's own words inside a block marked as another language: the detector names the
+      // page's declared language (Firefox: "Translate this page" → en, reliable; Chromium: en at
+      // 100%, not flagged reliable, as it flags almost no short line). Kept as markup — the page's
+      // own — so a short line between two Italian ones is not handed back to Italian by context.
+      const found = checkMarkup(passage) ? cache.get(passage.text.trim()) : null;
+      const sitesOwn = !!found && primaryLanguage(found.language) === home;
+      out.push({ language: sitesOwn ? home : markup, source: 'markup' });
       continue;
     }
     const letters = letterCount(passage.text);

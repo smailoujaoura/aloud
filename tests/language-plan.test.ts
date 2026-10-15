@@ -92,6 +92,26 @@ describe('planLanguages', () => {
     expect(plan[0]).toEqual({ language: 'it', source: 'markup' });
   });
 
+  it("reads a site's own words in a block marked as another language in the page's language", async () => {
+    // A Google result: the block is lang="it"; Google's own link inside it is English.
+    const google: Detector = async (text) =>
+      /translate this page/i.test(text) ? { language: 'en', reliable: false } : { language: 'it', reliable: true };
+    const plan = await planLanguages(
+      [p('Permesso di soggiorno | Polizia di Stato - Questura', 'it'), p('Translate this page', 'it'), p('Inserisci il numero di pratica della richiesta del tuo permesso di soggiorno', 'it'), p('Wikipedia', 'it')],
+      google,
+      'it',
+      new Map(),
+      'en',
+    );
+    expect(plan.map((l) => l.language)).toEqual(['it', 'en', 'it', 'it']);
+  });
+
+  it('keeps a marked block when the detector names anything but the page’s declared language', async () => {
+    const french: Detector = async () => ({ language: 'fr', reliable: true });
+    const plan = await planLanguages([p('Ciao, come stai oggi amico mio?', 'it')], french, 'en', new Map(), 'en');
+    expect(plan[0]).toEqual({ language: 'it', source: 'markup' });
+  });
+
   it('falls back to the page language when nothing can tell, and says so', async () => {
     const plan = await planLanguages([p('42'), p('—')], detector, 'fr-FR');
     expect(plan).toEqual([

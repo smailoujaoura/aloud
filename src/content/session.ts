@@ -1415,7 +1415,7 @@ export class ReaderSession {
       /* no detector: the page language stays unknown */
     }
     try {
-      this.passageLanguages = await planLanguages(passages, this.detect, page, this.languageCache);
+      this.passageLanguages = await planLanguages(passages, this.detect, page, this.languageCache, this.declaredLanguage);
     } catch (err) {
       log.warn('could not plan languages:', err);
       this.passageLanguages = passages.map(() => ({ language: primaryLanguage(page), source: 'page' as const }));
