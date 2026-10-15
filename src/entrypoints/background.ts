@@ -426,9 +426,9 @@ async function activate(tabId: number, mode: ActivateMode, targetElementId?: num
     return;
   }
 
+  let injected: unknown[];
   try {
-    await browser.scripting.executeScript({ target: { tabId }, files: [CONTENT_FILE] });
-    void browser.scripting.executeScript({ target: { tabId }, files: [ANNOTATE_FILE] }).catch(() => undefined);
+    injected = await browser.scripting.executeScript({ target: { tabId }, files: [CONTENT_FILE] });
   } catch (err) {
     // about:, chrome://, the new tab page, view-source:, the add-on stores, reader mode, Aloud's
     // own pages, file:// without access: nothing of ours may run here. Answer with something
@@ -437,6 +437,16 @@ async function activate(tabId: number, mode: ActivateMode, targetElementId?: num
     await openSettingsInstead(tab);
     return;
   }
+  // Firefox does not refuse its own pages (about:preferences, about:debugging): it answers [null],
+  // "done", though nothing ran — and the button then did nothing at all. A frame where the script
+  // ran answers with an object. Such a page's address is hidden even now, and it is the browser's:
+  // settings open over it, as Back brings it back.
+  if (!injected.some((r) => r != null)) {
+    console.info('[aloud] this page refused the reader, opening settings instead');
+    await openSettingsInstead(tab, { refused: true });
+    return;
+  }
+  void browser.scripting.executeScript({ target: { tabId }, files: [ANNOTATE_FILE] }).catch(() => undefined);
   await sendActivate(tabId, mode, targetElementId, 2);
 }
 
@@ -449,13 +459,16 @@ async function activate(tabId: number, mode: ActivateMode, targetElementId?: num
  * without access) they open beside it, so the page the reader was on is not thrown away; an Aloud
  * settings tab already open is reused.
  */
-async function openSettingsInstead(tab: { id?: number; index?: number; url?: string } | null): Promise<void> {
+async function openSettingsInstead(
+  tab: { id?: number; index?: number; url?: string } | null,
+  opts: { refused?: boolean } = {},
+): Promise<void> {
   const reason = tab?.url?.startsWith('file:') ? 'file' : 'page';
   const url = `${browser.runtime.getURL('/options.html')}#cant-read-${reason}`;
   try {
     // An empty page, or one of the browser's own, is replaced (settings-tabs.ts). Without the "tabs"
     // permission most addresses are hidden, and an unknown one is someone's page: open beside it.
-    if (tab?.id != null && settingsReplace(tab.url)) {
+    if (tab?.id != null && (settingsReplace(tab.url) || (opts.refused === true && !tab.url))) {
       await browser.tabs.update(tab.id, { url });
       return;
     }
