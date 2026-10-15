@@ -24,6 +24,7 @@ import { chooseExecutionProviders } from '@/engine/runtime-env';
 import { log } from '@/shared/log';
 import type { SynthEngine, SynthResult, InitContext } from './types';
 import { KOKORO_REVISION } from '@/shared/engine-catalog';
+import { ensureKokoroVoice, hasKokoroVoicePin } from '@/engine/kokoro-voice-files';
 
 const MODEL_ID = 'onnx-community/Kokoro-82M-v1.0-ONNX';
 
@@ -326,6 +327,8 @@ export class KokoroEngine implements SynthEngine {
     if (voice) this.voice = voice;
     this.lastRun = null;
     const usable = this.usableVoice();
+    // Its file checked and in place before kokoro-js reads it, so kokoro-js never fetches one itself.
+    await ensureKokoroVoice(usable);
     const espeakLanguage = ESPEAK_LANGUAGE[usable[0]!];
     if (espeakLanguage) return this.synthesizeWithEspeak(text, speed, usable, espeakLanguage);
     const audio = await this.tts.generate(text, { voice: usable as never, speed });
@@ -378,7 +381,8 @@ export class KokoroEngine implements SynthEngine {
    */
   private usableVoice(): string {
     const known = (this.tts as unknown as { voices?: Record<string, unknown> } | null)?.voices;
-    if (!known || this.voice in known || ESPEAK_LANGUAGE[this.voice[0]!]) return this.voice;
+    // Only a voice whose file Aloud can check (kokoro-voice-files.ts) is read at all.
+    if (hasKokoroVoicePin(this.voice) && (!known || this.voice in known || ESPEAK_LANGUAGE[this.voice[0]!])) return this.voice;
     log.warn(`[kokoro] voice "${this.voice}" is not available in this runtime — using ${DEFAULT_VOICE}`);
     this.voice = DEFAULT_VOICE;
     return this.voice;

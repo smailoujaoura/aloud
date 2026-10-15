@@ -13,6 +13,7 @@
  */
 import { browser } from 'wxt/browser';
 import { asModelWriter, cacheHas, fetchModelFile } from '@/engine/model-cache';
+import { KOKORO_VOICE_STORE, storeKokoroVoice } from '@/engine/kokoro-voice-files';
 import { readCacheSizes, sharedModelInstalled } from '@/engine/installed-voices';
 import { el } from '@/shared/dom';
 import { humanBytes } from '@/shared/log';
@@ -234,9 +235,6 @@ export async function downloadPiperVoice(entry: PiperVoiceEntry, progress: Progr
   if (!config || !voice) throw new Error('The voice downloaded but could not be saved on this device — its storage may be full or blocked');
 }
 
-/** The store kokoro-js keeps its voices' files in (see `kokoroVoiceUrl`). */
-const KOKORO_VOICE_STORE = 'kokoro-voices';
-
 /** Which of `voices` have no file on this device yet. */
 async function missingKokoroVoices(voices: readonly string[]): Promise<string[]> {
   if (typeof caches === 'undefined') return [];
@@ -246,21 +244,12 @@ async function missingKokoroVoices(voices: readonly string[]): Promise<string[]>
   return missing;
 }
 
-/** Fetch voices' files into kokoro-js's store, four at a time, reporting the bytes of each. */
+/** Fetch voices' files, checked, into kokoro-js's store, four at a time, reporting the bytes of each. */
 async function fetchKokoroVoices(voices: readonly string[], onBytes: (bytes: number) => void): Promise<void> {
   const store = await caches.open(KOKORO_VOICE_STORE);
   let next = 0;
   const fetchNext = async (): Promise<void> => {
-    while (next < voices.length) {
-      const voice = voices[next++]!;
-      const url = kokoroVoiceUrl(voice);
-      const res = await fetch(url, { credentials: 'omit' });
-      if (!res.ok) throw new Error(`Download failed (${res.status}) for the voice ${voice}`);
-      const bytes = await res.arrayBuffer();
-      // As kokoro-js stores it, so its own lookup finds it.
-      await store.put(url, new Response(bytes, { headers: res.headers }));
-      onBytes(bytes.byteLength);
-    }
+    while (next < voices.length) onBytes(await storeKokoroVoice(voices[next++]!, store));
   };
   await Promise.all(Array.from({ length: Math.min(4, voices.length) }, fetchNext));
 }

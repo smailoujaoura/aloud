@@ -27,3 +27,14 @@ describe('pinned model revisions', () => {
     expect(usableVoices('supertonic', manifest as never, at(SUPERTONIC_REVISION), offline).map((v) => v.id)).toEqual(['F1']);
   });
 });
+
+describe('Kokoro voice files', () => {
+  it('every voice offered has a fingerprint, and is downloaded from the pinned revision', async () => {
+    const { KOKORO_VOICE_SHA256 } = await import('@/shared/kokoro-voice-pins');
+    const { kokoroVoiceSource } = await import('@/engine/kokoro-voice-files');
+    for (const voice of Object.keys(manifest.kokoro.voices)) {
+      expect(KOKORO_VOICE_SHA256[voice], voice).toMatch(/^[0-9a-f]{64}$/);
+      expect(kokoroVoiceSource(voice)).toContain(`/resolve/${KOKORO_REVISION}/voices/${voice}.bin`);
+    }
+  });
+});
