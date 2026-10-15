@@ -150,6 +150,26 @@ describe('review findings', () => {
     expect(items[0]!.spokenText).toContain('forest and the animals');
   });
 
+  it('a space written as an element of its own still separates the words (Wikipedia’s &nbsp;)', () => {
+    load(`<article><p>Notable<span typeof="mw:Entity">&nbsp;</span>work: born c.<span>&nbsp;</span>May 1265 in Florence.</p></article>`);
+    const { items } = plan();
+    expect(items[0]!.spokenText).toContain('Notable work');
+    expect(items[0]!.spokenText).toContain('c. May 1265');
+  });
+
+  it('a phonetic transcription is not said: a whole block of it, or one inside a sentence', () => {
+    load(`<article>
+      <p>Dante Alighieri (Italian: <span lang="it-Latn-fonipa">[ˈdante aliˈɡjɛːri]</span>) was an Italian poet.</p>
+      <p lang="fr-IPA">[a.lõ.z‿ɑ̃.fɑ̃ də la pa.tʁi.ə]</p>
+      <p lang="fr">Allons enfants de la Patrie, le jour de gloire est arrivé.</p>
+    </article>`);
+    const { items } = plan();
+    expect(read(items)).not.toContain('[a.lõ.z‿ɑ̃.fɑ̃ də la pa.tʁi.ə]');
+    expect(items.find((i) => i.sourceText.includes('Dante'))!.spokenText).not.toContain('ˈdante');
+    expect(items.find((i) => i.sourceText.includes('Dante'))!.spokenText).toContain('Italian poet');
+    expect(read(items).some((t) => t.startsWith('Allons enfants'))).toBe(true);
+  });
+
   it('a translation behind hidden + aria-hidden is planned, and read once both are removed', () => {
     load(`<article>
       <p>Una frase visibile prima della traduzione nascosta qui.</p>

@@ -39,9 +39,31 @@ function isShortLabel(text: string): boolean {
   return t.split(/\s+/).length <= 5;
 }
 
+/**
+ * A language tag for a phonetic transcription: BCP 47's `fonipa` (and its kin), or `IPA` as
+ * Wikipedia also writes it (`fr-IPA`, `it-Latn-fonipa`). Notation, not words: a voice can only
+ * garble "[a.lõ.z‿ɑ̃.fɑ̃ də la pa.tʁi.ə]", and it was read with the French voice.
+ */
+const NOTATION = /(^|-)(fonipa|fonupa|fonapa|fonxsamp|fonkirsh|ipa)(-|$)/i;
+
 export class Eligibility {
   private readonly hiddenCache = new WeakMap<Element, boolean>();
   private readonly controlCache = new WeakMap<Element, boolean>();
+  private readonly notationCache = new WeakMap<Element, boolean>();
+
+  /** Is this text drawn, and words to say rather than a phonetic transcription? */
+  spoken(node: Text): boolean {
+    return this.rendered(node) && !(node.parentElement && this.notation(node.parentElement));
+  }
+
+  /** Inside an element tagged as a phonetic transcription (see NOTATION). */
+  notation(el: Element): boolean {
+    const known = this.notationCache.get(el);
+    if (known !== undefined) return known;
+    const result = NOTATION.test(el.closest('[lang]')?.getAttribute('lang') ?? '');
+    this.notationCache.set(el, result);
+    return result;
+  }
 
   /** Is this text node drawn on the page at all? */
   rendered(node: Text): boolean {

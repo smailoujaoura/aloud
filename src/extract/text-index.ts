@@ -82,7 +82,9 @@ export function buildTextIndex(root: Element, opts: { forReader?: boolean } = {}
   const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode(node: Node): number {
       const text = node.nodeValue;
-      if (!text || !text.trim()) return NodeFilter.FILTER_REJECT;
+      if (!text) return NodeFilter.FILTER_REJECT;
+      // Only spaces: kept by the reader as a word break (below), never as text of its own.
+      if (!text.trim()) return reader ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
       for (let el = node.parentElement; el && el !== root.parentElement; el = el.parentElement) {
         if (SKIP_TAGS.has(el.tagName)) return NodeFilter.FILTER_REJECT;
         // The reader keeps `aria-hidden` and `hidden` text as hidden candidates rather than leaving
@@ -100,16 +102,31 @@ export function buildTextIndex(root: Element, opts: { forReader?: boolean } = {}
     },
   });
 
+  /**
+   * A text node of spaces alone between two words of the same block: a word break. Wikipedia writes
+   * every non-breaking space as an element of its own (`Notable<span> </span>work`), and dropping
+   * those nodes read "Notablework" — and made the opening paragraph unrecognisable to the content
+   * check, which then left it out entirely.
+   */
+  let pendingSpace = false;
   let node = walker.nextNode() as Text | null;
   while (node) {
+    if (!node.data.trim()) {
+      pendingSpace = true;
+      node = walker.nextNode() as Text | null;
+      continue;
+    }
     const block = nearestBlock(node, root);
     if (prevBlock && block !== prevBlock && full.length > 0 && !full.endsWith('\n')) {
       full += '\n';
+    } else if (pendingSpace && full.length > 0 && !/\s$/.test(full) && !/^\s/.test(node.data)) {
+      full += ' ';
     }
+    pendingSpace = false;
     prevBlock = block;
 
     const data = node.data;
-    pieces.push({ node, at: full.length, len: data.length, ...(reader ? { eligible: reader.rendered(node) } : {}) });
+    pieces.push({ node, at: full.length, len: data.length, ...(reader ? { eligible: reader.spoken(node) } : {}) });
     full += data;
 
     node = walker.nextNode() as Text | null;
@@ -135,7 +152,7 @@ export function changedEligibility(index: TextIndex): Array<[number, number]> {
   const check = new Eligibility();
   const ranges: Array<[number, number]> = [];
   for (const piece of index.pieces) {
-    const now = piece.node.isConnected && check.rendered(piece.node);
+    const now = piece.node.isConnected && check.spoken(piece.node);
     if (now === piece.eligible) continue;
     piece.eligible = now;
     const last = ranges[ranges.length - 1];
