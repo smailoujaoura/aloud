@@ -12,6 +12,7 @@
  * that a Piper session never evaluates the (much larger) `@huggingface/transformers` +
  * `kokoro-js` graph, and a failure while evaluating it is catchable rather than fatal-at-load.
  */
+import { splitSpeed, timeStretch } from '@/audio/time-stretch';
 import type { EngineConfig, WorkerRequest, WorkerResponse } from './protocol';
 import type { SynthEngine, InitContext, ModelManifest } from './engines/types';
 import { assetUrl } from './runtime-env';
@@ -215,8 +216,28 @@ async function handleInit(req: Extract<WorkerRequest, { kind: 'init' }>): Promis
  * cannot run it from turning a whole article into silence.
  */
 async function synthesizeOrFallBack(job: Job): ReturnType<SynthEngine['synthesize']> {
+  return atSpeed(job.speed, (speed) => synthesizeOnce(job, speed));
+}
+
+/**
+ * Speech at `speed`: the model reads up to MODEL_MAX_SPEED, and the rest is made by speeding the
+ * audio up at the same pitch (audio/time-stretch.ts) — the models barely get faster past 2×, so 4×
+ * read hardly faster than 2×. Word timings move with the audio.
+ */
+async function atSpeed(speed: number, synthesize: (speed: number) => ReturnType<SynthEngine['synthesize']>): ReturnType<SynthEngine['synthesize']> {
+  const { model, stretch } = splitSpeed(speed);
+  const result = await synthesize(model);
+  if (stretch <= 1) return result;
+  return {
+    ...result,
+    pcm: timeStretch(result.pcm, result.sampleRate, stretch),
+    words: result.words?.map((w) => ({ ...w, start: w.start / stretch, end: w.end / stretch })),
+  };
+}
+
+async function synthesizeOnce(job: Job, speed: number): ReturnType<SynthEngine['synthesize']> {
   try {
-    return await engine!.synthesize(job.text, job.speed, job.voice);
+    return await engine!.synthesize(job.text, speed, job.voice);
   } catch (err) {
     const onGpu = engine?.executionProvider.startsWith('webgpu') ?? false;
     if (!onGpu || !started || started.fellBack) throw err;
@@ -234,7 +255,7 @@ async function synthesizeOrFallBack(job: Job): ReturnType<SynthEngine['synthesiz
       onProgress: () => undefined,
       onNotice: started.onNotice,
     });
-    return engine.synthesize(job.text, job.speed, job.voice);
+    return engine.synthesize(job.text, speed, job.voice);
   }
 }
 
