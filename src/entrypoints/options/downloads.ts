@@ -33,10 +33,23 @@ export class RowProgress {
   private readonly track = el(document, 'div', { class: 'progress-track' });
   private readonly fill = el(document, 'i');
   private readonly pct = el(document, 'span', { class: 'progress-pct' });
+  /**
+   * Stops the download under way. One button kept for the row's life, shown or not: made again on
+   * every percent, a click could land on one just replaced.
+   */
+  private readonly stopBtn = el(document, 'button', { type: 'button', class: 'link-btn progress-cancel', hidden: '' }, 'Cancel');
+  private onStop: (() => void) | null = null;
 
   constructor() {
     this.track.appendChild(this.fill);
-    this.wrap.append(this.track, this.pct);
+    this.stopBtn.addEventListener('click', () => this.onStop?.());
+    this.wrap.append(this.track, this.pct, this.stopBtn);
+  }
+
+  /** Offer Cancel beside the bar (null: none — preparing, or not cancellable). */
+  cancellable(onCancel: (() => void) | null): void {
+    this.onStop = onCancel;
+    this.stopBtn.hidden = !onCancel;
   }
 
   start(label: string): void {
@@ -77,6 +90,7 @@ export class RowProgress {
   }
 
   fail(text: string): void {
+    this.cancellable(null);
     this.wrap.hidden = true;
     this.msg.hidden = false;
     this.msg.classList.add('error');
@@ -84,6 +98,7 @@ export class RowProgress {
   }
 
   done(): void {
+    this.cancellable(null);
     this.wrap.hidden = true;
     this.msg.hidden = true;
     this.msg.textContent = '';
@@ -155,12 +170,15 @@ export function followDownload(key: string, progress: RowProgress, button: HTMLB
     button.disabled = true;
     if (view.phase === 'waiting') {
       button.textContent = 'Queued';
+      progress.cancellable(null);
       progress.waiting(view.text, () => downloads.cancel(key));
     } else if (view.phase === 'preparing') {
       button.textContent = 'Preparing…';
+      progress.cancellable(null);
       progress.show(view.text, 1);
     } else {
       button.textContent = 'Downloading…';
+      progress.cancellable(downloads.cancellable(key) ? () => downloads.cancel(key) : null);
       progress.show(view.text.replace(/^Downloading… \d+%( · )?/, '').replace(/ \d+%$/, '') || 'Downloading…', view.ratio);
     }
   };
@@ -201,7 +219,7 @@ export function downloadTray(): HTMLElement {
 }
 
 /** Fetch a Piper voice's weights and config, reporting their combined progress. */
-export async function downloadPiperVoice(entry: PiperVoiceEntry, progress: ProgressSink): Promise<void> {
+export async function downloadPiperVoice(entry: PiperVoiceEntry, progress: ProgressSink, cancel?: AbortSignal): Promise<void> {
   // The two files stream in parallel, so progress has to be summed across both rather than
   // reported per file — otherwise the bar jumps backwards when the second one starts.
   const perFile = new Map<string, { loaded: number; total: number }>();
@@ -225,6 +243,10 @@ export async function downloadPiperVoice(entry: PiperVoiceEntry, progress: Progr
   // that orphan wrote its file after "Delete all downloads" had cleared everything. So the first
   // failure cancels the other, and the job ends only once both have settled.
   const stop = new AbortController();
+  // Cancelled by the reader: both stop, the same way.
+  const cancelled = (): void => stop.abort();
+  cancel?.addEventListener('abort', cancelled, { once: true });
+  if (cancel?.aborted) cancelled();
   const fetchOne = (url: string, label: string, sha256?: string) =>
     fetchModelFile(url, { label, sha256, onProgress, signal: stop.signal, mustStore: true }).catch((err: unknown) => {
       stop.abort();
@@ -234,6 +256,8 @@ export async function downloadPiperVoice(entry: PiperVoiceEntry, progress: Progr
     fetchOne(entry.config, 'config', entry.sha256?.config),
     fetchOne(entry.onnx, 'voice', entry.sha256?.onnx),
   ]);
+  cancel?.removeEventListener('abort', cancelled);
+  cancel?.throwIfAborted();
   const failures = results.flatMap((r) => (r.status === 'rejected' ? [r.reason as unknown] : []));
   if (failures.length) {
     // The cause, not the cancellation it led to.
@@ -293,13 +317,23 @@ async function fetchKokoroVoices(voices: readonly string[], onBytes: (bytes: num
  * Each Kokoro voice needs a small file of its own, which used to be fetched the first time that
  * voice spoke: every voice tried was another request after the "download" was done.
  */
-export async function downloadSharedModel(config: EngineConfig, kokoroVoices: readonly string[], progress: ProgressSink): Promise<void> {
+export async function downloadSharedModel(
+  config: EngineConfig,
+  kokoroVoices: readonly string[],
+  progress: ProgressSink,
+  cancel?: AbortSignal,
+): Promise<void> {
   const missing = config.engine === 'kokoro' ? await missingKokoroVoices(kokoroVoices) : [];
-  if (!missing.length) return downloadViaWorker(config, progress);
-  return downloadViaWorker(config, progress, {
-    total: missing.length * KOKORO_VOICE_BYTES,
-    start: (onBytes, cancel) => asModelWriter(() => fetchKokoroVoices(missing, onBytes, cancel)),
-  });
+  if (!missing.length) return downloadViaWorker(config, progress, undefined, cancel);
+  return downloadViaWorker(
+    config,
+    progress,
+    {
+      total: missing.length * KOKORO_VOICE_BYTES,
+      start: (onBytes, stop) => asModelWriter(() => fetchKokoroVoices(missing, onBytes, stop)),
+    },
+    cancel,
+  );
 }
 
 /** Files fetched alongside a model, counted in its progress and finished before it is ready. */
@@ -316,8 +350,17 @@ interface Alongside {
  * `alongside` has arrived; rejects on the first fatal error. The Worker is always terminated,
  * including on the error path.
  */
-export function downloadViaWorker(config: EngineConfig, progress: ProgressSink, alongside?: Alongside): Promise<void> {
+export function downloadViaWorker(
+  config: EngineConfig,
+  progress: ProgressSink,
+  alongside?: Alongside,
+  cancel?: AbortSignal,
+): Promise<void> {
   return new Promise((resolve, reject) => {
+    if (cancel?.aborted) {
+      reject(cancel.reason instanceof Error ? cancel.reason : new Error('Download cancelled'));
+      return;
+    }
     let worker: Worker;
     try {
       worker = new Worker(browser.runtime.getURL('/tts-worker.js'), {
@@ -413,6 +456,10 @@ export function downloadViaWorker(config: EngineConfig, progress: ProgressSink, 
         finish(new Error(m.phase ? `[${m.phase}] ${m.message}` : m.message));
       }
     };
+
+    // Cancelled by the reader: the worker goes (and its downloads with it), the files alongside
+    // stop, and it settles once they have — the same path as a failure.
+    cancel?.addEventListener('abort', () => finish(new Error('Download cancelled')), { once: true });
 
     worker.postMessage({ kind: 'init', id: 1, config });
   });

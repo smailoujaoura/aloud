@@ -403,10 +403,14 @@ code {
 .progress-msg.error { color: var(--danger); }
 /* In line behind another download: plainly waiting, with a way out. */
 .progress-msg.is-waiting { color: var(--fg); }
-.progress-msg .link-btn {
+.progress-msg .link-btn, .progress-cancel {
   background: none; border: 0; padding: 0; margin-left: 4px; font: inherit; font-weight: 600;
   color: var(--accent-text, var(--fg)); text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
 }
+/* Cancel beside the bar of a download under way: quiet until pointed at. */
+.progress-cancel { font-size: 12px; color: var(--fg-muted); }
+.progress-cancel:hover, .progress-cancel:focus-visible { color: var(--danger); }
+.progress-cancel[hidden] { display: none; }
 /* The download line at the top of the voice section. */
 .download-tray {
   margin: 0 0 12px; padding: 9px 12px; border-radius: 10px; font-size: 13px; line-height: 1.45;

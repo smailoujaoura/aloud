@@ -552,14 +552,14 @@ function piperItem(group: PiperGroup, ctx: PanelContext): HTMLElement {
     const key = `piper:${id}`;
     download.addEventListener('click', () => {
       // Queued behind any download already running; the row says so (followDownload).
-      downloads.enqueue(key, group.name, (p) => downloadPiperVoice(entry, p)).then(
+      downloads.enqueue(key, group.name, (p, signal) => downloadPiperVoice(entry, p, signal)).then(
         async () => {
           announceModelsChanged();
           ctx.flashSaved(inUse ? `${group.name} is ready` : `${group.name} downloaded — press Use to read with it`);
           await ctx.refresh();
         },
         (err: unknown) => {
-          if (err instanceof DownloadCancelled) ctx.flashSaved(`${group.name} taken out of the download line`);
+          if (err instanceof DownloadCancelled) ctx.flashSaved(`${group.name}: download cancelled`);
         },
       );
     });
@@ -728,8 +728,8 @@ function modelCard(
   const key = `model:${engine}`;
   const startDownload = (): void => {
     // Queued behind any download already running; the card says so (followDownload).
-    downloads.enqueue(key, `${info.name} model`, (p) =>
-      downloadSharedModel(engineConfigFor(ctx.settings, { engine, purpose: 'download' }), voices, p),
+    downloads.enqueue(key, `${info.name} model`, (p, signal) =>
+      downloadSharedModel(engineConfigFor(ctx.settings, { engine, purpose: 'download' }), voices, p, signal),
     ).then(
       async () => {
         announceModelsChanged();
@@ -737,7 +737,7 @@ function modelCard(
         await ctx.refresh();
       },
       (err: unknown) => {
-        if (err instanceof DownloadCancelled) ctx.flashSaved(`${info.name} taken out of the download line`);
+        if (err instanceof DownloadCancelled) ctx.flashSaved(`${info.name}: download cancelled`);
       },
     );
   };

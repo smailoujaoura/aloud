@@ -33,7 +33,7 @@ export interface ProgressSink {
   note(text: string): void;
 }
 
-/** A waiting download taken out of the line by the reader. */
+/** A download the reader cancelled: taken out of the line, or stopped while running. */
 export class DownloadCancelled extends Error {
   constructor(label: string) {
     super(`${label}: download cancelled`);
@@ -44,7 +44,9 @@ export class DownloadCancelled extends Error {
 interface Job {
   key: string;
   label: string;
-  run: (progress: ProgressSink) => Promise<void>;
+  run: (progress: ProgressSink, signal: AbortSignal) => Promise<void>;
+  /** Stops the download while it runs (cancel). */
+  stop: AbortController;
   promise: Promise<void>;
   resolve: () => void;
   reject: (err: Error) => void;
@@ -60,7 +62,7 @@ export class DownloadQueue {
   private running = false;
 
   /** Queue a download (or join it, if this one is already in line); settles when it is done. */
-  enqueue(key: string, label: string, run: (progress: ProgressSink) => Promise<void>): Promise<void> {
+  enqueue(key: string, label: string, run: (progress: ProgressSink, signal: AbortSignal) => Promise<void>): Promise<void> {
     const existing = this.jobs.find((j) => j.key === key);
     if (existing) return existing.promise;
     this.failures.delete(key);
@@ -70,19 +72,36 @@ export class DownloadQueue {
       resolve = ok;
       reject = no;
     });
-    this.jobs.push({ key, label, run, promise, resolve, reject, phase: 'waiting', ratio: 0, text: '' });
+    this.jobs.push({ key, label, run, stop: new AbortController(), promise, resolve, reject, phase: 'waiting', ratio: 0, text: '' });
     this.changed();
     void this.pump();
     return promise;
   }
 
-  /** Take a waiting download out of the line. The one running finishes. */
+  /**
+   * Cancel a download: one waiting leaves the line; the one running stops — its requests are
+   * cancelled, nothing more is written, and the next in line starts once it has stopped. Files it
+   * finished before that are kept (each is written whole, once checked), so downloading it again
+   * picks up where it stopped. Not once the bytes are in and the model is being prepared.
+   */
   cancel(key: string): void {
-    const i = this.jobs.findIndex((j) => j.key === key && j.phase === 'waiting');
-    if (i < 0) return;
-    const [job] = this.jobs.splice(i, 1);
-    job!.reject(new DownloadCancelled(job!.label));
+    const i = this.jobs.findIndex((j) => j.key === key);
+    const job = this.jobs[i];
+    if (!job) return;
+    if (job.phase === 'waiting') {
+      this.jobs.splice(i, 1);
+      job.reject(new DownloadCancelled(job.label));
+    } else if (job.phase === 'downloading' && !job.stop.signal.aborted) {
+      job.stop.abort();
+      job.text = `Cancelling ${job.label}…`;
+    } else return;
     this.changed();
+  }
+
+  /** Can this download be cancelled now? While waiting or downloading, not while preparing. */
+  cancellable(key: string): boolean {
+    const job = this.jobs.find((j) => j.key === key);
+    return !!job && (job.phase === 'waiting' || (job.phase === 'downloading' && !job.stop.signal.aborted));
   }
 
   view(key: string): JobView | null {
@@ -150,6 +169,7 @@ export class DownloadQueue {
             this.changed();
           },
           note: (text) => {
+            if (job.stop.signal.aborted) return; // "Cancelling…" stays until it has stopped
             // The engines say "preparing" once the bytes are in: still this job's turn.
             if (/prepar/i.test(text)) job.phase = 'preparing';
             job.text = text;
@@ -157,11 +177,18 @@ export class DownloadQueue {
           },
         };
         try {
-          await job.run(sink);
+          await job.run(sink, job.stop.signal);
           this.jobs.shift();
+          // Cancelled too late to stop it: it finished, and is there.
           job.resolve();
         } catch (err) {
           this.jobs.shift();
+          if (job.stop.signal.aborted) {
+            // Stopped by the reader: not a failure to report on its row.
+            job.reject(new DownloadCancelled(job.label));
+            this.changed();
+            continue;
+          }
           const message = err instanceof Error ? err.message : String(err);
           this.failures.set(job.key, { label: job.label, text: message });
           job.reject(err instanceof Error ? err : new Error(message));

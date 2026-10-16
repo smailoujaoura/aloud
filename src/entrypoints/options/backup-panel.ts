@@ -220,17 +220,18 @@ function downloadStep(piper: string[], shared: Array<'kokoro' | 'supertonic'>, s
     btn.disabled = true;
     // Into the same line as the Download buttons, one after another — and this step says where
     // the line is while it waits, instead of standing still.
-    type Job = [key: string, label: string, run: (p: ProgressSink) => Promise<void>];
+    type Job = [key: string, label: string, run: (p: ProgressSink, signal: AbortSignal) => Promise<void>];
     const jobs: Job[] = [
       ...piper.map((id): Job => [
         `piper:${id}`,
         opts.manifest.piper[id]?.label ?? id,
-        (p) => downloadPiperVoice(opts.manifest.piper[id]!, p),
+        (p, signal) => downloadPiperVoice(opts.manifest.piper[id]!, p, signal),
       ]),
       ...shared.map((engine): Job => [
         `model:${engine}`,
         `${engine === 'kokoro' ? 'Kokoro-82M' : 'Supertonic-2'} model`,
-        (p) => downloadSharedModel(engineConfigFor(settings, { engine, purpose: 'download' }), Object.keys(opts.manifest.kokoro.voices), p),
+        (p, signal) =>
+          downloadSharedModel(engineConfigFor(settings, { engine, purpose: 'download' }), Object.keys(opts.manifest.kokoro.voices), p, signal),
       ]),
     ];
     const show = (): void => {

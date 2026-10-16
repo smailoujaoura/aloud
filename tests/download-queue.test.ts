@@ -99,4 +99,48 @@ describe('the download line', () => {
     expect(q.view('a')).toMatchObject({ phase: 'failed', text: 'Download failed (503)' });
     expect(b.started()).toBe(true);
   });
+
+  it('cancels the download under way: it stops, and the next starts only once it has', async () => {
+    const q = new DownloadQueue();
+    let signal!: AbortSignal;
+    let stopped!: () => void;
+    // A download that stops when cancelled — a moment later, as real requests do.
+    const a = (_p: ProgressSink, s: AbortSignal) =>
+      new Promise<void>((_ok, no) => {
+        signal = s;
+        stopped = () => no(new DOMException('Aborted', 'AbortError'));
+      });
+    const b = controlled();
+    const outcome = q.enqueue('a', 'Alba', a).then(() => 'done', (e: unknown) => e);
+    void q.enqueue('b', 'Ryan', b.run);
+    await tick();
+    expect(q.cancellable('a')).toBe(true);
+
+    q.cancel('a');
+    expect(signal.aborted).toBe(true);
+    expect(q.view('a')?.text).toBe('Cancelling Alba…');
+    expect(q.cancellable('a')).toBe(false);
+    await tick();
+    expect(b.started()).toBe(false); // still stopping: nothing of it may run beside the next
+
+    stopped();
+    await tick();
+    expect(await outcome).toBeInstanceOf(DownloadCancelled);
+    expect(q.view('a')).toBeNull(); // cancelled, not failed: no error left on its row
+    expect(b.started()).toBe(true);
+  });
+
+  it('cannot cancel a download being prepared, once its bytes are in', async () => {
+    const q = new DownloadQueue();
+    let signal!: AbortSignal;
+    let sink!: ProgressSink;
+    let finish!: () => void;
+    void q.enqueue('k', 'Kokoro-82M model', (p, s) => new Promise<void>((ok) => ((sink = p), (signal = s), (finish = ok))));
+    await tick();
+    sink.note('Downloaded — preparing the model…');
+    expect(q.cancellable('k')).toBe(false);
+    q.cancel('k');
+    expect(signal.aborted).toBe(false);
+    finish();
+  });
 });
