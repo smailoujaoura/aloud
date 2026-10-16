@@ -18,6 +18,7 @@
  * asked before a correction moved the passage to another voice — is dropped, never played as the
  * new voice's.
  */
+import { sharesModel } from '@/shared/engine-catalog';
 import { WorkerClient, type WorkerClientCallbacks } from '@/engine/worker-client';
 import type { EngineConfig, WordTiming } from '@/engine/protocol';
 import type { VoiceRef } from '@/shared/settings';
@@ -27,8 +28,8 @@ import { log } from '@/shared/log';
 export const MAX_LANES = 3;
 /**
  * Workers per secondary lane: one. A fixed count overrides the synthesis host's own rules — one
- * worker for Piper, one on a GPU, one on a phone — and more copies of a second model beside the
- * main voice's pool was memory a phone does not have. A passage in another
+ * worker for Piper, one on a GPU, one on a phone — and two copies of a second model (Supertonic is
+ * ~260 MB each) beside the main voice's pool was memory a phone does not have. A passage in another
  * language is a small share of the page; one worker reads it.
  */
 const SECONDARY_WORKERS = 1;
@@ -50,9 +51,9 @@ interface Lane {
   lastUsed: number;
 }
 
-/** Kokoro's voices share one model; every other voice is a model of its own. */
+/** Kokoro's voices share one model, and Supertonic's; each Piper voice is a model of its own. */
 export function laneKey(v: VoiceRef): string {
-  return v.engine === 'kokoro' ? 'kokoro' : `${v.engine}:${v.voice}`;
+  return sharesModel(v.engine) ? v.engine : `${v.engine}:${v.voice}`;
 }
 
 export class VoiceLanes {
@@ -150,8 +151,8 @@ export class VoiceLanes {
     const key = lane.key;
     lane.lastUsed = ++this.clock;
     this.owner.set(playId, key);
-    // Kokoro remembers the last voice it was given, so every Kokoro request names its own.
-    const perJob = ref.engine === 'kokoro' ? ref.voice : '';
+    // Kokoro and Supertonic remember the last voice they were given, so each request names its own.
+    const perJob = sharesModel(ref.engine) ? ref.voice : '';
     if (!lane.ready) {
       lane.queued.push({ playId, text, speed, voice: perJob });
       return;

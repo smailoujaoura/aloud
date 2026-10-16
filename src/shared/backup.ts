@@ -26,6 +26,7 @@ export interface BackupModels {
   /** Piper voice ids that were downloaded. */
   piper: string[];
   kokoro: boolean;
+  supertonic: boolean;
 }
 
 export interface Backup {
@@ -126,8 +127,8 @@ export function parseBackup(text: string): Backup {
     ),
     models: {
       piper: Array.isArray(b.models?.piper) ? b.models.piper.filter((v): v is string => typeof v === 'string') : [],
-      // A backup made when Aloud had Supertonic may say it was downloaded: there is nothing to restore.
       kokoro: b.models?.kokoro === true,
+      supertonic: b.models?.supertonic === true,
     },
     shortcuts: Object.fromEntries(Object.entries(obj(b.shortcuts)).filter(([, v]) => typeof v === 'string')) as Record<string, string>,
     stats: b.stats && typeof b.stats === 'object' ? normalizeStats(b.stats) : null,
@@ -168,7 +169,7 @@ function normalizeQueueItem(raw: unknown): QueueItem | null {
 /** One line per part: what restoring would bring in. */
 export function describeBackup(b: Backup): Record<BackupPart, string> {
   const n = (count: number, one: string, many = `${one}s`): string => `${count} ${count === 1 ? one : many}`;
-  const voices = b.models.piper.length + (b.models.kokoro ? 1 : 0);
+  const voices = b.models.piper.length + (b.models.kokoro ? 1 : 0) + (b.models.supertonic ? 1 : 0);
   return {
     settings: !b.settings ? 'No settings in this file' : voices ? `every setting, and ${n(voices, 'voice model')} to download again` : 'every setting',
     notes: n(b.notes.length, 'note'),

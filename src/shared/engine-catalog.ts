@@ -12,9 +12,12 @@
  * settings page — not smeared across every label.
  */
 import type { EngineId } from '@/shared/settings';
+import { parseSupertonicVoice } from '@/shared/supertonic-voices';
 
 /** Kokoro-82M at a fixed commit of onnx-community/Kokoro-82M-v1.0-ONNX (engines/kokoro.ts). */
 export const KOKORO_REVISION = '1939ad2a8e416c0acfeecc08a694d14ef25f2231';
+/** Supertonic 3 at a fixed commit of Supertone/supertonic-3 (models.json `base`). */
+export const SUPERTONIC_REVISION = '3cadd1ee6394adea1bd021217a0e650ede09a323';
 
 export interface EngineInfo {
   id: EngineId;
@@ -28,8 +31,8 @@ export interface EngineInfo {
   /** The download when reading on a GPU takes a different, larger file (Kokoro's full precision). */
   gpuApproxSize?: string;
   /**
-   * Substring of a cache key meaning "the shared model is present". Kokoro downloads one model
-   * that unlocks all its voices; Piper downloads per voice and has none.
+   * Substring of a cache key meaning "the shared model is present". Kokoro and Supertonic each
+   * download one model that unlocks all their voices; Piper downloads per voice and has none.
    */
   cacheHint?: string;
   /**
@@ -79,7 +82,7 @@ const ENGINES: Record<EngineId, EngineInfo> = {
     name: 'Kokoro-82M',
     tag: 'Best quality, wants a GPU',
     blurb:
-      'The more natural and expressive of the two. With GPU acceleration it is comfortably faster ' +
+      'The most natural and expressive of the three. With GPU acceleration it is comfortably faster ' +
       'than real time; without one it runs around 3× slower than real time and leans on parallel ' +
       'workers to keep up with playback. One download unlocks all 41 voices: English (US and UK), Spanish, French, Italian, Brazilian Portuguese and Hindi.',
     // The quantised build the CPU reads (92,361,116 bytes) or the full-precision one a GPU needs
@@ -98,9 +101,45 @@ const ENGINES: Record<EngineId, EngineInfo> = {
     needsGpuForSpeed: true,
     heavyForMobile: true,
   },
+  supertonic: {
+    id: 'supertonic',
+    name: 'Supertonic 3',
+    tag: '31 languages, large download',
+    blurb:
+      'Clear, natural voices in 31 languages — many that Kokoro does not speak, read more clearly ' +
+      'than Piper reads them. Quicker with a GPU; without one it needs a few workers to keep up. ' +
+      'One ~402 MB download unlocks all 10 voices, each in every language.',
+    // The four networks at the pinned commit (398.1 MB) and the ten voice styles (2.9 MB).
+    approxSize: '~402 MB',
+    cacheHint: 'supertonic-3',
+    // Must match `base` in scripts/models.base.json (tests/engine-pins.test.ts).
+    revision: SUPERTONIC_REVISION,
+    // Four separate networks, the config and the character table: any one missing and synthesis
+    // cannot run (engines/supertonic.ts loads all of them before the first sentence).
+    requiredFiles: [
+      '/onnx/text_encoder.onnx',
+      '/onnx/duration_predictor.onnx',
+      '/onnx/vector_estimator.onnx',
+      '/onnx/vocoder.onnx',
+      '/onnx/tts.json',
+      '/onnx/unicode_indexer.json',
+    ],
+    // A voice is a style in a language (`F1@de`); the style's file serves every language.
+    voiceFile: (voice) => `/voice_styles/${parseSupertonicVoice(voice).style}.json`,
+    needsGpuForSpeed: true,
+    heavyForMobile: true,
+  },
 };
 
-export const ENGINE_IDS: readonly EngineId[] = ['piper', 'kokoro'];
+export const ENGINE_IDS: readonly EngineId[] = ['piper', 'kokoro', 'supertonic'];
+
+/**
+ * One model reads all of the engine's voices (Kokoro, Supertonic): a worker switches voice from one
+ * sentence to the next without loading anything. Piper's voices are each a model of their own.
+ */
+export function sharesModel(engine: EngineId): boolean {
+  return engine !== 'piper';
+}
 
 export function engineInfo(id: EngineId): EngineInfo {
   return ENGINES[id];
@@ -128,5 +167,9 @@ export function downloadSize(info: EngineInfo, onGpu: boolean): string {
  * one download no preview and no page reaches the network again.
  */
 export const KOKORO_VOICE_BYTES = 522_240;
+/** Where a Supertonic voice style (F1…) is kept: the pinned commit, as models.json `base` says. */
+export const supertonicStyleUrl = (style: string): string =>
+  `https://huggingface.co/Supertone/supertonic-3/resolve/${SUPERTONIC_REVISION}/voice_styles/${style}.json`;
+
 export const kokoroVoiceUrl = (voice: string): string =>
   `https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/voices/${voice}.bin`;

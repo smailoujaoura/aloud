@@ -2,7 +2,7 @@
  * Voice preview for the options page: let the user hear a voice before committing to it.
  *
  *  - Piper voices have a hosted sample clip (`manifest.piper[x].sample`) — we just play the mp3.
- *  - Kokoro has no per-voice clips, so we synthesise a short fixed sentence on
+ *  - Kokoro / Supertonic have no per-voice clips, so we synthesise a short fixed sentence on
  *    device. That needs the (shared) engine model, so it only works once that model is cached.
  *
  * Design goals (this file used to spawn a throwaway worker per click, show "■ Stop" instantly
@@ -20,6 +20,7 @@
  * This module runs at the extension origin (the options page), so `new Worker(getURL(...))` and
  * `new AudioContext()` are both available (unlike in a content script).
  */
+import { sharesModel } from '@/shared/engine-catalog';
 import { browser } from 'wxt/browser';
 import type { EngineConfig, WorkerResponse } from '@/engine/protocol';
 import { PREVIEW_NATIVE } from './preview-sentences';
@@ -100,10 +101,10 @@ let warmKey = '';
 let pending: Pending = {};
 let nextId = 1;
 
-/** Kokoro voices are hot-swappable (shared model), so the voice is not part of its warm key. */
+/** Kokoro's and Supertonic's voices share a model, so the voice is not part of their warm key. */
 function configKey(c: EngineConfig): string {
-  const voice = c.engine === 'kokoro' ? '*' : c.voice;
-  return [c.engine, voice, c.preferWebGPU].join('|');
+  const voice = sharesModel(c.engine) ? '*' : c.voice;
+  return [c.engine, voice, c.steps ?? '', c.preferWebGPU].join('|');
 }
 
 function ensureWorker(): Worker {
@@ -237,7 +238,7 @@ export function playClip(url: string, onStatus: StatusFn = NOOP): Promise<void> 
   });
 }
 
-/** Synthesise the preview sentence on device and play it (Kokoro, and downloaded Piper voices). Never rejects. */
+/** Synthesise the preview sentence on device and play it (Kokoro / Supertonic). Never rejects. */
 export function playSynthesized(
   config: EngineConfig,
   onStatus: StatusFn = NOOP,
@@ -296,8 +297,8 @@ export function playSynthesized(
             chunkIndex: 0,
             text,
             speed: config.speed,
-            // Only Kokoro acts on this; it lets every Kokoro voice preview without a re-init.
-            voice: config.engine === 'kokoro' ? config.voice : undefined,
+            // Kokoro and Supertonic act on this: every voice previews without a re-init.
+            voice: sharesModel(config.engine) ? config.voice : undefined,
           });
         },
       );

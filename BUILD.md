@@ -148,6 +148,7 @@ toolbar click ──► background   (event page on Firefox, service worker on C
                     │  ORT: WebGPU where available, else single-thread WASM + SIMD
                     │  Piper: eSpeak-NG G2P + hand-rolled VITS session
                     │  Kokoro: kokoro-js + transformers, our IndexedDB cache
+                    │  Supertonic: four ORT graphs + flow matching
                     ▼  transferable Float32 PCM
 ```
 

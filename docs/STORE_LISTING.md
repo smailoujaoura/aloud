@@ -14,11 +14,12 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 
 > Listen to the web in a natural voice that lives on your device.
 >
-> Aloud turns any article or PDF into natural speech and lights up every word as it is read. The
+> Aloud turns any article or PDF into natural speech and lights up each sentence, and with most
+> voices each word, as it is read. The
 > voice is a neural network running inside your browser, so it works offline and nothing you read
 > is ever sent anywhere. No account, no subscription.
 >
-> • 212 natural voices in 49 languages, from two neural engines (Piper and Kokoro-82M)
+> • 222 natural voices in 52 languages, from three neural engines (Piper, Kokoro-82M, Supertonic 3)
 > • Reads the article, not the menus and ads, and highlights the sentence and the word in place
 > • PDFs too: real pages, highlighted where the text sits; mark them up and save the marks into the file
 > • Picks up at the sentence you stopped at; a reading queue for later; save any article as an MP3
@@ -56,7 +57,7 @@ search, shopping, new-tab or ad features).
 | activeTab | Runs the reader, highlighter or media controls only on the tab where the user starts Aloud (toolbar button, shortcut or context menu). No access to other tabs. |
 | scripting | Injects the reader and highlighter into that tab when the user starts them, instead of running content scripts on every site. |
 | storage | Keeps settings, notes, reading queue, history and reading positions locally. |
-| unlimitedStorage | Voice models are 21–347 MB each and are cached locally so reading works offline. |
+| unlimitedStorage | Voice models are 21–402 MB each and are cached locally so reading works offline. |
 | contextMenus | Right-click items: read the selection or from a point, keep a highlight, show notes, add a page or link to the reading queue. |
 | Host: file:///* | Lets the PDF reader open PDFs saved on the user's computer, once they enable "Allow access to file URLs". |
 | Optional host: *://*/* | Requested one site at a time, only when the user adds a site where the media controls or highlights should start by themselves, opens a PDF from that site, or queues a page from it. |
@@ -86,7 +87,7 @@ Certify all three statements (no sale, no unrelated use, no creditworthiness use
   > is voice data from Hugging Face (ONNX weights, JSON, `.bin` style vectors), never code.
 
 - **Android:** the listing is marked compatible with Firefox for Android (`gecko_android`).
-  Kokoro is too heavy for phones; Piper voices are the ones to recommend there.
+  Kokoro and Supertonic are too heavy for phones; Piper voices are the ones to recommend there.
 
 ## Before pressing submit
 

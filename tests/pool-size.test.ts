@@ -8,10 +8,12 @@ const phone = { cores: 8, touchFirst: true };
 describe('autoPoolSize', () => {
   it('runs one worker when a GPU is really there', () => {
     expect(autoPoolSize('kokoro', true, desktop)).toBe(1);
+    expect(autoPoolSize('supertonic', true, desktop)).toBe(1);
   });
 
   it('pools the neural engines when there is no GPU — the Chromium-without-an-adapter case', () => {
     expect(autoPoolSize('kokoro', false, desktop)).toBeGreaterThan(1);
+    expect(autoPoolSize('supertonic', false, desktop)).toBeGreaterThan(1);
   });
 
   it('never pools Piper, which is already faster than real time', () => {

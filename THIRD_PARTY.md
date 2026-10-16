@@ -58,6 +58,16 @@ published SHA-256 (`src/shared/kokoro-voice-pins.ts`) before it is kept. The mod
 extension's IndexedDB store, the voices to Cache Storage (`kokoro-voices`), where `kokoro-js`
 reads them.
 
+### Supertonic 3 — [`Supertone/supertonic-3`](https://huggingface.co/Supertone/supertonic-3) @ `3cadd1e`
+
+Model weights and the ten voice styles: **BigScience OpenRAIL-M**, a *use-restricted* licence — its
+behavioural conditions (Attachment A) travel with the weights, so anyone redistributing them, or a
+product built on them, must pass the conditions on; among them, not presenting what it generates as
+spoken by a person without saying it is machine-generated. Aloud never bundles the weights: they are
+downloaded from Hugging Face, from a pinned commit and checked against their SHA-256, when you choose
+Supertonic, and the licence is named on the engine's card in Settings before that download. Each
+voice style reads all 31 of the model's languages; Aloud offers each as a voice per language.
+
 ## Source availability
 
 This repository is the complete corresponding source. `npm ci && npm run build` reproduces

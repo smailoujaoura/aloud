@@ -3,8 +3,8 @@
  *
  * Two paths, because the two kinds of model are fetched by different code:
  *  - **Piper** is a pair of plain files, fetched straight through the model cache.
- *  - **Kokoro** is loaded by its engine (transformers.js), so the only honest way to "download"
- *    it is to initialise it in a
+ *  - **Kokoro / Supertonic** are loaded by their engine (transformers.js and a hand-rolled ORT
+ *    session respectively), so the only honest way to "download" one is to initialise it in a
  *    throwaway Worker and watch its progress events. That also warms the compile step, so the
  *    first real sentence is not the one paying for it.
  *
@@ -17,7 +17,7 @@ import { KOKORO_VOICE_STORE, storeKokoroVoice } from '@/engine/kokoro-voice-file
 import { readCacheSizes, sharedModelInstalled } from '@/engine/installed-voices';
 import { el } from '@/shared/dom';
 import { humanBytes } from '@/shared/log';
-import { KOKORO_VOICE_BYTES, kokoroVoiceUrl } from '@/shared/engine-catalog';
+import { KOKORO_VOICE_BYTES, kokoroVoiceUrl, supertonicStyleUrl } from '@/shared/engine-catalog';
 import type { EngineConfig, WorkerResponse } from '@/engine/protocol';
 import type { PiperVoiceEntry } from '@/engine/engines/types';
 import { downloads, type ProgressSink } from './download-queue';
@@ -312,18 +312,43 @@ async function fetchKokoroVoices(voices: readonly string[], onBytes: (bytes: num
   }
 }
 
+/** About the size of one Supertonic voice style (290–292 kB at the pinned commit), for progress. */
+const SUPERTONIC_STYLE_BYTES = 292_000;
+
+/** Fetch Supertonic voice styles into the model cache, one after another; stops when cancelled. */
+async function fetchSupertonicStyles(styles: readonly string[], onBytes: (bytes: number) => void, cancel: AbortSignal): Promise<void> {
+  for (const style of styles) {
+    cancel.throwIfAborted();
+    const bytes = await fetchModelFile(supertonicStyleUrl(style), { label: `${style} style`, signal: cancel, mustStore: true });
+    onBytes(bytes.byteLength);
+  }
+}
+
 /**
- * Download a shared model — for Kokoro, with every voice's own file alongside it, under one count.
- * Each Kokoro voice needs a small file of its own, which used to be fetched the first time that
- * voice spoke: every voice tried was another request after the "download" was done.
+ * Download a shared model — with every voice's own file alongside it, under one count: Kokoro's
+ * voice files, or Supertonic's voice styles. Each used to be fetched the first time that voice
+ * spoke: every voice tried was another request after the "download" was done.
+ *
+ * `voices` are the engine's voices to make ready: Kokoro voice ids, or Supertonic styles (F1…).
  */
 export async function downloadSharedModel(
   config: EngineConfig,
-  kokoroVoices: readonly string[],
+  voices: readonly string[],
   progress: ProgressSink,
   cancel?: AbortSignal,
 ): Promise<void> {
-  const missing = config.engine === 'kokoro' ? await missingKokoroVoices(kokoroVoices) : [];
+  if (config.engine === 'supertonic') {
+    const missing: string[] = [];
+    for (const style of voices) if (!(await cacheHas(supertonicStyleUrl(style)))) missing.push(style);
+    if (!missing.length) return downloadViaWorker(config, progress, undefined, cancel);
+    return downloadViaWorker(
+      config,
+      progress,
+      { total: missing.length * SUPERTONIC_STYLE_BYTES, start: (onBytes, stop) => fetchSupertonicStyles(missing, onBytes, stop) },
+      cancel,
+    );
+  }
+  const missing = config.engine === 'kokoro' ? await missingKokoroVoices(voices) : [];
   if (!missing.length) return downloadViaWorker(config, progress, undefined, cancel);
   return downloadViaWorker(
     config,

@@ -5,5 +5,102 @@
     "modelId": "onnx-community/Kokoro-82M-v1.0-ONNX",
     "license": "Apache-2.0",
     "voices": {}
+  },
+  "supertonic": {
+    "modelId": "Supertone/supertonic-3",
+    "license": "OpenRAIL-M (use-restricted model licence)",
+    "base": "https://huggingface.co/Supertone/supertonic-3/resolve/3cadd1ee6394adea1bd021217a0e650ede09a323",
+    "sampleRate": 44100,
+    "files": {
+      "textEncoder": "onnx/text_encoder.onnx",
+      "durationPredictor": "onnx/duration_predictor.onnx",
+      "vectorEstimator": "onnx/vector_estimator.onnx",
+      "vocoder": "onnx/vocoder.onnx"
+    },
+    "config": {
+      "tts": "onnx/tts.json",
+      "unicodeIndexer": "onnx/unicode_indexer.json"
+    },
+    "voices": {
+      "F1": {
+        "label": "Female 1",
+        "gender": "female"
+      },
+      "F2": {
+        "label": "Female 2",
+        "gender": "female"
+      },
+      "F3": {
+        "label": "Female 3",
+        "gender": "female"
+      },
+      "F4": {
+        "label": "Female 4",
+        "gender": "female"
+      },
+      "F5": {
+        "label": "Female 5",
+        "gender": "female"
+      },
+      "M1": {
+        "label": "Male 1",
+        "gender": "male"
+      },
+      "M2": {
+        "label": "Male 2",
+        "gender": "male"
+      },
+      "M3": {
+        "label": "Male 3",
+        "gender": "male"
+      },
+      "M4": {
+        "label": "Male 4",
+        "gender": "male"
+      },
+      "M5": {
+        "label": "Male 5",
+        "gender": "male"
+      }
+    },
+    "sha256": {
+      "durationPredictor": "c3eb91414d5ff8a7a239b7fe9e34e7e2bf8a8140d8375ffb14718b1c639325db",
+      "textEncoder": "c7befd5ea8c3119769e8a6c1486c4edc6a3bc8365c67621c881bbb774b9902ff",
+      "vectorEstimator": "883ac868ea0275ef0e991524dc64f16b3c0376efd7c320af6b53f5b780d7c61c",
+      "vocoder": "085de76dd8e8d5836d6ca66826601f615939218f90e519f70ee8a36ed2a4c4ba"
+    },
+    "languages": [
+      "en",
+      "ko",
+      "ja",
+      "ar",
+      "bg",
+      "cs",
+      "da",
+      "de",
+      "el",
+      "es",
+      "et",
+      "fi",
+      "fr",
+      "hi",
+      "hr",
+      "hu",
+      "id",
+      "it",
+      "lt",
+      "lv",
+      "nl",
+      "pl",
+      "pt",
+      "ro",
+      "ru",
+      "sk",
+      "sl",
+      "sv",
+      "tr",
+      "uk",
+      "vi"
+    ]
   }
 }

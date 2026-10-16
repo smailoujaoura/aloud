@@ -10,6 +10,8 @@ import type { EngineId } from '@/shared/settings';
 export interface EngineConfig {
   engine: EngineId;
   voice: string;
+  /** Supertonic only — flow-matching denoising steps. */
+  steps?: number;
   preferWebGPU: boolean;
   /** Verbose console logging (settings: `debug`). Sentence text is only logged when it is on. */
   debug?: boolean;

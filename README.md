@@ -13,8 +13,9 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
 - **Extraction** — [Mozilla Readability](https://github.com/mozilla/readability) strips nav / ads
   and grabs the article text.
 - **Voices** — [Piper](https://github.com/rhasspy/piper) (fast, ~21–137 MB per voice: `medium` around 60 MB, `high` around 110),
-  and [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (best quality; ~347 MB with a graphics card, ~114 MB
-  without). Inference runs on [ONNX Runtime Web](https://onnxruntime.ai/):
+  [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (best quality; ~347 MB with a graphics card, ~114 MB without) and
+  [Supertonic 3](https://huggingface.co/Supertone/supertonic-3) (~402 MB; 10 voices, each in 31 languages — the voice for
+  languages Kokoro does not speak). Inference runs on [ONNX Runtime Web](https://onnxruntime.ai/):
   WebGPU where the browser allows it, WebAssembly everywhere else.
 - **Gapless playback** — sentences are synthesised a few ahead of the playhead and scheduled
   sample-accurately through the Web Audio API, so there is no pause between them. Where the GPU
@@ -70,7 +71,7 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
 - **Live words a minute** — beside the speed, the pace of the passage being heard: its words over
   its audio, set as each passage starts and held until the next, so the figure is steady. A speed
   change shows when the first passage made at the new speed begins.
-- **Word by word** — with every voice, the word being spoken is marked inside the
+- **Word by word** — with Piper and Kokoro voices the word being spoken is marked inside the
   sentence, timed from the voice model's own phoneme durations rather than estimated. It is shown
   as a darker shade by default; Settings switches it to an underline, or off.
 - **Highlights and notes on any page** — select text and press <kbd>K</kbd> (on a page Aloud is
@@ -121,17 +122,17 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
 What decides it is not the browser but whether the extension's Worker can reach the GPU through
 WebGPU. With it, Chromium and Firefox perform the same:
 
-| | Piper | Kokoro-82M |
-|---|---|---|
-| **Chromium or Firefox, with WebGPU** | fast | **best — faster than Piper** |
-| **Chromium or Firefox, CPU only** | **best choice — fast** | works, ~3× slower than real time |
-| **Firefox Android** | **the only sensible choice** | too slow |
+| | Piper | Kokoro-82M | Supertonic 3 |
+|---|---|---|---|
+| **Chromium or Firefox, with WebGPU** | fast | **best — faster than Piper** | good, in 31 languages |
+| **Chromium or Firefox, CPU only** | **best choice — fast** | works, ~3× slower than real time | ~1.2× real time per worker; two keep up |
+| **Firefox Android** | **the only sensible choice** | too slow | too large |
 
 Chromium has WebGPU on by default; Firefox turns it on for pages on Windows but not for the
 workers Aloud synthesises in (see below). [Using your graphics card](https://aloud.souj.dev/gpu.html)
 explains, for readers rather than developers, why turning it on is safe and how to do it in each
-browser; Settings → Advanced links to it, and the reader mentions it once when Kokoro is
-running on the CPU.
+browser; Settings → Advanced links to it, and the reader mentions it once when Kokoro or
+Supertonic is running on the CPU.
 
 Firefox ships WebGPU switched off, and extensions get no `SharedArrayBuffer`
 ([bug 1673477](https://bugzilla.mozilla.org/show_bug.cgi?id=1673477)), so ONNX Runtime is stuck

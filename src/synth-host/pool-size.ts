@@ -2,7 +2,7 @@
  * How many synthesis workers to run.
  *
  * The pool exists to work around slow *CPU* synthesis. Piper is comfortably faster than real
- * time and needs one worker; Kokoro is not, so several workers each take a
+ * time and needs one worker; Kokoro and Supertonic are not, so several workers each take a
  * different sentence and the *effective* rate drops below real time. Measured on a 14-core
  * desktop with Kokoro q8 on WASM: one worker runs at ~3.2× real time — it can never keep up —
  * while four bring the effective rate under 1× and playback stops stalling between sentences.
@@ -44,6 +44,9 @@ export function autoPoolSize(engine: EngineId, gpu: boolean, env: PoolEnvironmen
   if (env.touchFirst) return 1;
 
   const cores = Math.max(1, env.cores);
+  // Supertonic 3 runs at about 1.2× real time per worker at its default 5 steps (the bench), so two
+  // keep ahead of the listener — and each copy holds about 1.1 GB, so never more than two.
+  if (engine === 'supertonic') return clamp(cores - 2, 1, 2);
   // Kokoro is the heaviest (~3× real-time) but small (q8 ≈ 86 MB).
   return clamp(cores - 2, 2, 4);
 }

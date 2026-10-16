@@ -9,6 +9,8 @@ export interface SynthResult {
 
 export interface InitContext {
   voice: string;
+  /** Supertonic denoising steps. */
+  steps?: number;
   preferWebGPU: boolean;
   onProgress: (p: { file: string; loaded: number; total: number; phase: 'download' | 'cache' | 'compile' }) => void;
   /**
@@ -20,13 +22,13 @@ export interface InitContext {
 }
 
 export interface SynthEngine {
-  readonly id: 'piper' | 'kokoro';
+  readonly id: 'piper' | 'kokoro' | 'supertonic';
   readonly sampleRate: number;
   readonly executionProvider: string;
   init(ctx: InitContext): Promise<void>;
   /**
    * `speed` is a multiplier: 2 => twice as fast, pitch preserved.
-   * `voice` is an optional per-call override — only Kokoro honours it (its voices share one
+   * `voice` is an optional per-call override — Kokoro and Supertonic honour it (their voices share one
    * model and differ only by a style vector loaded at generation time), letting the options
    * page preview every Kokoro voice without re-initialising. Other engines ignore it.
    */
@@ -53,6 +55,22 @@ export interface PiperVoiceEntry {
   numSpeakers?: number;
 }
 
+export interface SupertonicManifest {
+  modelId: string;
+  license: string;
+  /** Base HF `resolve` URL, e.g. https://huggingface.co/Supertone/supertonic-3/resolve/<commit> */
+  base: string;
+  files: { textEncoder: string; durationPredictor: string; vectorEstimator: string; vocoder: string };
+  config: { tts: string; unicodeIndexer: string };
+  /** SHA-256 of each network at the pinned commit in `base`, checked on download. */
+  sha256?: Partial<Record<'textEncoder' | 'durationPredictor' | 'vectorEstimator' | 'vocoder', string>>;
+  /** voice-style key -> metadata; the style JSON is `${base}/voice_styles/${key}.json`. */
+  voices: Record<string, { label: string; gender: string }>;
+  /** The languages every style reads, as the tag around the text (`<de>…</de>`). */
+  languages?: string[];
+  sampleRate: number;
+}
+
 /** Entry in assets/models.json. */
 export interface ModelManifest {
   piper: Record<string, PiperVoiceEntry>;
@@ -61,4 +79,5 @@ export interface ModelManifest {
     voices: Record<string, { label: string; language: string; gender: string; grade?: string }>;
     license: string;
   };
+  supertonic?: SupertonicManifest;
 }

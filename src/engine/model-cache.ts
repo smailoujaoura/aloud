@@ -246,7 +246,7 @@ export async function deleteModels(fn: () => Promise<void>): Promise<void> {
   if (!done) throw new ModelsInUse();
 }
 
-/** Files of an engine Aloud no longer has: Supertonic-2, removed. Nothing can read them. */
+/** Files Aloud no longer reads: Supertonic-2's, replaced by Supertonic 3. Nothing can read them. */
 const REMOVED_ENGINES = /\/Supertone\/supertonic-2\//;
 
 /**

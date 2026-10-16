@@ -8,6 +8,7 @@
  * The choice is made per page and never saved: reading one French page must not quietly turn
  * someone's default voice French. Pure functions only, so the rules are testable.
  */
+import { parseSupertonicVoice } from '@/shared/supertonic-voices';
 import type { EngineId } from '@/shared/settings';
 import type { ModelManifest } from '@/engine/engines/types';
 
@@ -34,8 +35,13 @@ function fullTag(tag: string): string {
  *
  * Null when the page language is unknown, when the current voice already speaks it, or when
  * nothing downloaded does. Among matches: the current engine first (least surprising change of
- * sound), then the same region as the current voice, then the manifest's own order.
+ * sound), then the better engine — Kokoro, then Supertonic, then Piper, as the bench heard them
+ * (Supertonic 3 read Russian, Korean, Spanish and Italian more clearly than Piper) — then the same
+ * region as the page, then the manifest's own order.
  */
+/** Which engine reads a language better, when the current one does not speak it. */
+const ENGINE_QUALITY: Partial<Record<EngineId, number>> = { kokoro: 2, supertonic: 1, piper: 0 };
+
 export function pickVoiceForLanguage(
   pageLanguage: string,
   current: CandidateVoice | null,
@@ -49,7 +55,8 @@ export function pickVoiceForLanguage(
   if (matches.length === 0) return null;
 
   const score = (v: CandidateVoice): number =>
-    (current && v.engine === current.engine ? 2 : 0) +
+    (current && v.engine === current.engine ? 100 : 0) +
+    (ENGINE_QUALITY[v.engine] ?? 0) * 10 +
     (fullTag(v.language) === fullTag(pageLanguage) ? 1 : 0);
   return [...matches].sort((a, b) => score(b) - score(a))[0] ?? null;
 }
@@ -57,7 +64,8 @@ export function pickVoiceForLanguage(
 /** The voice's language, from the bundled manifest. */
 export function voiceLanguage(engine: EngineId, id: string, manifest: ModelManifest): string {
   if (engine === 'piper') return manifest.piper[id]?.language ?? '';
-  return manifest.kokoro.voices[id]?.language ?? 'en';
+  if (engine === 'kokoro') return manifest.kokoro.voices[id]?.language ?? 'en';
+  return parseSupertonicVoice(id).language; // `F1@de`: a Supertonic style reading German
 }
 
 /** "French", "Brazilian Portuguese" — for messages. Falls back to the code itself. */

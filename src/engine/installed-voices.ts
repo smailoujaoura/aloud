@@ -3,8 +3,8 @@
  * offer right now.
  *
  * The cache is keyed by download URL, so presence is answered by looking for the right keys:
- * Piper needs both files of a specific voice, while Kokoro has one shared model whose presence
- * unlocks every voice it defines.
+ * Piper needs both files of a specific voice, while Kokoro and Supertonic each have one shared
+ * model whose presence unlocks every voice they define.
  */
 import { cacheEntries } from '@/engine/model-cache';
 import { engineInfo } from '@/shared/engine-catalog';
@@ -81,7 +81,7 @@ export function engineDownloaded(engine: EngineId, manifest: ModelManifest, size
 }
 
 /**
- * Is Kokoro's model — every file it loads, not just some of them — on this device?
+ * Is Kokoro's or Supertonic's model — every file it loads, not just some of them — on this device?
  *
  * With `gpu` known, the weights for that path are required; unknown, either set will do.
  */

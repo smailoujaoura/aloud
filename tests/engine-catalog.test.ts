@@ -19,22 +19,25 @@ describe('engineInfo', () => {
   it('says plainly which engine only gets fast with a GPU', () => {
     expect(engineInfo('kokoro').needsGpuForSpeed).toBe(true);
     expect(engineInfo('piper').needsGpuForSpeed).toBe(false);
+    expect(engineInfo('supertonic').needsGpuForSpeed).toBe(true);
   });
 
   it('flags the engines that are a bad idea on a phone', () => {
     expect(engineInfo('piper').heavyForMobile).toBe(false);
     expect(engineInfo('kokoro').heavyForMobile).toBe(true);
+    expect(engineInfo('supertonic').heavyForMobile).toBe(true);
   });
 
   it('carries a cache hint only for the shared-model engines', () => {
     expect(engineInfo('piper').cacheHint).toBeUndefined();
     expect(engineInfo('kokoro').cacheHint).toBe('Kokoro-82M');
+    expect(engineInfo('supertonic').cacheHint).toBe('supertonic-3');
   });
 });
 
 describe('listEngines', () => {
   it('is a fixed order — smallest and most portable first', () => {
-    expect(listEngines().map((e) => e.id)).toEqual(['piper', 'kokoro']);
+    expect(listEngines().map((e) => e.id)).toEqual(['piper', 'kokoro', 'supertonic']);
   });
 
   it('lists every engine exactly once', () => {

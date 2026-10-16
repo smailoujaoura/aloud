@@ -13,6 +13,7 @@ describe('voicePortrait', () => {
 
   it('leaves the other voices to their drawn avatar', () => {
     expect(voicePortrait('piper', 'en_US-amy-medium')).toBeNull();
+    expect(voicePortrait('supertonic', 'F1')).toBeNull();
   });
 
   it('gives every Kokoro voice a face — there are few enough to draw them all', () => {

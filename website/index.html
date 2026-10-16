@@ -6,7 +6,7 @@
 <title>Aloud: read the web aloud, privately</title>
 <meta name="description" content="Aloud reads any article or PDF aloud in a natural neural voice that runs entirely on your device, highlighting every word as it goes. Free, offline, no account. For Firefox, Firefox for Android and Chrome.">
 <meta property="og:title" content="Aloud: read the web aloud, privately">
-<meta property="og:description" content="212 natural voices that run inside your browser. Works offline, sends nothing anywhere, costs nothing.">
+<meta property="og:description" content="222 natural voices that run inside your browser. Works offline, sends nothing anywhere, costs nothing.">
 <meta property="og:type" content="website">
 <!-- Link previews need full addresses. The site is served from aloud.souj.dev. -->
 <meta property="og:url" content="https://aloud.souj.dev/">
@@ -290,7 +290,7 @@ section + section { border-top: 1px solid var(--rule); }
 .quote.idle { color: var(--ink-faint); font-size: 1.05rem; }
 .voice-note { margin-top: 10px; text-align: center; font-size: 0.9rem; color: var(--ink-muted); }
 
-.engines { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 48px; }
+.engines { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 48px; }
 @media (max-width: 820px) { .engines { grid-template-columns: minmax(0, 1fr); } }
 .engine { padding: 22px; border: 1px solid var(--rule); border-radius: var(--radius); display: grid; gap: 10px; align-content: start; background: var(--surface); }
 .engine .meta { font: 0.78rem var(--mono); color: var(--ink-faint); }
@@ -533,8 +533,8 @@ footer .by b { color: var(--ink); }
 
   <div class="proof" aria-label="Aloud in numbers">
     <div class="wrap">
-      <div><b>212</b><span>natural voices, from two neural engines</span></div>
-      <div><b>49</b><span>languages, from Arabic to Welsh</span></div>
+      <div><b>222</b><span>natural voices, from three neural engines</span></div>
+      <div><b>52</b><span>languages, from Arabic to Welsh</span></div>
       <div><b>0</b><span>words of what you read sent to a server</span></div>
       <div><b>Free</b><span>every voice, every feature, no account</span></div>
     </div>
@@ -577,7 +577,12 @@ footer .by b { color: var(--ink); }
         <div class="engine">
           <h3>Kokoro-82M</h3>
           <p class="meta">41 voices · English, Spanish, French, Italian, Portuguese, Hindi · one download for all: ~347 MB with a graphics card, ~114 MB without</p>
-          <p>The most natural-sounding of the two. On a graphics card it is both the richest voice and a fast one. <a href="gpu.html">Using your graphics card →</a></p>
+          <p>The most natural-sounding of the three. On a graphics card it is both the richest voice and a fast one. <a href="gpu.html">Using your graphics card →</a></p>
+        </div>
+        <div class="engine">
+          <h3>Supertonic 3</h3>
+          <p class="meta">10 voices, each in all 31 languages · one download: ~402 MB</p>
+          <p>Natural voices for languages Kokoro doesn't speak, from German and Russian to Japanese and Korean — clearer than Piper's. Quicker with a graphics card; on a processor Aloud runs two copies side by side to keep up.</p>
         </div>
       </div>
 
@@ -585,11 +590,11 @@ footer .by b { color: var(--ink); }
         <summary>Which engine suits my browser?</summary>
         <div class="table-scroll">
           <table>
-            <thead><tr><th scope="col">Your setup</th><th scope="col">Piper</th><th scope="col">Kokoro-82M</th></tr></thead>
+            <thead><tr><th scope="col">Your setup</th><th scope="col">Piper</th><th scope="col">Kokoro-82M</th><th scope="col">Supertonic 3</th></tr></thead>
             <tbody>
-              <tr><th scope="row">Chrome or Firefox, with WebGPU</th><td>fast</td><td class="best">best, and faster than Piper</td></tr>
-              <tr><th scope="row">Chrome or Firefox, processor only</th><td class="best">best choice, fast</td><td>works, about 3× slower than real time</td></tr>
-              <tr><th scope="row">Firefox for Android</th><td class="best">the one to use</td><td>too slow</td></tr>
+              <tr><th scope="row">Chrome or Firefox, with WebGPU</th><td>fast</td><td class="best">best, and faster than Piper</td><td>good, in 31 languages</td></tr>
+              <tr><th scope="row">Chrome or Firefox, processor only</th><td class="best">best choice, fast</td><td>works, about 3× slower than real time</td><td>keeps up with two copies at once, on a desktop</td></tr>
+              <tr><th scope="row">Firefox for Android</th><td class="best">the one to use</td><td>too slow</td><td>too large</td></tr>
             </tbody>
           </table>
         </div>
@@ -671,7 +676,7 @@ footer .by b { color: var(--ink); }
         <div class="copy">
           <p class="eyebrow">Settings that explain themselves</p>
           <h2>Who reads what, drawn instead of listed.</h2>
-          <p>Every language you have a voice for, wired to the face that reads it, with a flag. Click another face and the wire swings over; press its ▶ to hear it first. The last row says who reads every other language. All 212 voices are listed below it.</p>
+          <p>Every language you have a voice for, wired to the face that reads it, with a flag. Click another face and the wire swings over; press its ▶ to hear it first. The last row says who reads every other language. All 222 voices are listed below it.</p>
         </div>
         <figure class="shot">
           <picture>
@@ -698,7 +703,7 @@ footer .by b { color: var(--ink); }
               <tr><th scope="row">Where the voice runs</th><td class="yes">In your browser</td><td class="no">On the provider's servers</td></tr>
               <tr><th scope="row">What you're reading</th><td class="yes">Never leaves your device</td><td class="no">Uploaded to be spoken</td></tr>
               <tr><th scope="row">Account</th><td class="yes">None</td><td class="no">Usually required</td></tr>
-              <tr><th scope="row">Price</th><td class="yes">Free, all 212 voices</td><td class="no">Best voices often on a subscription</td></tr>
+              <tr><th scope="row">Price</th><td class="yes">Free, all 222 voices</td><td class="no">Best voices often on a subscription</td></tr>
               <tr><th scope="row">Without a connection</th><td class="yes">Works, after one download</td><td class="no">Stops</td></tr>
               <tr><th scope="row">Your notes and highlights</th><td class="yes">On this device, in one backup file</td><td class="no">In their cloud</td></tr>
             </tbody>
@@ -797,7 +802,7 @@ footer .by b { color: var(--ink); }
         <li><span class="where">Web Audio</span><h3>Play and follow</h3><p>Audio is scheduled sample-accurately, back to back, while the sentence and word are highlighted in place.</p></li>
       </ol>
       <div class="eng">
-        <div><h3>Two neural engines in a tab</h3><p>Piper (VITS) and Kokoro-82M (StyleTTS 2), each with its own phonemiser and model format, behind one engine interface.</p></div>
+        <div><h3>Three neural engines in a tab</h3><p>Piper (VITS), Kokoro-82M (StyleTTS 2) and Supertonic 3 (flow matching), each with its own text front end and model format, behind one engine interface.</p></div>
         <div><h3>Highlights that can't break the page</h3><p>The CSS Custom Highlight API marks text without changing the page's DOM. Notes are anchored by their text, so they find their place again after the page is edited.</p></div>
         <div><h3>One codebase, three browsers</h3><p>Firefox, Firefox for Android and Chromium from one Manifest V3 codebase built with WXT. Differences are detected as capabilities, not guessed from the browser's name.</p></div>
         <div><h3>Isolated from the page</h3><p>Synthesis runs in a hidden extension frame that only accepts connections carrying a one-time ticket from the extension, so a hostile page can't drive it.</p></div>
@@ -850,7 +855,7 @@ footer .by b { color: var(--ink); }
 <footer>
   <div class="wrap">
     <div>
-      <p><b>Aloud</b> is free software under GPL-3.0-or-later, because eSpeak NG, its phonemiser, is GPLv3. Voices come from Piper and Kokoro-82M, each under <a href="https://github.com/smailoujaoura/aloud/blob/main/PIPER_VOICE_LICENCES.md">its own licence</a>, and are downloaded when you choose them, never bundled.</p>
+      <p><b>Aloud</b> is free software under GPL-3.0-or-later, because eSpeak NG, its phonemiser, is GPLv3. Voices come from Piper, Kokoro-82M and Supertonic 3, each under <a href="https://github.com/smailoujaoura/aloud/blob/main/PIPER_VOICE_LICENCES.md">its own licence</a>, and are downloaded when you choose them, never bundled.</p>
       <p>Built on Mozilla Readability, ONNX Runtime Web and pdf.js. <a href="privacy.html">Privacy policy</a>: Aloud collects nothing. <a href="gpu.html">Using your graphics card</a>. <a class="source-link" href="https://github.com/smailoujaoura/aloud">Source code</a>.</p>
     </div>
     <p class="by">Made by <a href="https://souj.dev"><b>Smail Oujaoura</b></a><br>with <a href="https://claude.com/product/claude-code">Claude Code</a></p>

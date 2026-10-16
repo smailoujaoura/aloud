@@ -102,6 +102,10 @@ async function createEngine(which: EngineConfig['engine'], m: ModelManifest): Pr
     const { KokoroEngine } = await import('./engines/kokoro');
     return new KokoroEngine();
   }
+  if (which === 'supertonic') {
+    const { SupertonicEngine } = await import('./engines/supertonic');
+    return new SupertonicEngine(m);
+  }
   const { PiperEngine } = await import('./engines/piper');
   return new PiperEngine(m);
 }
@@ -178,6 +182,7 @@ async function handleInit(req: Extract<WorkerRequest, { kind: 'init' }>): Promis
     await asModelWriter(() =>
       loading.init({
         voice: req.config.voice,
+        steps: req.config.steps,
         preferWebGPU: req.config.preferWebGPU,
         onProgress,
         onNotice,
@@ -224,6 +229,7 @@ async function synthesizeOrFallBack(job: Job): ReturnType<SynthEngine['synthesiz
     engine = await createEngine(started.config.engine, started.manifest);
     await engine.init({
       voice: started.config.voice,
+      steps: started.config.steps,
       preferWebGPU: false,
       onProgress: () => undefined,
       onNotice: started.onNotice,

@@ -8,8 +8,8 @@
  *
  * The worker synthesises at the target speed, so scheduled sources always play at rate 1.0.
  *
- * Buffering is budgeted in **audio-seconds**, not sentence count: the slower engine
- * (Kokoro) produces ~10 s chunks that each take ~10 s to synthesise on the
+ * Buffering is budgeted in **audio-seconds**, not sentence count: the slower engines
+ * (Kokoro / Supertonic) produce ~10 s chunks that each take ~10 s to synthesise on the
  * single-threaded WASM path, so "keep 3 sentences ahead" was not enough headroom and
  * playback underran for ~10 s at a time. We now prime and top up against a seconds target.
  */

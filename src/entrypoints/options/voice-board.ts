@@ -14,6 +14,7 @@
  *
  * Under it, the catalogue: every voice there is, to browse and download.
  */
+import { supertonicVoices } from '@/shared/supertonic-voices';
 import { el } from '@/shared/dom';
 import { engineInfo } from '@/shared/engine-catalog';
 import { languageName, primaryLanguage, voiceLanguage, type CandidateVoice } from '@/shared/language-voice';
@@ -60,6 +61,10 @@ export function downloadedVoices(ctx: Pick<PanelContext, 'manifest' | 'sizes'>):
   }
   if (sharedModelInstalled('kokoro', ctx.sizes)) {
     for (const [id, v] of Object.entries(ctx.manifest.kokoro.voices)) out.push({ engine: 'kokoro', id, label: v.label, language: v.language });
+  }
+  if (sharedModelInstalled('supertonic', ctx.sizes)) {
+    // Every style in every language it reads, so each language's row offers all ten.
+    for (const v of supertonicVoices(ctx.manifest)) out.push({ engine: 'supertonic', id: v.id, label: v.label, language: v.language });
   }
   return out;
 }
@@ -157,7 +162,12 @@ export function renderVoiceBoard(
   wires.setAttribute('aria-hidden', 'true');
   board.append(wires);
 
-  const codes = new Set<string>([...installed.map((v) => primaryLanguage(v.language)), ...Object.keys(settings.languageVoices)]);
+  // A row for each language a voice of its own was downloaded for, and each one given a voice. Not
+  // one per language Supertonic speaks: every Supertonic voice speaks all 31, and 31 rows at once
+  // buried the board. Its voices join the rows there are; a language only it speaks is added from
+  // the catalogue (Use → For …), and until then the last row reads it.
+  const own = installed.filter((v) => v.engine !== 'supertonic');
+  const codes = new Set<string>([...own.map((v) => primaryLanguage(v.language)), ...Object.keys(settings.languageVoices)]);
   codes.delete('');
   for (const code of removed) codes.delete(code);
   const ordered = [...codes].sort((a, b) =>
@@ -268,7 +278,9 @@ export function renderVoiceBoard(
     }
     const faces = el(document, 'div', { class: `vb-faces${skipping ? ' is-off' : ''}` });
     const isOther = (v: CandidateVoice): boolean => !skipping && others.engine === v.engine && others.id === v.id;
-    const everyone = [...installed].sort(
+    // A language read by this row has no voice of its own, and is read in English: of Supertonic's
+    // voices, only the English ones (each of the other 310 speaks one language, which Auto gives it).
+    const everyone = installed.filter((v) => v.engine !== 'supertonic' || primaryLanguage(v.language) === 'en').sort(
       (a, b) =>
         Number(isOther(b)) - Number(isOther(a)) ||
         languageName(primaryLanguage(a.language)).localeCompare(languageName(primaryLanguage(b.language))),
