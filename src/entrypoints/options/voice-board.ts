@@ -164,8 +164,9 @@ export function renderVoiceBoard(
 
   // A row for each language a voice of its own was downloaded for, and each one given a voice. Not
   // one per language Supertonic speaks: every Supertonic voice speaks all 31, and 31 rows at once
-  // buried the board. Its voices join the rows there are; a language only it speaks is added from
-  // the catalogue (Use → For …), and until then the last row reads it.
+  // buried the board. Its voices join the rows there are; a language only it speaks is read by it
+  // on Auto all the same, and the last row says which those are (it once implied "Skip" covered
+  // them). One gets a row of its own from the catalogue (Use → For …).
   const own = installed.filter((v) => v.engine !== 'supertonic');
   const codes = new Set<string>([...own.map((v) => primaryLanguage(v.language)), ...Object.keys(settings.languageVoices)]);
   codes.delete('');
@@ -261,12 +262,29 @@ export function renderVoiceBoard(
     });
     const chips = el(document, 'span', { class: 'vb-modes' });
     chips.append(auto, skip);
+    // Languages without a row that Supertonic reads all the same, each in its own voice: the
+    // reader gives them to it before anything this row says, so the row names them.
+    const bySupertonic = [...new Set(installed.filter((v) => v.engine === 'supertonic').map((v) => primaryLanguage(v.language)))]
+      .filter((code) => code && !codes.has(code) && !removed.has(code))
+      .map(languageName)
+      .sort((a, b) => a.localeCompare(b));
     lang.append(
       el(document, 'b', {}, 'Every other language'),
-      el(document, 'span', {}, skipping ? 'Not read' : `Read by ${shortName(others.label)}`),
-      chips,
-      node,
+      el(document, 'span', {}, skipping ? (bySupertonic.length ? 'The rest not read' : 'Not read') : `Read by ${shortName(others.label)}`),
     );
+    if (bySupertonic.length) {
+      const shown = bySupertonic.slice(0, 5).join(', ');
+      const more = bySupertonic.length > 5 ? ` and ${bySupertonic.length - 5} more` : '';
+      lang.append(
+        el(
+          document,
+          'span',
+          { class: 'vb-also', title: `Read by Supertonic, each in its own language: ${bySupertonic.join(', ')}` },
+          `Supertonic reads ${shown}${more} in their own language.`,
+        ),
+      );
+    }
+    lang.append(chips, node);
     if (removed.size) {
       const back = el(document, 'span', { class: 'vb-removed' });
       for (const code of [...removed].sort()) {

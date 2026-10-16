@@ -752,6 +752,8 @@ code {
 .vb-remove:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); }
 @media (hover: none) { .vb-remove { opacity: .7; } }
 .vb-lang .vb-modes { grid-column: 1 / -1; display: inline-flex; gap: 4px; margin-top: 6px; }
+/* The languages Supertonic reads on Auto without a row of their own, said under the last row. */
+.vb-lang .vb-also { display: block; margin: 3px 0 5px; line-height: 1.4; max-width: 26ch; }
 .vb-removed { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .vb-back {
   padding: 2px 8px; border: 0; border-radius: 999px; background: var(--surface-2); color: var(--fg-muted);

@@ -170,6 +170,10 @@ function marked(el: Element): boolean {
 function awaitingReveal(el: Element, style: CSSStyleDeclaration, fadesIn: (el: HTMLElement) => boolean): boolean {
   if (!(el instanceof HTMLElement)) return false;
   if (!inFlowBox(el, style)) return false;
+  // A disclosure first, before any sign of a reveal: a translation a button shows is hidden until
+  // it is shown, however it is styled to appear. Checked last, a fade with a movement (or a
+  // library's class, or will-change) let it through while its button still said "Reveal".
+  if (disclosure(el)) return false;
   if (marked(el)) return true;
   // A script's fade-up: transparent *and* moved, both on the element itself. Inline transparency
   // alone says too little — a modal or an answer can be hidden that way.
@@ -223,6 +227,9 @@ function fadedIn(doc: Document): HTMLElement[] {
     const style = styleOf(el);
     // Any opacity at all: one still fading in has been revealed as much as one that has finished.
     if (!style || !(Number.parseFloat(style.opacity) > 0) || !fadesPlainly(style) || !inFlowBox(el, style)) continue;
+    // A disclosure someone opened is not a page fading its text in: revealing one translation
+    // made its still-hidden siblings look like scroll-reveal text, and they were read.
+    if (disclosure(el)) continue;
     shown.push(el);
   }
   return shown;
@@ -261,6 +268,33 @@ function namedByControl(el: HTMLElement): boolean {
     }
   }
   return false;
+}
+
+/**
+ * Something on the page reveals this block: a control names it (namedByControl), or it comes
+ * straight after one — a button, a link or anything clickable — with nothing between, as in
+ * `<button onclick="this.nextElementSibling.style.opacity=1">`, which names nothing.
+ */
+function disclosure(el: HTMLElement): boolean {
+  return namedByControl(el) || afterControl(el);
+}
+
+/** Straight after a control (or the paragraph holding only one): what such a control usually shows. */
+function afterControl(el: HTMLElement): boolean {
+  const before = el.previousElementSibling;
+  if (!before) return false;
+  if (clickable(before)) return true;
+  // A paragraph or line whose only content is the control.
+  const only = before.children.length === 1 ? before.firstElementChild : null;
+  return !!only && clickable(only) && (before.textContent ?? '').trim() === (only.textContent ?? '').trim();
+}
+
+function clickable(el: Element): boolean {
+  if (el.tagName === 'BUTTON' || el.tagName === 'SUMMARY') return true;
+  const role = el.getAttribute('role');
+  if (role === 'button' || role === 'tab' || role === 'switch') return true;
+  if (CONTROL_ATTRS.some((a) => el.hasAttribute(a))) return true;
+  return el.tagName === 'A' && (el.getAttribute('href') ?? '').startsWith('#');
 }
 
 /**
