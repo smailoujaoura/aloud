@@ -484,18 +484,13 @@ function piperItem(group: PiperGroup, ctx: PanelContext): HTMLElement {
   /** Ends this row's following of the download queue (an installed row follows nothing). */
   let stopFollowing: () => void = () => undefined;
   const installed = piperDownloaded(entry, ctx.sizes);
-  const inUse = ctx.settings.engine === 'piper' && ctx.settings.piperVoice === id;
-
-  const item = el(document, 'div', {
-    class: `voice-item${inUse ? ' is-current' : ''}${installed ? ' is-installed' : ''}`,
-  });
+  // No row is marked as "the" voice: each language has its own, and the board above says which.
+  // Marking the engine's saved voice lit up Alba and Heart whether anything read with them or not.
+  const item = el(document, 'div', { class: `voice-item${installed ? ' is-installed' : ''}` });
 
   const main = el(document, 'div', { class: 'vi-main' });
   const size = installed ? piperVoiceBytes(entry, ctx.sizes) : (entry.sizeBytes ?? 0);
   const title = el(document, 'b', { class: 'vi-name' }, group.name);
-  // The voice in use but not downloaded yet has no "In use" button to say so — it shows Download —
-  // so it says so beside its name instead.
-  if (inUse && !installed) title.append(el(document, 'span', { class: 'pill warn' }, 'Current'));
   main.append(
     title,
     el(document, 'span', { class: 'vi-meta' }, `${group.region} · ${entry.quality} · ${size ? humanBytes(size) : '?'}`),
@@ -526,12 +521,11 @@ function piperItem(group: PiperGroup, ctx: PanelContext): HTMLElement {
   }
 
   const actions = el(document, 'div', { class: 'vi-actions' });
-  if (entry.sample) actions.append(previewFor('piper', id, ctx));
 
   const progress = new RowProgress();
   if (installed) {
-    actions.append(useControl('piper', id, group.name, ctx));
-    const remove = el(document, 'button', { class: 'ghost btn-sm remove', type: 'button', title: 'Delete from this device' }, 'Remove');
+    // Remove first, away from Use: the one action here that takes something away.
+    const remove = el(document, 'button', { class: 'btn-sm remove', type: 'button', title: 'Delete from this device' }, 'Remove');
     remove.addEventListener('click', () => {
       void runModelAction(remove, async () => {
         try {
@@ -547,7 +541,10 @@ function piperItem(group: PiperGroup, ctx: PanelContext): HTMLElement {
       });
     });
     actions.append(remove);
+    if (entry.sample) actions.append(previewFor('piper', id, ctx));
+    actions.append(useControl('piper', id, group.name, ctx));
   } else {
+    if (entry.sample) actions.append(previewFor('piper', id, ctx));
     const download = el(document, 'button', { class: 'btn-sm', type: 'button' }, 'Download');
     const key = `piper:${id}`;
     download.addEventListener('click', () => {
@@ -555,7 +552,7 @@ function piperItem(group: PiperGroup, ctx: PanelContext): HTMLElement {
       downloads.enqueue(key, group.name, (p, signal) => downloadPiperVoice(entry, p, signal)).then(
         async () => {
           announceModelsChanged();
-          ctx.flashSaved(inUse ? `${group.name} is ready` : `${group.name} downloaded — press Use to read with it`);
+          ctx.flashSaved(`${group.name} downloaded — press Use to read with it`);
           await ctx.refresh();
         },
         (err: unknown) => {
@@ -662,8 +659,7 @@ function sharedPanel(engine: 'kokoro' | 'supertonic', ctx: PanelContext, again: 
   }
 
   const item = (v: SharedVoice): HTMLElement => {
-    const inUse = ctx.settings.engine === engine && activeVoice(ctx.settings) === v.id;
-    const row = el(document, 'div', { class: `voice-item${inUse ? ' is-current' : ''}` });
+    const row = el(document, 'div', { class: 'voice-item' });
     const main = el(document, 'div', { class: 'vi-main' });
     main.append(el(document, 'b', { class: 'vi-name' }, v.name), el(document, 'span', { class: 'vi-meta' }, v.meta));
     const actions = el(document, 'div', { class: 'vi-actions' });
