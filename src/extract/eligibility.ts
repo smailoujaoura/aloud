@@ -50,6 +50,9 @@ export class Eligibility {
   private readonly hiddenCache = new WeakMap<Element, boolean>();
   private readonly controlCache = new WeakMap<Element, boolean>();
   private readonly notationCache = new WeakMap<Element, boolean>();
+  /** Whether this page fades its blocks in as they are scrolled to (fadesInPlainly), once a pass. */
+  private fadingPage: boolean | null = null;
+  private readonly fadesIn = (doc: Document): boolean => (this.fadingPage ??= fadesInPlainly(doc));
 
   /** Is this text drawn, and words to say rather than a phonetic transcription? */
   spoken(node: Text): boolean {
@@ -80,7 +83,7 @@ export class Eligibility {
   hidden(el: Element): boolean {
     const known = this.hiddenCache.get(el);
     if (known !== undefined) return known;
-    const result = selfHidden(el) || (el.parentElement ? this.hidden(el.parentElement) : false);
+    const result = selfHidden(el, this.fadesIn) || (el.parentElement ? this.hidden(el.parentElement) : false);
     this.hiddenCache.set(el, result);
     return result;
   }
@@ -112,7 +115,7 @@ function styleOf(el: Element): CSSStyleDeclaration | null {
   }
 }
 
-function selfHidden(el: Element): boolean {
+function selfHidden(el: Element, fadesIn: (doc: Document) => boolean): boolean {
   if (el.hasAttribute('hidden') || el.hasAttribute('inert') || el.getAttribute('aria-hidden') === 'true') return true;
   // The body of a closed <details>: the browser hides it with no style the element itself shows.
   const parent = el.parentElement;
@@ -122,7 +125,7 @@ function selfHidden(el: Element): boolean {
   // `display: contents` has no box of its own, and hides nothing: its children are drawn.
   if (style.display === 'contents') return false;
   if (style.display === 'none') return true;
-  if (Number.parseFloat(style.opacity) === 0 && !awaitingReveal(el, style)) return true;
+  if (Number.parseFloat(style.opacity) === 0 && !awaitingReveal(el, style, fadesIn)) return true;
   // Clipped to nothing: a box with no width or no height that does not let content overflow
   // (a collapsed accordion, a "visually hidden" helper). A zero-height box whose content
   // overflows visibly is not hidden by this — its content is drawn below it.
@@ -164,10 +167,9 @@ function marked(el: Element): boolean {
  * A collapsed translation has no height; a tooltip or menu floats above the page; a spoiler kept
  * transparent by a class, with nothing set to move it, stays hidden.
  */
-function awaitingReveal(el: Element, style: CSSStyleDeclaration): boolean {
+function awaitingReveal(el: Element, style: CSSStyleDeclaration, fadesIn: (doc: Document) => boolean): boolean {
   if (!(el instanceof HTMLElement)) return false;
-  if (el.offsetWidth <= 1 || el.offsetHeight <= 1) return false;
-  if (style.position === 'absolute' || style.position === 'fixed') return false;
+  if (!inFlowBox(el, style)) return false;
   if (marked(el)) return true;
   // A script's fade-up: transparent *and* moved, both on the element itself. Inline transparency
   // alone says too little — a modal or an answer can be hidden that way.
@@ -175,27 +177,59 @@ function awaitingReveal(el: Element, style: CSSStyleDeclaration): boolean {
   if (el.style.opacity !== '' && Number.parseFloat(el.style.opacity) === 0 && inlineMoved) return true;
   if (/(^|,\s*)(opacity|transform)(\s*,|$)/.test(style.willChange)) return true;
   const set = (v: string | undefined): boolean => !!v && v !== 'none' && v !== '';
+  // A plain fade — transparent, with nothing but a transition on opacity — is the one sign a
+  // scroll-reveal paragraph and a disclosure (a translation, an answer that fades in when asked)
+  // share, so the element alone cannot tell them apart; nor can where it sits, which would read
+  // the same paragraph or skip it depending on the scroll position. The page can: a scroll-reveal
+  // page fades block after block, a disclosure is one or two.
+  if (fadesPlainly(style) && fadesIn(el.ownerDocument)) return true;
+  const moved = set(style.transform) || set(style.getPropertyValue('translate')) || set(style.getPropertyValue('scale'));
+  return moved && (transitioning(style, /^(all|opacity|transform|translate|scale)$/) || set(style.animationName));
+}
+
+/** A full-size box in the flow of the page: not collapsed, not floating above it. */
+function inFlowBox(el: HTMLElement, style: CSSStyleDeclaration): boolean {
+  if (el.offsetWidth <= 1 || el.offsetHeight <= 1) return false;
+  return style.position !== 'absolute' && style.position !== 'fixed';
+}
+
+/** A transition on a property matching `re`, longer than `minSeconds`. */
+function transitioning(style: CSSStyleDeclaration, re: RegExp, minSeconds = 0): boolean {
   // CSS repeats a shorter list of durations across the properties, cyclically.
   const durations = style.transitionDuration.split(',').map((d) => Number.parseFloat(d) || 0);
   const transitions = style.transitionProperty.split(',').map((p) => p.trim());
-  const transitioning = (re: RegExp, minSeconds = 0): boolean =>
-    transitions.some((p, i) => re.test(p) && (durations[i % durations.length] ?? 0) > minSeconds);
-  // A fade waiting to happen: a visible transition on opacity — but only below the screen. A
-  // scroll-reveal page fades in what is on screen as it loads, so text on screen and still fully
-  // transparent is not waiting to be scrolled to: it is a disclosure (a translation, an answer)
-  // that fades in when asked, and was read and saved before anyone asked. Below the screen the two
-  // cannot be told apart, and reading a fading answer costs far less than losing every paragraph
-  // of an article below its first screen.
-  if (transitioning(/^(all|opacity)$/, 0.15) && belowScreen(el)) return true;
-  const moved = set(style.transform) || set(style.getPropertyValue('translate')) || set(style.getPropertyValue('scale'));
-  return moved && (transitioning(/^(all|opacity|transform|translate|scale)$/) || set(style.animationName));
+  return transitions.some((p, i) => re.test(p) && (durations[i % durations.length] ?? 0) > minSeconds);
 }
 
-/** Starts below what the window shows now. */
-function belowScreen(el: HTMLElement): boolean {
-  const view = el.ownerDocument.defaultView;
-  if (!view) return false;
-  return el.getBoundingClientRect().top >= view.innerHeight;
+/** A visible fade on opacity waiting to happen. */
+function fadesPlainly(style: CSSStyleDeclaration): boolean {
+  return transitioning(style, /^(all|opacity)$/, 0.15);
+}
+
+/** How many plainly fading blocks of prose make a page that fades its text in as it is scrolled to. */
+const FADING_BLOCKS = 3;
+
+/** Long enough to be a passage of prose rather than a label. */
+const PROSE_CHARS = 40;
+
+/**
+ * Does this page fade its text in as it is scrolled to? At least FADING_BLOCKS blocks of prose,
+ * anywhere on it, with a fade on opacity — whether still transparent or already faded in, so the
+ * answer stays the same as the reader moves down the page and the last ones are reached. Links,
+ * buttons and short labels are left out: many sites fade those on hover.
+ */
+function fadesInPlainly(doc: Document): boolean {
+  const body = doc.body;
+  if (!body) return false;
+  let found = 0;
+  for (const el of body.querySelectorAll('*')) {
+    if (!(el instanceof HTMLElement) || NATIVE_CONTROLS.has(el.tagName) || el.tagName === 'A') continue;
+    if ((el.textContent ?? '').trim().length < PROSE_CHARS) continue;
+    const style = styleOf(el);
+    if (!style || !fadesPlainly(style) || !inFlowBox(el, style)) continue;
+    if (++found >= FADING_BLOCKS) return true;
+  }
+  return false;
 }
 
 /**

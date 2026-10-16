@@ -105,6 +105,18 @@ export class GaplessScheduler {
     return true;
   }
 
+  /**
+   * Has `playId` begun to sound? Scheduled is not started: a sentence queued behind the one playing,
+   * or queued and then paused before its first word (the clock stops while paused), has said
+   * nothing yet. Its lead silence does not count as sounding either.
+   */
+  started(playId: number): boolean {
+    if (!this.ctx) return false;
+    const entry = this.timeline.find((e) => e.playId === playId);
+    if (!entry) return playId <= this.lastEnded;
+    return this.ctx.currentTime >= entry.start + entry.lead;
+  }
+
   /** True when we want to play but the browser is holding the AudioContext for a user gesture. */
   needsGesture(): boolean {
     return this.running && this.ctx != null && this.ctx.state !== 'running';

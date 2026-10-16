@@ -254,14 +254,38 @@ async function missingKokoroVoices(voices: readonly string[]): Promise<string[]>
   return missing;
 }
 
-/** Fetch voices' files, checked, into kokoro-js's store, four at a time, reporting the bytes of each. */
-async function fetchKokoroVoices(voices: readonly string[], onBytes: (bytes: number) => void): Promise<void> {
+/**
+ * Fetch voices' files, checked, into kokoro-js's store, four at a time, reporting the bytes of each.
+ *
+ * The first failure ends it: no further file starts, those under way are cancelled, and it settles
+ * only once all four have stopped. With `Promise.all` the failure was reported — and the storage
+ * lock let go, so "Delete" was allowed — while the other three went on fetching and writing files.
+ */
+async function fetchKokoroVoices(voices: readonly string[], onBytes: (bytes: number) => void, cancel: AbortSignal): Promise<void> {
   const store = await caches.open(KOKORO_VOICE_STORE);
+  const stop = new AbortController();
+  const stopAll = (): void => stop.abort();
+  cancel.addEventListener('abort', stopAll, { once: true });
+  if (cancel.aborted) stopAll();
   let next = 0;
   const fetchNext = async (): Promise<void> => {
-    while (next < voices.length) onBytes(await storeKokoroVoice(voices[next++]!, store));
+    try {
+      while (next < voices.length && !stop.signal.aborted) onBytes(await storeKokoroVoice(voices[next++]!, store, stop.signal));
+    } catch (err) {
+      stop.abort();
+      throw err;
+    }
   };
-  await Promise.all(Array.from({ length: Math.min(4, voices.length) }, fetchNext));
+  try {
+    const results = await Promise.allSettled(Array.from({ length: Math.min(4, voices.length) }, fetchNext));
+    const failures = results.flatMap((r) => (r.status === 'rejected' ? [r.reason as unknown] : []));
+    // The cause, not the cancellations it led to.
+    const cause = failures.find((e) => !(e instanceof DOMException && e.name === 'AbortError')) ?? failures[0];
+    if (cause !== undefined) throw cause instanceof Error ? cause : new Error(String(cause));
+    cancel.throwIfAborted();
+  } finally {
+    cancel.removeEventListener('abort', stopAll);
+  }
 }
 
 /**
@@ -274,14 +298,15 @@ export async function downloadSharedModel(config: EngineConfig, kokoroVoices: re
   if (!missing.length) return downloadViaWorker(config, progress);
   return downloadViaWorker(config, progress, {
     total: missing.length * KOKORO_VOICE_BYTES,
-    start: (onBytes) => asModelWriter(() => fetchKokoroVoices(missing, onBytes)),
+    start: (onBytes, cancel) => asModelWriter(() => fetchKokoroVoices(missing, onBytes, cancel)),
   });
 }
 
 /** Files fetched alongside a model, counted in its progress and finished before it is ready. */
 interface Alongside {
   total: number;
-  start: (onBytes: (bytes: number) => void) => Promise<void>;
+  /** Settles only once all its work has stopped; `cancel` stops it when the model fails. */
+  start: (onBytes: (bytes: number) => void, cancel: AbortSignal) => Promise<void>;
 }
 
 /**
@@ -305,6 +330,10 @@ export function downloadViaWorker(config: EngineConfig, progress: ProgressSink, 
     }
 
     let settled = false;
+    // The files coming alongside stop when the model fails, and the download is reported failed
+    // only once they have: nothing of it is still fetching or writing when the row says so.
+    const alongStop = new AbortController();
+    let along: Promise<void> | undefined;
     const finish = (err?: Error): void => {
       if (settled) return;
       settled = true;
@@ -314,8 +343,12 @@ export function downloadViaWorker(config: EngineConfig, progress: ProgressSink, 
       } catch {
         /* already gone */
       }
-      if (err) reject(err);
-      else resolve();
+      if (!err) {
+        resolve();
+        return;
+      }
+      alongStop.abort();
+      void (along ?? Promise.resolve()).catch(() => undefined).then(() => reject(err));
     };
 
     worker.onerror = (ev: ErrorEvent) => {
@@ -341,10 +374,10 @@ export function downloadViaWorker(config: EngineConfig, progress: ProgressSink, 
       // The share is on the bar; the line under it says how much.
       progress.note(total > 0 ? `${humanBytes(loaded)} of ${humanBytes(total)}` : 'Downloading…');
     };
-    const along = alongside?.start((bytes) => {
+    along = alongside?.start((bytes) => {
       alongLoaded += bytes;
       report();
-    });
+    }, alongStop.signal);
     along?.then(
       () => {
         alongDone = true;

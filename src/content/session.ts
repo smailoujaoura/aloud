@@ -882,7 +882,11 @@ export class ReaderSession {
       if (this.eligibilityTimer) return;
       this.eligibilityTimer = window.setTimeout(() => {
         this.eligibilityTimer = 0;
-        this.onEligibilityChanged();
+        // One after another: each run takes the page's changes since the last one, and works out
+        // languages asynchronously — two at once could each miss what the other took.
+        this.eligibilityRuns = this.eligibilityRuns
+          .then(() => this.onEligibilityChanged())
+          .catch((err) => log.warn('[eligibility] could not follow the page:', err));
       }, 200);
     });
     this.eligibilityObserver.observe(document.documentElement, {
@@ -892,7 +896,9 @@ export class ReaderSession {
     });
   }
 
-  private onEligibilityChanged(): void {
+  private eligibilityRuns: Promise<void> = Promise.resolve();
+
+  private async onEligibilityChanged(): Promise<void> {
     if (this.disposed || !this.textIndex) return;
     const ranges = changedEligibility(this.textIndex);
     if (!ranges.length) return;
@@ -922,6 +928,35 @@ export class ReaderSession {
     }
     if (!changed.length && !here) return;
     log.info(`[eligibility] the page changed: ${this.playlist.filter((p) => p.eligible).length} of ${this.playlist.length} sentences readable`);
+
+    // What shows decides a passage's language: English hidden and Italian revealed in its place is
+    // an Italian passage now, for its own voice. Languages are worked out again (the detector
+    // remembers every text it has seen, so only what is new is asked about), and a sentence whose
+    // language or voice moved is made again like one whose words changed. A language the reader
+    // corrected stays corrected (applyLanguages).
+    const before = new Map(this.playlist.filter((i) => i.playId >= current).map((i) => [i.playId, routeSignature(i)]));
+    await this.planPassageLanguages();
+    if (this.disposed) return;
+    this.routeItems(current);
+    for (const [id, was] of before) {
+      const item = this.playlist[id];
+      if (!item || routeSignature(item) === was) continue;
+      if (id > current) {
+        if (!changed.includes(id)) changed.push(id);
+      } else if (item.eligible) {
+        here = true;
+        hereReworded = true;
+      }
+    }
+    this.languageVoice = this.pickPrimary();
+    this.shownLanguageKey = '';
+    this.showLanguage(current);
+    // Moved on meanwhile: what was decided about "here" was about another sentence.
+    if (this.currentPlayId !== current) {
+      here = false;
+      hereReworded = false;
+    }
+
     if (this.exporter) {
       this.cancelExport('The page changed, so the MP3 was stopped');
       return;
@@ -932,10 +967,19 @@ export class ReaderSession {
       this.moveOnFrom(current + 1);
       return;
     }
-    // Words hidden in the sentence being read, before its audio started (paused on it, or still
-    // buffering): its prepared audio says them, so it is made again. Once it sounds, it finishes.
-    if (hereReworded && this.scheduler.discard(current)) changed.unshift(current);
-    this.remake(changed);
+    // Words hidden in the sentence being read, or its language changed, before its audio started
+    // (paused on it, or still buffering): its prepared audio says the old words, so it is made
+    // again. Once it sounds, it finishes. Prepared but not yet scheduled, it is simply dropped;
+    // already scheduled — paused before its first word — only a seek takes it back, which leaves
+    // the pause as it is.
+    if (hereReworded && !this.scheduler.started(current)) {
+      if (this.scheduler.discard(current)) changed.unshift(current);
+      else {
+        this.seekTo(current, { quiet: true });
+        return;
+      }
+    }
+    this.remake(changed.sort((a, b) => a - b));
   }
 
   /**
@@ -2212,11 +2256,17 @@ export class ReaderSession {
     const prevEngine = engineIdentity(this.engineConfig());
     this.settings = await getSettings();
 
-    // Which voice reads which passage: Auto, the voices chosen per language, the saved voice.
+    // Which voice reads which passage: Auto, the voices chosen per language, the saved voice, and
+    // the Voice page's last row — who reads every other language, whether those are skipped, and
+    // which languages were taken off the board. Missing those three, a choice made there was saved
+    // but an open reader kept its old voices until it was started again.
     const next = this.settings;
     if (
       prev.matchPageLanguage !== next.matchPageLanguage ||
       !sameValue(prev.languageVoices, next.languageVoices) ||
+      !sameValue(prev.otherVoice, next.otherVoice) ||
+      prev.unvoicedLanguages !== next.unvoicedLanguages ||
+      !sameValue(prev.removedLanguages, next.removedLanguages) ||
       prev.engine !== next.engine ||
       activeVoice(prev) !== activeVoice(next)
     ) {
@@ -2619,6 +2669,13 @@ function changedVisibly(prev: Settings, next: Settings): boolean {
 }
 
 /** Settings are re-read from storage, so lists arrive as new arrays: compare them by content. */
+/** What a sentence is said as: its language, its voice (or skipped), and the text prepared for it. */
+function routeSignature(item: PlaylistItem): string {
+  const route = item.route;
+  const voice = route?.kind === 'voice' ? `${route.voice.engine}:${route.voice.id}` : route?.kind ?? '';
+  return `${item.language ?? ''}|${voice}|${item.spokenAs ?? ''}|${item.spokenText}`;
+}
+
 function sameValue(a: unknown, b: unknown): boolean {
   return a === b || (typeof a === 'object' && JSON.stringify(a) === JSON.stringify(b));
 }

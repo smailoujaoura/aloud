@@ -33,10 +33,14 @@ async function genuine(voice: string, bytes: ArrayBuffer): Promise<boolean> {
 const STALL_MS = 120_000;
 const ATTEMPTS = 3;
 
-async function fetchWithRetry(url: string, voice: string): Promise<ArrayBuffer> {
+async function fetchWithRetry(url: string, voice: string, cancel?: AbortSignal): Promise<ArrayBuffer> {
   let last: unknown;
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+    cancel?.throwIfAborted();
     const stop = new AbortController();
+    // Cancelled from outside (the download it belongs to failed): stop now, and do not retry.
+    const cancelled = (): void => stop.abort();
+    cancel?.addEventListener('abort', cancelled, { once: true });
     let timer = setTimeout(() => stop.abort(), STALL_MS);
     const arrived = (): void => {
       clearTimeout(timer);
@@ -64,20 +68,24 @@ async function fetchWithRetry(url: string, voice: string): Promise<ArrayBuffer> 
       }
       return bytes.buffer;
     } catch (err) {
+      cancel?.throwIfAborted();
       last = stop.signal.aborted ? new Error(`The voice ${voice} did not download — the connection kept stalling`) : err;
     } finally {
       clearTimeout(timer);
+      cancel?.removeEventListener('abort', cancelled);
     }
   }
   throw last instanceof Error ? last : new Error(String(last));
 }
 
 /** Download `voice`'s file, check it, and store it where kokoro-js reads it. Returns its size. */
-export async function storeKokoroVoice(voice: string, store?: Cache): Promise<number> {
+export async function storeKokoroVoice(voice: string, store?: Cache, cancel?: AbortSignal): Promise<number> {
   if (!hasKokoroVoicePin(voice)) throw new Error(`The Kokoro voice ${voice} cannot be checked, so it is not downloaded`);
-  const bytes = await fetchWithRetry(kokoroVoiceSource(voice), voice);
+  const bytes = await fetchWithRetry(kokoroVoiceSource(voice), voice, cancel);
   if (!(await genuine(voice, bytes))) throw new Error(`Integrity check failed for the voice ${voice}`);
   const target = store ?? (await caches.open(KOKORO_VOICE_STORE));
+  // Nothing is written once the download it belongs to has failed.
+  cancel?.throwIfAborted();
   await target.put(
     kokoroVoiceUrl(voice),
     new Response(bytes, { headers: { 'content-type': 'application/octet-stream', 'content-length': String(bytes.byteLength) } }),
