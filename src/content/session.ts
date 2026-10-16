@@ -266,6 +266,12 @@ export class ReaderSession {
    * hidden on the page — taken when it is asked for, since the page can change after.
    */
   private readonly madeWords = new Map<number, number>();
+  /**
+   * The language each sentence's audio was asked for in, for the same reason: English hidden and
+   * Italian shown while the English audio plays makes the passage Italian, but what is still
+   * heard of that audio is English.
+   */
+  private readonly madeLanguage = new Map<number, string>();
   /** Heard but not yet written to the statistics. */
   private heardQueue: Heard[] = [];
   private lastStatsWrite = 0;
@@ -1807,6 +1813,7 @@ export class ReaderSession {
         continue;
       }
       this.madeWords.set(i, countWords(item.visibleSource ?? item.sourceText, item.language));
+      this.madeLanguage.set(i, item.language ?? '');
       this.worker.request(i, item.spokenText, this.settings.speed, this.voiceFor(item));
     }
   }
@@ -1984,6 +1991,7 @@ export class ReaderSession {
     this.audioSeconds.delete(playId);
     this.wordTimings.delete(playId);
     this.madeWords.delete(playId);
+    this.madeLanguage.delete(playId);
   }
 
   private onChunkEnd(playId: number): void {
@@ -2053,7 +2061,7 @@ export class ReaderSession {
       seconds: to - already,
       words: (this.madeWords.get(playId) ?? countWords(item.visibleSource ?? item.sourceText, item.language)) * share,
       site: this.docSource().site ?? '',
-      language: item.language ?? '',
+      language: this.madeLanguage.get(playId) ?? item.language ?? '',
     });
   }
 

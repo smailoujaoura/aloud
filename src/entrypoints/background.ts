@@ -17,7 +17,7 @@
  * partway through `main()` and leaving the rest of the listeners unregistered.
  */
 import { browser } from 'wxt/browser';
-import { settingsReplace } from '@/shared/settings-tabs';
+import { emptyPage, settingsReplace } from '@/shared/settings-tabs';
 import { defineBackground } from 'wxt/utils/define-background';
 import { PORT_NAME, type ActivateMode, type LibraryTab, type ToBackgroundMessage } from '@/shared/messages';
 import { NOTES_FULL_MESSAGE, addNote } from '@/shared/notes';
@@ -423,6 +423,13 @@ async function activate(tabId: number, mode: ActivateMode, targetElementId?: num
   const ownPage = tab?.url ? tab.url.startsWith(browser.runtime.getURL('/')) : await isOwnTab(tabId);
   if (ownPage && active && (active.tabId === tabId || active.tabId === null)) {
     postToActive({ type: 'toggle' });
+    return;
+  }
+
+  // An empty page — a new tab, about:blank — has nothing to read: settings, as on the browser's
+  // own pages. Firefox would let the reader into about:blank, only for it to report no article.
+  if (emptyPage(tab?.url)) {
+    await openSettingsInstead(tab);
     return;
   }
 

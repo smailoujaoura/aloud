@@ -50,9 +50,9 @@ export class Eligibility {
   private readonly hiddenCache = new WeakMap<Element, boolean>();
   private readonly controlCache = new WeakMap<Element, boolean>();
   private readonly notationCache = new WeakMap<Element, boolean>();
-  /** Whether this page fades its blocks in as they are scrolled to (fadesInPlainly), once a pass. */
-  private fadingPage: boolean | null = null;
-  private readonly fadesIn = (doc: Document): boolean => (this.fadingPage ??= fadesInPlainly(doc));
+  /** The blocks of prose this page has already faded in (fadedIn), found once a pass. */
+  private faded: HTMLElement[] | null = null;
+  private readonly fadesIn = (el: HTMLElement): boolean => revealedLike(el, (this.faded ??= fadedIn(el.ownerDocument)));
 
   /** Is this text drawn, and words to say rather than a phonetic transcription? */
   spoken(node: Text): boolean {
@@ -115,7 +115,7 @@ function styleOf(el: Element): CSSStyleDeclaration | null {
   }
 }
 
-function selfHidden(el: Element, fadesIn: (doc: Document) => boolean): boolean {
+function selfHidden(el: Element, fadesIn: (el: HTMLElement) => boolean): boolean {
   if (el.hasAttribute('hidden') || el.hasAttribute('inert') || el.getAttribute('aria-hidden') === 'true') return true;
   // The body of a closed <details>: the browser hides it with no style the element itself shows.
   const parent = el.parentElement;
@@ -167,7 +167,7 @@ function marked(el: Element): boolean {
  * A collapsed translation has no height; a tooltip or menu floats above the page; a spoiler kept
  * transparent by a class, with nothing set to move it, stays hidden.
  */
-function awaitingReveal(el: Element, style: CSSStyleDeclaration, fadesIn: (doc: Document) => boolean): boolean {
+function awaitingReveal(el: Element, style: CSSStyleDeclaration, fadesIn: (el: HTMLElement) => boolean): boolean {
   if (!(el instanceof HTMLElement)) return false;
   if (!inFlowBox(el, style)) return false;
   if (marked(el)) return true;
@@ -180,9 +180,11 @@ function awaitingReveal(el: Element, style: CSSStyleDeclaration, fadesIn: (doc: 
   // A plain fade — transparent, with nothing but a transition on opacity — is the one sign a
   // scroll-reveal paragraph and a disclosure (a translation, an answer that fades in when asked)
   // share, so the element alone cannot tell them apart; nor can where it sits, which would read
-  // the same paragraph or skip it depending on the scroll position. The page can: a scroll-reveal
-  // page fades block after block, a disclosure is one or two.
-  if (fadesPlainly(style) && fadesIn(el.ownerDocument)) return true;
+  // the same paragraph or skip it depending on the scroll position. Two things on the page can:
+  // a control that names it (it is a disclosure), and blocks like it already faded in — a
+  // scroll-reveal page fades in what was on screen as it loaded, while a page of translations
+  // shows none of them until asked. How many fade proved nothing: three translations fade too.
+  if (fadesPlainly(style) && !namedByControl(el) && fadesIn(el)) return true;
   const moved = set(style.transform) || set(style.getPropertyValue('translate')) || set(style.getPropertyValue('scale'));
   return moved && (transitioning(style, /^(all|opacity|transform|translate|scale)$/) || set(style.animationName));
 }
@@ -206,28 +208,57 @@ function fadesPlainly(style: CSSStyleDeclaration): boolean {
   return transitioning(style, /^(all|opacity)$/, 0.15);
 }
 
-/** How many plainly fading blocks of prose make a page that fades its text in as it is scrolled to. */
-const FADING_BLOCKS = 3;
-
 /** Long enough to be a passage of prose rather than a label. */
 const PROSE_CHARS = 40;
 
 /**
- * Does this page fade its text in as it is scrolled to? At least FADING_BLOCKS blocks of prose,
- * anywhere on it, with a fade on opacity — whether still transparent or already faded in, so the
- * answer stays the same as the reader moves down the page and the last ones are reached. Links,
- * buttons and short labels are left out: many sites fade those on hover.
+ * The blocks of prose on this page that fade on opacity and are shown now — faded in, or fading in.
+ * Links, buttons and short labels are left out: many sites fade those on hover.
  */
-function fadesInPlainly(doc: Document): boolean {
-  const body = doc.body;
-  if (!body) return false;
-  let found = 0;
-  for (const el of body.querySelectorAll('*')) {
+function fadedIn(doc: Document): HTMLElement[] {
+  const shown: HTMLElement[] = [];
+  for (const el of doc.body?.querySelectorAll('*') ?? []) {
     if (!(el instanceof HTMLElement) || NATIVE_CONTROLS.has(el.tagName) || el.tagName === 'A') continue;
     if ((el.textContent ?? '').trim().length < PROSE_CHARS) continue;
     const style = styleOf(el);
-    if (!style || !fadesPlainly(style) || !inFlowBox(el, style)) continue;
-    if (++found >= FADING_BLOCKS) return true;
+    // Any opacity at all: one still fading in has been revealed as much as one that has finished.
+    if (!style || !(Number.parseFloat(style.opacity) > 0) || !fadesPlainly(style) || !inFlowBox(el, style)) continue;
+    shown.push(el);
+  }
+  return shown;
+}
+
+/**
+ * Is a block like `el` among those already faded in? The same element, and either a class in
+ * common or both faded through their own style attribute — the same reveal, not some card
+ * elsewhere that fades on hover.
+ */
+function revealedLike(el: HTMLElement, shown: readonly HTMLElement[]): boolean {
+  const classes = [...el.classList];
+  const inline = el.style.opacity !== '' || el.style.transition !== '';
+  return shown.some(
+    (other) =>
+      other !== el &&
+      other.tagName === el.tagName &&
+      (classes.some((c) => other.classList.contains(c)) || (inline && (other.style.opacity !== '' || other.style.transition !== ''))),
+  );
+}
+
+/**
+ * Named by a control on the page — the button or link that reveals it: `aria-controls`, a link to
+ * it, Bootstrap's `data-target` / `data-bs-target`, or a click handler that mentions its id.
+ */
+function namedByControl(el: HTMLElement): boolean {
+  for (let at: HTMLElement | null = el; at && at !== at.ownerDocument.body; at = at.parentElement) {
+    const id = at.id;
+    if (!id) continue;
+    const q = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(id) : id.replace(/["\\]/g, '\\$&');
+    const doc = at.ownerDocument;
+    if (doc.querySelector(`[aria-controls~="${q}"], [href="#${q}"], [data-target="#${q}"], [data-bs-target="#${q}"]`)) return true;
+    for (const c of doc.querySelectorAll('[onclick]')) {
+      const code = c.getAttribute('onclick') ?? '';
+      if (code.includes(`#${id}`) || code.includes(`'${id}'`) || code.includes(`"${id}"`)) return true;
+    }
   }
   return false;
 }

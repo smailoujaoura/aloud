@@ -15,6 +15,14 @@ const EMPTY_PAGE =
 /** The browser's own pages: settings, add-ons, debugging, history and the like. */
 const BROWSER_PAGE = /^(about:|chrome:\/\/|edge:\/\/|brave:\/\/|opera:\/\/|vivaldi:\/\/)/i;
 
+/**
+ * A page that is only somewhere to start from. Firefox lets the reader into about:blank, which
+ * then said "This page doesn't look like an article" — the button opens settings there instead.
+ */
+export function emptyPage(url: string | undefined): boolean {
+  return !!url && EMPTY_PAGE.test(url);
+}
+
 /** Should settings open in this tab (true), or beside it (false)? Unknown addresses: beside. */
 export function settingsReplace(url: string | undefined): boolean {
   if (!url) return false;
