@@ -533,7 +533,7 @@ export class ReaderSession {
   private loadedIdentity = '';
 
   /**
-   * Kokoro or Supertonic on the processor is the one case where a setting elsewhere — the browser
+   * Kokoro on the processor is the one case where a setting elsewhere — the browser
    * keeping WebGPU from workers — costs real speed. Say so once, with the way to fix it; Piper is
    * fast anywhere and gets no tip, and someone who switched acceleration off chose that.
    */
@@ -1084,7 +1084,6 @@ export class ReaderSession {
     return {
       engine: this.engine,
       voice: this.voice,
-      steps: this.settings.supertonicSteps,
       preferWebGPU: this.settings.preferWebGPU,
       debug: this.settings.debug,
       speed: this.settings.speed,

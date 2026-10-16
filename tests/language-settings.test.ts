@@ -45,3 +45,22 @@ describe('the bar, and voice choices', () => {
     expect(s.otherVoice).toEqual({ engine: 'kokoro', voice: 'if_sara' });
   });
 });
+
+describe('Supertonic, removed', () => {
+  it('settings and backups made with it load cleanly: its voices and settings are dropped', () => {
+    const raw = {
+      ...DEFAULT_SETTINGS,
+      engine: 'supertonic',
+      supertonicVoice: 'F1',
+      supertonicSteps: 6,
+      languageVoices: { en: { engine: 'supertonic', voice: 'F1' }, it: { engine: 'piper', voice: 'it_IT-paola-medium' } },
+      otherVoice: { engine: 'supertonic', voice: 'M2' },
+    } as unknown as Settings;
+    const s = sanitizeSettings(raw);
+    expect(s.engine).toBe(DEFAULT_SETTINGS.engine);
+    expect(s.languageVoices).toEqual({ it: { engine: 'piper', voice: 'it_IT-paola-medium' } });
+    expect(s.otherVoice).toBeNull();
+    expect(s).not.toHaveProperty('supertonicVoice');
+    expect(s).not.toHaveProperty('supertonicSteps');
+  });
+});

@@ -92,7 +92,7 @@ export default defineConfig({
       {
         // `synth-host.html` is the hidden iframe the content script loads to host the synthesis
         // Worker. `vendor/rt/*` holds the worker's lazily-imported engine chunks (Piper / Kokoro /
-        // Supertonic / the ORT loader) produced by scripts/build-worker.mjs.
+        // the ORT loader) produced by scripts/build-worker.mjs.
         // Only the voice frame's document. Everything it loads — its script, the worker, the
         // runtime chunks, ONNX Runtime, eSpeak's data — is requested by that frame at the
         // extension's own origin, which needs no listing here; models.json and the icon reach the

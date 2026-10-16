@@ -568,7 +568,7 @@ function piperItem(group: PiperGroup, ctx: PanelContext): HTMLElement {
   return item;
 }
 
-// ---- shared-model engines (Kokoro / Supertonic) ----------------------------
+// ---- the shared-model engine (Kokoro) --------------------------------------
 
 interface SharedVoice {
   id: string;
@@ -579,29 +579,20 @@ interface SharedVoice {
   group: string;
 }
 
-function sharedVoices(engine: 'kokoro' | 'supertonic', manifest: ModelManifest): SharedVoice[] {
-  if (engine === 'kokoro') {
-    // Every Kokoro voice is a good one: no grades and no "best" heading, just by name.
-    return Object.entries(manifest.kokoro.voices)
-      .map(([id, v]) => ({
-        id,
-        name: v.label,
-        meta: [accentName(v.language), v.gender].filter(Boolean).join(' · '),
-        rank: 0,
-        group: v.language.startsWith('en') ? 'English' : accentName(v.language),
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }
-  return Object.entries(manifest.supertonic?.voices ?? {}).map(([id, v]) => ({
-    id,
-    name: v.label,
-    meta: v.gender,
-    rank: 0,
-    group: 'English',
-  }));
+function sharedVoices(_engine: 'kokoro', manifest: ModelManifest): SharedVoice[] {
+  // Every Kokoro voice is a good one: no grades and no "best" heading, just by name.
+  return Object.entries(manifest.kokoro.voices)
+    .map(([id, v]) => ({
+      id,
+      name: v.label,
+      meta: [accentName(v.language), v.gender].filter(Boolean).join(' · '),
+      rank: 0,
+      group: v.language.startsWith('en') ? 'English' : accentName(v.language),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function sharedPanel(engine: 'kokoro' | 'supertonic', ctx: PanelContext, again: () => void): HTMLElement {
+function sharedPanel(engine: 'kokoro', ctx: PanelContext, again: () => void): HTMLElement {
   const panel = el(document, 'div', { class: 'panel-body' });
   const info = engineInfo(engine);
   const bytes = info.cacheHint ? sharedModelBytes(ctx.sizes, info.cacheHint) : 0;
@@ -673,8 +664,7 @@ function sharedPanel(engine: 'kokoro' | 'supertonic', ctx: PanelContext, again: 
   if (ctx.filter && languages.length > 1) {
     list.append(el(document, 'p', { class: 'list-note' }, `Matches from every language · ${voices.length}`));
   }
-  if (engine === 'kokoro') for (const v of voices) list.append(item(v));
-  else withQualityHeadings(list, voices, (v) => isBestVoice(engine, v.id), item);
+  for (const v of voices) list.append(item(v));
   return panel;
 }
 
@@ -682,12 +672,12 @@ function sharedPanel(engine: 'kokoro' | 'supertonic', ctx: PanelContext, again: 
 const finishedOnce = new Set<string>();
 
 function modelCard(
-  engine: 'kokoro' | 'supertonic',
+  engine: 'kokoro',
   state: { downloaded: boolean; bytes: number },
   ctx: PanelContext,
 ): HTMLElement {
   const info = engineInfo(engine);
-  const licence = engine === 'kokoro' ? ctx.manifest.kokoro.license : (ctx.manifest.supertonic?.license ?? '');
+  const licence = ctx.manifest.kokoro.license;
   const card = el(document, 'div', { class: `model-card${state.downloaded ? ' is-installed' : ''}` });
 
   // A machine with a GPU reads with Kokoro's full-precision build — the quantised one returns

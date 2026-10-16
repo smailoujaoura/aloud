@@ -145,7 +145,7 @@ function buildBarDiagram(): void {
 // ---- engine cards ----------------------------------------------------------
 
 /**
- * The three engines, described by what each one *is*.
+ * The two engines, described by what each one *is*.
  *
  * Not ranked for this machine: a walkthrough that says "recommended here" has to be right about
  * "here", and the honest answer depends on a GPU probe that has not necessarily finished. What

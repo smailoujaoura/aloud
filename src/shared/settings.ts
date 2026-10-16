@@ -8,7 +8,7 @@ import { storage } from 'wxt/utils/storage';
 import type { PronunciationRule } from '@/segment/pronunciations';
 import { withStorageLock } from './storage-lock';
 
-export type EngineId = 'piper' | 'kokoro' | 'supertonic';
+export type EngineId = 'piper' | 'kokoro';
 
 /** One voice of one engine. */
 export interface VoiceRef {
@@ -196,10 +196,6 @@ export interface Settings {
   piperVoice: string;
   /** Kokoro voice key, e.g. `af_heart`. */
   kokoroVoice: string;
-  /** Supertonic voice-style key, e.g. `F1`. */
-  supertonicVoice: string;
-  /** Supertonic flow-matching denoising steps (more = better, slower). 3–8 is sensible. */
-  supertonicSteps: number;
   /**
    * Parallel synthesis workers for the neural engines. `0` = auto (from the engine, the
    * browser's GPU access and the CPU core count — see src/synth-host/entry.ts). Higher lets the
@@ -218,7 +214,7 @@ export interface Settings {
   /**
    * How to mark the word being spoken, inside the sentence highlight: a darker shade of the
    * highlight colour, an underline, or not at all. Only voices whose model reports when each
-   * sound plays can do it (Piper, Kokoro); Supertonic keeps the sentence highlight alone.
+   * sound plays can do it — Piper and Kokoro both do.
    */
   wordHighlight: WordHighlightStyle;
   /**
@@ -292,8 +288,6 @@ export const DEFAULT_SETTINGS: Settings = {
   engine: 'piper',
   piperVoice: 'en_GB-alba-medium',
   kokoroVoice: 'af_heart',
-  supertonicVoice: 'F1',
-  supertonicSteps: 4,
   synthWorkers: 0,
   speed: 1,
   mediaSpeed: DEFAULT_MEDIA_SPEED,
@@ -427,7 +421,10 @@ export function withDefaults(stored: Partial<Settings> | null | undefined): Sett
  * speed, an engine that does not exist, a colour list that is null. Those reach the reader, the
  * bar and the page marks, and a file should not be able to put them there.
  */
-export function sanitizeSettings(raw: Settings): Settings {
+export function sanitizeSettings(stored: Settings): Settings {
+  // Supertonic, the third engine, is gone: its settings are not carried on, and a voice or engine
+  // naming it falls back below like any other unknown one.
+  const { supertonicVoice: _voice, supertonicSteps: _steps, ...raw } = stored as Settings & { supertonicVoice?: unknown; supertonicSteps?: unknown };
   const oneOf = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T =>
     allowed.includes(value as T) ? (value as T) : fallback;
   const clamp = (value: unknown, min: number, max: number, fallback: number): number =>
@@ -444,12 +441,10 @@ export function sanitizeSettings(raw: Settings): Settings {
     : [];
   return {
     ...raw,
-    engine: oneOf(raw.engine, ['piper', 'kokoro', 'supertonic'] as const, DEFAULT_SETTINGS.engine),
+    engine: oneOf(raw.engine, ['piper', 'kokoro'] as const, DEFAULT_SETTINGS.engine),
     piperVoice: typeof raw.piperVoice === 'string' && raw.piperVoice ? raw.piperVoice : DEFAULT_SETTINGS.piperVoice,
     kokoroVoice: typeof raw.kokoroVoice === 'string' && raw.kokoroVoice ? raw.kokoroVoice : DEFAULT_SETTINGS.kokoroVoice,
-    supertonicVoice: typeof raw.supertonicVoice === 'string' && raw.supertonicVoice ? raw.supertonicVoice : DEFAULT_SETTINGS.supertonicVoice,
     speed: clamp(raw.speed, 0.5, 4, DEFAULT_SETTINGS.speed),
-    supertonicSteps: Math.round(clamp(raw.supertonicSteps, 2, 10, DEFAULT_SETTINGS.supertonicSteps)),
     synthWorkers: Math.round(clamp(raw.synthWorkers, 0, 6, DEFAULT_SETTINGS.synthWorkers)),
     sectionPauseMs: clamp(raw.sectionPauseMs, 0, 5000, DEFAULT_SETTINGS.sectionPauseMs),
     sentencePauseMs: clamp(raw.sentencePauseMs, 0, 5000, DEFAULT_SETTINGS.sentencePauseMs),
@@ -501,7 +496,7 @@ function languageVoices(value: unknown): Record<string, VoiceRef> {
   for (const [language, ref] of Object.entries(value as Record<string, unknown>)) {
     const r = ref as Partial<VoiceRef> | null;
     if (!/^[a-z]{2,3}$/.test(language) || !r || typeof r !== 'object') continue;
-    if (r.engine !== 'piper' && r.engine !== 'kokoro' && r.engine !== 'supertonic') continue;
+    if (r.engine !== 'piper' && r.engine !== 'kokoro') continue;
     if (typeof r.voice !== 'string' || !r.voice || r.voice.length > 80) continue;
     out[language] = { engine: r.engine, voice: r.voice };
   }
@@ -555,20 +550,16 @@ export function activeVoice(s: Settings): string {
   switch (s.engine) {
     case 'kokoro':
       return s.kokoroVoice;
-    case 'supertonic':
-      return s.supertonicVoice;
     default:
       return s.piperVoice;
   }
 }
 
 /** The settings key that holds the voice for the given engine. */
-export function voiceKeyFor(engine: EngineId): 'piperVoice' | 'kokoroVoice' | 'supertonicVoice' {
+export function voiceKeyFor(engine: EngineId): 'piperVoice' | 'kokoroVoice' {
   switch (engine) {
     case 'kokoro':
       return 'kokoroVoice';
-    case 'supertonic':
-      return 'supertonicVoice';
     default:
       return 'piperVoice';
   }

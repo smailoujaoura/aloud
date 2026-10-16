@@ -101,7 +101,6 @@ async function installedModels(manifest: ModelManifest): Promise<BackupModels> {
       .filter(([, entry]) => piperDownloaded(entry, sizes))
       .map(([id]) => id),
     kokoro: sharedModelInstalled('kokoro', sizes),
-    supertonic: sharedModelInstalled('supertonic', sizes),
   };
 }
 
@@ -174,7 +173,7 @@ async function followUps(host: HTMLElement, backup: Backup, parts: ReadonlySet<B
   if (parts.has('settings')) {
     const sizes = await readCacheSizes();
     const piper = backup.models.piper.filter((id) => opts.manifest.piper[id] && !piperDownloaded(opts.manifest.piper[id]!, sizes));
-    const shared = (['kokoro', 'supertonic'] as const).filter((e) => backup.models[e] && !sharedModelInstalled(e, sizes));
+    const shared = (['kokoro'] as const).filter((e) => backup.models[e] && !sharedModelInstalled(e, sizes));
     const count = piper.length + shared.length;
     if (count) host.append(downloadStep(piper, shared, settings, opts));
   }
@@ -207,10 +206,10 @@ function step(title: string, text: string, action: HTMLElement): HTMLElement {
   return box;
 }
 
-function downloadStep(piper: string[], shared: Array<'kokoro' | 'supertonic'>, settings: Settings, opts: BackupPanelOptions): HTMLElement {
+function downloadStep(piper: string[], shared: Array<'kokoro'>, settings: Settings, opts: BackupPanelOptions): HTMLElement {
   const names = [
     ...piper.map((id) => opts.manifest.piper[id]?.label ?? id),
-    ...shared.map((e) => (e === 'kokoro' ? 'Kokoro' : 'Supertonic')),
+    ...shared.map(() => 'Kokoro'),
   ];
   const btn = el(document, 'button', { type: 'button', class: 'primary btn-sm' }, `Download ${names.length} voice model${names.length === 1 ? '' : 's'}`);
   const progress = new RowProgress();
@@ -229,7 +228,7 @@ function downloadStep(piper: string[], shared: Array<'kokoro' | 'supertonic'>, s
       ]),
       ...shared.map((engine): Job => [
         `model:${engine}`,
-        `${engine === 'kokoro' ? 'Kokoro-82M' : 'Supertonic-2'} model`,
+        'Kokoro-82M model',
         (p, signal) =>
           downloadSharedModel(engineConfigFor(settings, { engine, purpose: 'download' }), Object.keys(opts.manifest.kokoro.voices), p, signal),
       ]),

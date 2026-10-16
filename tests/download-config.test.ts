@@ -19,12 +19,13 @@ describe('what a Download fetches', () => {
     // The weights and all 41 voices' own files, which come in the same download.
     expect(downloadSize(engineInfo('kokoro'), true)).toBe('~347 MB');
     expect(downloadSize(engineInfo('kokoro'), false)).toBe('~114 MB');
-    expect(downloadSize(engineInfo('supertonic'), true)).toBe(engineInfo('supertonic').approxSize);
+    // Piper's files are the same either way.
+    expect(downloadSize(engineInfo('piper'), true)).toBe(engineInfo('piper').approxSize);
     // Firefox showed Kokoro's GPU file as 325.53 MB; counting in 1024s said 310.
     expect(humanBytes(325_532_232)).toBe('326 MB');
   });
 
-  it('keeps Supertonic, whose files are the same either way, off the GPU', () => {
-    expect(engineConfigFor({ ...DEFAULT_SETTINGS, preferWebGPU: true }, { engine: 'supertonic', purpose: 'download' }).preferWebGPU).toBe(false);
+  it('keeps Piper, whose files are the same either way, off the GPU', () => {
+    expect(engineConfigFor({ ...DEFAULT_SETTINGS, preferWebGPU: true }, { engine: 'piper', purpose: 'download' }).preferWebGPU).toBe(false);
   });
 });

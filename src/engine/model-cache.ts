@@ -246,6 +246,27 @@ export async function deleteModels(fn: () => Promise<void>): Promise<void> {
   if (!done) throw new ModelsInUse();
 }
 
+/** Files of an engine Aloud no longer has: Supertonic-2, removed. Nothing can read them. */
+const REMOVED_ENGINES = /\/Supertone\/supertonic-2\//;
+
+/**
+ * Delete what is left of removed engines (REMOVED_ENGINES) — hundreds of megabytes nothing will
+ * use again, still counted as "on this device". Only when nothing is writing to the store; if
+ * something is, it is left for next time. True when there was anything to delete.
+ */
+export async function forgetRemovedEngines(): Promise<boolean> {
+  const stale = (await cacheEntries()).filter((e) => REMOVED_ENGINES.test(e.key));
+  if (!stale.length) return false;
+  try {
+    await deleteModels(async () => {
+      await Promise.all(stale.map((e) => cacheDelete(e.key)));
+    });
+    return true;
+  } catch {
+    return false; // in use: next time
+  }
+}
+
 export async function cacheClear(prefix?: string): Promise<void> {
   const entries = await cacheEntries();
   await Promise.all(

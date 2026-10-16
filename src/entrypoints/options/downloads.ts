@@ -3,8 +3,8 @@
  *
  * Two paths, because the two kinds of model are fetched by different code:
  *  - **Piper** is a pair of plain files, fetched straight through the model cache.
- *  - **Kokoro / Supertonic** are loaded by their engine (transformers.js and a hand-rolled ORT
- *    session respectively), so the only honest way to "download" one is to initialise it in a
+ *  - **Kokoro** is loaded by its engine (transformers.js), so the only honest way to "download"
+ *    it is to initialise it in a
  *    throwaway Worker and watch its progress events. That also warms the compile step, so the
  *    first real sentence is not the one paying for it.
  *

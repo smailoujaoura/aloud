@@ -27,8 +27,8 @@ import { log } from '@/shared/log';
 export const MAX_LANES = 3;
 /**
  * Workers per secondary lane: one. A fixed count overrides the synthesis host's own rules — one
- * worker for Piper, one on a GPU, one on a phone — and two copies of a second model (Supertonic is
- * ~260 MB each) beside the main voice's pool was memory a phone does not have. A passage in another
+ * worker for Piper, one on a GPU, one on a phone — and more copies of a second model beside the
+ * main voice's pool was memory a phone does not have. A passage in another
  * language is a small share of the page; one worker reads it.
  */
 const SECONDARY_WORKERS = 1;

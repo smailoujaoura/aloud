@@ -18,7 +18,7 @@ import { probeWorkerGpu, type WorkerGpuResult } from './gpu-check';
 import { listVoices } from '@/shared/voice-catalog';
 import { languageName } from '@/shared/language-voice';
 import { OTHER_LANGUAGES } from './voice-board';
-import { cacheClear, cacheEntries, cacheUsageBytes, deleteModels } from '@/engine/model-cache';
+import { cacheClear, cacheEntries, cacheUsageBytes, deleteModels, forgetRemovedEngines } from '@/engine/model-cache';
 import {
   DEFAULT_SETTINGS,
   getSettings,
@@ -384,7 +384,14 @@ async function render(): Promise<void> {
   }
 }
 
+/** Supertonic's files, from before it was removed, are deleted once per page (forgetRemovedEngines). */
+let removedEnginesChecked = false;
+
 async function renderNow(): Promise<void> {
+  if (!removedEnginesChecked) {
+    removedEnginesChecked = true;
+    await forgetRemovedEngines().catch(() => false);
+  }
   settings = await getSettings();
   applyTheme(document, settings.theme);
   for (const control of themeSwitches) control.setTheme(settings.theme);
@@ -411,13 +418,10 @@ async function renderNow(): Promise<void> {
   $<HTMLInputElement>('expandAbbreviations').checked = settings.expandAbbreviations;
   for (const [id, key] of SKIP_SWITCHES) $<HTMLInputElement>(id).checked = settings.skip[key];
 
-  $<HTMLInputElement>('supertonicSteps').value = String(settings.supertonicSteps);
-  $('supertonicStepsOut').textContent = String(settings.supertonicSteps);
   $<HTMLInputElement>('synthWorkers').value = String(settings.synthWorkers);
   $('synthWorkersOut').textContent = settings.synthWorkers === 0 ? 'auto' : String(settings.synthWorkers);
   $<HTMLInputElement>('preferWebGPU').checked = settings.preferWebGPU;
   $<HTMLInputElement>('debug').checked = settings.debug;
-  $('supertonic-steps-row').hidden = settings.engine !== 'supertonic';
 
   renderCapabilityHints();
 
@@ -585,7 +589,6 @@ function wire(): void {
   wireSlider('speed', 'speedOut', 'speed', speedLabel);
   wireSlider('sectionPauseMs', 'sectionPauseOut', 'sectionPauseMs', (v) => `${(v / 1000).toFixed(2)}s`);
   wireSlider('sentencePauseMs', 'sentencePauseOut', 'sentencePauseMs', (v) => `${(v / 1000).toFixed(2)}s`);
-  wireSlider('supertonicSteps', 'supertonicStepsOut', 'supertonicSteps', String);
   wireSlider('synthWorkers', 'synthWorkersOut', 'synthWorkers', (v) => (v === 0 ? 'auto' : String(v)));
 
   $('annotateToolbar').addEventListener('change', async (e) => {

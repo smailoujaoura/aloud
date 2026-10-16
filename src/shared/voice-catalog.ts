@@ -2,9 +2,9 @@
  * Reading the bundled model manifest (`models.json`) as a list of pickable voices.
  *
  * Both voice pickers — the in-page control bar and the options page — need the same thing:
- * "which voices does this engine offer, and how should they be grouped?". The three engines
- * store that differently in the manifest (Piper has one entry per downloadable voice, Kokoro and
- * Supertonic have one shared model with many styles), so the shape difference is absorbed here
+ * "which voices does this engine offer, and how should they be grouped?". The two engines
+ * store that differently in the manifest (Piper has one entry per downloadable voice, Kokoro has
+ * one shared model with many styles), so the shape difference is absorbed here
  * rather than in each caller.
  */
 import type { ModelManifest } from '@/engine/engines/types';
@@ -27,12 +27,6 @@ export function listVoices(engine: EngineId, manifest: ModelManifest): VoiceOpti
         id,
         label: `${v.label} · ${v.gender}`,
         group: v.language,
-      }));
-    case 'supertonic':
-      return Object.entries(manifest.supertonic?.voices ?? {}).map(([id, v]) => ({
-        id,
-        label: `${v.label} · ${v.gender}`,
-        group: 'English',
       }));
     default:
       return Object.entries(manifest.piper).map(([id, v]) => ({

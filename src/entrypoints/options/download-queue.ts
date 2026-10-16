@@ -1,8 +1,8 @@
 /**
  * Voice downloads on the settings page: one at a time, the rest waiting their turn — and saying so.
  *
- * Models are tens to hundreds of megabytes over whatever line the reader has, and Kokoro and
- * Supertonic are compiled once downloaded, which is heavy work of its own. Run side by side they
+ * Models are tens to hundreds of megabytes over whatever line the reader has, and Kokoro is
+ * compiled once downloaded, which is heavy work of its own. Run side by side they
  * only slowed each other down. Before this queue a second Download button pressed during a
  * download did nothing at all, with no word why; and finishing one download redrew the list,
  * which threw away the progress bar of any other still running.

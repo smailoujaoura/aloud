@@ -2,7 +2,7 @@
  * Voice preview for the options page: let the user hear a voice before committing to it.
  *
  *  - Piper voices have a hosted sample clip (`manifest.piper[x].sample`) — we just play the mp3.
- *  - Kokoro / Supertonic have no per-voice clips, so we synthesise a short fixed sentence on
+ *  - Kokoro has no per-voice clips, so we synthesise a short fixed sentence on
  *    device. That needs the (shared) engine model, so it only works once that model is cached.
  *
  * Design goals (this file used to spawn a throwaway worker per click, show "■ Stop" instantly
@@ -103,7 +103,7 @@ let nextId = 1;
 /** Kokoro voices are hot-swappable (shared model), so the voice is not part of its warm key. */
 function configKey(c: EngineConfig): string {
   const voice = c.engine === 'kokoro' ? '*' : c.voice;
-  return [c.engine, voice, c.steps ?? '', c.preferWebGPU].join('|');
+  return [c.engine, voice, c.preferWebGPU].join('|');
 }
 
 function ensureWorker(): Worker {
@@ -237,7 +237,7 @@ export function playClip(url: string, onStatus: StatusFn = NOOP): Promise<void> 
   });
 }
 
-/** Synthesise the preview sentence on device and play it (Kokoro / Supertonic). Never rejects. */
+/** Synthesise the preview sentence on device and play it (Kokoro, and downloaded Piper voices). Never rejects. */
 export function playSynthesized(
   config: EngineConfig,
   onStatus: StatusFn = NOOP,

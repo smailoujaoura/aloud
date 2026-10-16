@@ -9,8 +9,6 @@ export interface SynthResult {
 
 export interface InitContext {
   voice: string;
-  /** Supertonic denoising steps. */
-  steps?: number;
   preferWebGPU: boolean;
   onProgress: (p: { file: string; loaded: number; total: number; phase: 'download' | 'cache' | 'compile' }) => void;
   /**
@@ -22,7 +20,7 @@ export interface InitContext {
 }
 
 export interface SynthEngine {
-  readonly id: 'piper' | 'kokoro' | 'supertonic';
+  readonly id: 'piper' | 'kokoro';
   readonly sampleRate: number;
   readonly executionProvider: string;
   init(ctx: InitContext): Promise<void>;
@@ -55,20 +53,6 @@ export interface PiperVoiceEntry {
   numSpeakers?: number;
 }
 
-export interface SupertonicManifest {
-  modelId: string;
-  license: string;
-  /** Base HF `resolve` URL, e.g. https://huggingface.co/Supertone/supertonic-2/resolve/main */
-  base: string;
-  files: { textEncoder: string; durationPredictor: string; vectorEstimator: string; vocoder: string };
-  config: { tts: string; unicodeIndexer: string };
-  /** SHA-256 of each network at the pinned commit in `base`, checked on download. */
-  sha256?: Partial<Record<'textEncoder' | 'durationPredictor' | 'vectorEstimator' | 'vocoder', string>>;
-  /** voice-style key -> metadata; the style JSON is `${base}/voice_styles/${key}.json`. */
-  voices: Record<string, { label: string; gender: string }>;
-  sampleRate: number;
-}
-
 /** Entry in assets/models.json. */
 export interface ModelManifest {
   piper: Record<string, PiperVoiceEntry>;
@@ -77,5 +61,4 @@ export interface ModelManifest {
     voices: Record<string, { label: string; language: string; gender: string; grade?: string }>;
     license: string;
   };
-  supertonic?: SupertonicManifest;
 }

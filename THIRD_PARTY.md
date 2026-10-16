@@ -58,13 +58,6 @@ published SHA-256 (`src/shared/kokoro-voice-pins.ts`) before it is kept. The mod
 extension's IndexedDB store, the voices to Cache Storage (`kokoro-voices`), where `kokoro-js`
 reads them.
 
-### Supertonic — [`Supertone/supertonic-2`](https://huggingface.co/Supertone/supertonic-2)
-
-Model weights: **OpenRAIL-M**, a *use-restricted* licence — its behavioural conditions travel with
-the weights, so anyone redistributing them (or a product built on them) must pass the conditions
-on. Aloud never bundles the weights: they are downloaded from Hugging Face on first use, and the
-licence is shown on the engine's card in Settings before that download.
-
 ## Source availability
 
 This repository is the complete corresponding source. `npm ci && npm run build` reproduces

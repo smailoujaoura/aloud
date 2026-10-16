@@ -57,8 +57,7 @@ export function pickVoiceForLanguage(
 /** The voice's language, from the bundled manifest. */
 export function voiceLanguage(engine: EngineId, id: string, manifest: ModelManifest): string {
   if (engine === 'piper') return manifest.piper[id]?.language ?? '';
-  if (engine === 'kokoro') return manifest.kokoro.voices[id]?.language ?? 'en';
-  return 'en'; // Supertonic's voices are English.
+  return manifest.kokoro.voices[id]?.language ?? 'en';
 }
 
 /** "French", "Brazilian Portuguese" — for messages. Falls back to the code itself. */

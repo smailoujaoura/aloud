@@ -16,7 +16,7 @@ const note = (id: string, updatedAt: number, text = id): Note => ({
   updatedAt,
 });
 
-const extra = { aloud: '0.1.0', models: { piper: ['en_GB-alba-medium'], kokoro: true, supertonic: false }, shortcuts: { 'save-note': 'Alt+Shift+S' } };
+const extra = { aloud: '0.1.0', models: { piper: ['en_GB-alba-medium'], kokoro: true }, shortcuts: { 'save-note': 'Alt+Shift+S' } };
 
 describe('backup', () => {
   it('round-trips through a file', () => {

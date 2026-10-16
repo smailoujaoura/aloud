@@ -61,9 +61,6 @@ export function downloadedVoices(ctx: Pick<PanelContext, 'manifest' | 'sizes'>):
   if (sharedModelInstalled('kokoro', ctx.sizes)) {
     for (const [id, v] of Object.entries(ctx.manifest.kokoro.voices)) out.push({ engine: 'kokoro', id, label: v.label, language: v.language });
   }
-  if (sharedModelInstalled('supertonic', ctx.sizes)) {
-    for (const [id, v] of Object.entries(ctx.manifest.supertonic?.voices ?? {})) out.push({ engine: 'supertonic', id, label: v.label, language: 'en' });
-  }
   return out;
 }
 

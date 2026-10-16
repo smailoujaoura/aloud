@@ -20,16 +20,14 @@ export function engineConfigFor(
   const voiceOf: Record<EngineId, string> = {
     piper: settings.piperVoice,
     kokoro: settings.kokoroVoice,
-    supertonic: settings.supertonicVoice,
   };
 
   return {
     engine,
     voice: opts.voice ?? voiceOf[engine],
-    steps: settings.supertonicSteps,
     // Kokoro's download is the build this machine reads with: on a GPU that is the full-precision
     // one. Fetching the smaller CPU build there downloaded a file reading never used, and the
-    // first preview then started the real download with no warning. Supertonic's files are the same
+    // first preview then started the real download with no warning. Piper's files are the same
     // either way, so its download stays off the GPU.
     preferWebGPU: opts.purpose === 'download' && engine !== 'kokoro' ? false : settings.preferWebGPU,
     speed: settings.speed,

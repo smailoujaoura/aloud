@@ -15,8 +15,6 @@ import type { EngineId } from '@/shared/settings';
 
 /** Kokoro-82M at a fixed commit of onnx-community/Kokoro-82M-v1.0-ONNX (engines/kokoro.ts). */
 export const KOKORO_REVISION = '1939ad2a8e416c0acfeecc08a694d14ef25f2231';
-/** Supertonic-2 at a fixed commit of Supertone/supertonic-2 (models.json `base`). */
-export const SUPERTONIC_REVISION = '75e6727618a02f323c720cba9478152d4bc16ca4';
 
 export interface EngineInfo {
   id: EngineId;
@@ -30,8 +28,8 @@ export interface EngineInfo {
   /** The download when reading on a GPU takes a different, larger file (Kokoro's full precision). */
   gpuApproxSize?: string;
   /**
-   * Substring of a cache key meaning "the shared model is present". Kokoro and Supertonic each
-   * download one model that unlocks all their voices; Piper downloads per voice and has none.
+   * Substring of a cache key meaning "the shared model is present". Kokoro downloads one model
+   * that unlocks all its voices; Piper downloads per voice and has none.
    */
   cacheHint?: string;
   /**
@@ -81,7 +79,7 @@ const ENGINES: Record<EngineId, EngineInfo> = {
     name: 'Kokoro-82M',
     tag: 'Best quality, wants a GPU',
     blurb:
-      'The most natural and expressive of the three. With GPU acceleration it is comfortably faster ' +
+      'The more natural and expressive of the two. With GPU acceleration it is comfortably faster ' +
       'than real time; without one it runs around 3× slower than real time and leans on parallel ' +
       'workers to keep up with playback. One download unlocks all 41 voices: English (US and UK), Spanish, French, Italian, Brazilian Portuguese and Hindi.',
     // The quantised build the CPU reads (92,361,116 bytes) or the full-precision one a GPU needs
@@ -100,34 +98,9 @@ const ENGINES: Record<EngineId, EngineInfo> = {
     needsGpuForSpeed: true,
     heavyForMobile: true,
   },
-  supertonic: {
-    id: 'supertonic',
-    name: 'Supertonic-2',
-    tag: 'Expressive, large download',
-    blurb:
-      'Expressive, and roughly real time without a GPU — quicker with one. A single ~262 MB ' +
-      'download unlocks all 10 voices.',
-    approxSize: '~262 MB',
-    cacheHint: 'supertonic-2',
-    // Must match `base` in scripts/models.base.json (tests/engine-pins.test.ts).
-    revision: SUPERTONIC_REVISION,
-    // Four separate networks, the config and the character table: any one missing and synthesis
-    // cannot run (engines/supertonic.ts loads all of them before the first sentence).
-    requiredFiles: [
-      '/onnx/text_encoder.onnx',
-      '/onnx/duration_predictor.onnx',
-      '/onnx/vector_estimator.onnx',
-      '/onnx/vocoder.onnx',
-      '/onnx/tts.json',
-      '/onnx/unicode_indexer.json',
-    ],
-    voiceFile: (voice) => `/voice_styles/${voice}.json`,
-    needsGpuForSpeed: false,
-    heavyForMobile: true,
-  },
 };
 
-export const ENGINE_IDS: readonly EngineId[] = ['piper', 'kokoro', 'supertonic'];
+export const ENGINE_IDS: readonly EngineId[] = ['piper', 'kokoro'];
 
 export function engineInfo(id: EngineId): EngineInfo {
   return ENGINES[id];

@@ -43,7 +43,7 @@ describe('restoring a backup', () => {
     const b = backupOf({ settings: { speed: -3, engine: 'nonsense', annotate: { colors: null }, mediaSpeed: { presets: ['fast'] } } });
     const settings = restoredSettings(b)!;
     expect(settings.speed).toBeGreaterThan(0);
-    expect(['piper', 'kokoro', 'supertonic']).toContain(settings.engine);
+    expect(['piper', 'kokoro']).toContain(settings.engine);
     expect(settings.annotate.colors.length).toBeGreaterThan(0);
     expect(settings.mediaSpeed.presets.every((p) => typeof p === 'number')).toBe(true);
   });

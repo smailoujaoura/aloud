@@ -37,14 +37,13 @@ export interface PipelineTuning {
  * Baseline: CPU-only synthesis — Firefox everywhere, and Chromium whenever the machine hands
  * back no GPU adapter (no Vulkan driver on Linux, blocklisted GPU, remote desktop, …).
  *
- * Piper is comfortably faster than real time, so it needs only a shallow queue. Kokoro and
- * Supertonic are not, and are fed by a *pool* of workers (see src/synth-host/entry.ts), so the
+ * Piper is comfortably faster than real time, so it needs only a shallow queue. Kokoro is not,
+ * and is fed by a *pool* of workers (see src/synth-host/entry.ts), so the
  * queue must be deep enough to keep every worker busy — several jobs each.
  */
 const CPU_TUNING: Record<EngineId, PipelineTuning> = {
   piper: { lookahead: 4, primeSeconds: 1.5, maxChars: 240 },
   kokoro: { lookahead: 24, primeSeconds: 3.5, maxChars: 160 },
-  supertonic: { lookahead: 20, primeSeconds: 3.5, maxChars: 160 },
 };
 
 /**
@@ -55,14 +54,12 @@ const CPU_TUNING: Record<EngineId, PipelineTuning> = {
 const GPU_TUNING: Record<EngineId, PipelineTuning> = {
   piper: { lookahead: 4, primeSeconds: 1.5, maxChars: 240 },
   kokoro: { lookahead: 6, primeSeconds: 1.5, maxChars: 240 },
-  supertonic: { lookahead: 6, primeSeconds: 1.5, maxChars: 240 },
 };
 
 /** Phones: slow cores and a hard memory ceiling, so prime longer and keep chunks short. */
 const MOBILE_TUNING: Record<EngineId, PipelineTuning> = {
   piper: { lookahead: 4, primeSeconds: 2, maxChars: 200 },
   kokoro: { lookahead: 8, primeSeconds: 5, maxChars: 120 },
-  supertonic: { lookahead: 8, primeSeconds: 5, maxChars: 120 },
 };
 
 /**
