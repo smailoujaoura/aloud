@@ -252,9 +252,10 @@ function showStep(next: number): void {
   // Unavailable buttons keep their place (invisible, not removed), so nothing in the nav moves
   // from one step to the next.
   setAway($<HTMLButtonElement>('back'), index === 0);
+  // On the last step there is nothing next: the same button, in the same place, opens the settings.
   const nextBtn = $<HTMLButtonElement>('next');
-  setAway(nextBtn, index === steps.length - 1);
-  nextBtn.textContent = index === steps.length - 2 ? 'Last one' : 'Next';
+  const last = index === steps.length - 1;
+  nextBtn.textContent = last ? 'Open settings' : index === steps.length - 2 ? 'Last one' : 'Next';
 
   for (const [i, dot] of dots.entries()) {
     dot.classList.toggle('on', i === index);
@@ -308,18 +309,17 @@ const dots: HTMLButtonElement[] = steps.map((step, i) => {
 // ---- wiring ----------------------------------------------------------------
 
 function wire(): void {
-  $('next').addEventListener('click', () => showStep(index + 1));
+  const openSettings = (): void => {
+    toast('Opening settings…', 'info');
+    void browser.runtime.openOptionsPage();
+  };
+  $('next').addEventListener('click', () => (index === steps.length - 1 ? openSettings() : showStep(index + 1)));
   $('back').addEventListener('click', () => showStep(index - 1));
   $('dots').replaceChildren(...dots);
 
   $('demo').addEventListener('click', () => void toggleDemo());
 
-  for (const id of ['toVoices', 'toSettings']) {
-    $(id).addEventListener('click', () => {
-      toast('Opening settings…', 'info');
-      void browser.runtime.openOptionsPage();
-    });
-  }
+  $('toVoices').addEventListener('click', openSettings);
 
   const finish = (): void => {
     void demo?.dispose();
