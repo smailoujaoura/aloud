@@ -33,6 +33,13 @@ export default defineConfig({
   publicDir: `${rootDir}public`,
   outDir: '.output',
   manifestVersion: 3,
+  // The source archive Mozilla's reviewers rebuild from. WXT leaves dot-files out, and without
+  // .npmrc (legacy-peer-deps) the documented `npm ci` refused the lockfile.
+  // Internal review reports are not part of the source: left out, so the archive is what builds.
+  zip: {
+    includeSources: ['**/*', '.npmrc'],
+    excludeSources: ['docs/RELEASE_*', 'docs/CLAUDE_*', 'docs/STORE_POLICY_AUDIT_*'],
+  },
 
   manifest: ({ browser }) => ({
     name: 'Aloud — Offline Neural Reader',
@@ -209,6 +216,33 @@ export default defineConfig({
       // which buried real errors in every page's console. The chunks are local files, so
       // preloading them gains nothing anyway.
       modulePreload: false,
+      // Easy to review, version after version: Aloud's code is not minified (a one-line change is
+      // a one-line diff, not a changed 400 KB line), and its files keep their names from one build
+      // to the next instead of carrying a content hash (session-B07WzqdJ.js became a new file at
+      // every release). Rollup still numbers two chunks of the same name apart.
+      minify: false,
     },
+    plugins: [
+      {
+        // WXT sets hashed names of its own after this config is read; the output options are the
+        // last word, so the names are set there.
+        name: 'aloud-stable-file-names',
+        outputOptions(options) {
+          // Whatever pattern WXT chose for each kind of file, without its hash.
+          const unhashed = <T,>(pattern: T): T => {
+            const strip = (p: string): string => p.replace(/[-.]\[hash(?::\d+)?\]/g, '');
+            if (typeof pattern === 'string') return strip(pattern) as T;
+            if (typeof pattern === 'function') return ((info: unknown) => strip(String((pattern as (i: unknown) => string)(info)))) as T;
+            return pattern;
+          };
+          return {
+            ...options,
+            entryFileNames: unhashed(options.entryFileNames),
+            chunkFileNames: unhashed(options.chunkFileNames ?? 'chunks/[name].js'),
+            assetFileNames: unhashed(options.assetFileNames ?? 'assets/[name][extname]'),
+          };
+        },
+      },
+    ],
   }),
 });

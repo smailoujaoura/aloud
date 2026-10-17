@@ -19,6 +19,32 @@ const stub = resolve(root, 'src/worker/empty-stub.ts');
 // browser was built last.
 const BROWSER_TARGETS = ['firefox128', 'chrome120'];
 
+/**
+ * transformers.js points ONNX Runtime at its WebAssembly on cdn.jsdelivr.net whenever no path is set
+ * yet. Aloud always sets the packaged one first (src/engine/ort-loader.ts), so the line never runs —
+ * but the stores ask that code able to load from elsewhere be removed, not merely left unused
+ * (Chrome: "remote hosted code", what to do if the code isn't being used). This drops that one line
+ * from the bundled copy of transformers.js, and nothing else. The ONNX Runtime files themselves are
+ * copied unmodified (sync-assets.mjs). If an update to transformers.js changes the line, the build
+ * stops here rather than ship a CDN path again.
+ */
+const TRANSFORMERS_CDN_DEFAULT =
+  'ONNX_ENV.wasm.wasmPaths = `https://cdn.jsdelivr.net/npm/@huggingface/transformers@${_env_js__WEBPACK_IMPORTED_MODULE_0__.env.version}/dist/`;';
+
+const noCdnDefault = {
+  name: 'aloud-no-cdn-default',
+  transform(code, id) {
+    if (!/[\\/]@huggingface[\\/]transformers[\\/]dist[\\/]transformers\.web\.js$/.test(id)) return null;
+    if (!code.includes(TRANSFORMERS_CDN_DEFAULT)) {
+      throw new Error(`[build-worker] transformers.js no longer has the CDN default this build removes — check ${id}`);
+    }
+    return {
+      code: code.replace(TRANSFORMERS_CDN_DEFAULT, '/* Aloud: no CDN — ONNX Runtime ships in the extension (vendor/ort/), set by ort-loader.ts */'),
+      map: null,
+    };
+  },
+};
+
 export async function buildWorker(options) {
   const minify = !(options && options.minify === false);
   await build({
@@ -37,6 +63,7 @@ export async function buildWorker(options) {
     },
     define: { 'process.env.NODE_ENV': JSON.stringify('production') },
     worker: { format: 'es' },
+    plugins: [noCdnDefault],
     build: {
       target: BROWSER_TARGETS,
       outDir: '.gen/worker',
@@ -58,8 +85,9 @@ export async function buildWorker(options) {
         output: {
           format: 'es',
           entryFileNames: 'tts-worker.js',
-          chunkFileNames: 'vendor/rt/[name]-[hash].js',
-          assetFileNames: 'vendor/rt/[name]-[hash][extname]',
+          // Stable names, so one release compares with the next file by file (see wxt.config.ts).
+          chunkFileNames: 'vendor/rt/[name].js',
+          assetFileNames: 'vendor/rt/[name][extname]',
           paths: {
             'onnxruntime-web': './vendor/ort/ort.bundle.min.mjs',
             'onnxruntime-common': './vendor/ort/ort.bundle.min.mjs',

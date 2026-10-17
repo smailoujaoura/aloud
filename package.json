@@ -26,7 +26,8 @@
     "test": "vitest run",
     "test:e2e:firefox": "node scripts/e2e-firefox.mjs",
     "say": "node scripts/say.mjs",
-    "lint:ext": "web-ext lint --source-dir .output/firefox-mv3"
+    "lint:ext": "web-ext lint --source-dir .output/firefox-mv3",
+    "voices": "node scripts/gen-voices.mjs"
   },
   "dependencies": {
     "@breezystack/lamejs": "1.2.7",

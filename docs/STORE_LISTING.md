@@ -66,8 +66,30 @@ search, shopping, new-tab or ad features).
 Runtime's, which transformers.js would otherwise take from cdn.jsdelivr.net (Aloud sets the local
 path before it loads). Voice models downloaded at runtime are ONNX data files, not code.
 
-**Data usage:** tick nothing. Aloud does not collect or transmit any of the listed data types.
-Certify all three statements (no sale, no unrelated use, no creditworthiness use).
+**Data usage:** disclose what Aloud *handles*, even though it all stays on the device. Chrome's User
+Data FAQ (question 3): "Extensions are required to disclose how they handle user data, even when
+data is processed or stored locally" — "handle" includes using information about the websites a
+user reads. So tick, with the explanation below, the dashboard's categories for:
+
+- **Website content** — the text of pages and PDFs being read; articles saved to the reading queue;
+  the passages kept as notes and highlights.
+- **Web history** (web browsing activity) — the addresses of pages read, with where reading stopped
+  (history, reading positions) and the sites in the listening statistics.
+
+Explanation to give: *"Used only on the user's device, to read pages aloud and to keep the user's
+own history, reading positions, notes and statistics. Stored in the browser's extension storage on
+the device; never transmitted, sold or shared. Aloud has no server."* Check the dashboard's current
+category names and definitions when filling it in. Certify all three statements (no sale, no
+unrelated use, no creditworthiness use).
+
+Open question: the same FAQ (question 9) asks that user data be "stored at rest using a strong
+encryption method such as RSA or AES", without saying whether that covers data kept on the user's
+own device. Aloud's local storage is not encrypted (as with browser storage generally). If a
+reviewer raises it, the answer is that nothing leaves the device and the browser profile is the
+user's own; encrypting it would need a key stored beside it.
+
+Publish the current privacy policy (website/privacy.html, 17 October) before submitting: the live
+page was still the 4 October version, without the Limited Use statement.
 
 **Private / incognito windows:** the manifest declares `"incognito": "not_allowed"`. Aloud keeps
 reading positions, history and listening statistics, and private-window activity must not be stored

@@ -6,16 +6,19 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildWorker, buildSynthHost } from './build-worker.mjs';
 import { syncAssets } from './sync-assets.mjs';
-import { genVoices } from './gen-voices.mjs';
 import { writeNotices } from './notices.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-await genVoices();
+// The voice catalogue (public/models.json) is committed and built from as it is: refreshing it from
+// Hugging Face is a separate, deliberate step (`npm run voices`), reviewed as an ordinary diff. A
+// release build needs nothing beyond `npm ci` — a store reviewer rebuilding the source gets the
+// same catalogue, whatever the remote says that day.
 syncAssets();
 writeNotices();
-await buildWorker({ minify: true });
-await buildSynthHost({ minify: true });
+// Not minified, for the same reason as the extension's own code (wxt.config.ts): reviewable diffs.
+await buildWorker({ minify: false });
+await buildSynthHost({ minify: false });
 
 const gen = join(root, '.gen/worker');
 const pub = join(root, 'public');
