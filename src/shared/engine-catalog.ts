@@ -134,6 +134,17 @@ const ENGINES: Record<EngineId, EngineInfo> = {
 export const ENGINE_IDS: readonly EngineId[] = ['piper', 'kokoro', 'supertonic'];
 
 /**
+ * Supertonic's detail (flow-matching steps) for this device. A phone gets 3 unless its reader
+ * chose otherwise: on a 2018 phone (Exynos 9810) the default 5 steps took about 9 s per 3 s of
+ * speech. 3 steps is about 28% faster (on a laptop, RTF 1.3 → 0.9) and still read English, German
+ * and Italian word for word; Russian slipped on one word, which 5 steps had right.
+ */
+export const PHONE_SUPERTONIC_STEPS = 3;
+export function supertonicStepsFor(chosen: number, phone: boolean, defaultSteps: number): number {
+  return phone && chosen === defaultSteps ? PHONE_SUPERTONIC_STEPS : chosen;
+}
+
+/**
  * One model reads all of the engine's voices (Kokoro, Supertonic): a worker switches voice from one
  * sentence to the next without loading anything. Piper's voices are each a model of their own.
  */

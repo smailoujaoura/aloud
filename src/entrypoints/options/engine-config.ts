@@ -4,7 +4,8 @@
  */
 import type { EngineConfig } from '@/engine/protocol';
 import { capabilities } from '@/shared/browser-env';
-import type { EngineId, Settings } from '@/shared/settings';
+import { DEFAULT_SETTINGS, type EngineId, type Settings } from '@/shared/settings';
+import { supertonicStepsFor } from '@/shared/engine-catalog';
 
 export type ConfigPurpose =
   /** One sentence, one worker, smallest weights that will do. */
@@ -26,7 +27,7 @@ export function engineConfigFor(
   return {
     engine,
     voice: opts.voice ?? voiceOf[engine],
-    steps: settings.supertonicSteps,
+    steps: supertonicStepsFor(settings.supertonicSteps, capabilities().touchFirst, DEFAULT_SETTINGS.supertonicSteps),
     // Kokoro's download is the build this machine reads with: on a GPU that is the full-precision
     // one. Fetching the smaller CPU build there downloaded a file reading never used, and the
     // first preview then started the real download with no warning. Supertonic's files are the same

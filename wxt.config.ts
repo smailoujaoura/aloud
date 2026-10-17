@@ -45,6 +45,12 @@ export default defineConfig({
     // reusing a tab already open on a note's page. activeTab covers every page the user acts on.
     permissions: ['activeTab', 'scripting', 'storage', 'unlimitedStorage', 'contextMenus'],
 
+    // Not in private windows. Aloud keeps where you stopped, your history and listening statistics,
+    // and in a private window it would keep them too — Mozilla forbids storing private-browsing data
+    // (add-on policy 6.3), and a private window promises the same everywhere. Until every one of those
+    // writes knows it is private, the browsers keep Aloud out of private windows altogether.
+    incognito: 'not_allowed',
+
     // No Hugging Face hosts: voices download without them. Hugging Face serves its files, and the
     // download servers it redirects to, with open CORS headers, and Aloud's requests carry no
     // cookies — checked in both browsers with these permissions removed (a model card, a Kokoro

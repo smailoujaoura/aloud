@@ -44,3 +44,14 @@ describe('listEngines', () => {
     expect(listEngines()).toHaveLength(ENGINE_IDS.length);
   });
 });
+
+describe('Supertonic detail on phones', () => {
+  it('a phone reads with 3 steps, unless its reader chose a number of their own', async () => {
+    const { supertonicStepsFor, PHONE_SUPERTONIC_STEPS } = await import('@/shared/engine-catalog');
+    expect(PHONE_SUPERTONIC_STEPS).toBe(3);
+    expect(supertonicStepsFor(5, true, 5)).toBe(3);
+    expect(supertonicStepsFor(5, false, 5)).toBe(5);
+    expect(supertonicStepsFor(7, true, 5)).toBe(7);
+    expect(supertonicStepsFor(2, true, 5)).toBe(2);
+  });
+});

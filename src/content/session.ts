@@ -29,8 +29,8 @@ import { CONTROL_HOST_ID, ControlBar, type BarVoice, type ExportState, type Lang
 import { voicePortrait } from '@/ui/voice-portraits';
 import type { EngineConfig, WordTiming } from '@/engine/protocol';
 import type { ModelManifest } from '@/engine/engines/types';
-import { getSettings, setSettings, activeVoice, voiceKeyFor, type EngineId, type Settings, type VoiceRef } from '@/shared/settings';
-import { ENGINE_IDS, engineInfo } from '@/shared/engine-catalog';
+import { DEFAULT_SETTINGS, getSettings, setSettings, activeVoice, voiceKeyFor, type EngineId, type Settings, type VoiceRef } from '@/shared/settings';
+import { ENGINE_IDS, engineInfo, supertonicStepsFor } from '@/shared/engine-catalog';
 import { languageName, primaryLanguage, voiceLanguage, type CandidateVoice } from '@/shared/language-voice';
 import { planLanguages, type Detection, type Detector, type PassageInput, type PassageLanguage } from './language-plan';
 import { routeFor, voiceKey, type Route, type RouteContext } from './voice-routing';
@@ -1089,7 +1089,7 @@ export class ReaderSession {
     return {
       engine: this.engine,
       voice: this.voice,
-      steps: this.settings.supertonicSteps,
+      steps: supertonicStepsFor(this.settings.supertonicSteps, capabilities().touchFirst, DEFAULT_SETTINGS.supertonicSteps),
       preferWebGPU: this.settings.preferWebGPU,
       debug: this.settings.debug,
       speed: this.settings.speed,

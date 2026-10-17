@@ -69,6 +69,10 @@ path before it loads). Voice models downloaded at runtime are ONNX data files, n
 **Data usage:** tick nothing. Aloud does not collect or transmit any of the listed data types.
 Certify all three statements (no sale, no unrelated use, no creditworthiness use).
 
+**Private / incognito windows:** the manifest declares `"incognito": "not_allowed"`. Aloud keeps
+reading positions, history and listening statistics, and private-window activity must not be stored
+(Mozilla add-on policy 6.3), so it does not run in private windows at all. The privacy policy says so.
+
 ## Firefox Add-ons (AMO)
 
 - **Data collection:** the manifest declares `data_collection_permissions: { required: ["none"] }`.
