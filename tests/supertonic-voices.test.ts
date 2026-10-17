@@ -51,4 +51,14 @@ describe('Supertonic 3 voices: a style in a language', () => {
     const alba = { engine: 'piper' as const, id: 'en_GB-alba-medium', label: 'Alba', language: 'en_GB' };
     expect(pickVoiceForLanguage('de', alba, [thorsten, m1])?.id).toBe('de_DE-thorsten-medium');
   });
+
+  it('with a GPU Kokoro reads Italian before Supertonic; without one — a phone — Supertonic does', () => {
+    const sara = { engine: 'kokoro' as const, id: 'if_sara', label: 'Sara', language: 'it' };
+    const f1 = { engine: 'supertonic' as const, id: 'F1@it', label: 'Female 1', language: 'it' };
+    const alba = { engine: 'piper' as const, id: 'en_GB-alba-medium', label: 'Alba', language: 'en_GB' };
+    expect(pickVoiceForLanguage('it', alba, [sara, f1], true)?.id).toBe('if_sara');
+    expect(pickVoiceForLanguage('it', alba, [sara, f1], false)?.id).toBe('F1@it');
+    // Not known yet counts as without: the cost of a wrong guess is a minute per sentence on a phone.
+    expect(pickVoiceForLanguage('it', alba, [sara, f1], null)?.id).toBe('F1@it');
+  });
 });

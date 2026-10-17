@@ -46,6 +46,11 @@ export interface RouteContext {
   removed?: ReadonlySet<string>;
   /** The voice chosen for every other language; absent for the voice English gets. */
   other?: VoiceRef | null;
+  /**
+   * Reading runs on a GPU (true), or not / not known yet: which engine Auto prefers when the saved
+   * voice does not speak a language (pickVoiceForLanguage). Without one, Supertonic before Kokoro.
+   */
+  gpu?: boolean | null;
 }
 
 export function voiceKey(v: { engine: string; id?: string; voice?: string }): string {
@@ -71,7 +76,7 @@ export function routeFor(languageTag: string, ctx: RouteContext): Route {
   if (primaryLanguage(ctx.saved.language) === language) return { kind: 'voice', voice: ctx.saved, reason: 'saved', language };
   const hidden = ctx.hidden;
   const visible = hidden?.size ? ctx.installed.filter((v) => !hidden.has(voiceKey(v))) : ctx.installed;
-  const match = pickVoiceForLanguage(language, ctx.saved, visible) ?? pickVoiceForLanguage(language, ctx.saved, ctx.installed);
+  const match = pickVoiceForLanguage(language, ctx.saved, visible, ctx.gpu) ?? pickVoiceForLanguage(language, ctx.saved, ctx.installed, ctx.gpu);
   if (match) return { kind: 'voice', voice: match, reason: 'match', language };
   if (ctx.skip.has(language) || (ctx.unvoiced === 'skip' && language !== 'en')) return { kind: 'skip', language };
   // English itself missing: the saved voice (asking for the English fallback here would loop).

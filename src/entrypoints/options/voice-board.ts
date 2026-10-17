@@ -27,6 +27,8 @@ import { voicePortrait } from '@/ui/voice-portraits';
 import { shortPiperLabel } from '@/shared/voice-catalog';
 import { previewFor } from './preview-button';
 import type { PanelContext } from './voice-panels';
+import { readsOnGpu } from './engine-config';
+import { capabilities } from '@/shared/browser-env';
 
 /** The board's last row: every language without voices of its own. */
 export const OTHER_LANGUAGES = '*';
@@ -145,6 +147,8 @@ export function renderVoiceBoard(
     installed,
     skip: new Set<string>(),
     other: settings.otherVoice,
+    // As the reader decides it: without a GPU (or on a phone), Supertonic before Kokoro on Auto.
+    gpu: readsOnGpu(settings) && !capabilities().touchFirst,
   };
   const skipping = settings.unvoicedLanguages === 'skip';
 
