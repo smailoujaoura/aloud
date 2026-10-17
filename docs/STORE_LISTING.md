@@ -100,8 +100,13 @@ reading positions, history and listening statistics, and private-window activity
 - **Data collection:** the manifest declares `data_collection_permissions: { required: ["none"] }`.
 - **Source code:** upload `.output/tts-reader-1.0.0-sources.zip` with this note for the reviewer:
 
-  > Built with Node 22.12+ and npm on Linux: `npm ci && npm run build:firefox`. Output is
-  > `.output/firefox-mv3/`, byte-identical to the uploaded package (verified from a clean copy).
+  > Built with Node 22.23 and npm 10.9 on Linux: `npm ci && npm run build:firefox` (the archive's
+  > `.npmrc` sets legacy-peer-deps, which the lockfile needs). The build needs no network after
+  > `npm ci`: the voice catalogue (`public/models.json`) is committed, and refreshing it is a
+  > separate maintainer step. Output is `.output/firefox-mv3/`, byte-identical to the uploaded
+  > package — checked by unpacking this archive into another folder, installing from the same
+  > lockfile, building and comparing all 347 files' SHA-256. The code is not minified and file
+  > names carry no hashes, so versions can be compared file by file.
   > Vendored, unmodified third-party files (ONNX Runtime Web, pdf.js, piper-phonemize WASM) are
   > copied from node_modules by `scripts/sync-assets.mjs`; versions are listed in THIRD_PARTY.md.
   > The `Function`-constructor lint warnings come from those libraries. The two `innerHTML`

@@ -38,7 +38,9 @@ export default defineConfig({
   // Internal review reports are not part of the source: left out, so the archive is what builds.
   zip: {
     includeSources: ['**/*', '.npmrc'],
-    excludeSources: ['docs/RELEASE_*', 'docs/CLAUDE_*', 'docs/STORE_POLICY_AUDIT_*'],
+    // Nor are the runtime files the build copies in from node_modules and builds (public/vendor/,
+    // the worker), which git ignores too: 59 MB a reviewer would otherwise get twice.
+    excludeSources: ['docs/RELEASE_*', 'docs/CLAUDE_*', 'docs/STORE_POLICY_AUDIT_*', 'public/vendor/**', 'public/tts-worker.js'],
   },
 
   manifest: ({ browser }) => ({
@@ -227,6 +229,12 @@ export default defineConfig({
         // WXT sets hashed names of its own after this config is read; the output options are the
         // last word, so the names are set there.
         name: 'aloud-stable-file-names',
+        // Unminified code keeps comments naming each module's file — by its absolute path, so a
+        // build in another folder (a reviewer's) differed in those lines. Relative to the project.
+        renderChunk(code) {
+          const here = rootDir.replace(/[\\/]$/, '');
+          return code.includes(here) ? { code: code.split(here).join('.'), map: null } : null;
+        },
         outputOptions(options) {
           // Whatever pattern WXT chose for each kind of file, without its hash.
           const unhashed = <T,>(pattern: T): T => {
