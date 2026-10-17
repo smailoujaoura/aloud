@@ -256,7 +256,7 @@ section + section { border-top: 1px solid var(--rule); }
 .center { text-align: center; justify-items: center; margin-inline: auto; }
 
 /* Voices: every face plays */
-.faces { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 22px 12px; }
+.faces { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 22px 12px; }
 @media (max-width: 1000px) { .faces { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .face {
   appearance: none; border: 0; background: none; color: inherit; font: inherit; cursor: pointer;
@@ -565,6 +565,10 @@ footer .by b { color: var(--ink); }
         <button class="face" type="button" data-src="kokoro-af_kore" data-line="I'm Kore. I run on your graphics card when your browser allows it, and on your processor when it doesn't."><span class="ring"><img src="assets/portraits/kokoro-af_kore.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Kore<small>Kokoro · US</small></span></button>
         <button class="face" type="button" data-src="kokoro-af_aoede" data-line="I'm Aoede. Reading a dark website? I keep the highlight easy on the eyes."><span class="ring"><img src="assets/portraits/kokoro-af_aoede.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Aoede<small>Kokoro · US</small></span></button>
         <button class="face" type="button" data-src="kokoro-am_fenrir" data-line="I'm Fenrir. I can even stop videos from playing by themselves."><span class="ring"><img src="assets/portraits/kokoro-am_fenrir.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Fenrir<small>Kokoro · US</small></span></button>
+        <button class="face" type="button" data-src="supertonic-F1-de" data-line="Ich lese Deutsch, Russisch, Japanisch und achtundzwanzig weitere Sprachen, alles auf diesem Gerät. — I read German, Russian, Japanese and twenty-eight more languages, all on this device."><span class="ring"><img src="assets/portraits/supertonic-F1.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Female 1<small>Supertonic · German</small></span></button>
+        <button class="face" type="button" data-src="supertonic-M1-es" data-line="Leo artículos en español sin enviar nada a ningún sitio. — I read articles in Spanish without sending anything anywhere."><span class="ring"><img src="assets/portraits/supertonic-M1.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Male 1<small>Supertonic · Spanish</small></span></button>
+        <button class="face" type="button" data-src="supertonic-F2-ja" data-line="日本語の記事も、この端末の中で読み上げます。 — I read Japanese articles aloud too, right on this device."><span class="ring"><img src="assets/portraits/supertonic-F2.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Female 2<small>Supertonic · Japanese</small></span></button>
+        <button class="face" type="button" data-src="supertonic-M5-ru" data-line="Я читаю по-русски, и всё это работает без интернета. — I read Russian, and all of it works without the internet."><span class="ring"><img src="assets/portraits/supertonic-M5.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Male 5<small>Supertonic · Russian</small></span></button>
       </div>
       <p class="quote idle" id="quote" aria-live="polite">Click a face to hear that voice.</p>
 
@@ -582,7 +586,7 @@ footer .by b { color: var(--ink); }
         <div class="engine">
           <h3>Supertonic 3</h3>
           <p class="meta">10 voices, each in all 31 languages · one download: ~402 MB</p>
-          <p>Natural voices for languages Kokoro doesn't speak, from German and Russian to Japanese and Korean — clearer than Piper's. Quicker with a graphics card; on a processor Aloud runs two copies side by side to keep up.</p>
+          <p>Natural voices for languages Kokoro doesn't speak, from German and Russian to Japanese and Korean — clearer than Piper's. Quicker with a graphics card; on a processor it is two to three times faster than Kokoro, so without one Aloud picks it first.</p>
         </div>
       </div>
 
@@ -594,7 +598,7 @@ footer .by b { color: var(--ink); }
             <tbody>
               <tr><th scope="row">Chrome or Firefox, with WebGPU</th><td>fast</td><td class="best">best, and faster than Piper</td><td>good, in 31 languages</td></tr>
               <tr><th scope="row">Chrome or Firefox, processor only</th><td class="best">best choice, fast</td><td>works, about 3× slower than real time</td><td>keeps up with two copies at once, on a desktop</td></tr>
-              <tr><th scope="row">Firefox for Android</th><td class="best">the one to use</td><td>too slow</td><td>too large</td></tr>
+              <tr><th scope="row">Firefox for Android</th><td class="best">the one to use</td><td>too slow</td><td>works, slower than speech on older phones: it pauses to catch up now and then</td></tr>
             </tbody>
           </table>
         </div>
@@ -681,7 +685,7 @@ footer .by b { color: var(--ink); }
         <figure class="shot">
           <picture>
             <source srcset="assets/shots/voice-dark.webp" media="(prefers-color-scheme: dark)">
-            <img src="assets/shots/voice-light.webp" width="1408" height="1976" loading="lazy" alt="Aloud's voice settings: a board titled Who reads what, each language with its flag wired to the face that reads it — English to Heart, French to Siwis, Hindi to Alpha, Italian to Sara, Portuguese and Spanish to Dora — beside the other voices that could, each with a play button; a last row says every other language is read by Heart.">
+            <img src="assets/shots/voice-light.webp" width="1408" height="2316" loading="lazy" alt="Aloud's voice settings: a board titled Who reads what, each language with its flag wired to the face that reads it — English to Heart, French to Siwis, German to Supertonic's Female 1, Hindi to Alpha, Italian to Sara, Portuguese and Spanish to Dora — beside the other voices that could, Supertonic's among them; a last row says every other language is read by Heart, and names the languages Supertonic reads in their own voice.">
           </picture>
         </figure>
       </div>

@@ -51,6 +51,11 @@ export const SAMPLES = [
   { file: 'kokoro-af_kore', engine: 'kokoro', voice: 'af_kore', text: "I'm Kore. I run on your graphics card when your browser allows it, and on your processor when it doesn't." },
   { file: 'kokoro-af_aoede', engine: 'kokoro', voice: 'af_aoede', text: "I'm Aoede. Reading a dark website? I keep the highlight easy on the eyes." },
   { file: 'kokoro-am_fenrir', engine: 'kokoro', voice: 'am_fenrir', text: "I'm Fenrir. I can even stop videos from playing by themselves." },
+  // Supertonic 3: each voice speaks 31 languages, so each says its line in another one.
+  { file: 'supertonic-F1-de', engine: 'supertonic', voice: 'F1@de', text: 'Ich lese Deutsch, Russisch, Japanisch und achtundzwanzig weitere Sprachen, alles auf diesem Gerät.' },
+  { file: 'supertonic-M1-es', engine: 'supertonic', voice: 'M1@es', text: 'Leo artículos en español sin enviar nada a ningún sitio.' },
+  { file: 'supertonic-F2-ja', engine: 'supertonic', voice: 'F2@ja', text: '日本語の記事も、この端末の中で読み上げます。' },
+  { file: 'supertonic-M5-ru', engine: 'supertonic', voice: 'M5@ru', text: 'Я читаю по-русски, и всё это работает без интернета.' },
 ];
 
 /** The hero demo: the article on the page, sentence by sentence, in Alba's voice. */

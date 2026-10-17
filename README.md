@@ -59,7 +59,10 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
 - **Each language in its own voice** — the language of every paragraph is told apart (the page's
   own `lang` markup, the browser's language detector, and the paragraphs around a short reply or
   a name), and each is read by a downloaded voice that speaks it: an Italian story with English
-  translations switches between an Italian and an English voice. Pick a voice on the bar during
+  translations switches between an Italian and an English voice. When your voice does not speak a
+  passage's language, Auto picks the engine that suits the machine: with a GPU Kokoro, then
+  Supertonic, then Piper; without one (a phone, say) Supertonic first, two to three times faster
+  than Kokoro on a processor. Pick a voice on the bar during
   a passage to make it that language's voice on every page, lock a page to one voice, or correct
   a passage's language, from the language button on the bar. A language with no voice is read in
   English, and the bar says so, with a link to its voices; Settings can have such languages skipped
@@ -71,6 +74,10 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
 - **Live words a minute** — beside the speed, the pace of the passage being heard: its words over
   its audio, set as each passage starts and held until the next, so the figure is steady. A speed
   change shows when the first passage made at the new speed begins.
+- **Every speed is the real one, up to 4×** — the voice models themselves barely get faster past
+  2× (each sound keeps at least one audio frame: asked for 4×, Piper and Kokoro read about 2.2×), so
+  past 1.5× the model reads at 1.5× and Aloud speeds its audio up the rest of the way at the same
+  pitch (WSOLA). 2× reads at 2×, word for word clear; 4× is 4×.
 - **Word by word** — with Piper and Kokoro voices the word being spoken is marked inside the
   sentence, timed from the voice model's own phoneme durations rather than estimated. It is shown
   as a darker shade by default; Settings switches it to an underline, or off.
@@ -126,7 +133,7 @@ WebGPU. With it, Chromium and Firefox perform the same:
 |---|---|---|---|
 | **Chromium or Firefox, with WebGPU** | fast | **best — faster than Piper** | good, in 31 languages |
 | **Chromium or Firefox, CPU only** | **best choice — fast** | works, ~3× slower than real time | ~1.2× real time per worker; two keep up |
-| **Firefox Android** | **the only sensible choice** | too slow | too large |
+| **Firefox Android** | **the one to use — about real time** | far too slow | works, slower than speech on older phones (pauses to catch up) |
 
 Chromium has WebGPU on by default; Firefox turns it on for pages on Windows but not for the
 workers Aloud synthesises in (see below). [Using your graphics card](https://aloud.souj.dev/gpu.html)
