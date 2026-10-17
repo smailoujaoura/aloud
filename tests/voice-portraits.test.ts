@@ -13,7 +13,12 @@ describe('voicePortrait', () => {
 
   it('leaves the other voices to their drawn avatar', () => {
     expect(voicePortrait('piper', 'en_US-amy-medium')).toBeNull();
-    expect(voicePortrait('supertonic', 'F1')).toBeNull();
+  });
+
+  it('gives each Supertonic voice one face, in every language it speaks', () => {
+    expect(voicePortrait('supertonic', 'F1@en')?.file).toBe('/portraits/supertonic-F1.webp');
+    expect(voicePortrait('supertonic', 'F1@ja')?.file).toBe('/portraits/supertonic-F1.webp');
+    expect(voicePortrait('supertonic', 'M5@de')?.sounds).toContain('deep');
   });
 
   it('gives every Kokoro voice a face — there are few enough to draw them all', () => {

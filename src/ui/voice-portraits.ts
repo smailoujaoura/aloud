@@ -3,7 +3,8 @@
  *
  * None of these people exist: every portrait was generated (SDXL with the SDXL-Lightning UNet,
  * both openrail++) from a description of how the voice sounds — who it sounds like, how old,
- * from where. Every Kokoro voice has one, and the Piper speakers worth coming back to; every
+ * from where. Every Kokoro voice has one, every Supertonic voice, and the Piper speakers worth
+ * coming back to; every
  * other voice shows the one stand-in avatar (see voice-avatar.ts). The files live in
  * `public/portraits/`, 160 px WebP.
  *
@@ -16,6 +17,7 @@
  */
 import type { EngineId } from '@/shared/settings';
 import { piperVoiceName } from '@/ui/voice-avatar';
+import { parseSupertonicVoice } from '@/shared/supertonic-voices';
 
 export interface Portrait {
   /** Path under the extension root. */
@@ -81,6 +83,24 @@ const KOKORO_REST: Record<string, string> = {
   pm_santa: 'a jolly Brazilian man of about seventy',
 };
 
+/**
+ * Supertonic 3's ten styles, each speaking all 31 languages — so no nationality: who they sound
+ * like comes from measuring them (median pitch and its range, reading the same sentence), and the
+ * faces are a varied cast. One face per style, in every language.
+ */
+const SUPERTONIC: Record<string, string> = {
+  F1: 'a woman of about thirty, warm and lively',
+  F2: 'a young woman in her twenties, bright and expressive',
+  F3: 'a woman in her late thirties, calm',
+  F4: 'a woman in her twenties, quick and light',
+  F5: 'a woman in her forties, low and steady',
+  M1: 'a man in his early thirties, expressive',
+  M2: 'a man in his fifties, deep and even',
+  M3: 'a man in his forties, brisk',
+  M4: 'a man in his late twenties, light',
+  M5: 'an older man, very deep',
+};
+
 /** The portrait for a voice, or null when it keeps the drawn avatar. */
 export function voicePortrait(engine: EngineId, id: string): Portrait | null {
   if (engine === 'piper') {
@@ -91,6 +111,11 @@ export function voicePortrait(engine: EngineId, id: string): Portrait | null {
   if (engine === 'kokoro') {
     const sounds = KOKORO[id] ?? KOKORO_REST[id];
     return sounds ? { file: `/portraits/kokoro-${id}.webp`, sounds } : null;
+  }
+  if (engine === 'supertonic') {
+    const { style } = parseSupertonicVoice(id);
+    const sounds = SUPERTONIC[style];
+    return sounds ? { file: `/portraits/supertonic-${style}.webp`, sounds } : null;
   }
   return null;
 }
@@ -116,5 +141,6 @@ export function allPortraitFiles(): string[] {
   return [
     ...Object.keys(PIPER).map((name) => `/portraits/piper-${name}.webp`),
     ...[...Object.keys(KOKORO), ...Object.keys(KOKORO_REST)].map((id) => `/portraits/kokoro-${id}.webp`),
+    ...Object.keys(SUPERTONIC).map((style) => `/portraits/supertonic-${style}.webp`),
   ];
 }
