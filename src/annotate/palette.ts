@@ -10,9 +10,9 @@ import { DEFAULT_NOTE_COLORS, type NoteColor, type NoteStyle } from '@/shared/se
 import { washFor, type PageTone } from '@/highlight/contrast';
 
 /**
- * Set on the page's root element while Aloud is reading it. Your highlights then draw as
- * underlines, and the only wash on the page is the sentence being read — two backgrounds in the
- * same yellow could not be told apart.
+ * Set on the page's root element while Aloud is reading it (the notes panel moves above the bar).
+ * Marks keep their own style while reading: a highlight that turned into an underline whenever
+ * the reader was open looked like the style choice being ignored.
  */
 export const READING_ATTR = 'data-aloud-reading';
 
@@ -42,7 +42,7 @@ export function markName(colorId: string, style: NoteStyle): string {
  *
  * On a dark page the wash is lifted and faded (as the reader's own is — see contrast.ts) and the
  * underline is drawn in a *light* tone of the colour: the usual darker ink disappears into a
- * dark page. While Aloud reads (`READING_ATTR`), highlights become underlines.
+ * dark page.
  */
 export function markCss(palette: readonly NoteColor[], tone: PageTone = 'light'): string {
   return palette
@@ -55,7 +55,6 @@ export function markCss(palette: readonly NoteColor[], tone: PageTone = 'light')
       return [
         `::highlight(${markName(c.id, 'highlight')}) { background-color: ${fill}; color: inherit; }`,
         `::highlight(${markName(c.id, 'underline')}) { ${underline} }`,
-        `:root[${READING_ATTR}] ::highlight(${markName(c.id, 'highlight')}) { background-color: transparent; ${underline} }`,
       ];
     })
     .join('\n');

@@ -112,9 +112,9 @@ export interface MediaSpeedSettings {
  */
 export const DEFAULT_MEDIA_SPEED: MediaSpeedSettings = {
   enabled: true,
-  step: 0.1,
+  step: 0.25,
   presets: [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4],
-  preferred: 1.75,
+  preferred: 2,
   startAt: 0,
   rememberPerSite: true,
   showBadge: true,
@@ -224,6 +224,10 @@ export interface Settings {
    * sound plays can do it (Piper, Kokoro); Supertonic keeps the sentence highlight alone.
    */
   wordHighlight: WordHighlightStyle;
+  /** The colour of the word being spoken (`#rrggbb`), painted over the sentence highlight. */
+  wordColor: string;
+  /** How strongly the word is painted, 0.15 (faint) to 1 (solid). */
+  wordStrength: number;
   /**
    * Give highlighted text a readable colour when the page's own colour would disappear into the
    * highlight — pale grey on a light page, light text on a dark one. Only the sentences that need
@@ -305,6 +309,8 @@ export const DEFAULT_SETTINGS: Settings = {
   highlight: true,
   highlightColor: 'rgba(255, 214, 10, 0.45)',
   wordHighlight: 'darker',
+  wordColor: '#ff9500',
+  wordStrength: 0.55,
   highlightReadable: true,
   scrollMode: 'keep-visible',
   pdfView: 'pages',
@@ -328,11 +334,21 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 /** The stored settings' schema version; each step up has a migration below. */
-export const SETTINGS_VERSION = 7;
+export const SETTINGS_VERSION = 8;
 
 type Migration = (prev: Record<string, unknown>) => Record<string, unknown>;
 
 const MIGRATIONS: Record<number, Migration> = {
+    // v7 -> v8: video speed moves in quarters (0.25), and "your speed" is 2×. Only a profile still
+    // on the old defaults (0.1 and 1.75×) moves; a step or speed someone chose is theirs.
+    8(prev: Record<string, unknown>): Record<string, unknown> {
+      const media = prev.mediaSpeed as { step?: number; preferred?: number } | undefined;
+      if (!media) return prev;
+      const next = { ...media };
+      if (media.step === 0.1) next.step = DEFAULT_MEDIA_SPEED.step;
+      if (media.preferred === 1.75) next.preferred = DEFAULT_MEDIA_SPEED.preferred;
+      return { ...prev, mediaSpeed: next };
+    },
     // v6 -> v7: the notes panel's single key is off by default (see DEFAULT_ANNOTATE). Only a
     // profile still on the old default "n" changes; a key someone chose is theirs.
     7(prev: Record<string, unknown>): Record<string, unknown> {
@@ -465,6 +481,8 @@ export function sanitizeSettings(raw: Settings): Settings {
     pdfView: oneOf(raw.pdfView, ['pages', 'reflow'] as const, DEFAULT_SETTINGS.pdfView),
     wordHighlight: oneOf(raw.wordHighlight, ['darker', 'underline', 'off'] as const, DEFAULT_SETTINGS.wordHighlight),
     highlightColor: typeof raw.highlightColor === 'string' && raw.highlightColor ? raw.highlightColor : DEFAULT_SETTINGS.highlightColor,
+    wordColor: typeof raw.wordColor === 'string' && /^#[0-9a-f]{6}$/i.test(raw.wordColor) ? raw.wordColor : DEFAULT_SETTINGS.wordColor,
+    wordStrength: clamp(raw.wordStrength, 0.15, 1, DEFAULT_SETTINGS.wordStrength),
     languageVoices: languageVoices(raw.languageVoices),
     unvoicedLanguages: oneOf(raw.unvoicedLanguages, ['english', 'skip'] as const, DEFAULT_SETTINGS.unvoicedLanguages),
     removedLanguages: Array.isArray(raw.removedLanguages)

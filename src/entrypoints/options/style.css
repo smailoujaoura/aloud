@@ -761,3 +761,87 @@ code {
 }
 .vb-back:hover { color: var(--fg); }
 .vb-faces.is-off { opacity: .45; }
+
+/* ---- one layout for every setting ----------------------------------------------------------
+   What a setting is (and a line on what it does) on the left; its control on the right, every
+   control the same width and ending at the same edge; on/off as a switch at that edge. The Voice
+   view has its own layout and keeps it. */
+.form { --ctl: 260px; }
+.form .row { display: flex; align-items: center; gap: 16px; margin: 0; padding: 11px 0; min-height: 38px; }
+.form .row > span:first-child { flex: 1 1 auto; min-width: 0; font-weight: 560; }
+.form .row-label { display: flex; flex-direction: column; gap: 2px; }
+.form .row-label > .muted, .form .check-hint { font-weight: 400; font-size: 12.5px; line-height: 1.4; color: var(--fg-muted); }
+.form .row > select,
+.form .row > input[type='text'],
+.form .row > input[type='search'],
+.form .row > input[type='number'],
+.form .row > input[type='color'],
+.form .row > .theme-switch,
+.form .row > .key-button,
+.form .key-row > .key-button {
+  flex: 0 0 var(--ctl); width: var(--ctl); min-width: 0; box-sizing: border-box; margin: 0;
+}
+.form .row > select, .form .row > input[type='text'], .form .row > input[type='search'], .form .row > input[type='number'] { height: 36px; padding: 0 10px; }
+.form .row > input[type='color'] { height: 36px; padding: 3px; }
+.form .row > input[type='range'] { flex: 0 0 calc(var(--ctl) - 64px); width: calc(var(--ctl) - 64px); margin: 0; }
+.form .row > output { flex: 0 0 48px; min-width: 0; }
+.form .row > .theme-switch { display: flex; }
+.form .row > .theme-switch .seg { flex: 1 1 0; justify-content: center; }
+.form .row-hint, .form .row-hint.flush { margin: -6px 0 8px; max-width: calc(100% - var(--ctl) - 16px); font-size: 12.5px; }
+.form .sub-label { margin: 20px 0 4px; font-size: 12px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; color: var(--fg-muted); }
+
+/* On/off: a switch at the right edge, where every other control ends. */
+.form .row.check { flex-direction: row-reverse; justify-content: space-between; }
+.form .row.check > span { flex: 1 1 auto; min-width: 0; font-weight: 560; }
+.form .row.check > input[type='checkbox'] {
+  appearance: none; -webkit-appearance: none; flex: 0 0 auto; position: relative; margin: 0;
+  width: 42px; height: 24px; border-radius: 12px; cursor: pointer;
+  background: var(--surface-3); border: 1px solid var(--border-strong); transition: background .15s;
+}
+.form .row.check > input[type='checkbox']::before {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--fg-muted); transition: transform .15s, background .15s;
+}
+.form .row.check > input[type='checkbox']:checked { background: var(--accent-solid); border-color: transparent; }
+.form .row.check > input[type='checkbox']:checked::before { transform: translateX(18px); background: var(--accent-on); }
+.form .row.check > input[type='checkbox']:focus-visible { outline: 2px solid var(--accent-solid); outline-offset: 2px; }
+.form .row.check > input[type='checkbox']:disabled { opacity: .5; cursor: default; }
+@media (prefers-reduced-motion: reduce) { .form .row.check > input[type='checkbox'], .form .row.check > input[type='checkbox']::before { transition: none; } }
+
+.form .skip-grid { display: block; }
+.form .skip-grid .row { margin: 0; }
+
+/* Keys: the same rows, the key where any other control would be. */
+.form .speed-keys { gap: 0; margin: 0 0 8px; }
+.form .key-row { padding: 9px 0; border: 0; border-radius: 0; background: none; gap: 16px; }
+.form .key-text > span:first-child { font-weight: 560; }
+.form .key-text > .muted { font-size: 12.5px; }
+.form .key-button { height: 36px; }
+
+/* Actions with a word on their state: the word on the left, the button on the right. */
+.form .gpu-actions { display: flex; flex-direction: row-reverse; justify-content: space-between; align-items: center; gap: 16px; padding: 8px 0; }
+
+@media (max-width: 560px) {
+  .form { --ctl: 100%; }
+  .form .row:not(.check), .form .key-row { flex-wrap: wrap; gap: 8px; }
+  .form .row:not(.check) > span:first-child, .form .key-row > .key-text { flex: 1 1 100%; }
+  .form .row > input[type='range'] { flex: 1 1 auto; width: auto; }
+  .form .row-hint, .form .row-hint.flush { max-width: none; }
+}
+
+/* Highlights & notes: the mark styles and colours as they look on a page. */
+.form .row > .swatches { flex: 0 0 var(--ctl); width: var(--ctl); display: flex; justify-content: space-between; }
+.swatch-pick {
+  width: 40px; height: 34px; padding: 0; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--surface-2); display: grid; place-items: center; cursor: pointer;
+}
+.swatch-pick::before { content: ''; width: 20px; height: 20px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px rgba(0,0,0,.2); }
+.swatch-pick:hover { border-color: var(--border-strong); }
+.swatch-pick[aria-checked='true'] { border-color: var(--accent-solid); box-shadow: 0 0 0 1px var(--accent-solid); background: var(--surface-3); }
+.style-switch .seg[aria-pressed='true'] { background: var(--surface-3); color: var(--fg); box-shadow: inset 0 0 0 2px var(--accent-solid); }
+.seg-sample { padding: 1px 4px; border-radius: 3px; text-underline-offset: 3px; }
+@media (max-width: 560px) { .form .row > .swatches { justify-content: flex-start; gap: 8px; } }
+
+.form .row > #themeSwitchRow { flex: 0 0 var(--ctl); width: var(--ctl); display: flex; }
+#themeSwitchRow .theme-switch { display: flex; width: 100%; box-sizing: border-box; }
+#themeSwitchRow .theme-switch .seg { flex: 1 1 0; justify-content: center; }

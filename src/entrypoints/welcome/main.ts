@@ -255,7 +255,7 @@ function showStep(next: number): void {
   // On the last step there is nothing next: the same button, in the same place, opens the settings.
   const nextBtn = $<HTMLButtonElement>('next');
   const last = index === steps.length - 1;
-  nextBtn.textContent = last ? 'Open settings' : index === steps.length - 2 ? 'Last one' : 'Next';
+  nextBtn.textContent = last ? 'Settings' : index === steps.length - 2 ? 'Last one' : 'Next';
 
   for (const [i, dot] of dots.entries()) {
     dot.classList.toggle('on', i === index);

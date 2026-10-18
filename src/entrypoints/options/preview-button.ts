@@ -64,8 +64,7 @@ export function previewButton(
       btn.classList.add('error');
     } else {
       btn.classList.remove('error');
-      if (s.engineInfo) btn.title = `Running on ${s.engineInfo}`;
-      else btn.removeAttribute('title');
+      btn.removeAttribute('title');
     }
 
     switch (s.phase) {

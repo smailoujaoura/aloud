@@ -27,7 +27,7 @@ export default defineUnlistedScript(() => {
   if (w.__aloudLoaded) return;
   w.__aloudLoaded = true;
 
-  const activate = (mode: ActivateMode, targetElement?: Element | null): void => {
+  const activate = (mode: ActivateMode, targetElement?: Element | null, fresh = false): void => {
     // Chromium hands a PDF tab to a plugin `<embed>`: the document's URL is the PDF, but its DOM
     // holds no text at all, so extraction can only ever fail here ("this page doesn't look like
     // an article"). The background opens Aloud's own PDF reader instead — it catches PDFs by URL
@@ -38,7 +38,9 @@ export default defineUnlistedScript(() => {
     }
 
     const session = w.__aloudSession;
-    if (session && mode === 'article') {
+    // `fresh`: "Listen from here" in the Library, on a tab already being read — start again, so
+    // the reader resumes at the sentence just saved.
+    if (session && mode === 'article' && !fresh) {
       // Toolbar button / shortcut on an already-running session = play/pause toggle.
       void session.externalToggle();
       return;
@@ -54,7 +56,7 @@ export default defineUnlistedScript(() => {
   w.__aloudActivate = activate;
 
   browser.runtime.onMessage.addListener((msg: unknown, _sender, sendResponse: (reply: unknown) => void) => {
-    const m = msg as { type?: string; mode?: ActivateMode; targetElementId?: number };
+    const m = msg as { type?: string; mode?: ActivateMode; targetElementId?: number; fresh?: boolean };
     // "Add page to reading queue": extract now, while the page is open and readable. Answered with
     // `sendResponse`: a returned promise arrives as `undefined` in Chromium 120 (shared/reply.ts).
     if (m?.type === 'extract-for-queue') return replyLater(sendResponse, extractForQueue());
@@ -68,7 +70,7 @@ export default defineUnlistedScript(() => {
         /* not available / stale id */
       }
     }
-    activate(m.mode ?? 'article', target);
+    activate(m.mode ?? 'article', target, m.fresh === true);
     return false;
   });
 

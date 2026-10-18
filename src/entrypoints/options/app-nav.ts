@@ -10,6 +10,7 @@ export const VIEWS = [
   'continue',
   'queue',
   'notes',
+  'pdfs',
   'history',
   'stats',
   'voice',
@@ -17,11 +18,10 @@ export const VIEWS = [
   'appearance',
   'highlights',
   'speed',
-  'pdfs',
   'pronunciation',
-  'advanced',
   'shortcuts',
   'backup',
+  'advanced',
 ] as const;
 export type View = (typeof VIEWS)[number];
 
@@ -47,8 +47,21 @@ export function showView(view: View, opts: { focus?: boolean; push?: boolean } =
   }
   if (current !== view) window.scrollTo({ top: 0 });
   current = view;
+  revealInNav(view);
   if (opts.focus) document.querySelector<HTMLElement>(`#view-${view} h1, #view-${view} h2`)?.focus?.();
   for (const fn of listeners) fn(view);
+}
+
+/**
+ * On a narrow window the navigation is one row that scrolls sideways: keep the current view's
+ * item on screen there, so a reload on "Advanced" does not land back at the left end.
+ */
+function revealInNav(view: View): void {
+  const row = document.querySelector<HTMLElement>('.app-nav');
+  const link = document.querySelector<HTMLElement>(`.nav-item[data-view="${view}"]`);
+  if (!row || !link || row.scrollWidth <= row.clientWidth) return;
+  const target = link.offsetLeft - (row.clientWidth - link.offsetWidth) / 2;
+  row.scrollLeft = Math.max(0, Math.min(target, row.scrollWidth - row.clientWidth));
 }
 
 export function currentView(): View | null {

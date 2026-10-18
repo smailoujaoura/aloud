@@ -46,6 +46,9 @@ export interface HighlighterOptions {
   scrollMode: ScrollMode;
   /** How the word being spoken looks. `off` is handled by not showing words at all. */
   wordStyle?: WordHighlightStyle;
+  /** The word's own colour (`#rrggbb`), and how strongly it is painted (0.15–1). */
+  wordColor?: string;
+  wordStrength?: number;
   /**
    * Give highlighted text a readable colour when the page's own colour would disappear into the
    * highlight. Off leaves the page's colours exactly as they are.
@@ -88,6 +91,13 @@ export class Highlighter {
   /** Whether the text being highlighted sits on a light or a dark background (see `paint`). */
   private tone: PageTone = 'light';
 
+  /** The word's own colour and strength, for this page's tone; null to derive it from the sentence colour. */
+  private get wordMark(): WordMark | null {
+    const color = this.opts.wordColor ? parseColor(this.opts.wordColor) : null;
+    if (!color) return null;
+    return { rgb: color.rgb, strength: this.opts.wordStrength ?? 0.55, tone: this.tone };
+  }
+
   /** The chosen highlight colour, adapted to the page's tone (contrast.ts: washFor). */
   private get wash(): string {
     const color = parseColor(this.opts.color);
@@ -109,7 +119,7 @@ export class Highlighter {
         border-radius: 2px;
       }
       ::highlight(${WORD_HIGHLIGHT_NAME}) {
-        ${wordStyleCss(wash, this.opts.wordStyle ?? 'darker')}
+        ${wordStyleCss(wash, this.opts.wordStyle ?? 'darker', this.wordMark)}
       }
       ::highlight(${DARK_TEXT_NAME}) {
         background-color: ${wash};
@@ -122,11 +132,11 @@ export class Highlighter {
         border-radius: 2px;
       }
       ::highlight(${WORD_DARK_TEXT_NAME}) {
-        ${wordStyleCss(wash, this.opts.wordStyle ?? 'darker')}
+        ${wordStyleCss(wash, this.opts.wordStyle ?? 'darker', this.wordMark)}
         color: ${DARK_INK};
       }
       ::highlight(${WORD_LIGHT_TEXT_NAME}) {
-        ${wordStyleCss(wash, this.opts.wordStyle ?? 'darker')}
+        ${wordStyleCss(wash, this.opts.wordStyle ?? 'darker', this.wordMark)}
         color: ${LIGHT_INK};
       }
       .${SPAN_CLASS} {
@@ -377,7 +387,24 @@ export class Highlighter {
  * follow without drawing anything across the text; `underline` leaves the colour alone and draws
  * a line in the same hue under the word.
  */
-export function wordStyleCss(color: string, style: WordHighlightStyle): string {
+export interface WordMark {
+  rgb: [number, number, number];
+  /** 0.15–1: how opaque the word's fill is. */
+  strength: number;
+  tone: PageTone;
+}
+
+export function wordStyleCss(color: string, style: WordHighlightStyle, mark?: WordMark | null): string {
+  if (mark) {
+    const strength = Math.min(1, Math.max(0.15, mark.strength));
+    // On a dark page the colour is lifted towards white, as the sentence wash is, so the word
+    // glows rather than going muddy; its line is the light tone there and a deep one on white.
+    const lift = (v: number): number => Math.round(v + (255 - v) * 0.3);
+    const rgb = mark.tone === 'dark' ? mark.rgb.map(lift) : mark.rgb;
+    const line = mark.tone === 'dark' ? rgb : mark.rgb.map((v) => Math.round(v * 0.7));
+    if (style === 'underline') return `color: inherit; text-decoration: underline 3px rgb(${line.join(', ')}); text-underline-offset: 2px;`;
+    return `background-color: rgba(${rgb.join(', ')}, ${strength.toFixed(2)}); color: inherit;`;
+  }
   const tone = wordTone(color);
   if (style === 'underline') {
     return `color: inherit; text-decoration: underline 3px ${tone.line}; text-underline-offset: 2px;`;

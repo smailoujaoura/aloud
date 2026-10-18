@@ -24,6 +24,7 @@ export async function initReading(opts: { onContinueCount: (n: number) => void; 
     opts.onContinueCount(unfinished.length);
     renderContinue(unfinished, opts.onContinue);
     renderHistory(history);
+    renderPdfs(history, opts.onContinue);
   };
   render(await loadHistory());
   watchHistory(render);
@@ -79,6 +80,28 @@ function renderHistory(history: History): void {
       const forget = el(document, 'button', { type: 'button', class: 'ghost btn-sm q-icon', title: 'Remove from history', 'aria-label': 'Remove from history' }, '✕');
       forget.addEventListener('click', () => void removeFromHistory(entry.source.key));
       card.append(text, forget);
+      return card;
+    }),
+  );
+}
+
+/** The PDFs view: every PDF listened to, newest first, each one click from where it stopped. */
+function renderPdfs(history: History, onOpen: (entry: HistoryEntry) => void): void {
+  const pdfs = historyList(history).filter((e) => e.source.reopen.kind === 'pdf' || e.source.reopen.kind === 'file');
+  $('pdfEmpty').hidden = pdfs.length > 0;
+  $('pdfList').replaceChildren(
+    ...pdfs.map((entry) => {
+      const card = el(document, 'li', { class: 'card' });
+      const text = el(document, 'div', { class: 'card-text' });
+      text.append(el(document, 'span', { class: 'card-title' }, entry.source.title || entry.source.site || 'Untitled'));
+      const state = entry.finished ? 'Finished' : `${formatListeningTime(remainingSeconds(entry))} left`;
+      text.append(el(document, 'span', { class: 'card-meta' }, [entry.source.site, state, ago(entry.lastReadAt)].filter(Boolean).join(' · ')));
+      text.append(progressBar(entry));
+      const actions = el(document, 'div', { class: 'card-actions' });
+      const open = el(document, 'button', { type: 'button', class: 'btn-sm' }, entry.finished ? 'Open' : '▶ Continue');
+      open.addEventListener('click', () => onOpen(entry));
+      actions.append(open);
+      card.append(text, actions);
       return card;
     }),
   );

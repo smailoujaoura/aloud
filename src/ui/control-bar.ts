@@ -1238,8 +1238,6 @@ export class ControlBar {
   private renderToast(state: SessionState): void {
     // While the tips card is up it *is* the message above the bar.
     if (this.tips) return;
-    const engine = state.engineInfo ? ` · ${state.engineInfo}` : '';
-
     if (state.status === 'error') {
       this.setToast(state.error ?? 'Something went wrong', false, 'err');
     } else if (state.status === 'extracting') {
@@ -1252,7 +1250,7 @@ export class ControlBar {
         true,
       );
     } else if (state.busy) {
-      this.setToast(`Buffering…${engine}`, true);
+      this.setToast('Buffering…', true);
     } else if (state.hint) {
       this.setToast(state.hint, false);
     } else {

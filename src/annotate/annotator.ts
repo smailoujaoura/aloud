@@ -18,7 +18,7 @@
  */
 import { siteOf } from '@/shared/doc-source';
 import { documentKey } from '@/shared/position-match';
-import { NOTES_FULL_MESSAGE, addNote, loadNotes, notesForPage, parseTags, removeNote, restoreNote, updateNote, watchNotes, type Note } from '@/shared/notes';
+import { NOTES_FULL_MESSAGE, addNote, loadNotes, noteFacets, notesForPage, removeNote, restoreNote, updateNote, watchNotes, type Note } from '@/shared/notes';
 import type { TextIndex } from '@/extract/text-index';
 import { DEFAULT_ANNOTATE, getSettings, watchSettings, type AnnotateSettings, type NoteStyle } from '@/shared/settings';
 import { anchorForRange, pageIndex, rangeForAnchor } from './page-anchoring';
@@ -27,6 +27,7 @@ import { NOTE_STYLES, colorFor, markCss, markName } from './palette';
 import { backgroundUnder, toneOf, type PageTone } from '@/highlight/contrast';
 import { PANEL_CSS, PageNotesPanel } from './notes-panel';
 import { containTyping } from '@/ui/contain-typing';
+import { TAG_INPUT_CSS, tagInput } from '@/ui/tag-input';
 
 const HOST_ID = 'aloud-annotate-host';
 const READER_HOST_ID = 'aloud-control-host';
@@ -449,33 +450,41 @@ export class PageAnnotator {
       if (comment.value !== note.comment) void updateNote(note.id, { comment: comment.value });
     });
 
-    const tags = document.createElement('input');
-    tags.placeholder = 'Tags, separated by commas';
-    tags.value = (note.tags ?? []).join(', ');
-    tags.setAttribute('aria-label', 'Tags');
-    let tagTimer = 0;
-    const saveTags = (): void => {
-      clearTimeout(tagTimer);
-      const next = parseTags(tags.value);
-      if (next.join(',') !== (note.tags ?? []).join(',')) void updateNote(note.id, { tags: next });
-    };
-    tags.addEventListener('input', () => {
-      clearTimeout(tagTimer);
-      tagTimer = window.setTimeout(saveTags, 600);
+    const tags = tagInput(document, {
+      tags: note.tags ?? [],
+      suggestions: noteFacets(this.allNotes).tags.map(([t]) => t),
+      onChange: (next) => void updateNote(note.id, { tags: next }),
     });
-    tags.addEventListener('change', saveTags);
-    tags.addEventListener('blur', saveTags);
 
-    const hint = document.createElement('div');
-    hint.className = 'hint';
-    hint.textContent = 'Delete removes it · type to write a note · Esc closes';
+    // Saves what is typed and closes: Esc, or "Done" where there is no Esc key (a phone).
+    const finish = (): void => {
+      clearTimeout(timer);
+      if (comment.value !== note.comment) void updateNote(note.id, { comment: comment.value });
+      this.closePopover();
+    };
+    const foot = document.createElement('div');
+    foot.className = 'row';
+    const hint = document.createElement('span');
+    hint.className = 'hint grow';
+    hint.textContent = matchMedia('(pointer: coarse)').matches ? '' : 'Esc closes · Delete removes it';
+    const done = button('Done', 'Save and close (Esc)', finish);
+    done.className = 'text-btn';
+    foot.append(hint, done);
 
     // Keys typed here belong to the note, not to the page's own shortcuts. The popover itself
     // takes focus, so Delete (or Backspace) removes the mark at once, and the first letter typed
     // moves into the note and carries on there.
     pop.tabIndex = -1;
     pop.addEventListener('keydown', (e) => {
-      if (e.key !== 'Escape') e.stopPropagation();
+      // Handled here, not left to bubble: keys typed in the note never leave the shadow root
+      // (contain-typing.ts), so the page-level Esc never heard one pressed inside the text.
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        finish();
+        return;
+      }
+      e.stopPropagation();
       if (e.target !== pop || e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
@@ -485,7 +494,7 @@ export class PageAnnotator {
         comment.setSelectionRange(comment.value.length, comment.value.length);
       }
     });
-    pop.append(colors, styles, comment, tags, hint);
+    pop.append(colors, styles, comment, tags, foot);
     root.append(pop);
     this.popover = { el: pop, id };
     place(pop, painted.range.getBoundingClientRect(), 'below');
@@ -628,7 +637,7 @@ export const UI_CSS = `
   }
   @media (prefers-color-scheme: dark) {
     .toolbar, .popover, .toast { color: #ececf1; background: #25252b; border-color: rgba(255,255,255,.14); }
-    textarea, input { background: #1b1b20 !important; color: #ececf1 !important; border-color: rgba(255,255,255,.18) !important; }
+    textarea, input:not(.tag-field) { background: #1b1b20 !important; color: #ececf1 !important; border-color: rgba(255,255,255,.18) !important; }
   }
   .toolbar { display: flex; align-items: center; gap: 4px; padding: 5px; }
   button { font: inherit; color: inherit; cursor: pointer; background: transparent; border: 0; border-radius: 8px; }
@@ -648,9 +657,10 @@ export const UI_CSS = `
   .hint { font-size: 11.5px; opacity: .6; }
   .row { display: flex; align-items: center; gap: 2px; }
   .grow { flex: 1; }
-  textarea, input {
+  textarea, input:not(.tag-field) {
     box-sizing: border-box; width: 100%; font: inherit; padding: 7px 9px; border-radius: 8px;
     border: 1px solid rgba(0,0,0,.18); background: #fafafa; color: #1b1b1f; resize: vertical;
   }
   .toast { left: 50%; bottom: 24px; transform: translateX(-50%); padding: 8px 12px; display: flex; align-items: center; gap: 8px; }
+  ${TAG_INPUT_CSS}
 `;

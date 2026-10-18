@@ -214,7 +214,7 @@ describe('a rate change from the player, not the viewer', () => {
       el.dispatchEvent(new Event('ratechange'));
       expect(controller.currentRate).toBe(1.75);
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'd', bubbles: true }));
-      expect(el.playbackRate).toBe(1.85);
+      expect(el.playbackRate).toBe(2); // one step of the default 0.25
       controller.stop();
     });
   });

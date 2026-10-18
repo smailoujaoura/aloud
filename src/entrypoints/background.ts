@@ -407,7 +407,7 @@ async function openWalkthrough(): Promise<void> {
   }
 }
 
-async function activate(tabId: number, mode: ActivateMode, targetElementId?: number): Promise<void> {
+async function activate(tabId: number, mode: ActivateMode, targetElementId?: number, fresh = false): Promise<void> {
   // A PDF is never an article: Chromium hands the tab to a plugin <embed> with no text in its
   // DOM, and Firefox renders it in a privileged viewer no content script can touch. Read it in
   // Aloud's own PDF page instead of injecting into something unreadable.
@@ -454,7 +454,7 @@ async function activate(tabId: number, mode: ActivateMode, targetElementId?: num
     return;
   }
   void browser.scripting.executeScript({ target: { tabId }, files: [ANNOTATE_FILE] }).catch(() => undefined);
-  await sendActivate(tabId, mode, targetElementId, 2);
+  await sendActivate(tabId, mode, targetElementId, 2, fresh);
 }
 
 
@@ -505,13 +505,14 @@ async function sendActivate(
   mode: ActivateMode,
   targetElementId: number | undefined,
   retries: number,
+  fresh = false,
 ): Promise<void> {
   try {
-    await browser.tabs.sendMessage(tabId, { type: 'activate', mode, targetElementId });
+    await browser.tabs.sendMessage(tabId, { type: 'activate', mode, targetElementId, fresh });
   } catch (err) {
     if (retries > 0) {
       await new Promise((r) => setTimeout(r, 120));
-      return sendActivate(tabId, mode, targetElementId, retries - 1);
+      return sendActivate(tabId, mode, targetElementId, retries - 1, fresh);
     }
     console.warn('[aloud] activate message not delivered:', err);
   }
@@ -748,6 +749,16 @@ async function sendWithRetry<T>(tabId: number, message: unknown, retries: number
 async function openAndRead(url: string): Promise<void> {
   if (looksLikePdf(url)) {
     await openPdfReader(url, null);
+    return;
+  }
+  // The page may be open already ("Open at highlight" goes there too): use that tab, and start the
+  // reader afresh so it resumes from the position just saved instead of toggling play/pause.
+  const target = documentKey(url);
+  const open = (await browser.tabs.query({}).catch(() => [])).find((t) => t.url && documentKey(t.url) === target);
+  if (open?.id != null) {
+    await browser.tabs.update(open.id, { active: true });
+    await focusWindow(open.windowId);
+    await activate(open.id, 'article', undefined, true);
     return;
   }
   const tab = await browser.tabs.create({ url });

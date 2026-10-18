@@ -29,6 +29,7 @@
           <a href="#continue" data-view="continue" class="nav-item"><span class="nav-icon" aria-hidden="true">▶</span><span class="nav-label">Continue</span><span class="count" id="count-continue"></span></a>
           <a href="#queue" data-view="queue" class="nav-item"><span class="nav-icon" aria-hidden="true">☰</span><span class="nav-label">Up next</span><span class="count" id="count-queue"></span></a>
           <a href="#notes" data-view="notes" class="nav-item"><span class="nav-icon" aria-hidden="true">✎</span><span class="nav-label">Notes</span><span class="count" id="count-notes"></span></a>
+          <a href="#pdfs" data-view="pdfs" class="nav-item"><span class="nav-icon" aria-hidden="true">▤</span><span class="nav-label">PDFs</span></a>
           <a href="#history" data-view="history" class="nav-item"><span class="nav-icon" aria-hidden="true">⟲</span><span class="nav-label">History</span></a>
           <a href="#stats" data-view="stats" class="nav-item"><span class="nav-icon" aria-hidden="true">▥</span><span class="nav-label">Statistics</span></a>
           <p class="nav-group">Settings</p>
@@ -37,11 +38,10 @@
           <a href="#appearance" data-view="appearance" class="nav-item"><span class="nav-icon" aria-hidden="true">◐</span><span class="nav-label">Appearance</span></a>
           <a href="#highlights" data-view="highlights" class="nav-item"><span class="nav-icon" aria-hidden="true">▍</span><span class="nav-label">Highlights &amp; notes</span></a>
           <a href="#speed" data-view="speed" class="nav-item"><span class="nav-icon" aria-hidden="true">»</span><span class="nav-label">Video speed</span></a>
-          <a href="#pdfs" data-view="pdfs" class="nav-item"><span class="nav-icon" aria-hidden="true">▤</span><span class="nav-label">PDFs</span></a>
           <a href="#pronunciation" data-view="pronunciation" class="nav-item"><span class="nav-icon" aria-hidden="true">Aa</span><span class="nav-label">Pronunciation</span></a>
-          <a href="#advanced" data-view="advanced" class="nav-item"><span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-label">Advanced</span></a>
           <a href="#shortcuts" data-view="shortcuts" class="nav-item"><span class="nav-icon" aria-hidden="true">⌨</span><span class="nav-label">Shortcuts</span></a>
           <a href="#backup" data-view="backup" class="nav-item"><span class="nav-icon" aria-hidden="true">⇅</span><span class="nav-label">Backup &amp; restore</span></a>
+          <a href="#advanced" data-view="advanced" class="nav-item"><span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-label">Advanced</span></a>
         </div>
         <button id="walkthrough" class="ghost nav-help" type="button">How it works</button>
         <!-- Free software: its licences and its source, from inside the product (scripts/notices.mjs). -->
@@ -104,18 +104,30 @@
       <div class="view lib-view" id="view-notes" data-view="notes" role="region" aria-label="Notes" hidden>
         <header class="view-head"><h1>Notes</h1><p class="muted small">Every passage you kept, marked again whenever you go back to its page.</p></header>
 
-        <div class="panel-bar">
-          <input type="search" id="noteSearch" placeholder="Search your notes…" aria-label="Search notes" />
-          <select id="noteSite" aria-label="Show notes from one site"></select>
-          <select id="noteTag" aria-label="Show notes with one tag"></select>
+        <div class="notes-toolbar">
+          <input type="search" id="noteSearch" placeholder="Search notes" aria-label="Search notes" />
+          <select id="noteWhen" aria-label="When">
+            <option value="any">Any time</option>
+            <option value="today">Today</option>
+            <option value="week">Past 7 days</option>
+            <option value="month">Past 30 days</option>
+            <option value="year">This year</option>
+          </select>
+          <select id="noteSite" aria-label="Site"></select>
+          <select id="noteOrder" aria-label="Order">
+            <option value="page">By page</option>
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+          </select>
         </div>
+        <div class="note-chips" id="noteChips" role="group" aria-label="Filter"></div>
         <div class="panel-bar export-bar">
           <p class="muted small" id="notesShown"></p>
           <div class="panel-actions">
-            <button id="copyNotes" class="ghost btn-sm" type="button">Copy as Markdown</button>
-            <button id="downloadNotes" class="ghost btn-sm" type="button">Download .md</button>
-            <button id="downloadJson" class="ghost btn-sm" type="button">Download .json</button>
-            <button id="importNotesButton" class="ghost btn-sm" type="button">Import notes…</button>
+            <button id="copyNotes" class="ghost btn-sm" type="button" title="Copy the notes shown, as Markdown">Copy</button>
+            <button id="downloadNotes" class="ghost btn-sm" type="button" title="Download the notes shown, as Markdown">.md</button>
+            <button id="downloadJson" class="ghost btn-sm" type="button" title="Download the notes shown, to import elsewhere">.json</button>
+            <button id="importNotesButton" class="ghost btn-sm" type="button" title="Add notes from a .json file">Import…</button>
             <input type="file" id="importNotes" accept=".json,application/json" hidden />
           </div>
         </div>
@@ -129,6 +141,27 @@
             place on the page, and export them as Markdown or JSON.</p>
         </div>
       
+      </div>
+
+      <div class="view lib-view" id="view-pdfs" data-view="pdfs" role="region" aria-label="PDFs" hidden>
+        <header class="view-head"><h1>PDFs</h1><p class="muted small">Opened here, read here. The file never leaves this device.</p></header>
+        <div class="panel-bar">
+          <label class="pdf-view-choice">
+            <span class="muted small">Show as</span>
+            <select id="pdfView">
+              <option value="pages">Original pages</option>
+              <option value="reflow">Reflowed text</option>
+            </select>
+          </label>
+          <div class="panel-actions">
+            <button id="openPdf" class="primary" type="button">Open a PDF…</button>
+          </div>
+        </div>
+        <ol id="pdfList" class="cards compact"></ol>
+        <div id="pdfEmpty" class="empty" hidden>
+          <h2>No PDFs yet</h2>
+          <p>PDFs you open show up here with how far you got.</p>
+        </div>
       </div>
 
       <div class="view lib-view" id="view-history" data-view="history" role="region" aria-label="History" hidden>
@@ -225,7 +258,7 @@
       </section>
       </div>
 
-      <div class="view" id="view-reading" data-view="reading" role="region" aria-label="Reading" hidden>
+      <div class="view form" id="view-reading" data-view="reading" role="region" aria-label="Reading" hidden>
 <section>
         <h2>Reading</h2>
         <label class="row">
@@ -262,7 +295,7 @@
       </section>
       </div>
 
-      <div class="view" id="view-appearance" data-view="appearance" role="region" aria-label="Appearance" hidden>
+      <div class="view form" id="view-appearance" data-view="appearance" role="region" aria-label="Appearance" hidden>
 <section>
         <h2>Appearance</h2>
         <label class="row">
@@ -280,16 +313,25 @@
           <span>Highlight the sentence being read</span>
         </label>
         <label class="row">
+          <span>Sentence colour</span>
+          <input type="color" id="highlightColor" />
+        </label>
+        <label class="row">
           <span>Mark the word being spoken</span>
           <select id="wordHighlight">
-            <option value="darker">Darker colour</option>
-            <option value="underline">Underline</option>
+            <option value="darker">With a colour</option>
+            <option value="underline">With an underline</option>
             <option value="off">Don't mark words</option>
           </select>
         </label>
-        <label class="row">
-          <span>Highlight colour</span>
-          <input type="color" id="highlightColor" />
+        <label class="row" id="wordColorRow">
+          <span>Word colour</span>
+          <input type="color" id="wordColor" />
+        </label>
+        <label class="row" id="wordStrengthRow">
+          <span>Word strength</span>
+          <input type="range" id="wordStrength" min="15" max="100" step="5" />
+          <output id="wordStrengthOut"></output>
         </label>
         <label class="row check">
           <input type="checkbox" id="highlightReadable" />
@@ -307,7 +349,7 @@
       </section>
       </div>
 
-      <div class="view" id="view-highlights" data-view="highlights" role="region" aria-label="Highlights & notes" hidden>
+      <div class="view form" id="view-highlights" data-view="highlights" role="region" aria-label="Highlights & notes" hidden>
 <section>
         <div class="section-head">
           <h2>Highlights &amp; notes</h2>
@@ -322,7 +364,7 @@
       </section>
       </div>
 
-      <div class="view" id="view-speed" data-view="speed" role="region" aria-label="Video speed" hidden>
+      <div class="view form" id="view-speed" data-view="speed" role="region" aria-label="Video speed" hidden>
 <section>
         <div class="section-head">
           <h2>Video &amp; audio speed</h2>
@@ -336,22 +378,8 @@
       </section>
       </div>
 
-      <div class="view" id="view-pdfs" data-view="pdfs" role="region" aria-label="PDFs" hidden>
-<section>
-        <h2>PDFs</h2>
-        <label class="row">
-          <span>Show PDFs as</span>
-          <select id="pdfView">
-            <option value="pages">The original pages</option>
-            <option value="reflow">Reflowed text</option>
-          </select>
-        </label>
-        <p class="muted small">Original pages keep figures and columns. Reflowed text suits a small screen.</p>
-        <button id="openPdf">Open a PDF…</button>
-      </section>
-      </div>
 
-      <div class="view" id="view-pronunciation" data-view="pronunciation" role="region" aria-label="Pronunciation" hidden>
+      <div class="view form" id="view-pronunciation" data-view="pronunciation" role="region" aria-label="Pronunciation" hidden>
 <section>
         <div class="section-head">
           <h2>Pronunciation</h2>
@@ -361,7 +389,7 @@
       </section>
       </div>
 
-      <div class="view" id="view-advanced" data-view="advanced" role="region" aria-label="Advanced" hidden>
+      <div class="view form" id="view-advanced" data-view="advanced" role="region" aria-label="Advanced" hidden>
 <section>
         <h2>Advanced</h2>
         <label class="row" id="supertonic-steps-row">
@@ -413,7 +441,7 @@
       </section>
       </div>
 
-      <div class="view" id="view-shortcuts" data-view="shortcuts" role="region" aria-label="Shortcuts" hidden>
+      <div class="view form" id="view-shortcuts" data-view="shortcuts" role="region" aria-label="Shortcuts" hidden>
       <section>
         <div class="section-head">
           <h2>Shortcuts</h2>
@@ -422,7 +450,7 @@
       </section>
       </div>
 
-      <div class="view" id="view-backup" data-view="backup" role="region" aria-label="Backup & restore" hidden>
+      <div class="view form" id="view-backup" data-view="backup" role="region" aria-label="Backup & restore" hidden>
       <section>
         <div class="section-head">
           <h2>Backup &amp; restore</h2>

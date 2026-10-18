@@ -54,7 +54,7 @@ import { renderSiteList } from './site-list';
 import { renderPronunciationEditor } from './pronunciation-editor';
 import { renderVoiceSection, type PanelContext } from './voice-panels';
 import { initNav, onViewChange, setNavCount, showView } from './app-nav';
-import { initLibrary } from '@/library/app';
+import { initLibrary, refitNotes } from '@/library/app';
 import { answerTabQueries } from '@/shared/own-tab';
 import { downloads } from './download-queue';
 import { announceModelsChanged, onModelsChanged } from './downloads';
@@ -135,6 +135,14 @@ async function withBusy(
     button.classList.remove('busy');
     button.textContent = label;
   }
+}
+
+/** The word's colour and strength only mean something while words are marked (and strength only for a fill). */
+function syncWordRows(): void {
+  const style = $<HTMLSelectElement>('wordHighlight').value;
+  const marksWords = $<HTMLInputElement>('highlight').checked && style !== 'off';
+  $('wordColorRow').hidden = !marksWords;
+  $('wordStrengthRow').hidden = !marksWords || style === 'underline';
 }
 
 async function save(patch: Partial<Settings>): Promise<void> {
@@ -405,6 +413,10 @@ async function renderNow(): Promise<void> {
   $<HTMLInputElement>('highlightReadable').checked = settings.highlightReadable;
   $<HTMLSelectElement>('wordHighlight').disabled = !settings.highlight;
   $<HTMLInputElement>('highlightColor').value = toHex(settings.highlightColor);
+  $<HTMLInputElement>('wordColor').value = settings.wordColor;
+  $<HTMLInputElement>('wordStrength').value = String(Math.round(settings.wordStrength * 100));
+  $('wordStrengthOut').textContent = `${Math.round(settings.wordStrength * 100)}%`;
+  syncWordRows();
   $<HTMLSelectElement>('scrollMode').value = settings.scrollMode;
   $<HTMLSelectElement>('pdfView').value = settings.pdfView;
   $<HTMLInputElement>('sectionPauseMs').value = String(settings.sectionPauseMs);
@@ -611,9 +623,14 @@ function wire(): void {
 
   wireCheckbox('highlight', 'highlight');
   wireCheckbox('highlightReadable', 'highlightReadable');
-  $('wordHighlight').addEventListener('change', (e) =>
-    save({ wordHighlight: (e.target as HTMLSelectElement).value as Settings['wordHighlight'] }),
-  );
+  $('wordHighlight').addEventListener('change', (e) => {
+    syncWordRows();
+    void save({ wordHighlight: (e.target as HTMLSelectElement).value as Settings['wordHighlight'] });
+  });
+  $('highlight').addEventListener('change', () => {
+    $<HTMLSelectElement>('wordHighlight').disabled = !$<HTMLInputElement>('highlight').checked;
+    syncWordRows();
+  });
   wireCheckbox('tapToSeek', 'tapToSeek');
   wireCheckbox('barAutoHide', 'barAutoHide');
   wireCheckbox('skipUrls', 'skipUrls');
@@ -626,6 +643,11 @@ function wire(): void {
   wireCheckbox('preferWebGPU', 'preferWebGPU');
   wireCheckbox('debug', 'debug');
 
+  $('wordColor').addEventListener('change', (e) => void save({ wordColor: (e.target as HTMLInputElement).value }));
+  $('wordStrength').addEventListener('input', (e) => {
+    $('wordStrengthOut').textContent = `${(e.target as HTMLInputElement).value}%`;
+  });
+  $('wordStrength').addEventListener('change', (e) => void save({ wordStrength: Number((e.target as HTMLInputElement).value) / 100 }));
   $('highlightColor').addEventListener('change', (e) => {
     const hex = (e.target as HTMLInputElement).value;
     const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
@@ -795,6 +817,10 @@ watchSettings((next) => {
   if (document.hasFocus() || !settings) return;
   settings = next;
   void render();
+});
+// Note fields are sized to their text, which only measures while the Notes view is showing.
+onViewChange((view) => {
+  if (view === 'notes') requestAnimationFrame(refitNotes);
 });
 // The rail says what the view in front of you is for (rail.ts).
 initNav();

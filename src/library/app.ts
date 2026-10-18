@@ -7,6 +7,8 @@
  * to it from other tabs.
  */
 import { initNotes } from './notes-panel';
+
+export { refitNotes } from './notes-panel';
 import { initQueue } from './queue-panel';
 import { initReading } from './reading-panels';
 import { initStats } from './stats-panel';

@@ -431,8 +431,7 @@ export class ReaderSession {
       },
     }, { maxLanes: capabilities().formFactor === 'android' ? 2 : MAX_LANES });
 
-    // Your saved highlights draw as underlines while the reader is open, so the one wash on the
-    // page is the sentence being read (annotate/palette.ts: READING_ATTR).
+    // Marks the page as being read (annotate/palette.ts: READING_ATTR): the notes panel moves above the bar.
     document.documentElement.setAttribute(READING_ATTR, '');
     this.bar = new ControlBar(document, this.controlCallbacks(), {
       speed: this.settings.speed,
@@ -448,6 +447,8 @@ export class ReaderSession {
       color: this.settings.highlightColor,
       scrollMode: this.settings.scrollMode,
       wordStyle: this.settings.wordHighlight,
+      wordColor: this.settings.wordColor,
+      wordStrength: this.settings.wordStrength,
       keepReadable: this.settings.highlightReadable,
       bottomInset: () => this.bar?.coveredHeight() ?? 0,
     });
@@ -2296,6 +2297,8 @@ export class ReaderSession {
       color: this.settings.highlightColor,
       scrollMode: this.settings.scrollMode,
       wordStyle: this.settings.wordHighlight,
+      wordColor: this.settings.wordColor,
+      wordStrength: this.settings.wordStrength,
       keepReadable: this.settings.highlightReadable,
     });
     if (!this.settings.highlight || this.settings.wordHighlight === 'off') this.stopFollowingWords(true);

@@ -8,6 +8,7 @@ import { sourceUrl } from '@/shared/doc-source';
 import { textFragmentUrl } from '@/annotate/anchor';
 import { colorFor, inkFor } from '@/annotate/palette';
 import { DEFAULT_NOTE_COLORS, getSettings, watchSettings, type NoteColor } from '@/shared/settings';
+import { TAG_INPUT_CSS, tagInput } from '@/ui/tag-input';
 import {
   filterNotes,
   groupBySource,
@@ -18,21 +19,26 @@ import {
   notesToFile,
   parseNotesFile,
   notesToMarkdown,
-  parseTags,
   removeNote,
+  sinceFor,
+  sortNotes,
   restoreNote,
   updateNote,
   watchNotes,
   type Note,
+  type NoteWhen,
 } from '@/shared/notes';
 import { $, ago, toast } from './feedback';
 
 let notes: Note[] = [];
 /** The reader's colours (settings: annotate.colors), so a note's stripe matches its mark. */
 let palette: NoteColor[] = DEFAULT_NOTE_COLORS;
-const filter = { query: '', site: '', tag: '' };
+const filter = { query: '', site: '', tag: '', when: 'any' as NoteWhen, color: '', commented: false };
+let order: 'page' | 'newest' | 'oldest' = 'page';
 /** A comment being typed is not redrawn under the cursor when storage echoes the change back. */
 let editing: string | null = null;
+
+let rerender: () => void = () => undefined;
 
 export async function initNotes(opts: { onCount: (n: number) => void; onListen: (note: Note) => void }): Promise<void> {
   const render = (): void => {
@@ -40,6 +46,8 @@ export async function initNotes(opts: { onCount: (n: number) => void; onListen: 
     renderFilters();
     renderNotes(opts.onListen);
   };
+  rerender = render;
+  document.head.append(el(document, 'style', {}, TAG_INPUT_CSS));
   notes = await loadNotes();
   palette = (await getSettings()).annotate.colors;
   render();
@@ -63,8 +71,12 @@ export async function initNotes(opts: { onCount: (n: number) => void; onListen: 
     filter.site = (e.target as HTMLSelectElement).value;
     render();
   });
-  $<HTMLSelectElement>('noteTag').addEventListener('change', (e) => {
-    filter.tag = (e.target as HTMLSelectElement).value;
+  $<HTMLSelectElement>('noteWhen').addEventListener('change', (e) => {
+    filter.when = (e.target as HTMLSelectElement).value as NoteWhen;
+    render();
+  });
+  $<HTMLSelectElement>('noteOrder').addEventListener('change', (e) => {
+    order = (e.target as HTMLSelectElement).value as typeof order;
     render();
   });
 
@@ -105,8 +117,19 @@ export async function initNotes(opts: { onCount: (n: number) => void; onListen: 
   });
 }
 
-const shown = (): Note[] => filterNotes(notes, filter);
-const isFiltered = (): boolean => !!(filter.query || filter.site || filter.tag);
+const shown = (): Note[] => filterNotes(notes, { ...filter, since: sinceFor(filter.when) });
+const isFiltered = (): boolean => !!(filter.query || filter.site || filter.tag || filter.when !== 'any' || filter.color || filter.commented);
+
+/** The notes view is shown: size the note fields, which measure nothing while the view is hidden. */
+export function refitNotes(): void {
+  for (const t of document.querySelectorAll<HTMLTextAreaElement>('#notesList textarea')) fitField(t);
+}
+
+function fitField(t: HTMLTextAreaElement): void {
+  if (!t.isConnected || t.offsetParent === null) return; // hidden: keep the CSS height
+  t.style.height = 'auto';
+  t.style.height = `${t.scrollHeight + 2}px`;
+}
 
 /** The file name says what is in it: "Aloud notes · doc.rust-lang.org · rust-book · 2026-09-18.md". */
 function download(text: string, ext: string, type: string): void {
@@ -122,9 +145,42 @@ function download(text: string, ext: string, type: string): void {
 function renderFilters(): void {
   const { sites, tags } = noteFacets(notes);
   fillSelect($<HTMLSelectElement>('noteSite'), 'All sites', sites, filter.site);
-  fillSelect($<HTMLSelectElement>('noteTag'), 'All tags', tags.map(([t, n]) => [`#${t}`, n, t]), filter.tag);
-  $('noteTag').hidden = tags.length === 0;
   $('noteSite').hidden = sites.length < 2 && !filter.site;
+
+  // One row of toggles: your tags, the colours in use, and "with writing". Pressing one again
+  // (or another of its kind) changes the filter; nothing to open first.
+  const chips: HTMLElement[] = [];
+  const chip = (label: string, pressed: boolean, title: string, onPress: () => void, swatch?: string): HTMLElement => {
+    const b = el(document, 'button', { type: 'button', class: 'filter-chip', 'aria-pressed': String(pressed), title }, label);
+    if (swatch) {
+      b.classList.add('is-color');
+      b.style.setProperty('--c', swatch);
+    }
+    b.addEventListener('click', () => {
+      onPress();
+      rerender();
+    });
+    return b;
+  };
+  for (const [tag, n] of tags) chips.push(chip(`#${tag} ${n}`, filter.tag === tag, `Only notes tagged ${tag}`, () => (filter.tag = filter.tag === tag ? '' : tag)));
+  const used = new Set(notes.map((n) => n.color ?? ''));
+  const colours = palette.filter((c) => used.has(c.id));
+  if (colours.length > 1) {
+    for (const c of colours) chips.push(chip('', filter.color === c.id, `Only ${c.label.toLocaleLowerCase()} marks`, () => (filter.color = filter.color === c.id ? '' : c.id), c.fill));
+  }
+  if (notes.some((n) => n.comment.trim())) chips.push(chip('✎ With writing', filter.commented, 'Only notes you wrote something under', () => (filter.commented = !filter.commented)));
+  if (isFiltered()) {
+    const clear = el(document, 'button', { type: 'button', class: 'filter-chip clear' }, 'Clear filters');
+    clear.addEventListener('click', () => {
+      Object.assign(filter, { query: '', site: '', tag: '', when: 'any', color: '', commented: false });
+      $<HTMLInputElement>('noteSearch').value = '';
+      $<HTMLSelectElement>('noteWhen').value = 'any';
+      rerender();
+    });
+    chips.push(clear);
+  }
+  $('noteChips').replaceChildren(...chips);
+  $('noteChips').hidden = chips.length === 0;
 }
 
 function fillSelect(select: HTMLSelectElement, all: string, items: Array<[string, number] | [string, number, string]>, current: string): void {
@@ -142,13 +198,18 @@ function renderNotes(onListen: (note: Note) => void): void {
   for (const id of ['copyNotes', 'downloadNotes', 'downloadJson']) $(id).toggleAttribute('disabled', list.length === 0);
   $('notesShown').textContent = notes.length
     ? isFiltered()
-      ? `${list.length} of ${notes.length} notes — exports include only these`
+      ? `${list.length} of ${notes.length} notes`
       : `${notes.length} note${notes.length === 1 ? '' : 's'}`
     : '';
 
   const host = $('notesList');
   if (notes.length > 0 && list.length === 0) {
     host.replaceChildren(el(document, 'p', { class: 'muted no-match' }, 'No notes match.'));
+    return;
+  }
+  if (order !== 'page') {
+    host.replaceChildren(...sortNotes(list, order).map((note) => noteCard(note, onListen, true)));
+    refitNotes();
     return;
   }
   host.replaceChildren(
@@ -165,22 +226,37 @@ function renderNotes(onListen: (note: Note) => void): void {
       return section;
     }),
   );
+  refitNotes();
 }
 
-function noteCard(note: Note, onListen: (note: Note) => void): HTMLElement {
+/** Changes made while a field had focus were not drawn; draw them once focus has left the notes. */
+function afterEditing(): void {
+  window.setTimeout(() => {
+    if (!editing) rerender();
+  }, 50);
+}
+
+function noteCard(note: Note, onListen: (note: Note) => void, withSource = false): HTMLElement {
   const card = el(document, 'article', { class: 'note' });
+  if (withSource) {
+    // Newest or oldest first, notes from many pages sit together: each says where it is from.
+    const url = sourceUrl(note.source);
+    const label = note.source.title || note.source.site;
+    card.append(
+      url
+        ? el(document, 'a', { class: 'note-from', href: url, target: '_blank', rel: 'noopener noreferrer', title: note.source.site }, label)
+        : el(document, 'span', { class: 'note-from' }, label),
+    );
+  }
   const fill = colorFor(palette, note.color).fill;
   const color = note.style === 'underline' ? inkFor(fill) : fill;
   const quote = el(document, 'blockquote', {}, note.text);
   quote.style.borderLeftColor = color;
   card.append(quote);
 
-  const comment = el(document, 'textarea', { rows: '1', placeholder: 'Add your thoughts…', 'aria-label': 'Your note' });
+  const comment = el(document, 'textarea', { rows: '2', placeholder: 'Write a note…', 'aria-label': 'Your note' });
   comment.value = note.comment;
-  const fit = (): void => {
-    comment.style.height = 'auto';
-    comment.style.height = `${comment.scrollHeight}px`;
-  };
+  const fit = (): void => fitField(comment);
   let timer = 0;
   comment.addEventListener('focus', () => (editing = note.id));
   comment.addEventListener('input', () => {
@@ -192,32 +268,30 @@ function noteCard(note: Note, onListen: (note: Note) => void): HTMLElement {
     clearTimeout(timer);
     editing = null;
     if (comment.value !== note.comment) void updateNote(note.id, { comment: comment.value });
+    afterEditing();
   });
-  requestAnimationFrame(fit);
   card.append(comment);
 
-  const tags = el(document, 'input', { class: 'note-tags', placeholder: 'Add tags, separated by commas', 'aria-label': 'Tags' }) as HTMLInputElement;
-  tags.value = (note.tags ?? []).join(', ');
-  tags.addEventListener('focus', () => (editing = note.id));
-  let tagTimer = 0;
-  const saveTags = (): void => {
-    clearTimeout(tagTimer);
-    const next = parseTags(tags.value);
-    if (next.join(',') !== (note.tags ?? []).join(',')) void updateNote(note.id, { tags: next });
-  };
-  tags.addEventListener('input', () => {
-    clearTimeout(tagTimer);
-    tagTimer = window.setTimeout(saveTags, 600);
+  const tags = tagInput(document, {
+    tags: note.tags ?? [],
+    placeholder: 'Add a tag',
+    suggestions: noteFacets(notes).tags.map(([t]) => t),
+    onChange: (next) => void updateNote(note.id, { tags: next }),
+    onPick: (tag) => {
+      filter.tag = tag;
+      rerender();
+    },
   });
-  tags.addEventListener('change', saveTags);
-  tags.addEventListener('blur', () => {
-    saveTags();
+  tags.classList.add('note-tags');
+  tags.addEventListener('focusin', () => (editing = note.id));
+  tags.addEventListener('focusout', () => {
     editing = null;
+    afterEditing();
   });
   card.append(tags);
 
   const foot = el(document, 'footer', { class: 'note-foot' });
-  foot.append(el(document, 'span', { class: 'muted small' }, ago(note.createdAt)));
+  foot.append(el(document, 'span', { class: 'muted small', title: new Date(note.createdAt).toLocaleString() }, ago(note.createdAt)));
   const actions = el(document, 'div', { class: 'note-actions' });
   const url = sourceUrl(note.source);
   if (note.anchor && url && note.source.reopen.kind === 'web') {

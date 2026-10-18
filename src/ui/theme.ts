@@ -73,7 +73,7 @@ export function nextTheme(theme: ThemeChoice): ThemeChoice {
 }
 
 export const THEME_LABEL: Record<ThemeChoice, string> = {
-  system: 'Match the system',
+  system: 'System',
   light: 'Light',
   dark: 'Dark',
 };

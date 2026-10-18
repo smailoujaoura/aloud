@@ -9,7 +9,7 @@
 .panel-bar p { margin: 0; }
 .panel-actions { display: flex; gap: 8px; align-items: center; }
 .panel-actions .primary { padding: 8px 16px; }
-#noteSearch { flex: 1 1 240px; min-width: 0; }
+#noteSearch { min-width: 0; }
 
 .empty {
   padding: 22px 24px;
@@ -54,13 +54,16 @@ a.card-title:hover { text-decoration: underline; }
   font: 15.5px/1.6 Georgia, "Iowan Old Style", "Palatino Linotype", serif; color: var(--fg);
   white-space: pre-wrap;
 }
+/* The note and its tags look like what they are: fields to write in, at their full size from the
+   first draw (a hidden view measures nothing, so the height comes from CSS until it can). */
 .note textarea {
   display: block; width: 100%; box-sizing: border-box; resize: none; overflow: hidden;
-  margin: 0; padding: 6px 8px; border-radius: 8px; border: 1px solid transparent;
-  background: transparent; color: var(--fg); font: 14px/1.5 var(--sans);
+  min-height: 2.9em; margin: 4px 0 6px; padding: 7px 10px; border-radius: 9px;
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--fg); font: 14px/1.5 var(--sans);
 }
-.note textarea:hover { background: var(--surface-2); }
-.note textarea:focus { background: var(--bg); border-color: var(--border-strong); outline: none; }
+.note textarea::placeholder { color: var(--fg-muted); opacity: 1; }
+.note textarea:hover { border-color: var(--border-strong); }
+.note textarea:focus { background: var(--bg); border-color: var(--accent-solid); outline: none; }
 .note-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
 .note-actions { display: flex; gap: 4px; }
 .no-match { padding: 12px 2px; }
@@ -123,15 +126,24 @@ a.card-title:hover { text-decoration: underline; }
 }
 
 /* Notes filters and tags. */
-#noteSite, #noteTag { flex: 0 1 auto; max-width: 14rem; }
-.export-bar { margin-top: -4px; }
-.note-tags {
-  display: block; width: 100%; box-sizing: border-box; margin: 2px 0 0; padding: 5px 8px;
-  border-radius: 8px; border: 1px solid transparent; background: transparent;
-  color: var(--fg-muted); font: 12.5px/1.4 var(--sans);
+.notes-toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.notes-toolbar #noteSearch { flex: 1 1 200px; }
+.notes-toolbar select { flex: 0 0 auto; max-width: 12rem; }
+.note-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.filter-chip {
+  padding: 4px 11px; border-radius: 999px; font-size: 12.5px; line-height: 18px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--fg); cursor: pointer;
 }
-.note-tags:hover { background: var(--surface-2); }
-.note-tags:focus { background: var(--bg); border-color: var(--border-strong); outline: none; color: var(--fg); }
+.filter-chip:hover { border-color: var(--border-strong); }
+.filter-chip[aria-pressed='true'] { background: var(--accent-solid); color: var(--accent-on); border-color: transparent; font-weight: 600; }
+.filter-chip.is-color { width: 28px; padding: 0; display: inline-grid; place-items: center; }
+.filter-chip.is-color::before { content: ''; width: 14px; height: 14px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px rgba(0,0,0,.2); }
+.filter-chip.is-color[aria-pressed='true'] { background: var(--surface-3); box-shadow: 0 0 0 2px var(--accent-solid); }
+.filter-chip.clear { border-style: dashed; color: var(--fg-muted); }
+.export-bar { margin-top: -4px; }
+.note-from { display: block; margin: 0 0 6px; font-size: 12.5px; font-weight: 600; color: var(--fg-muted); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+a.note-from:hover { color: var(--fg); text-decoration: underline; }
+.note-tags { --tag-border: var(--border); --tag-bg: var(--surface-2); --tag-focus: var(--accent-solid); --tag-chip: var(--surface-3); margin: 0 0 4px; font: 13px/1.4 var(--sans); color: var(--fg); }
 
 /* A saved article's images stay on its own site until they are asked for (queue-panel.ts). */
 .article-images { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -159,3 +171,4 @@ a.card-title:hover { text-decoration: underline; }
 .stats-list li > i { grid-column: 1 / -1; display: block; height: 4px; border-radius: 2px; background: var(--accent-solid); }
 .stats-list li.unknown > span:first-child { color: var(--fg-muted); font-style: italic; }
 .stats-note { margin: 10px 0 0; line-height: 1.55; }
+.pdf-view-choice { display: inline-flex; align-items: center; gap: 8px; }

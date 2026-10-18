@@ -95,12 +95,48 @@ export interface NoteFilter {
   site?: string;
   /** A tag; '' for all. */
   tag?: string;
+  /** Only notes kept at or after this time (ms); 0 or absent for any time. */
+  since?: number;
+  /** A palette colour id; '' for all. */
+  color?: string;
+  /** Only notes you wrote something under. */
+  commented?: boolean;
+}
+
+export type NoteWhen = 'any' | 'today' | 'week' | 'month' | 'year';
+
+/** The start of a "when" range, local time: today from midnight, the week and month as the last 7 and 30 days. */
+export function sinceFor(when: NoteWhen, now = new Date()): number {
+  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  switch (when) {
+    case 'today':
+      return midnight;
+    case 'week':
+      return midnight - 6 * 86_400_000;
+    case 'month':
+      return midnight - 29 * 86_400_000;
+    case 'year':
+      return new Date(now.getFullYear(), 0, 1).getTime();
+    default:
+      return 0;
+  }
+}
+
+/** Newest or oldest first, by when each was kept. */
+export function sortNotes(notes: readonly Note[], order: 'newest' | 'oldest'): Note[] {
+  const sign = order === 'newest' ? -1 : 1;
+  return [...notes].sort((a, b) => sign * (a.createdAt - b.createdAt));
 }
 
 /** Search, narrowed to one site and/or one tag. */
 export function filterNotes(notes: readonly Note[], filter: NoteFilter): Note[] {
   return searchNotes(notes, filter.query ?? '').filter(
-    (n) => (!filter.site || n.source.site === filter.site) && (!filter.tag || (n.tags ?? []).includes(filter.tag)),
+    (n) =>
+      (!filter.site || n.source.site === filter.site) &&
+      (!filter.tag || (n.tags ?? []).includes(filter.tag)) &&
+      (!filter.since || n.createdAt >= filter.since) &&
+      (!filter.color || (n.color ?? '') === filter.color) &&
+      (!filter.commented || n.comment.trim() !== ''),
   );
 }
 
