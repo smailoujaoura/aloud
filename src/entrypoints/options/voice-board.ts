@@ -27,8 +27,6 @@ import { voicePortrait } from '@/ui/voice-portraits';
 import { shortPiperLabel } from '@/shared/voice-catalog';
 import { previewFor } from './preview-button';
 import type { PanelContext } from './voice-panels';
-import { readsOnGpu } from './engine-config';
-import { capabilities } from '@/shared/browser-env';
 
 /** The board's last row: every language without voices of its own. */
 export const OTHER_LANGUAGES = '*';
@@ -61,12 +59,13 @@ export function downloadedVoices(ctx: Pick<PanelContext, 'manifest' | 'sizes'>):
   for (const [id, entry] of Object.entries(ctx.manifest.piper)) {
     if (piperDownloaded(entry, ctx.sizes)) out.push({ engine: 'piper', id, label: shortPiperLabel(entry.label), language: entry.language });
   }
-  if (sharedModelInstalled('kokoro', ctx.sizes)) {
-    for (const [id, v] of Object.entries(ctx.manifest.kokoro.voices)) out.push({ engine: 'kokoro', id, label: v.label, language: v.language });
-  }
+  // Supertonic before Kokoro, as everywhere engines are listed.
   if (sharedModelInstalled('supertonic', ctx.sizes)) {
     // Every style in every language it reads, so each language's row offers all ten.
     for (const v of supertonicVoices(ctx.manifest)) out.push({ engine: 'supertonic', id: v.id, label: v.label, language: v.language });
+  }
+  if (sharedModelInstalled('kokoro', ctx.sizes)) {
+    for (const [id, v] of Object.entries(ctx.manifest.kokoro.voices)) out.push({ engine: 'kokoro', id, label: v.label, language: v.language });
   }
   return out;
 }
@@ -147,8 +146,6 @@ export function renderVoiceBoard(
     installed,
     skip: new Set<string>(),
     other: settings.otherVoice,
-    // As the reader decides it: without a GPU (or on a phone), Supertonic before Kokoro on Auto.
-    gpu: readsOnGpu(settings) && !capabilities().touchFirst,
   };
   const skipping = settings.unvoicedLanguages === 'skip';
 

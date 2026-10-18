@@ -34,26 +34,21 @@ function fullTag(tag: string): string {
  * The downloaded voice to read a `pageLanguage` page with, or null to keep the current one.
  *
  * Null when the page language is unknown, when the current voice already speaks it, or when
- * nothing downloaded does. Among matches: the current engine first (least surprising change of
- * sound), then the better engine for this machine, then the same region as the page, then the
- * manifest's own order. "Better" depends on the GPU: with one, Kokoro, then Supertonic, then Piper;
- * without one — a phone, or a computer whose browser keeps WebGPU from workers — Supertonic before
- * Kokoro, which on a processor alone is two to three times slower (on a 2018 phone, a minute for
- * three seconds of speech, where Supertonic took nine). Supertonic reads more clearly than Piper
- * in the languages the bench compared.
+ * nothing downloaded does. Among matches: Supertonic first, then the current engine (least
+ * surprising change of sound), then the better engine — Supertonic, then Kokoro, then Piper — then the same region as
+ * the page, then the manifest's own order. Supertonic first everywhere: on a processor it is two to
+ * three times faster than Kokoro (on a 2018 phone, nine seconds for three seconds of speech where
+ * Kokoro took a minute), it reads 31 languages, and it reads more clearly than Piper in the
+ * languages the bench compared.
  */
-/** Which engine reads a language better, when the current one does not speak it: with a GPU, and without. */
-const ENGINE_QUALITY_GPU: Partial<Record<EngineId, number>> = { kokoro: 2, supertonic: 1, piper: 0 };
-const ENGINE_QUALITY_CPU: Partial<Record<EngineId, number>> = { supertonic: 2, kokoro: 1, piper: 0 };
+/** Which engine reads a language better, when the current one does not speak it. */
+const ENGINE_QUALITY: Partial<Record<EngineId, number>> = { supertonic: 2, kokoro: 1, piper: 0 };
 
 export function pickVoiceForLanguage(
   pageLanguage: string,
   current: CandidateVoice | null,
   installed: readonly CandidateVoice[],
-  /** Reading runs on a GPU (true), or not / not known (false, null): see above. */
-  gpu: boolean | null = null,
 ): CandidateVoice | null {
-  const quality = gpu === true ? ENGINE_QUALITY_GPU : ENGINE_QUALITY_CPU;
   const want = primaryLanguage(pageLanguage);
   if (!want) return null;
   if (current && primaryLanguage(current.language) === want) return null;
@@ -61,9 +56,13 @@ export function pickVoiceForLanguage(
   const matches = installed.filter((v) => primaryLanguage(v.language) === want);
   if (matches.length === 0) return null;
 
+  // Supertonic first, even before the current engine: asked for "Supertonic before Kokoro,
+  // everywhere". The saved voice still reads its own language, and a voice chosen for a language
+  // still wins (routeFor) — this only decides who reads a language neither covers.
   const score = (v: CandidateVoice): number =>
+    (v.engine === 'supertonic' ? 1000 : 0) +
     (current && v.engine === current.engine ? 100 : 0) +
-    (quality[v.engine] ?? 0) * 10 +
+    (ENGINE_QUALITY[v.engine] ?? 0) * 10 +
     (fullTag(v.language) === fullTag(pageLanguage) ? 1 : 0);
   return [...matches].sort((a, b) => score(b) - score(a))[0] ?? null;
 }

@@ -23,7 +23,7 @@ package that kokoro-js uses for Kokoro's English voices.
 | [flag-icons](https://github.com/lipis/flag-icons) | 7.5.0 | MIT | The small flag beside each language on the Voice page (47 of its SVGs, copied in) | `flags/` |
 | [`pdf-lib`](https://github.com/Hopding/pdf-lib) | 1.17.1 | MIT | Writing highlights and notes into PDF files | a chunk of the PDF page, loaded on first save |
 | [pdf.js](https://github.com/mozilla/pdf.js) (legacy build) | 6.3.289 (`pdfjs-dist`) | Apache-2.0 | Rendering and text extraction for PDFs | `vendor/pdfjs/*` (loaded at runtime, with its own worker, CMaps and standard fonts) |
-| Voice portraits: generated images of people who do not exist, made for Aloud with [SDXL](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0) and the [SDXL-Lightning](https://huggingface.co/ByteDance/SDXL-Lightning) UNet | — | Made for Aloud; the models are under CreativeML OpenRAIL++-M | A face beside each Kokoro and Supertonic voice and a few Piper ones; Settings says each is generated | `portraits/` |
+| Voice portraits: generated images of people who do not exist, made for Aloud with [SDXL](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0) and the [SDXL-Lightning](https://huggingface.co/ByteDance/SDXL-Lightning) UNet | — | Made for Aloud; the models are under CreativeML OpenRAIL++-M | A face beside each Supertonic and Kokoro voice and a few Piper ones; Settings says each is generated | `portraits/` |
 | [WXT](https://wxt.dev) | 0.21.4 | MIT | Build tooling only (not shipped) | — |
 
 `onnxruntime-web` is intentionally **not** bundled into `tts-worker.js`; it is copied verbatim to
@@ -49,15 +49,6 @@ only "See URL" or nothing; the dataset's own page is then the authority.
 Aloud never bundles a voice: it is downloaded from Hugging Face when you choose it, for you to
 use. Anyone redistributing a voice, or using it in a product, should check its model card.
 
-### Kokoro — [`onnx-community/Kokoro-82M-v1.0-ONNX`](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX)
-
-Model weights and voices: **Apache-2.0**. One download holds the model (the quantised build on a
-CPU, the full-precision one with a graphics card) and all 41 voices' style files (`voices/*.bin`).
-Everything comes from the same pinned commit, and every voice file is checked against its
-published SHA-256 (`src/shared/kokoro-voice-pins.ts`) before it is kept. The model goes to the
-extension's IndexedDB store, the voices to Cache Storage (`kokoro-voices`), where `kokoro-js`
-reads them.
-
 ### Supertonic 3 — [`Supertone/supertonic-3`](https://huggingface.co/Supertone/supertonic-3) @ `3cadd1e`
 
 Model weights and the ten voice styles: **BigScience OpenRAIL-M**, a *use-restricted* licence — its
@@ -67,6 +58,15 @@ spoken by a person without saying it is machine-generated. Aloud never bundles t
 downloaded from Hugging Face, from a pinned commit and checked against their SHA-256, when you choose
 Supertonic, and the licence is named on the engine's card in Settings before that download. Each
 voice style reads all 31 of the model's languages; Aloud offers each as a voice per language.
+
+### Kokoro — [`onnx-community/Kokoro-82M-v1.0-ONNX`](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX)
+
+Model weights and voices: **Apache-2.0**. One download holds the model (the quantised build on a
+CPU, the full-precision one with a graphics card) and all 41 voices' style files (`voices/*.bin`).
+Everything comes from the same pinned commit, and every voice file is checked against its
+published SHA-256 (`src/shared/kokoro-voice-pins.ts`) before it is kept. The model goes to the
+extension's IndexedDB store, the voices to Cache Storage (`kokoro-voices`), where `kokoro-js`
+reads them.
 
 ## Source availability
 

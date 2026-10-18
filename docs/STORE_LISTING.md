@@ -19,7 +19,7 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 > voice is a neural network running inside your browser, so it works offline and nothing you read
 > is ever sent anywhere. No account, no subscription.
 >
-> • 222 natural voices in 52 languages, from three neural engines (Piper, Kokoro-82M, Supertonic 3)
+> • 222 natural voices in 52 languages, from three neural engines (Piper, Supertonic 3, Kokoro-82M)
 > • Reads the article, not the menus and ads, and highlights the sentence and the word in place
 > • PDFs too: real pages, highlighted where the text sits; mark them up and save the marks into the file
 > • Picks up at the sentence you stopped at; a reading queue for later; save any article as an MP3
@@ -118,7 +118,8 @@ reading positions, history and listening statistics, and private-window activity
   > is voice data from Hugging Face (ONNX weights, JSON, `.bin` style vectors), never code.
 
 - **Android:** the listing is marked compatible with Firefox for Android (`gecko_android`).
-  Kokoro and Supertonic are too heavy for phones; Piper voices are the ones to recommend there.
+  Piper voices are the ones to recommend on phones; Supertonic 3 works there, slower than speech on
+  older phones; Kokoro is too heavy for them.
 
 ## Before pressing submit
 

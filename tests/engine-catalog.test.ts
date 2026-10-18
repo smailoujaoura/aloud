@@ -36,8 +36,8 @@ describe('engineInfo', () => {
 });
 
 describe('listEngines', () => {
-  it('is a fixed order — smallest and most portable first', () => {
-    expect(listEngines().map((e) => e.id)).toEqual(['piper', 'kokoro', 'supertonic']);
+  it('is a fixed order — the most portable first, then Supertonic before Kokoro', () => {
+    expect(listEngines().map((e) => e.id)).toEqual(['piper', 'supertonic', 'kokoro']);
   });
 
   it('lists every engine exactly once', () => {

@@ -13,9 +13,9 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
 - **Extraction** — [Mozilla Readability](https://github.com/mozilla/readability) strips nav / ads
   and grabs the article text.
 - **Voices** — [Piper](https://github.com/rhasspy/piper) (fast, ~21–137 MB per voice: `medium` around 60 MB, `high` around 110),
-  [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (best quality; ~347 MB with a graphics card, ~114 MB without) and
-  [Supertonic 3](https://huggingface.co/Supertone/supertonic-3) (~402 MB; 10 voices, each in 31 languages — the voice for
-  languages Kokoro does not speak). Inference runs on [ONNX Runtime Web](https://onnxruntime.ai/):
+  [Supertonic 3](https://huggingface.co/Supertone/supertonic-3) (~402 MB; 10 voices, each in 31 languages; two to
+  three times faster than Kokoro on a processor) and [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (~347 MB
+  with a graphics card, ~114 MB without; the richest English on a GPU). Inference runs on [ONNX Runtime Web](https://onnxruntime.ai/):
   WebGPU where the browser allows it, WebAssembly everywhere else.
 - **Gapless playback** — sentences are synthesised a few ahead of the playhead and scheduled
   sample-accurately through the Web Audio API, so there is no pause between them. Where the GPU
@@ -60,9 +60,8 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
   own `lang` markup, the browser's language detector, and the paragraphs around a short reply or
   a name), and each is read by a downloaded voice that speaks it: an Italian story with English
   translations switches between an Italian and an English voice. When your voice does not speak a
-  passage's language, Auto picks the engine that suits the machine: with a GPU Kokoro, then
-  Supertonic, then Piper; without one (a phone, say) Supertonic first, two to three times faster
-  than Kokoro on a processor. Pick a voice on the bar during
+  passage's language, Auto picks Supertonic first, then Kokoro, then Piper — Supertonic is two
+  to three times faster than Kokoro on a processor and reads 31 languages. Pick a voice on the bar during
   a passage to make it that language's voice on every page, lock a page to one voice, or correct
   a passage's language, from the language button on the bar. A language with no voice is read in
   English, and the bar says so, with a link to its voices; Settings can have such languages skipped
@@ -129,11 +128,11 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
 What decides it is not the browser but whether the extension's Worker can reach the GPU through
 WebGPU. With it, Chromium and Firefox perform the same:
 
-| | Piper | Kokoro-82M | Supertonic 3 |
+| | Piper | Supertonic 3 | Kokoro-82M |
 |---|---|---|---|
-| **Chromium or Firefox, with WebGPU** | fast | **best — faster than Piper** | good, in 31 languages |
-| **Chromium or Firefox, CPU only** | **best choice — fast** | works, ~3× slower than real time | ~1.2× real time per worker; two keep up |
-| **Firefox Android** | **the one to use — about real time** | far too slow | works, slower than speech on older phones (pauses to catch up) |
+| **Chromium or Firefox, with WebGPU** | fast | good, in 31 languages | **best English — faster than Piper** |
+| **Chromium or Firefox, CPU only** | **best choice — fast** | ~1.2× real time per worker; two keep up | works, ~3× slower than real time |
+| **Firefox Android** | **the one to use — about real time** | works, slower than speech on older phones (pauses to catch up) | far too slow |
 
 Chromium has WebGPU on by default; Firefox turns it on for pages on Windows but not for the
 workers Aloud synthesises in (see below). [Using your graphics card](https://aloud.souj.dev/gpu.html)

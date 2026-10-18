@@ -174,7 +174,7 @@ async function followUps(host: HTMLElement, backup: Backup, parts: ReadonlySet<B
   if (parts.has('settings')) {
     const sizes = await readCacheSizes();
     const piper = backup.models.piper.filter((id) => opts.manifest.piper[id] && !piperDownloaded(opts.manifest.piper[id]!, sizes));
-    const shared = (['kokoro', 'supertonic'] as const).filter((e) => backup.models[e] && !sharedModelInstalled(e, sizes));
+    const shared = (['supertonic', 'kokoro'] as const).filter((e) => backup.models[e] && !sharedModelInstalled(e, sizes));
     const count = piper.length + shared.length;
     if (count) host.append(downloadStep(piper, shared, settings, opts));
   }

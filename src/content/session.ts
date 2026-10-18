@@ -56,7 +56,7 @@ import { capabilities } from '@/shared/browser-env';
 import { GPU_GUIDE_URL } from '@/shared/links';
 
 import { backendOf, tuningFor, type SynthBackend } from './engine-tuning';
-import { loadLastBackend, loadWorkerGpu, saveLastBackend, saveWorkerGpu } from '@/shared/backend-memory';
+import { loadLastBackend, saveLastBackend, saveWorkerGpu } from '@/shared/backend-memory';
 import {
   buildArticlePlaylist,
   buildSelectionPlaylist,
@@ -247,11 +247,6 @@ export class ReaderSession {
   private manualVoice: CandidateVoice | null = null;
   /** Every downloaded voice, with its language. */
   private installedVoiceList: CandidateVoice[] = [];
-  /**
-   * Reading runs on a GPU here: what a worker last found, unless WebGPU is switched off or this is a
-   * phone (null until known). Auto prefers Supertonic to Kokoro without one (routeContext).
-   */
-  private onGpu: boolean | null = null;
   /** The detector's answers, by text — asked once per passage, however often the plan changes. */
   private readonly languageCache = new Map<string, Detection | null>();
   /** Each passage's language as planned, by passage number. */
@@ -1392,7 +1387,6 @@ export class ReaderSession {
 
   /** Every downloaded voice of every engine, with the language it speaks. */
   private async loadInstalledVoices(): Promise<void> {
-    this.onGpu = capabilities().touchFirst || !this.settings.preferWebGPU ? false : await loadWorkerGpu().catch(() => null);
     const manifest = this.manifest;
     if (!manifest) {
       this.installedVoiceList = [];
@@ -1428,7 +1422,6 @@ export class ReaderSession {
       unvoiced: this.settings.unvoicedLanguages,
       removed: new Set(this.settings.removedLanguages),
       other: this.settings.otherVoice,
-      gpu: this.onGpu,
     };
   }
 

@@ -131,7 +131,8 @@ const ENGINES: Record<EngineId, EngineInfo> = {
   },
 };
 
-export const ENGINE_IDS: readonly EngineId[] = ['piper', 'kokoro', 'supertonic'];
+// Supertonic before Kokoro wherever engines are listed: the tabs, the walkthrough, the board.
+export const ENGINE_IDS: readonly EngineId[] = ['piper', 'supertonic', 'kokoro'];
 
 /**
  * Supertonic's detail (flow-matching steps) for this device. A phone gets 3 unless its reader

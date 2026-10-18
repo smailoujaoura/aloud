@@ -40,25 +40,33 @@ describe('Supertonic 3 voices: a style in a language', () => {
     expect(s.languageVoices).toEqual({ en: { engine: 'supertonic', voice: 'F4@en' }, de: { engine: 'supertonic', voice: 'M1@de' } });
   });
 
-  it('on Auto, the better engine reads a language the current one does not: Kokoro, Supertonic, Piper', () => {
+  it('on Auto, Supertonic reads a language the current voice does not, whatever engine is reading', () => {
     const thorsten = { engine: 'piper' as const, id: 'de_DE-thorsten-medium', label: 'Thorsten', language: 'de_DE' };
     const m1 = { engine: 'supertonic' as const, id: 'M1@de', label: 'Male 1', language: 'de' };
     const heart = { engine: 'kokoro' as const, id: 'af_heart', label: 'Heart', language: 'en-us' };
     // Reading with Kokoro, which has no German: Supertonic's German, not Piper's, whatever the page's tag.
     expect(pickVoiceForLanguage('de-DE', heart, [thorsten, m1])?.id).toBe('M1@de');
     expect(pickVoiceForLanguage('de', heart, [thorsten, m1])?.id).toBe('M1@de');
-    // Reading with Piper: Piper's German, the least surprising change of sound.
+    // Reading with Piper: still Supertonic's German — Supertonic first, everywhere.
     const alba = { engine: 'piper' as const, id: 'en_GB-alba-medium', label: 'Alba', language: 'en_GB' };
-    expect(pickVoiceForLanguage('de', alba, [thorsten, m1])?.id).toBe('de_DE-thorsten-medium');
+    expect(pickVoiceForLanguage('de', alba, [thorsten, m1])?.id).toBe('M1@de');
   });
 
-  it('with a GPU Kokoro reads Italian before Supertonic; without one — a phone — Supertonic does', () => {
+  it('Supertonic reads Italian before Kokoro, GPU or not', () => {
     const sara = { engine: 'kokoro' as const, id: 'if_sara', label: 'Sara', language: 'it' };
     const f1 = { engine: 'supertonic' as const, id: 'F1@it', label: 'Female 1', language: 'it' };
     const alba = { engine: 'piper' as const, id: 'en_GB-alba-medium', label: 'Alba', language: 'en_GB' };
-    expect(pickVoiceForLanguage('it', alba, [sara, f1], true)?.id).toBe('if_sara');
-    expect(pickVoiceForLanguage('it', alba, [sara, f1], false)?.id).toBe('F1@it');
-    // Not known yet counts as without: the cost of a wrong guess is a minute per sentence on a phone.
-    expect(pickVoiceForLanguage('it', alba, [sara, f1], null)?.id).toBe('F1@it');
+    expect(pickVoiceForLanguage('it', alba, [sara, f1])?.id).toBe('F1@it');
+    expect(pickVoiceForLanguage('it', alba, [f1, sara])?.id).toBe('F1@it');
+  });
+
+  it('Supertonic even before the engine already reading: a Kokoro reader gets French from Supertonic', () => {
+    const heart = { engine: 'kokoro' as const, id: 'af_heart', label: 'Heart', language: 'en-us' };
+    const siwis = { engine: 'kokoro' as const, id: 'ff_siwis', label: 'Siwis', language: 'fr-fr' };
+    const f1 = { engine: 'supertonic' as const, id: 'F1@fr', label: 'Female 1', language: 'fr' };
+    expect(pickVoiceForLanguage('fr', heart, [siwis, f1])?.id).toBe('F1@fr');
+    // Without Supertonic, the current engine as before.
+    const piperFr = { engine: 'piper' as const, id: 'fr_FR-siwis-medium', label: 'Siwis', language: 'fr_FR' };
+    expect(pickVoiceForLanguage('fr', heart, [siwis, piperFr])?.id).toBe('ff_siwis');
   });
 });
