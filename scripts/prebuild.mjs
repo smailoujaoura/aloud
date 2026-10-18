@@ -17,7 +17,10 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 syncAssets();
 writeNotices();
 // Not minified, for the same reason as the extension's own code (wxt.config.ts): reviewable diffs.
-await buildWorker({ minify: false });
+// The browser decides one thing in the worker: whether transformers.js is bundled as published
+// (Firefox) or with its dead CDN line taken out (Chrome) — see build-worker.mjs.
+const browser = process.argv[2] === 'chrome' ? 'chrome' : 'firefox';
+await buildWorker({ minify: false, browser });
 await buildSynthHost({ minify: false });
 
 const gen = join(root, '.gen/worker');
@@ -35,4 +38,4 @@ rmSync(join(pub, 'vendor/rt'), { recursive: true, force: true });
 mkdirSync(join(pub, 'vendor'), { recursive: true });
 cpSync(gen, pub, { recursive: true });
 
-console.log('[prebuild] worker + runtime assets copied into public/');
+console.log(`[prebuild] worker (${browser}) + runtime assets copied into public/`);

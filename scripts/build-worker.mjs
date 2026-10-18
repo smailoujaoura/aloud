@@ -21,12 +21,18 @@ const BROWSER_TARGETS = ['firefox128', 'chrome120'];
 
 /**
  * transformers.js points ONNX Runtime at its WebAssembly on cdn.jsdelivr.net whenever no path is set
- * yet. Aloud always sets the packaged one first (src/engine/ort-loader.ts), so the line never runs —
- * but the stores ask that code able to load from elsewhere be removed, not merely left unused
- * (Chrome: "remote hosted code", what to do if the code isn't being used). This drops that one line
- * from the bundled copy of transformers.js, and nothing else. The ONNX Runtime files themselves are
- * copied unmodified (sync-assets.mjs). If an update to transformers.js changes the line, the build
- * stops here rather than ship a CDN path again.
+ * yet. Aloud always sets the packaged one first (src/engine/ort-loader.ts), so the line never runs.
+ *
+ * The two stores want opposite things of that dead line:
+ *  - Chrome asks that code able to load from elsewhere be removed, not merely left unused ("remote
+ *    hosted code": what to do if the code isn't being used). The Chrome build drops that one line
+ *    from the bundled copy, and nothing else. If an update to transformers.js changes the line, the
+ *    build stops here rather than ship a CDN path again.
+ *  - Mozilla does not allow third-party libraries to be modified at all ("Modifications to these
+ *    libraries/frameworks are not permitted"). The Firefox build bundles transformers.js exactly as
+ *    published on npm; the line stays, unreachable, and Firefox's extension CSP would refuse a
+ *    remote script in any case.
+ * The ONNX Runtime files themselves are copied unmodified for both (sync-assets.mjs).
  */
 const TRANSFORMERS_CDN_DEFAULT =
   'ONNX_ENV.wasm.wasmPaths = `https://cdn.jsdelivr.net/npm/@huggingface/transformers@${_env_js__WEBPACK_IMPORTED_MODULE_0__.env.version}/dist/`;';
@@ -47,6 +53,7 @@ const noCdnDefault = {
 
 export async function buildWorker(options) {
   const minify = !(options && options.minify === false);
+  const browser = options?.browser ?? 'firefox';
   await build({
     root,
     configFile: false,
@@ -63,7 +70,7 @@ export async function buildWorker(options) {
     },
     define: { 'process.env.NODE_ENV': JSON.stringify('production') },
     worker: { format: 'es' },
-    plugins: [noCdnDefault],
+    plugins: browser === 'firefox' ? [] : [noCdnDefault],
     build: {
       target: BROWSER_TARGETS,
       outDir: '.gen/worker',

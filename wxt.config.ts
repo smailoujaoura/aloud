@@ -199,10 +199,10 @@ export default defineConfig({
   }),
 
   hooks: {
-    // Builds the synthesis worker + vendored runtime into public/. Browser-agnostic: one worker
-    // bundle serves both targets (see scripts/build-worker.mjs).
-    'build:before'() {
-      execFileSync(process.execPath, ['scripts/prebuild.mjs'], { stdio: 'inherit' });
+    // Builds the synthesis worker + vendored runtime into public/, for the browser being built: the
+    // two differ only in one dead line of transformers.js (see scripts/build-worker.mjs).
+    'build:before'(wxt) {
+      execFileSync(process.execPath, ['scripts/prebuild.mjs', wxt.config.browser], { stdio: 'inherit' });
     },
   },
 

@@ -62,9 +62,11 @@ search, shopping, new-tab or ad features).
 | Host: file:///* | Lets the PDF reader open PDFs saved on the user's computer, once they enable "Allow access to file URLs". |
 | Optional host: *://*/* | Requested one site at a time, only when the user adds a site where the media controls or highlights should start by themselves, opens a PDF from that site, or queues a page from it. |
 
-**Remote code:** No. All JavaScript and WebAssembly ship in the package — including ONNX
+**Remote code:** No. All JavaScript and WebAssembly ship in the package, including ONNX
 Runtime's, which transformers.js would otherwise take from cdn.jsdelivr.net (Aloud sets the local
-path before it loads). Voice models downloaded at runtime are ONNX data files, not code.
+path before it loads). In the Chrome package that unused CDN line is removed from the bundled
+transformers.js; the Firefox package keeps the library exactly as published, as Mozilla requires.
+Voice models downloaded at runtime are ONNX data files, not code.
 
 **Data usage:** disclose what Aloud *handles*, even though it all stays on the device. Chrome's User
 Data FAQ (question 3): "Extensions are required to disclose how they handle user data, even when
@@ -114,8 +116,12 @@ reading positions, history and listening statistics, and private-window activity
   > copy of the page; the `import()` warnings load files from the package itself
   > (`vendor/ort/`, `vendor/pdfjs/`) by their `runtime.getURL` address. Nothing is loaded from a
   > CDN: ONNX Runtime's WebAssembly path is set to `vendor/ort/` before transformers.js loads
-  > (`src/engine/ort-loader.ts`, `src/engine/engines/kokoro.ts`). What is downloaded at run time
-  > is voice data from Hugging Face (ONNX weights, JSON, `.bin` style vectors), never code.
+  > (`src/engine/ort-loader.ts`, `src/engine/engines/kokoro.ts`). transformers.js 3.7.5 is bundled
+  > unmodified from npm (`vendor/rt/transformers.web.js`); its default
+  > `wasmPaths = https://cdn.jsdelivr.net/...` (line ~2901 of `dist/transformers.web.js`) runs only
+  > when no path is set, which never happens here, and the extension CSP would block it anyway.
+  > What is downloaded at run time is voice data from Hugging Face (ONNX weights, JSON, `.bin`
+  > style vectors), never code.
 
 - **Android:** the listing is marked compatible with Firefox for Android (`gecko_android`).
   Piper voices are the ones to recommend on phones; Supertonic 3 works there, slower than speech on
