@@ -125,7 +125,7 @@ export function normalizeForSpeech(input: string, options: NormalizeOptions = {}
   text = text.replace(PICTOGRAPHIC, ' ');
 
   // Soft hyphen, zero-width, and other invisibles.
-  text = text.replace(/[­​‌﻿]/g, '');
+  text = text.replace(/[\u00ad\u200b\u200c\u200d\u2060\ufeff]/g, '');
 
   // Collapse any run of the same sentence-final punctuation ("!!!" -> "!").
   text = text.replace(/([!?.])\1{1,}/g, '$1');

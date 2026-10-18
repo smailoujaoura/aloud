@@ -54,6 +54,8 @@ import { countWords, recordCompleted, recordHeard, type Heard } from '@/shared/l
 import { log } from '@/shared/log';
 import { capabilities } from '@/shared/browser-env';
 import { isTypingEvent } from '@/media-speed/keys';
+import { estimatedWordTimings } from '@/audio/estimate-words';
+import { ruleRoot, rulesFor, skipSelector } from '@/extract/site-rules';
 import { GPU_GUIDE_URL } from '@/shared/links';
 
 import { backendOf, tuningFor, type SynthBackend } from './engine-tuning';
@@ -396,7 +398,10 @@ export class ReaderSession {
         if (sr > 0) {
           this.audioSeconds.set(playId, pcm.length / sr);
         }
-        if (words?.length) this.wordTimings.set(playId, words);
+        // Supertonic reports no word times (and an alignment can miss): an estimate from the
+        // audio itself keeps the word mark moving rather than leaving only the sentence lit.
+        const timed = words?.length ? words : sr > 0 && this.playlist[playId] ? estimatedWordTimings(this.playlist[playId]!.spokenText, pcm, sr) : [];
+        if (timed.length) this.wordTimings.set(playId, timed);
         else this.wordTimings.delete(playId);
         this.scheduler.provide(playId, pcm, sr, leadSilenceSec(this.playlist[playId], this.settings));
       },
@@ -658,8 +663,13 @@ export class ReaderSession {
       if (!article.text || article.text.length < 40) {
         throw new Error("This page doesn't look like an article.");
       }
-      const liveRoot = known ? known.root : resolveLiveRoot(article, document);
-      this.textIndex = buildTextIndex(liveRoot, { forReader: true });
+      // What the site rules say (extract/site-rules.ts): where the article is, and what in it is
+      // never said — citation markers, edit links, infoboxes, share bars. Not for an article
+      // Aloud already holds (a PDF), whose text has none of a site's markup.
+      const rules = known ? null : rulesFor(document);
+      if (rules) log.info('site rules:', rules.ids.filter((id) => !id.startsWith('generic.')).join(', ') || 'generic only');
+      const liveRoot = known ? known.root : (rules && ruleRoot(rules, document)) ?? resolveLiveRoot(article, document);
+      this.textIndex = buildTextIndex(liveRoot, { forReader: true, skip: rules ? skipSelector(rules, this.settings.skip) : '' });
       this.playlist = buildArticlePlaylist({
         index: this.textIndex,
         lang: article.lang,
@@ -670,6 +680,7 @@ export class ReaderSession {
         // A whole-page read passes over code, tables, … as configured. "Read from here" is aimed
         // at a specific place, so it still skips — the aim picks where to start, not what to read.
         skip: this.settings.skip,
+        ...(rules ? { rules } : {}),
       });
     }
 

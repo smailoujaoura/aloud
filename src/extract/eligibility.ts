@@ -47,6 +47,13 @@ function isShortLabel(text: string): boolean {
 const NOTATION = /(^|-)(fonipa|fonupa|fonapa|fonxsamp|fonkirsh|ipa)(-|$)/i;
 
 export class Eligibility {
+  /**
+   * @param skip Selector for text never to be said even where it shows — a citation marker, an
+   *   infobox, a share bar (extract/site-rules.ts). '' for none.
+   */
+  constructor(private readonly skip = '') {}
+
+  private readonly skipCache = new WeakMap<Element, boolean>();
   private readonly hiddenCache = new WeakMap<Element, boolean>();
   private readonly controlCache = new WeakMap<Element, boolean>();
   private readonly notationCache = new WeakMap<Element, boolean>();
@@ -56,7 +63,23 @@ export class Eligibility {
 
   /** Is this text drawn, and words to say rather than a phonetic transcription? */
   spoken(node: Text): boolean {
-    return this.rendered(node) && !(node.parentElement && this.notation(node.parentElement));
+    const parent = node.parentElement;
+    return this.rendered(node) && !(parent && (this.notation(parent) || this.skipped(parent)));
+  }
+
+  /** Inside something the site rules say is not read (see the constructor). */
+  skipped(el: Element): boolean {
+    if (!this.skip) return false;
+    const known = this.skipCache.get(el);
+    if (known !== undefined) return known;
+    let result = false;
+    try {
+      result = el.closest(this.skip) !== null;
+    } catch {
+      result = false;
+    }
+    this.skipCache.set(el, result);
+    return result;
   }
 
   /** Inside an element tagged as a phonetic transcription (see NOTATION). */

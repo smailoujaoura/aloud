@@ -57,7 +57,7 @@ export interface SkipSettings {
  * Code is skipped by default (a listing read symbol by symbol helps nobody) and so is the
  * reference list; tables and captions are read, because they are often part of the argument.
  */
-export const DEFAULT_SKIP: SkipSettings = { code: true, tables: false, captions: false, references: true };
+export const DEFAULT_SKIP: SkipSettings = { code: true, tables: true, captions: false, references: true };
 
 /**
  * The media speed control: Aloud's second job, setting the playback rate of any `<video>` or
@@ -265,8 +265,8 @@ export interface Settings {
   highlightColor: string;
   /**
    * How to mark the word being spoken, inside the sentence highlight: a darker shade of the
-   * highlight colour, an underline, or not at all. Only voices whose model reports when each
-   * sound plays can do it (Piper, Kokoro); Supertonic keeps the sentence highlight alone.
+   * highlight colour, an underline, or not at all. Piper and Kokoro report when each word plays;
+   * Supertonic's word times are estimated from its audio (audio/estimate-words.ts).
    */
   wordHighlight: WordHighlightStyle;
   /** The colour of the word being spoken (`#rrggbb`), painted over the sentence highlight. */
@@ -380,11 +380,18 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 /** The stored settings' schema version; each step up has a migration below. */
-export const SETTINGS_VERSION = 8;
+export const SETTINGS_VERSION = 9;
 
 type Migration = (prev: Record<string, unknown>) => Record<string, unknown>;
 
 const MIGRATIONS: Record<number, Migration> = {
+    // v8 -> v9: tables are skipped by default — read cell by cell, a table is rarely what anyone
+    // wants to hear. Only a profile with all four skip choices still at the old defaults moves.
+    9(prev: Record<string, unknown>): Record<string, unknown> {
+      const skip = prev.skip as Partial<SkipSettings> | undefined;
+      if (!skip || skip.code !== true || skip.tables !== false || skip.captions !== false || skip.references !== true) return prev;
+      return { ...prev, skip: { ...skip, tables: true } };
+    },
     // v7 -> v8: video speed moves in quarters (0.25), and "your speed" is 2×. Only a profile still
     // on the old defaults (0.1 and 1.75×) moves; a step or speed someone chose is theirs.
     8(prev: Record<string, unknown>): Record<string, unknown> {

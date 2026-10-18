@@ -26,6 +26,14 @@ describe('buildTextIndex (happy-dom)', () => {
     expect(idx.fullText).toMatch(/Title Here\nFirst/);
   });
 
+  it('the reader reads a line break between two words as a word break', () => {
+    document.body.innerHTML = `<div id="root"><p class="lan1"><em>“Dove state andando?”</em><br><em>“Il cielo sta cadendo!”</em> gridano tutti quanti.<br>“Santo cielo!”</p></div>`;
+    const reader = buildTextIndex(document.getElementById('root')!, { forReader: true });
+    expect(reader.fullText).toBe('“Dove state andando?” “Il cielo sta cadendo!” gridano tutti quanti. “Santo cielo!”');
+    // What notes anchor to is unchanged.
+    expect(buildTextIndex(document.getElementById('root')!).fullText).toContain('andando?”“Il');
+  });
+
   it('rangeForSpan produces a DOM Range whose text matches the requested slice', () => {
     document.body.innerHTML = `<div id="root"><p>Alpha beta gamma.</p><p>Delta epsilon.</p></div>`;
     const root = document.getElementById('root')!;

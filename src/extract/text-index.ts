@@ -43,6 +43,8 @@ export interface TextIndex {
   pieces: Piece[];
   /** Built for the reader (see `buildTextIndex`'s `forReader`). */
   forReader?: boolean;
+  /** The reader's "never say this" selector (extract/site-rules.ts), kept for re-checks. */
+  skip?: string;
 }
 
 export function isHidden(el: Element): boolean {
@@ -72,15 +74,18 @@ export function nearestBlock(node: Node, root: Element): Element {
  * is never prose), and text that is not rendered *now* is kept but marked ineligible, so revealing
  * a translation while reading makes it readable in place, without rebuilding the plan.
  */
-export function buildTextIndex(root: Element, opts: { forReader?: boolean } = {}): TextIndex {
+export function buildTextIndex(root: Element, opts: { forReader?: boolean; skip?: string } = {}): TextIndex {
   const doc = root.ownerDocument;
   const pieces: Piece[] = [];
   let full = '';
   let prevBlock: Element | null = null;
-  const reader = opts.forReader ? new Eligibility() : null;
+  const reader = opts.forReader ? new Eligibility(opts.skip ?? '') : null;
 
-  const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+  // The reader also sees <br>: a line break between two words is a word break ("quanti.<br>“Santo"
+  // read and highlighted as one word, and the word marks drifted by one from there).
+  const walker = doc.createTreeWalker(root, reader ? NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT : NodeFilter.SHOW_TEXT, {
     acceptNode(node: Node): number {
+      if (node.nodeType === Node.ELEMENT_NODE) return (node as Element).tagName === 'BR' ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
       const text = node.nodeValue;
       if (!text) return NodeFilter.FILTER_REJECT;
       // Only spaces: kept by the reader as a word break (below), never as text of its own.
@@ -111,7 +116,7 @@ export function buildTextIndex(root: Element, opts: { forReader?: boolean } = {}
   let pendingSpace = false;
   let node = walker.nextNode() as Text | null;
   while (node) {
-    if (!node.data.trim()) {
+    if (node.nodeType === Node.ELEMENT_NODE || !node.data.trim()) {
       pendingSpace = true;
       node = walker.nextNode() as Text | null;
       continue;
@@ -132,7 +137,7 @@ export function buildTextIndex(root: Element, opts: { forReader?: boolean } = {}
     node = walker.nextNode() as Text | null;
   }
 
-  return { root, fullText: full, pieces, ...(reader ? { forReader: true } : {}) };
+  return { root, fullText: full, pieces, ...(reader ? { forReader: true, ...(opts.skip ? { skip: opts.skip } : {}) } : {}) };
 }
 
 /**
@@ -149,7 +154,7 @@ export function refreshEligibility(index: TextIndex): boolean {
  */
 export function changedEligibility(index: TextIndex): Array<[number, number]> {
   if (!index.forReader) return [];
-  const check = new Eligibility();
+  const check = new Eligibility(index.skip ?? '');
   const ranges: Array<[number, number]> = [];
   for (const piece of index.pieces) {
     const now = piece.node.isConnected && check.spoken(piece.node);
@@ -201,7 +206,10 @@ export function visibleTextOf(index: TextIndex, start: number, end: number): str
     out = out.slice(0, from) + ' '.repeat(to - from) + out.slice(to);
     blanked = true;
   }
-  return blanked ? out.replace(/[ \t]{2,}/g, ' ').replace(/\s+([,.;:!?…])/g, '$1').trim() : text;
+  // Brackets left empty by what was blanked (a pronunciation in "Yagé [jaˈhe]") go too.
+  return blanked
+    ? out.replace(/[([]\s*[)\]]/g, ' ').replace(/[ \t]{2,}/g, ' ').replace(/\s+([,.;:!?…])/g, '$1').trim()
+    : text;
 }
 
 /** Binary search for the piece containing `offset` (or the first piece starting at/after it). */

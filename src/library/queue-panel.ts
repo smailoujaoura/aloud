@@ -25,7 +25,9 @@ import {
   type QueueItem,
   type QueuedArticle,
 } from '@/shared/reading-queue';
-import { getSettings } from '@/shared/settings';
+import { DEFAULT_SKIP, getSettings, type SkipSettings } from '@/shared/settings';
+import { readableLength } from '@/content/skip-rules';
+import { rulesFor } from '@/extract/site-rules';
 import { log } from '@/shared/log';
 import { $, toast } from './feedback';
 import { heldCount, releaseHeld, sanitised } from './article-sanitise';
@@ -41,8 +43,24 @@ let onCountChange: (count: number) => void = () => {};
 /** Speech runs at about this many characters a second at 1×; enough for "about 6 min". */
 const CHARS_PER_SECOND = 14;
 
+let skipRules: SkipSettings = DEFAULT_SKIP;
+/** Characters each queued article would be read as, by id (counting is a parse; done once). */
+const readable = new Map<string, number>();
+
+/** Listening time for what will be read — not the references, notes and skipped code under it. */
 function listeningSeconds(item: QueueItem): number | null {
-  return item.article ? item.article.text.length / CHARS_PER_SECOND / speed : null;
+  if (!item.article) return null;
+  let chars = readable.get(item.id);
+  if (chars == null) {
+    try {
+      const doc = new DOMParser().parseFromString(item.article.html || '', 'text/html');
+      chars = item.article.html ? readableLength(doc.body, skipRules, rulesFor(doc, item.url)) : item.article.text.length;
+    } catch {
+      chars = item.article.text.length;
+    }
+    readable.set(item.id, chars);
+  }
+  return chars / CHARS_PER_SECOND / speed;
 }
 
 
@@ -315,7 +333,9 @@ export function inQueue(id: string): boolean {
 
 export async function initQueue(opts: { onCount: (count: number) => void }): Promise<void> {
   onCountChange = opts.onCount;
-  speed = (await getSettings()).speed;
+  const settings = await getSettings();
+  speed = settings.speed;
+  skipRules = settings.skip;
   queue = await loadQueue();
   renderList();
   // Articles added from other tabs while this page is open appear straight away.

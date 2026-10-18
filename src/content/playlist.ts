@@ -20,6 +20,7 @@ import { isSpeakable } from '@/segment/normalize';
 import { Aligner } from '@/align/fuzzy-align';
 import { blocksToRead } from './skip-rules';
 import type { SkipSettings } from '@/shared/settings';
+import type { PageRules } from '@/extract/site-rules';
 
 export interface PlaylistItem {
   /** Position in the playlist. Doubles as the id used across the worker/scheduler protocol. */
@@ -93,12 +94,12 @@ const MIN_HEADING_PAUSE_MS = 250;
  * Article / "read from here": walk the block model in document order and segment each block.
  */
 export function buildArticlePlaylist(
-  opts: PlanOptions & { referenceText: string; title: string; skip?: SkipSettings },
+  opts: PlanOptions & { referenceText: string; title: string; skip?: SkipSettings; rules?: PageRules },
 ): PlaylistItem[] {
   const { index, lang, maxChars, normalize, referenceText, title } = opts;
   const allBlocks = buildBlockModel(index, { referenceText, title });
   const blocks = opts.skip
-    ? blocksToRead(allBlocks, opts.skip, (b) => index.fullText.slice(b.start, b.end))
+    ? blocksToRead(allBlocks, opts.skip, (b) => index.fullText.slice(b.start, b.end), opts.rules)
     : allBlocks;
   const playlist: PlaylistItem[] = [];
 
