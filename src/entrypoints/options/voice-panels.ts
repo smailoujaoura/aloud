@@ -274,7 +274,7 @@ function avatar(engine: EngineId, id: string, ctx: PanelContext, className = 'vi
   // The best voices have a face, so they are remembered by it. Not a real person: say so where
   // the face is, in the tooltip, along with who the voice sounds like.
   node.classList.add('has-photo');
-  node.title = `Sounds like ${portrait.sounds}. Portrait generated — not a real person.`;
+  node.title = `Sounds like ${portrait.sounds}. Generated portrait, not a real person.`;
   node.removeAttribute('aria-hidden');
   const img = el(document, 'img', {
     src: portrait.file,
@@ -466,7 +466,7 @@ function piperPanel(ctx: PanelContext, again: () => void): HTMLElement {
     list.append(el(document, 'p', { class: 'list-note' }, `Matches from every language · ${matches.length}`));
     for (const g of matches.slice(0, MAX_SEARCH_RESULTS)) list.append(piperItem(g, ctx));
     if (matches.length > MAX_SEARCH_RESULTS) {
-      list.append(emptyState(`${matches.length - MAX_SEARCH_RESULTS} more — keep typing to narrow it down.`));
+      list.append(emptyState(`${matches.length - MAX_SEARCH_RESULTS} more. Keep typing to narrow it down.`));
     }
     return panel;
   }
@@ -515,7 +515,7 @@ function piperItem(group: PiperGroup, ctx: PanelContext): HTMLElement {
         { type: 'button', class: `q-chip${vid === id ? ' is-selected' : ''}`, 'aria-pressed': String(vid === id) },
         `${have ? '✓ ' : ''}${v.quality.replace('_', '-')}`,
       );
-      chip.title = have ? `${v.quality} — on this device` : `${v.quality} — ${v.sizeBytes ? humanBytes(v.sizeBytes) : ''}`;
+      chip.title = have ? `${v.quality} · on this device` : `${v.quality} · ${v.sizeBytes ? humanBytes(v.sizeBytes) : ''}`;
       chip.addEventListener('click', () => {
         variantChoice.set(group.key, vid);
         // This row is replaced on its own: it stops following the download queue now, not at
@@ -560,7 +560,7 @@ function piperItem(group: PiperGroup, ctx: PanelContext): HTMLElement {
       downloads.enqueue(key, group.name, (p, signal) => downloadPiperVoice(entry, p, signal)).then(
         async () => {
           announceModelsChanged();
-          ctx.flashSaved(`${group.name} downloaded — press Use to read with it`);
+          ctx.flashSaved(`${group.name} downloaded. Press Use to read with it`);
           await ctx.refresh();
         },
         (err: unknown) => {
@@ -668,7 +668,7 @@ function sharedPanel(engine: 'kokoro' | 'supertonic', ctx: PanelContext, again: 
   if (!downloaded) {
     list.append(el(document, 'p', { class: 'list-note' }, all.length === voices.length
         ? `Download the model above to use these ${voices.length} voices.`
-        : `Download the model above to use these voices — one download for all ${all.length}, in every language.`));
+        : `Download the model above to use these voices. One download for all ${all.length}.`));
   }
 
   const item = (v: SharedVoice): HTMLElement => {
@@ -744,7 +744,7 @@ function modelCard(
     ).then(
       async () => {
         announceModelsChanged();
-        ctx.flashSaved(`${info.name} is ready — pick a voice below`);
+        ctx.flashSaved(`${info.name} is ready. Pick a voice below`);
         await ctx.refresh();
       },
       (err: unknown) => {

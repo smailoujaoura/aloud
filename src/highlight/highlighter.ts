@@ -355,6 +355,9 @@ export class Highlighter {
     const text = parseColor(view.getComputedStyle(element).color);
     const highlight = parseColor(this.wash);
     if (!text || !highlight) return null;
+    // Invisible text stays invisible: the PDF page's text layer lies over the drawn page, and
+    // giving its letters a colour drew a second, larger, shifted copy of every highlighted line.
+    if (text.alpha < 0.05) return null;
     return readableTextColor(text, background, highlight);
   }
 

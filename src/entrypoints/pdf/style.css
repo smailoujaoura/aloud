@@ -95,7 +95,7 @@ code {
    paper here. */
 body.pages-view { background: #4a4a52; }
 :root[data-theme='dark'] body.pages-view { background: #26262c; }
-body.pages-view main { max-width: none; padding: 24px 12px 160px; }
+body.pages-view main { max-width: none; padding: 68px 12px 160px; }
 body.pages-view #article > h1 {
   max-width: 44rem;
   margin: 0 auto 20px;
@@ -160,7 +160,7 @@ body.pages-view #article > h1 {
 .pin-layer .pin svg { width: 13px; height: 13px; }
 
 /* Floating panels share one look: the app's surface, not the page's paper. */
-.doc-tools, .sel-bar, .mark-pop, .notes-panel {
+.doc-tools, .page-tools, .sel-bar, .mark-pop, .notes-panel {
   font: 13px/1.4 var(--sans);
   color: var(--fg);
   background: var(--surface);
@@ -168,11 +168,11 @@ body.pages-view #article > h1 {
   border-radius: 12px;
   box-shadow: var(--shadow-2);
 }
-.doc-tools button, .sel-bar button, .mark-pop button, .notes-panel button {
+.doc-tools button, .page-tools button, .sel-bar button, .mark-pop button, .notes-panel button {
   font: inherit; color: inherit; background: transparent; border: 0; border-radius: 8px;
   padding: 6px 10px; cursor: pointer;
 }
-.doc-tools button:hover:not(:disabled), .sel-bar button:hover, .mark-pop button:hover, .notes-panel button:hover {
+.doc-tools button:hover:not(:disabled), .page-tools button:hover, .sel-bar button:hover, .mark-pop button:hover, .notes-panel button:hover {
   background: var(--surface-2);
 }
 .doc-tools button:disabled { opacity: 0.4; cursor: default; }
@@ -253,3 +253,29 @@ body.pages-view #article > h1 {
 
 @keyframes mark-pop-in { from { opacity: 0; transform: translateY(3px); } }
 @media (prefers-reduced-motion: reduce) { .sel-bar, .mark-pop, .notes-panel { animation: none; } }
+
+/* Whatever a highlight asks of the letters, the text layer's stay invisible: the page image
+   underneath draws them. Coloured, they came out as a second, shifted copy of the line. */
+.text-layer *::highlight(aloud-sentence-dark),
+.text-layer *::highlight(aloud-sentence-light),
+.text-layer *::highlight(aloud-word-dark),
+.text-layer *::highlight(aloud-word-light) { color: transparent; }
+
+/* Where you are, and how big the pages are drawn (pdf/page-tools.ts). */
+.page-tools {
+  position: fixed; top: 12px; left: 12px; z-index: 30;
+  display: flex; align-items: center; gap: 2px; padding: 4px;
+}
+.page-tools .page-at {
+  font: inherit; color: inherit; text-align: right; font-variant-numeric: tabular-nums;
+  width: auto; min-width: 2.6em; padding: 5px 6px;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px;
+}
+.page-tools .page-at:focus { outline: 2px solid var(--accent-solid); outline-offset: 0; }
+.page-of { color: var(--fg-muted); padding: 0 8px 0 6px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.zoom-group { display: contents; }
+.page-tools .zoom-level { min-width: 4.4em; font-variant-numeric: tabular-nums; }
+.page-tools .icon-btn { width: 30px; font-size: 16px; line-height: 1; }
+@media (max-width: 560px) { .zoom-group { display: none; } }
+/* A page wider than the window is scrolled sideways, from its left edge. */
+body.pages-view #article { width: max-content; min-width: 100%; }

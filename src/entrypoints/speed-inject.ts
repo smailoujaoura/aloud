@@ -44,7 +44,7 @@ export default defineUnlistedScript(() => {
   const guard = new AutoplayGuard({
     enabled: false, // until the settings say otherwise
     leavePlaying: !withThePage,
-    notice: (media) => controller?.notice('Autoplay stopped — press play to watch', media),
+    notice: (media) => controller?.notice('Autoplay stopped. Press play to watch', media),
   });
   // Clicks and keys from the very start: one made while the settings load still counts.
   const stopWatching = guard.watchGestures();

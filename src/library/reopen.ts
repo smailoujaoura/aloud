@@ -32,7 +32,7 @@ export async function reopen(source: DocSource, at: NotePosition | null, showQue
   }
   if (how.kind === 'file') {
     await browser.tabs.create({ url: browser.runtime.getURL('/pdf.html') });
-    toast(`Choose ${how.name} again — Aloud isn't allowed to reopen files from your disk by itself`);
+    toast(`Choose ${how.name} again. Browsers don’t let Aloud reopen files from your disk`);
     return;
   }
   if (how.kind === 'pdf' || (await permission)) {
@@ -41,7 +41,7 @@ export async function reopen(source: DocSource, at: NotePosition | null, showQue
     return;
   }
   await browser.tabs.create({ url: how.url });
-  toast('Press the Aloud button on that page — it picks up where you were');
+  toast('Press the Aloud button on that page to pick up where you were');
 }
 
 function originPattern(url: string): string | null {

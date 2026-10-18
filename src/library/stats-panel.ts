@@ -45,7 +45,7 @@ export async function initStats(): Promise<void> {
   $('clearStats').addEventListener('click', async () => {
     if (!confirm('Clear every listening statistic? History, notes and the queue are kept. Counting starts again from now.')) return;
     await clearStats();
-    toast('Statistics cleared — counting from now');
+    toast('Statistics cleared. Counting from now');
   });
   render();
 }
@@ -104,7 +104,7 @@ function renderSummary(summary: StatsSummary, stats: ListeningStats, history: Hi
   $('statsSince').textContent =
     `Counting since ${new Date(stats.since).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}.` +
     (legacy > 0
-      ? ` History has its own total — ${formatListeningTime(legacy)} across ${documents(Object.keys(history).length)} — which includes listening from before then and is not split by day.`
+      ? ` History also counts ${formatListeningTime(legacy)} from before then, not split by day.`
       : '');
 }
 

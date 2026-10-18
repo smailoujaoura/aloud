@@ -47,12 +47,12 @@ const PART_LABEL: Record<BackupPart, string> = {
 
 export function renderBackupPanel(host: HTMLElement, opts: BackupPanelOptions): void {
   const exportBtn = el(document, 'button', { type: 'button', class: 'primary' }, 'Download a backup');
-  const exportNote = el(document, 'p', { class: 'muted small' }, 'Settings, voices chosen and downloaded, keys, colours, notes, the queue, history, reading positions, video speeds and PDF marks. The voice models themselves are not in the file — they are downloaded again on restore.');
+  const exportNote = el(document, 'p', { class: 'muted small' }, 'Settings, voices, keys, notes, the queue, history, reading positions, video speeds and PDF marks. Voice models download again on restore.');
   exportBtn.addEventListener('click', () => void exportBackup(opts).catch((err) => opts.toast(`Could not make the backup: ${String(err)}`, 'error')));
   // Your setup without your reading: to set up another browser the way you like it, or to keep a
   // known-good default — no notes, queue, history or statistics in the file.
   const settingsBtn = el(document, 'button', { type: 'button' }, 'Download settings only');
-  settingsBtn.title = 'Settings, voices chosen and downloaded, and keyboard shortcuts — no notes, history, queue or statistics';
+  settingsBtn.title = 'Settings, voices and shortcuts. No notes, history, queue or statistics';
   settingsBtn.addEventListener('click', () => void exportBackup(opts, true).catch((err) => opts.toast(`Could not save the settings: ${String(err)}`, 'error')));
 
   const file = el(document, 'input', { type: 'file', accept: '.json,application/json', hidden: '' }) as HTMLInputElement;
@@ -91,7 +91,7 @@ async function exportBackup(opts: BackupPanelOptions, settingsOnly = false): Pro
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
   const d = describeBackup(backup);
-  opts.toast(settingsOnly ? `Settings saved — ${d.settings.toLowerCase()}, and keyboard shortcuts` : `Backup saved — ${d.notes}, ${d.settings.toLowerCase()}`, 'ok');
+  opts.toast(settingsOnly ? `Settings saved: ${d.settings.toLowerCase()}, and keyboard shortcuts` : `Backup saved: ${d.notes}, ${d.settings.toLowerCase()}`, 'ok');
 }
 
 async function installedModels(manifest: ModelManifest): Promise<BackupModels> {
@@ -126,7 +126,7 @@ function showRestore(host: HTMLElement, backup: Backup, opts: BackupPanelOptions
     box.checked = true;
     boxes.set(part, box);
     const text = el(document, 'span', {}, `${PART_LABEL[part]} `);
-    text.append(el(document, 'span', { class: 'muted' }, `— ${described[part]}`));
+    text.append(el(document, 'span', { class: 'muted' }, `· ${described[part]}`));
     row.append(box, text);
     list.append(row);
   }
@@ -156,7 +156,7 @@ function showRestore(host: HTMLElement, backup: Backup, opts: BackupPanelOptions
         parts.has('notes') && over.notes ? `${over.notes} note${over.notes === 1 ? '' : 's'}` : '',
         parts.has('library') && over.queue ? `${over.queue} queued article${over.queue === 1 ? '' : 's'}` : '',
       ].filter(Boolean);
-      opts.toast(missed.length ? `Restored — ${missed.join(' and ')} did not fit and were left out` : 'Restored', missed.length ? 'info' : 'ok');
+      opts.toast(missed.length ? `Restored, except ${missed.join(' and ')}, which did not fit` : 'Restored', missed.length ? 'info' : 'ok');
       await followUps(after, backup, parts, opts);
     } catch (err) {
       opts.toast(`Could not restore: ${String(err)}`, 'error');
@@ -196,7 +196,7 @@ async function followUps(host: HTMLElement, backup: Backup, parts: ReadonlySet<B
     if (missing.length) host.append(siteStep(missing, opts));
   }
 
-  if (!host.childElementCount) host.append(el(document, 'p', { class: 'muted small' }, 'Nothing else to do — everything is back.'));
+  if (!host.childElementCount) host.append(el(document, 'p', { class: 'muted small' }, 'Everything is back.'));
 }
 
 function step(title: string, text: string, action: HTMLElement): HTMLElement {

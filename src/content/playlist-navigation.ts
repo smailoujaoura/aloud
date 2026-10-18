@@ -69,19 +69,38 @@ export function indexAtPoint(
   // On the text itself, not merely near it: the caret APIs return the nearest position to *any*
   // point, so a click on blank space — a margin, the gap between paragraphs — used to land in
   // some sentence and move the reading, often far from where the reader was.
+  // Text that is there but not shown can lie over the text that is: a story site's hidden
+  // translation (opacity 0, height 0, overflowing) covers the next paragraph's first lines, and
+  // a tap there landed in the English, or in its padding and nowhere. The visible sentence under
+  // the point wins.
+  const at = caret.node.nodeType === Node.ELEMENT_NODE ? (caret.node as Element) : caret.node.parentElement;
+  if (at && at.checkVisibility?.({ opacityProperty: true, visibilityProperty: true }) === false) return visibleAt(playlist, x, y);
   if (!onGlyph(doc, caret, x, y)) return null;
 
   for (const item of playlist) {
     try {
-      if (item.range?.isPointInRange(caret.node, caret.offset)) return item.playId;
+      if (!item.range?.isPointInRange(caret.node, caret.offset)) continue;
     } catch {
-      /* the caret node is in a different tree than this range — not a match */
+      continue; // the caret node is in a different tree than this range — not a match
     }
+    if (item.eligible === false) return visibleAt(playlist, x, y);
+    return item.playId;
   }
 
   // Between two sentences (a margin, a caption, a list bullet): snap by document order.
   const el = caret.node.nodeType === Node.ELEMENT_NODE ? (caret.node as Element) : caret.node.parentElement;
   return el ? indexNearElement(playlist, el) : null;
+}
+
+/** The read sentence drawn at (x, y), by its boxes. Only for the rare tap that hit hidden text. */
+function visibleAt(playlist: PlaylistItem[], x: number, y: number): number | null {
+  for (const item of playlist) {
+    if (item.eligible === false || !item.range) continue;
+    for (const r of item.range.getClientRects()) {
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return item.playId;
+    }
+  }
+  return null;
 }
 
 /** Is (x, y) on the character at the caret, or the one before it? A few pixels of slack. */

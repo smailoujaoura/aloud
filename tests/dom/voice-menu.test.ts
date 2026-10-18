@@ -58,7 +58,7 @@ describe('the voice and language button', () => {
     expect(root.querySelector('button.voice')!.classList.contains('missing')).toBe(true);
     root.querySelector<HTMLButtonElement>('button.voice')!.click();
     const warn = root.querySelector('.menu-text.warn')!.textContent!;
-    expect(warn).toContain('No German voice is downloaded');
+    expect(warn).toContain('No German voice downloaded');
     const actions = [...root.querySelectorAll<HTMLButtonElement>('.menu-actions button')];
     actions.find((a) => a.textContent === 'Skip German')!.click();
     expect(cb.onMissingVoice).toHaveBeenCalledWith('de', 'skip');

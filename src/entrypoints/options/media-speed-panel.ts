@@ -26,7 +26,7 @@ const KEY_ROWS: Array<{ key: keyof MediaSpeedSettings['keys']; label: string; hi
   { key: 'preferred', label: 'Your speed', hint: 'Jump to your preferred speed, and back' },
   { key: 'nextPreset', label: 'Next preset', hint: 'Up through the preset speeds' },
   { key: 'previousPreset', label: 'Previous preset', hint: 'Down through the preset speeds' },
-  { key: 'rewind', label: 'Rewind', hint: 'Back a few seconds — even where the player has no seek bar' },
+  { key: 'rewind', label: 'Rewind', hint: 'Back a few seconds, even without a seek bar' },
   { key: 'advance', label: 'Skip forward', hint: 'Forward a few seconds' },
 ];
 
@@ -38,7 +38,7 @@ export function renderMediaSpeedPanel(host: HTMLElement, opts: MediaSpeedPanelOp
   const sites = el(document, 'div', { class: 'speed-sites' });
   renderSiteList(sites, {
     heading: 'Starts by itself on',
-    empty: 'No sites yet — the shortcut works everywhere without asking for anything.',
+    empty: 'No sites yet. The shortcut works everywhere.',
     what: 'the speed control',
     sites: s.alwaysOn,
     save: (alwaysOn) => opts.save({ alwaysOn }),
@@ -75,7 +75,7 @@ export function renderMediaSpeedPanel(host: HTMLElement, opts: MediaSpeedPanelOp
       'Stop videos and audio from playing by themselves',
       s.blockAutoplay,
       (on) => void opts.save({ blockAutoplay: on }),
-      'On the sites above. Anything you start — a click, a tap, Space — plays as usual.',
+      'On the sites above. Whatever you start yourself plays as usual.',
     ),
   );
 

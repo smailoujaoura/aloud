@@ -265,7 +265,7 @@ const FIREFOX_PREFS: Array<{ name: string; value: string; why: string }> = [
   {
     name: 'dom.webgpu.workers.enabled',
     value: 'true',
-    why: 'the one that matters here — it lets web workers use it, and synthesis runs in a worker',
+    why: 'the one that matters: voices run in a web worker',
   },
   {
     name: 'gfx.webrender.all',
@@ -287,7 +287,7 @@ function renderPrefList(): void {
         document.createTextNode('Search for '),
         code,
         copy,
-        el(document, 'div', { class: 'muted small' }, `Set it to ${pref.value} — ${pref.why}.`),
+        el(document, 'div', { class: 'muted small' }, `Set it to ${pref.value}: ${pref.why}.`),
       );
       return li;
     }),
@@ -302,7 +302,7 @@ async function copyPref(name: string, button: HTMLButtonElement): Promise<void> 
     toast(`Copied ${name}`, 'ok');
     setTimeout(() => (button.textContent = label), 1200);
   } catch {
-    toast('Could not copy — select the name and copy it by hand', 'error');
+    toast('Could not copy. Select the name and copy it by hand', 'error');
   }
 }
 
@@ -358,7 +358,7 @@ function mediaSpeedOptions(): Parameters<typeof renderMediaSpeedPanel>[1] {
 function renderAnnotateSites(): void {
   renderSiteList($('annotateSites'), {
     heading: 'Show my highlights by themselves on',
-    empty: 'No sites yet — highlights appear when you use Aloud on a page or open a note.',
+    empty: 'No sites yet.',
     what: 'your highlights',
     sites: settings.annotate.alwaysOn,
     save: async (alwaysOn) => {
@@ -564,7 +564,7 @@ async function chooseTheme(choice: ThemeChoice): Promise<void> {
   settings = await setSettings({ theme: choice });
   // Named rather than "Saved": the page has already repainted, and the message's job is to say
   // that the reading bar and the PDF reader just changed too.
-  toast(`Theme: ${THEME_LABEL[choice].toLowerCase()} — applied everywhere Aloud draws`, 'ok');
+  toast(`Theme: ${THEME_LABEL[choice].toLowerCase()}`, 'ok');
 }
 
 // ---- wiring ----------------------------------------------------------------
@@ -678,7 +678,7 @@ function wire(): void {
     // Not under a download: it would delete what is being written, and the download would then
     // finish into an empty cache. Say why instead of doing nothing.
     if (downloads.busy) {
-      toast('Some voices are still downloading — wait for them to finish, or cancel the ones waiting, then delete.', 'error');
+      toast('Some voices are still downloading. Let them finish or cancel them, then delete.', 'error');
       return;
     }
     if (!confirm('Delete every cached model file? They will re-download next time.')) return;
@@ -806,7 +806,7 @@ function explainUnreadablePage(): void {
       ? gecko
         ? 'Firefox doesn’t let add-ons read files on your disk. Open a PDF from here instead, or open the page from a website.'
         : 'Aloud isn’t allowed to read local files yet. Turn on “Allow access to file URLs” for Aloud on chrome://extensions, or open a PDF from here.'
-      : 'Browsers keep extensions out of their own pages — new tabs, settings, add-on stores. Open an article or a PDF and press the Aloud button there. Meanwhile, here are your settings.';
+      : 'Aloud can’t run on the browser’s own pages. Open an article or a PDF and press the Aloud button there.';
   $('cantRead').hidden = false;
   $('cantReadClose').addEventListener('click', () => ($('cantRead').hidden = true));
   $('cantReadLibrary').addEventListener('click', () => showView('continue', { push: true }));

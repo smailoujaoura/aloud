@@ -87,14 +87,15 @@
         </div>
         <div id="empty" class="empty" hidden>
           <h2>Nothing queued yet</h2>
-          <p>Right-click any article and choose <b>Add page to reading queue</b>, or right-click a link
-            and choose <b>Add link to reading queue</b>. Articles play here one after another — and
-            pages you add are saved as they are, so they play even offline.</p>
+          <p>Right-click a page or a link to add it. Queued pages play here one after another, even offline.</p>
         </div>
         <ol id="list" class="q-list"></ol>
             <!-- The queued article being read. The reader session runs on this like on any page. -->
       <div id="now" class="q-now" hidden>
-        <p class="q-now-label" id="nowLabel">Now reading</p>
+        <div class="q-now-head">
+          <p class="q-now-label" id="nowLabel">Now reading</p>
+          <button type="button" class="ghost btn-sm" id="nowOnPage" title="Open the article on its site and carry on reading there">Continue on the page ↗</button>
+        </div>
         <div id="prompt" class="q-prompt" hidden></div>
         <article id="article"></article>
       </div>
@@ -134,11 +135,9 @@
         <div id="notesList"><div class="voice-loading" aria-hidden="true"><span class="skeleton sk-row"></span><span class="skeleton sk-row"></span></div></div>
         <div id="notesEmpty" class="empty" hidden>
           <h2>No notes yet</h2>
-          <p>Select text and press <kbd>K</kbd> where Aloud is running, <kbd>Alt</kbd>+<kbd>K</kbd> anywhere (or
-            right-click → <b>Highlight and keep in Notes</b>): the passage is highlighted on the page,
-            and highlighted again whenever you come back. While Aloud is reading, the same key keeps
-            the sentence you just heard. Every note is here — filter by site or tag, open it at its
-            place on the page, and export them as Markdown or JSON.</p>
+          <p>Select text and press <kbd>Alt</kbd>+<kbd>K</kbd>, or right-click and choose
+            <b>Highlight and keep in Notes</b>. While Aloud reads, <kbd>K</kbd> keeps the sentence you
+            just heard.</p>
         </div>
       
       </div>
@@ -213,9 +212,7 @@
           <section aria-labelledby="statsLanguagesHead"><h2 id="statsLanguagesHead">Languages</h2><ol id="statsLanguages" class="stats-list"></ol></section>
         </div>
         <p class="muted small" id="statsSince"></p>
-        <p class="muted small stats-note">Only what you actually heard counts: a sentence as it plays, and the part of one you
-          heard before pausing or skipping. Making an MP3 is not listening. Statistics travel in the backup file with your
-          history — restoring the same file twice counts nothing twice.</p>
+        <p class="muted small stats-note">Only what you heard counts. Saving an MP3 doesn't.</p>
       </div>
 
       <div class="view" id="view-voice" data-view="voice" role="region" aria-label="Voice" hidden>

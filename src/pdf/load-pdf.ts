@@ -252,7 +252,11 @@ function makeRenderer(doc: PdfDocumentLike, task: PdfLoadingTaskLike): PdfRender
           if (destroyed) return;
           // Draw at device resolution and let CSS scale it back down, or the text on a HiDPI
           // screen is visibly soft next to the crisp DOM around it.
-          const dpr = Math.min(3, Math.max(1, globalThis.devicePixelRatio || 1));
+          // Within a pixel budget, though: a page zoomed to 300% on a HiDPI screen would otherwise
+          // be a canvas of hundreds of megabytes. Past it, the page is drawn a little softer.
+          const MAX_PIXELS = 2 ** 24;
+          const wanted = Math.min(3, Math.max(1, globalThis.devicePixelRatio || 1));
+          const dpr = Math.max(0.5, Math.min(wanted, Math.sqrt(MAX_PIXELS / Math.max(1, viewport.width * viewport.height))));
           canvas.width = Math.round(viewport.width * dpr);
           canvas.height = Math.round(viewport.height * dpr);
           canvas.style.width = `${viewport.width}px`;

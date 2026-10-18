@@ -76,7 +76,12 @@ function renderList(): void {
   $('count').textContent =
     n === 0
       ? 'Empty'
-      : `${n} article${n === 1 ? '' : 's'} · about ${formatListeningTime(total)}${unknown ? ` plus ${unknown} not yet downloaded` : ''} · plays top to bottom`;
+      : [
+          `${n} article${n === 1 ? '' : 's'}`,
+          unknown === n ? '' : `about ${formatListeningTime(total)}${unknown ? ` plus ${unknown} to download` : ''}`,
+        ]
+          .filter(Boolean)
+          .join(' · ');
   $('empty').hidden = n > 0 || playingId !== null;
   $('playAll').hidden = n === 0 || playingId !== null;
   $('clear').hidden = n === 0;
@@ -91,7 +96,7 @@ function renderList(): void {
       const seconds = listeningSeconds(item);
       const meta = [
         item.site,
-        failed.has(item.id) ? 'could not be downloaded — try again' : seconds != null ? `about ${formatListeningTime(seconds)}` : 'downloads when played',
+        failed.has(item.id) ? 'could not be downloaded. Try again' : seconds != null ? `about ${formatListeningTime(seconds)}` : 'downloads when played',
       ];
       text.append(title, el(document, 'span', { class: 'q-meta' }, meta.join(' · ')));
 
@@ -106,10 +111,11 @@ function renderList(): void {
         });
         actions.append(read);
       }
+      const onPage = iconButton('↗', 'Read it on its page', false, () => void readOnPage(item));
       const up = iconButton('↑', 'Move up', i === 0, () => void moveInQueue(item.id, -1));
       const down = iconButton('↓', 'Move down', i === n - 1, () => void moveInQueue(item.id, 1));
       const remove = iconButton('✕', 'Remove from queue', false, () => void removeItem(item.id));
-      actions.append(up, down, remove);
+      actions.append(onPage, up, down, remove);
 
       row.append(el(document, 'span', { class: 'q-num' }, String(i + 1)), text, actions);
       return row;
@@ -122,6 +128,36 @@ function iconButton(label: string, title: string, disabled: boolean, onClick: ()
   b.disabled = disabled;
   b.addEventListener('click', onClick);
   return b;
+}
+
+/**
+ * Read it on the page it came from instead. The reader there resumes where this one stopped: the
+ * position is saved under the same address (and matched by its words, not its sentence number).
+ */
+async function readOnPage(item: QueueItem): Promise<void> {
+  // Asked inside the click, before anything is awaited (see library/reopen.ts).
+  const origin = originPattern(item.url);
+  const allowed = origin ? browser.permissions.request({ origins: [origin] }).catch(() => false) : Promise.resolve(false);
+  if (item.id === playingId) {
+    await stopPlaying();
+    $('now').hidden = true;
+    renderList();
+  }
+  if (await allowed) {
+    await browser.runtime.sendMessage({ type: 'open-and-read', url: item.url });
+    return;
+  }
+  await browser.tabs.create({ url: item.url });
+  toast('Press the Aloud button on that page to carry on');
+}
+
+function originPattern(url: string): string | null {
+  try {
+    const { protocol, hostname } = new URL(url);
+    return protocol === 'http:' || protocol === 'https:' ? `${protocol}//${hostname}/*` : null;
+  } catch {
+    return null;
+  }
 }
 
 async function removeItem(id: string): Promise<void> {
@@ -230,7 +266,7 @@ function imageNotice(held: number): HTMLElement {
   const row = el(document, 'p', { class: 'q-prompt article-images' });
   row.append(
     document.createTextNode(
-      `${held} image${held === 1 ? '' : 's'} or media file${held === 1 ? '' : 's'} not loaded — they live on the original site, and fetching them tells it you are reading. `,
+      `${held} image${held === 1 ? '' : 's'} or media file${held === 1 ? '' : 's'} not loaded. Loading them tells the site you are reading. `,
     ),
   );
   const load = el(document, 'button', { type: 'button', class: 'btn-sm' }, 'Load images');
@@ -291,7 +327,7 @@ async function downloadArticle(item: QueueItem): Promise<QueuedArticle | null> {
     return article;
   } catch (err) {
     log.warn('[queue] download failed:', err);
-    toast(`Could not read ${item.site} — ${err instanceof Error ? err.message : String(err)}. It stays in your queue.`, 'error');
+    toast(`Could not read ${item.site} (${err instanceof Error ? err.message : String(err)}). It stays in your queue.`, 'error');
     prompt.hidden = true;
     return null;
   }
@@ -311,7 +347,7 @@ function askPermission(item: QueueItem, origin: string): Promise<boolean> {
         .catch(() => false)
         .then((granted) => {
           prompt.hidden = true;
-          if (!granted) toast(`Not allowed to read ${item.site} — skipping it`, 'error');
+          if (!granted) toast(`Not allowed to read ${item.site}. Skipped`, 'error');
           resolve(granted);
         });
     });
@@ -344,6 +380,10 @@ export async function initQueue(opts: { onCount: (count: number) => void }): Pro
     renderList();
   });
 
+  $('nowOnPage').addEventListener('click', () => {
+    const item = queue.find((q) => q.id === playingId);
+    if (item) void readOnPage(item);
+  });
   $('playAll').addEventListener('click', () => {
     const first = queue[0];
     if (first) void play(first.id);

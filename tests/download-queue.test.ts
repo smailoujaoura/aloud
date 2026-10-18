@@ -53,8 +53,8 @@ describe('the download line', () => {
     void q.enqueue('b', 'Ryan', controlled().run);
     void q.enqueue('c', 'Lessac', controlled().run);
     await tick();
-    expect(q.view('b')!.text).toBe('Waiting — starts after Alba finishes (next in line)');
-    expect(q.view('c')!.text).toBe('Waiting — starts after Alba finishes (2nd in line)');
+    expect(q.view('b')!.text).toBe('Waiting for Alba (next in line)');
+    expect(q.view('c')!.text).toBe('Waiting for Alba (2nd in line)');
     a.sink().set(0.42);
     expect(q.view('a')).toMatchObject({ phase: 'downloading', ratio: 0.42 });
     a.sink().note('Downloaded — preparing the model…');

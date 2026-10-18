@@ -45,7 +45,7 @@ export function face(engine: EngineId, id: string, size = 40, className = 'vi-av
   }
   // Not a real person: said where the face is, with who the voice sounds like.
   node.classList.add('has-photo');
-  node.title = `Sounds like ${portrait.sounds}. Portrait generated — not a real person.`;
+  node.title = `Sounds like ${portrait.sounds}. Generated portrait, not a real person.`;
   node.removeAttribute('aria-hidden');
   const img = el(document, 'img', { src: portrait.file, alt: '', width: String(size), height: String(size), decoding: 'async' });
   img.addEventListener('error', () => img.replaceWith(drawn()), { once: true });
@@ -200,7 +200,7 @@ export function renderVoiceBoard(
       class: `vb-auto${chosen ? '' : ' is-on'}`,
       role: 'radio',
       'aria-checked': String(!chosen),
-      title: automatic ? `Auto: ${shortName(automatic.label)} now — Aloud picks, and follows what you download` : 'Auto',
+      title: automatic ? `Auto: ${shortName(automatic.label)} for now. Aloud picks from what you download` : 'Auto',
     }, 'Auto');
     auto.addEventListener('click', () => {
       if (chosen) void ctx.setLanguageVoice(code, null);

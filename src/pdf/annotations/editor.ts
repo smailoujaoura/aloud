@@ -60,8 +60,8 @@ const KIND_KEY: Record<string, MarkKind> = { h: 'highlight', u: 'underline', s: 
 
 const SAVE_LABEL: Record<SaveMode, { label: string; title: string }> = {
   'in-place': { label: 'Save', title: 'Write the marks into the PDF file (Ctrl+S)' },
-  'save-as': { label: 'Save…', title: 'Choose where to save — pick the original file to replace it (Ctrl+S)' },
-  'download-as': { label: 'Save…', title: 'Choose where to save — pick the original file to replace it (Ctrl+S)' },
+  'save-as': { label: 'Save…', title: 'Choose where to save. Pick the original file to replace it (Ctrl+S)' },
+  'download-as': { label: 'Save…', title: 'Choose where to save. Pick the original file to replace it (Ctrl+S)' },
   download: { label: 'Save a copy', title: 'Download the PDF with its marks (Ctrl+S)' },
 };
 
@@ -134,6 +134,13 @@ export class MarkEditor {
     const open = this.popover?.id;
     this.history.replaceAll(marks);
     if (open && !marks.some((m) => m.id === open)) this.closePopover();
+    this.redraw();
+  }
+
+  /** The pages were drawn at another size (a zoom): place the marks again. */
+  relayout(): void {
+    this.closeSelectionBar();
+    this.closePopover();
     this.redraw();
   }
 
@@ -451,7 +458,7 @@ export class MarkEditor {
     this.history.remove(id);
     this.closePopover();
     this.changed();
-    this.flash('Deleted — Ctrl+Z to undo');
+    this.flash('Deleted. Ctrl+Z to undo');
   }
 
   private undo(): void {

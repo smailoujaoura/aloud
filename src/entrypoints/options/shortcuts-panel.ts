@@ -36,7 +36,7 @@ const READER_ROWS: Array<[keyof ReaderKeys, string, string]> = [
   ['faster', 'Faster', ''],
   ['note', 'Save to Notes', 'What you just heard'],
   ['follow', 'Follow the reading', 'On or off'],
-  ['jump', 'Click a sentence to jump there', 'On or off — off lets you click and select freely'],
+  ['jump', 'Click a sentence to jump there', 'Off lets you click and select freely'],
   ['highlight', 'Highlight the sentence', 'On or off'],
   ['toolbar', 'Colour toolbar when you select text', 'On or off'],
   ['sleep', 'Sleep timer', ''],
@@ -145,7 +145,7 @@ export async function renderShortcutsPanel(host: HTMLElement, opts: ShortcutsPan
   const keys = el(document, 'div', { class: 'speed-keys' });
   keys.append(...rows);
   host.replaceChildren(
-    el(document, 'p', { class: 'sub-label' }, 'Browser shortcuts — they work on any page'),
+    el(document, 'p', { class: 'sub-label' }, 'Browser shortcuts, on any page'),
     keys,
     ...foot,
     el(document, 'p', { class: 'sub-label' }, 'While a page is being read'),
@@ -222,7 +222,7 @@ function singleKeyRow(
       if (e.key === 'Escape') return done(null);
       if (e.key === 'Backspace') return done('');
       if (e.ctrlKey || e.altKey || e.metaKey) {
-        opts.toast('One key on its own here — the shortcuts above are the ones with Ctrl or Alt', 'error');
+        opts.toast('Just one key here, without Ctrl or Alt', 'error');
         return done(null);
       }
       if (e.key.length === 1 && e.key.trim()) done(e.key.toLowerCase());
@@ -278,7 +278,7 @@ function pageKeyRows(opts: ShortcutsPanelOptions): HTMLElement {
         if (e.key === 'Escape') return done(null);
         if (e.key === 'Backspace') return done('');
         if (e.ctrlKey || e.altKey || e.metaKey) {
-          opts.toast('One key on its own here — the shortcuts above are the ones with Ctrl or Alt', 'error');
+          opts.toast('Just one key here, without Ctrl or Alt', 'error');
           return done(null);
         }
         if (e.key.length === 1 && e.key.trim()) done(e.key.toLowerCase());
@@ -310,7 +310,7 @@ function row(
     warning.textContent = text;
     warning.hidden = !text;
   };
-  showWarning(taken(shortcut, opts.browserKind) ? `${prettyShortcut(shortcut)} ${taken(shortcut, opts.browserKind)} — the browser takes it first, so Aloud never sees it.` : '');
+  showWarning(taken(shortcut, opts.browserKind) ? `${prettyShortcut(shortcut)} ${taken(shortcut, opts.browserKind)} . The browser takes it first.` : '');
 
   const button = el(document, 'button', { type: 'button', class: 'key-button' }, prettyShortcut(shortcut)) as HTMLButtonElement;
   if (!update) {
@@ -333,7 +333,7 @@ function row(
       const used = taken(next, opts.browserKind);
       if (used) {
         button.textContent = prettyShortcut(shortcut);
-        opts.toast(`${prettyShortcut(next)} ${used} — Aloud would never see it`, 'error');
+        opts.toast(`${prettyShortcut(next)} ${used} . Aloud would never see it`, 'error');
         showWarning(`${prettyShortcut(next)} ${used}. Choose another.`);
         return;
       }

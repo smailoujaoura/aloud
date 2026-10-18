@@ -106,9 +106,8 @@ const ENGINES: Record<EngineId, EngineInfo> = {
     name: 'Supertonic 3',
     tag: '31 languages, large download',
     blurb:
-      'Clear, natural voices in 31 languages — many that Kokoro does not speak, read more clearly ' +
-      'than Piper reads them. Quicker with a GPU; without one it needs a few workers to keep up. ' +
-      'One ~402 MB download unlocks all 10 voices, each in every language.',
+      'Clear, natural voices in 31 languages, many that Kokoro does not speak. Quicker with a GPU. ' +
+      'One ~402 MB download gives all 10 voices, each in every language.',
     // The four networks at the pinned commit (398.1 MB) and the ten voice styles (2.9 MB).
     approxSize: '~402 MB',
     cacheHint: 'supertonic-3',

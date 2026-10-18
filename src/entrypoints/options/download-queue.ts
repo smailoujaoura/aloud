@@ -203,7 +203,7 @@ export class DownloadQueue {
 
 function waitingText(running: string, position: number): string {
   const place = position === 1 ? 'next in line' : `${ordinal(position)} in line`;
-  return `Waiting — starts after ${running} finishes (${place})`;
+  return `Waiting for ${running} (${place})`;
 }
 
 function ordinal(n: number): string {

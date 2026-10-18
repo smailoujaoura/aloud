@@ -305,7 +305,7 @@ export class ControlBar {
     this.playBtn = this.iconButton('play', 'Play', ICON_PATHS.play, 'Play / pause');
     this.prevBtn = this.iconButton('prev', 'Previous sentence', ICON_PATHS.prev, 'Previous sentence');
     this.nextBtn = this.iconButton('next', 'Next sentence', ICON_PATHS.next, 'Next sentence');
-    const backBtn = this.iconButton('back', 'Back a little', ICON_PATHS.replay, 'Back a little — replay the last few seconds');
+    const backBtn = this.iconButton('back', 'Back a little', ICON_PATHS.replay, 'Replay the last few seconds');
     backBtn.addEventListener('click', () => this.cb.onBackALittle());
     const noteBtn = this.iconButton('note', 'Save to Notes', ICON_PATHS.bookmark, 'Save what you just heard to Notes');
     noteBtn.addEventListener('click', () => this.cb.onSaveNote());
@@ -719,10 +719,10 @@ export class ControlBar {
     this.titleWithKey(
       'follow',
       state === 'on'
-        ? 'Following the reading — click to stop'
+        ? 'Following the reading. Click to stop'
         : state === 'away'
-          ? 'Resting while you look around (back in a few seconds) — click to go back now'
-          : 'Not following — click to go to the sentence being read and follow it',
+          ? 'Paused while you look around. Click to go back now'
+          : 'Not following. Click to go to the sentence being read',
     );
   }
 
@@ -760,7 +760,7 @@ export class ControlBar {
           : info.missing
             ? ` · no ${info.name} voice downloaded`
             : '';
-    this.voiceBtn.title = `${name}${info?.name ? ` reading ${info.name}` : ''}${state} — voices and language`;
+    this.voiceBtn.title = `${name}${info?.name ? ` reading ${info.name}` : ''}${state} · voices and language`;
   }
 
   setTapToSeek(on: boolean): void {
@@ -946,7 +946,7 @@ export class ControlBar {
         text(
           info.skipped
             ? `No ${info.name} voice is downloaded, so ${info.name} passages are skipped.`
-            : `No ${info.name} voice is downloaded — ${info.voiceLabel} reads ${info.name} with its own pronunciation.`,
+            : `No ${info.name} voice downloaded. ${info.voiceLabel} reads ${info.name} with its own accent.`,
           'menu-text warn',
         );
         const actions = this.make('div', { class: 'menu-actions' });
@@ -1005,7 +1005,7 @@ export class ControlBar {
     } else if (info?.auto) {
       action(`Read this whole page with ${current?.name ?? 'this voice'}`, () => this.cb.onVoiceLock?.(true));
     } else if (info) {
-      text('Voices do not switch with the language — that is turned off in Settings.');
+      text('Voices don’t switch with the language. That’s off in Settings.');
     }
     action('Choose which voices appear here…', () => {
       this.closePopover();

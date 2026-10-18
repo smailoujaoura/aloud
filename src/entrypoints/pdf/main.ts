@@ -30,6 +30,7 @@ import { MarkSync, unsettledSyncs } from '@/pdf/annotations/sync';
 import { canOpenWithHandle, pickPdfWithHandle, saveFile, saveMode } from '@/pdf/annotations/save-file';
 import { takePdf } from '@/pdf/handoff';
 import { buildTextLayer } from '@/pdf/page-view';
+import { pageAtReadingLine, pageTools, type PageTools } from '@/pdf/page-tools';
 import { titleIsInBody, type PdfBlock, type PdfLineBox } from '@/pdf/text-layout';
 import { getSettings, watchSettings, type PdfView } from '@/shared/settings';
 import { applyTheme, watchSystemTheme } from '@/ui/theme';
@@ -137,6 +138,7 @@ function pageBreak(page: number): HTMLElement {
   const hr = document.createElement('hr');
   hr.className = 'page-break';
   hr.dataset.page = `page ${page}`;
+  hr.dataset.pageNumber = String(page);
   hr.setAttribute('aria-hidden', 'true');
   return hr;
 }
@@ -171,6 +173,12 @@ interface PageSlot {
   canvas: HTMLCanvasElement;
   view: PdfPageView;
   drawn: boolean;
+  pageNumber: number;
+  /** The page's size at zoom 1. Its text layer is laid out at this size and scaled with the zoom. */
+  base: { width: number; height: number };
+  layer: HTMLElement;
+  /** What the marks are drawn with: its view follows the zoom. */
+  page: EditorPage;
 }
 
 /**
@@ -217,17 +225,22 @@ function renderPages(doc: LoadedPdf, renderer: PdfRenderer, scale: number): Prom
 
     const layer = buildTextLayer(view, byPage.get(pageNumber) ?? []);
     holder.append(layer.el);
+    layer.el.style.width = `${view.width}px`;
+    layer.el.style.height = `${view.height}px`;
 
-    slots.set(holder, { holder, canvas, view, drawn: false });
-    return { holder, finish: layer.finish, pageNumber, view };
+    const page: EditorPage = { holder, view, pageNumber };
+    const slot: PageSlot = { holder, canvas, view, drawn: false, pageNumber, base: { width: view.width, height: view.height }, layer: layer.el, page };
+    slots.set(holder, slot);
+    return { holder, finish: layer.finish, slot };
   });
 
   function draw(slot: PageSlot): void {
     if (slot.drawn) return;
     slot.drawn = true;
-    void slot.view.render(slot.canvas).catch((err) => {
-      // A cancelled render is the normal outcome of scrolling past a page mid-draw.
-      if (!slot.drawn) return;
+    const { view } = slot;
+    void view.render(slot.canvas).catch((err) => {
+      // A cancelled render is the normal outcome of scrolling past a page mid-draw, or of a zoom.
+      if (!slot.drawn || slot.view !== view) return;
       log.warn('[pdf] page render failed:', err);
     });
   }
@@ -247,9 +260,157 @@ function renderPages(doc: LoadedPdf, renderer: PdfRenderer, scale: number): Prom
     for (const { finish } of pages) finish();
     // Observed last, so the first callback sees pages that are laid out and can be drawn.
     for (const { holder } of pages) observer.observe(holder);
-    return pages.map(({ holder, view, pageNumber }) => ({ holder, view, pageNumber }));
+    zoomSlots = pages.map(({ slot }) => slot);
+    return zoomSlots.map((slot) => slot.page);
   });
 }
+
+// ---- zoom ------------------------------------------------------------------
+
+/** Zoom is relative to "fit the width", within these bounds. */
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 3;
+
+let zoom = 1;
+/** The scale of zoom 1: the page width fitted to the window. */
+let fit = 1;
+let zoomSlots: PageSlot[] = [];
+let zoomTimer = 0;
+let zoomRound = 0;
+
+/**
+ * Draw the pages larger or smaller, keeping the point at (x, y) in the window where it is.
+ *
+ * The browser's own zoom (Ctrl + wheel) only enlarged the page images, and blurred them. Here the
+ * page boxes take their new size at once, the old image stretched to it, and a moment later each
+ * page is drawn again at the new size, sharp. The text layer is not rebuilt — the reader is
+ * reading it — only scaled.
+ */
+function zoomTo(next: number, x = window.innerWidth / 2, y = window.innerHeight / 3): void {
+  next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, next));
+  if (!zoomSlots.length || Math.abs(next - zoom) < 0.001) return;
+  const anchor = anchorAt(x, y);
+  zoom = next;
+  for (const slot of zoomSlots) {
+    const width = `${slot.base.width * zoom}px`;
+    const height = `${slot.base.height * zoom}px`;
+    slot.holder.style.width = slot.canvas.style.width = width;
+    slot.holder.style.height = slot.canvas.style.height = height;
+    slot.layer.style.transform = zoom === 1 ? '' : `scale(${zoom})`;
+    // The marks were drawn for the size the page had; stretched with it until they are redrawn.
+    const drawnAt = slot.view.width / slot.base.width;
+    for (const extra of slot.holder.querySelectorAll<HTMLElement>('.mark-layer, .pin-layer')) {
+      extra.style.transformOrigin = '0 0';
+      extra.style.transform = `scale(${zoom / drawnAt})`;
+    }
+  }
+  if (anchor) {
+    const r = anchor.slot.holder.getBoundingClientRect();
+    window.scrollBy(r.left + anchor.fx * r.width - x, r.top + anchor.fy * r.height - y);
+  }
+  tools?.setZoom(zoom);
+  clearTimeout(zoomTimer);
+  zoomTimer = window.setTimeout(() => void redrawAtZoom(), 180);
+}
+
+function anchorAt(x: number, y: number): { slot: PageSlot; fx: number; fy: number } | null {
+  const slot = zoomSlots.find((s) => s.holder.getBoundingClientRect().bottom >= y) ?? zoomSlots[zoomSlots.length - 1];
+  if (!slot) return null;
+  const r = slot.holder.getBoundingClientRect();
+  return { slot, fx: (x - r.left) / (r.width || 1), fy: (y - r.top) / (r.height || 1) };
+}
+
+/** Every page at the current zoom: new views, the marks redrawn, the visible pages repainted. */
+async function redrawAtZoom(): Promise<void> {
+  const round = ++zoomRound;
+  const r = renderer;
+  if (!r) return;
+  const scale = fit * zoom;
+  const views = await Promise.all(zoomSlots.map((slot) => r.view(slot.pageNumber, scale)));
+  if (round !== zoomRound || renderer !== r) return;
+  zoomSlots.forEach((slot, i) => {
+    const view = views[i]!;
+    slot.view.cancel();
+    slot.view = view;
+    slot.page.view = view;
+    for (const extra of slot.holder.querySelectorAll<HTMLElement>('.mark-layer, .pin-layer')) extra.style.transform = '';
+    if (slot.drawn) repaint(slot);
+  });
+  editor?.relayout();
+}
+
+/** Draw the page again off screen and swap it in, so it never flashes blank. */
+function repaint(slot: PageSlot): void {
+  const fresh = document.createElement('canvas');
+  fresh.setAttribute('aria-hidden', 'true');
+  const { view } = slot;
+  view
+    .render(fresh)
+    .then(() => {
+      if (slot.view !== view || !slot.drawn) return;
+      slot.canvas.replaceWith(fresh);
+      slot.canvas = fresh;
+    })
+    .catch(() => undefined);
+}
+
+window.addEventListener(
+  'wheel',
+  (e) => {
+    if (!(e.ctrlKey || e.metaKey) || !zoomSlots.length) return;
+    e.preventDefault();
+    // A mouse wheel's notch, in whichever unit the browser reports it, is about a fifth larger or
+    // smaller; a touchpad pinch sends many small steps.
+    const px = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaMode === 2 ? e.deltaY * window.innerHeight : e.deltaY;
+    zoomTo(zoom * Math.exp(-px / 500), e.clientX, e.clientY);
+  },
+  { passive: false },
+);
+
+document.addEventListener('keydown', (e) => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey || !zoomSlots.length) return;
+  if (e.key === '=' || e.key === '+') zoomTo(zoom * 1.2);
+  else if (e.key === '-' || e.key === '_') zoomTo(zoom / 1.2);
+  else if (e.key === '0') zoomTo(1);
+  else return;
+  e.preventDefault();
+});
+
+// ---- where you are ---------------------------------------------------------
+
+let tools: PageTools | null = null;
+/** The element that starts each page, in order. */
+let pageStarts: Array<{ el: Element; page: number }> = [];
+let pageFrame = 0;
+
+function showPageTools(total: number, zoomable: boolean): void {
+  tools?.dispose();
+  tools = pageTools({
+    total,
+    zoomable,
+    onPage(page) {
+      const start = [...pageStarts].reverse().find((s) => s.page <= page) ?? pageStarts[0];
+      if (!start) return;
+      const top = start.el.getBoundingClientRect().top + window.scrollY - (zoomable ? 60 : 24);
+      window.scrollTo({ top: Math.max(0, top) });
+    },
+    onZoom(how) {
+      zoomTo(how === 'fit' ? 1 : how === 'in' ? zoom * 1.2 : zoom / 1.2);
+    },
+  });
+  tools.setZoom(zoom);
+  trackPage();
+}
+
+function trackPage(): void {
+  if (pageFrame) return;
+  pageFrame = requestAnimationFrame(() => {
+    pageFrame = 0;
+    if (pageStarts.length) tools?.setPage(pageAtReadingLine(pageStarts));
+  });
+}
+window.addEventListener('scroll', trackPage, { passive: true });
+window.addEventListener('resize', trackPage);
 
 /** The lines of each block, split by the page they sit on — a block can straddle a page break. */
 function blocksByPage(blocks: PdfBlock[]): Map<number, Array<{ block: PdfBlock; lines: PdfLineBox[] }>> {
@@ -280,7 +441,8 @@ function blocksByPage(blocks: PdfBlock[]): Map<number, Array<{ block: PdfBlock; 
 async function fitScale(renderer: PdfRenderer): Promise<number> {
   const first = await renderer.view(1, 1);
   const available = Math.min(MAX_PAGE_WIDTH, Math.max(320, window.innerWidth - 48));
-  return available / first.width;
+  fit = available / first.width;
+  return fit;
 }
 
 // ---- loading ---------------------------------------------------------------
@@ -352,15 +514,24 @@ async function present(
   $('picker').hidden = true;
   $('doc').hidden = false;
 
+  zoom = 1;
+  zoomSlots = [];
+  clearTimeout(zoomTimer);
   if (renderer) {
     showStatus('Drawing the pages…', 0.98);
     document.body.classList.add('pages-view');
     const pages = await renderPages(doc, renderer, await fitScale(renderer));
     await startEditor(pages, bytes, name, handle, fileMarks ?? []);
+    pageStarts = pages.map((p) => ({ el: p.holder, page: p.pageNumber }));
   } else {
     document.body.classList.remove('pages-view');
     renderReflow(doc);
+    pageStarts = [
+      { el: $('article'), page: 1 },
+      ...[...document.querySelectorAll<HTMLElement>('.page-break')].map((el) => ({ el, page: Number(el.dataset.pageNumber) || 1 })),
+    ];
   }
+  showPageTools(doc.pageCount, !!renderer);
 
   $('status').hidden = true;
   log.info(
@@ -599,7 +770,7 @@ async function requestOriginAndOpen(url: string): Promise<void> {
     showPicker(
       `Open ${fileNameOf(url)}`,
       'Without permission for that site, Aloud cannot download the file itself.',
-      'You can still save the PDF and choose it here — it is read entirely on this device either way.',
+      'You can also save the PDF and choose it here. It is read on this device either way.',
     );
     return;
   }
@@ -633,7 +804,7 @@ function fallbackToPicker(): void {
     showPicker(
       name || 'Open the PDF',
       'Firefox does not let add-ons read files from your disk, so Aloud cannot open this PDF on its own.',
-      'Choose the same file here and it will be read aloud — nothing leaves your device either way.',
+      'Choose the same file here to read it. Nothing leaves your device.',
     );
     return;
   }

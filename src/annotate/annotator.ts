@@ -18,6 +18,7 @@
  */
 import { siteOf } from '@/shared/doc-source';
 import { documentKey } from '@/shared/position-match';
+import { capabilities } from '@/shared/browser-env';
 import { NOTES_FULL_MESSAGE, addNote, loadNotes, noteFacets, notesForPage, removeNote, restoreNote, updateNote, watchNotes, type Note } from '@/shared/notes';
 import type { TextIndex } from '@/extract/text-index';
 import { DEFAULT_ANNOTATE, getSettings, watchSettings, type AnnotateSettings, type NoteStyle } from '@/shared/settings';
@@ -377,7 +378,8 @@ export class PageAnnotator {
       root.append(bar);
       this.toolbar = bar;
     }
-    place(this.toolbar, box, 'above');
+    if (capabilities().touchFirst) dock(this.toolbar, box);
+    else place(this.toolbar, box, 'above');
   }
 
   private closeToolbar(): void {
@@ -612,6 +614,19 @@ function button(label: string, title: string, run: () => void): HTMLButtonElemen
   return b;
 }
 
+/**
+ * On a phone, the selection's own menu (Copy, Share, Select all) floats next to the selection, and
+ * a toolbar placed there covered it or was covered by it. Ours goes to the edge of the screen
+ * instead: the top, or the bottom when the selection is up there, clear of the reader's bar.
+ */
+function dock(float: HTMLElement, box: DOMRect): void {
+  float.classList.add('docked');
+  const nearTop = box.top < window.innerHeight * 0.3;
+  float.style.top = nearTop ? '' : 'calc(env(safe-area-inset-top, 0px) + 8px)';
+  float.style.bottom = nearTop ? 'calc(env(safe-area-inset-bottom, 0px) + 132px)' : '';
+  float.style.left = '50%';
+}
+
 /** Position a floating element next to a viewport box, kept on screen. */
 function place(float: HTMLElement, box: DOMRect, side: 'above' | 'below'): void {
   float.style.visibility = 'hidden';
@@ -640,6 +655,10 @@ export const UI_CSS = `
     textarea, input:not(.tag-field) { background: #1b1b20 !important; color: #ececf1 !important; border-color: rgba(255,255,255,.18) !important; }
   }
   .toolbar { display: flex; align-items: center; gap: 4px; padding: 5px; }
+  .toolbar.docked { transform: translateX(-50%); max-width: calc(100vw - 16px); padding: 6px; gap: 6px; }
+  .toolbar.docked .swatch { width: 36px; height: 36px; }
+  .toolbar.docked .swatch::before { width: 20px; height: 20px; }
+  .toolbar.docked .text-btn { padding: 9px 11px; }
   button { font: inherit; color: inherit; cursor: pointer; background: transparent; border: 0; border-radius: 8px; }
   .swatch { width: 26px; height: 26px; display: grid; place-items: center; padding: 0; }
   .swatch::before { content: ''; width: 16px; height: 16px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px rgba(0,0,0,.2); }

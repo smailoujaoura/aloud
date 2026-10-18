@@ -94,7 +94,8 @@ a.card-title:hover { text-decoration: underline; }
 .q-icon { min-width: 30px; padding: 5px 8px; color: var(--fg-muted); }
 
 .q-now { border-top: 1px solid var(--border); padding-top: 24px; }
-.q-now-label { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; font-weight: 650; color: var(--fg-muted); margin: 0 0 12px; }
+.q-now-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 0 0 12px; }
+.q-now-label { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; font-weight: 650; color: var(--fg-muted); margin: 0; }
 .q-prompt {
   display: flex; flex-direction: column; gap: 10px;
   padding: 14px 16px; margin-bottom: 18px;

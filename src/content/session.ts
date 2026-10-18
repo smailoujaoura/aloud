@@ -434,7 +434,7 @@ export class ReaderSession {
       onLaneFailed: (voice, message, playIds) => {
         for (const id of playIds) this.requested.delete(id);
         const label = this.voiceLabel(voice.voice, voice.engine);
-        this.bar?.flash(`${label} could not be loaded (${message}) — its passages are read by another voice`);
+        this.bar?.flash(`${label} could not be loaded (${message}). Another voice reads its passages`);
         void this.reroute();
       },
     }, { maxLanes: capabilities().formFactor === 'android' ? 2 : MAX_LANES });
@@ -552,7 +552,7 @@ export class ReaderSession {
     if (this.settings.gpuTipSeen || !this.settings.preferWebGPU || this.engine === 'piper') return;
     if (executionProvider.startsWith('webgpu')) return;
     void setSettings({ gpuTipSeen: true });
-    this.bar?.flash(`${engineInfo(this.engine).name} is running on your processor — your graphics card would make it faster`, 'info', {
+    this.bar?.flash(`${engineInfo(this.engine).name} is running on the processor. The graphics card would be faster`, 'info', {
       label: 'How',
       run: () => window.open(GPU_GUIDE_URL, '_blank', 'noopener'),
     });
@@ -1193,7 +1193,7 @@ export class ReaderSession {
       this.bar?.flash(`Reading this whole page with ${label}`, 'ok');
     } else if (auto && !speaksIt) {
       this.manualVoice = candidate;
-      this.bar?.flash(`Reading this whole page with ${label} — voices no longer follow the language here`, 'ok', {
+      this.bar?.flash(`Reading this whole page with ${label}`, 'ok', {
         label: 'Undo',
         run: () => void this.setVoiceLock(false),
       });
@@ -1264,7 +1264,7 @@ export class ReaderSession {
   private async onSleepStop(): Promise<void> {
     this.sleepTimer?.onStopReached();
     await this.pause();
-    this.bar?.flash('Sleep timer — stopped here. Press play to carry on.', 'ok');
+    this.bar?.flash('Sleep timer: stopped here. Press play to carry on.', 'ok');
   }
 
   /** Title, voice and site for the OS media overlay and the lock screen. */
@@ -1289,7 +1289,7 @@ export class ReaderSession {
   private async startExport(): Promise<void> {
     if (this.exporter || this.playlist.length === 0) return;
     if (!this.engineReady) {
-      this.setExport({ phase: 'error', message: 'The voice is still loading — try again in a moment.' });
+      this.setExport({ phase: 'error', message: 'The voice is still loading. Try again in a moment.' });
       return;
     }
     this.exportFile = null;
@@ -1324,7 +1324,7 @@ export class ReaderSession {
         // would hide that part of the page is silence.
         this.bar?.flash(
           missing.length === 0
-            ? 'MP3 ready — press the save button to keep it'
+            ? 'MP3 ready. Press save to keep it'
             : `MP3 ready, but ${missing.length} sentence${missing.length === 1 ? '' : 's'} could not be spoken and ${
                 missing.length === 1 ? 'is' : 'are'
               } silent`,
@@ -1576,10 +1576,10 @@ export class ReaderSession {
       if (route.kind !== 'voice') return;
       if (route.reason === 'match' || route.reason === 'preference') {
         if (voiceKey(route.voice) === voiceKey(this.savedVoice())) return;
-        this.bar?.flash(`This page is in ${name(lang)} — reading it with ${shortLabel(route.voice.label)}`, 'ok');
+        this.bar?.flash(`This page is in ${name(lang)}: reading it with ${shortLabel(route.voice.label)}`, 'ok');
       } else if (route.reason === 'missing') {
         this.missingTold.add(lang);
-        this.bar?.flash(`This page is in ${name(lang)}, and no ${name(lang)} voice is downloaded — reading it in English`, 'info', {
+        this.bar?.flash(`No ${name(lang)} voice downloaded: reading this page in English`, 'info', {
           label: 'Get one',
           run: () => this.background()?.postMessage({ type: 'open-options', language: lang }),
         });
@@ -1619,7 +1619,7 @@ export class ReaderSession {
     }
     if (info.missing && !info.manual && info.auto && info.language && !this.missingTold.has(info.language)) {
       this.missingTold.add(info.language);
-      this.bar.flash(`No ${info.name} voice is downloaded — ${info.voiceLabel} reads this ${info.name} passage in English`, 'info', {
+      this.bar.flash(`No ${info.name} voice downloaded: ${info.voiceLabel} reads this passage in English`, 'info', {
         label: 'Choose',
         run: () => this.bar?.openLanguageMenu(),
       });
@@ -1986,9 +1986,9 @@ export class ReaderSession {
     // The status line keeps saying it until play is pressed; the flash offers the way out. The
     // first-run tips card would hide both, and matters less than a voice that says nothing.
     this.bar?.hideTips();
-    this.state.hint = `${this.voiceLabel(this.voice)} produced no audio — pick another voice`;
+    this.state.hint = `${this.voiceLabel(this.voice)} produced no audio. Pick another voice`;
     this.pushState();
-    this.bar?.flash(`${this.voiceLabel(this.voice)} is not producing any audio — pick another voice, or press play to retry`, 'info', {
+    this.bar?.flash(`${this.voiceLabel(this.voice)} is not producing audio. Pick another voice, or press play to retry`, 'info', {
       label: 'Settings',
       run: () => this.background()?.postMessage({ type: 'open-options' }),
     });
@@ -2246,7 +2246,7 @@ export class ReaderSession {
     this.state.currentIndex = at;
     this.lastSavedIndex = at;
     this.highlighter?.show(this.rangeOf(at));
-    this.bar?.flash(`Picking up where you left off — sentence ${at + 1} of ${this.playlist.length}`, 'info', {
+    this.bar?.flash(`Picking up where you left off: sentence ${at + 1} of ${this.playlist.length}`, 'info', {
       label: 'Start over',
       run: () => this.seekTo(0),
     });
@@ -2333,7 +2333,7 @@ export class ReaderSession {
     this.tapToSeek?.setEnabled(on);
     this.bar?.setTapToSeek(on);
     this.bar?.flash(
-      on ? 'Click-to-jump on — click any sentence to jump there' : 'Click-to-jump off',
+      on ? 'Click any sentence to jump there' : 'Click-to-jump off',
       on ? 'ok' : 'info',
     );
   }
@@ -2400,7 +2400,7 @@ export class ReaderSession {
     const respoken = changesSpokenText(prev, this.settings);
     if (respoken) {
       this.respeak();
-      this.bar?.flash('Pronunciation updated — from the next sentence', 'ok');
+      this.bar?.flash('Pronunciation updated from the next sentence', 'ok');
     }
 
     // Compare what the engine would *load*, not which settings moved: a saved voice change does
@@ -2560,7 +2560,7 @@ export class ReaderSession {
       this.settings = await setSettings({ scrollMode: 'off' });
       this.highlighter?.setOptions({ scrollMode: 'off' });
       this.renderFollow();
-      this.bar?.flash('Not following the reading — the page stays where you put it', 'ok');
+      this.bar?.flash('Not following. The page stays where you put it', 'ok');
       return;
     }
     if (mode === 'off') {

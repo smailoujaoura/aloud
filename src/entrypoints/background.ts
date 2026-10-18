@@ -708,7 +708,7 @@ async function reportQueued(
   title: string,
 ): Promise<void> {
   const short = title.length > 48 ? `${title.slice(0, 47)}…` : title;
-  if (result.full) tellTab(tabId, 'Your reading queue is full — play or clear some of it first', '!');
+  if (result.full) tellTab(tabId, 'Your reading queue is full. Play or clear some first', '!');
   else if (!result.added) tellTab(tabId, `“${short}” is already in your reading queue`, '✓');
   else tellTab(tabId, `Added “${short}” to your reading queue (${result.size})`, `+${Math.min(result.size, 99)}`);
 }

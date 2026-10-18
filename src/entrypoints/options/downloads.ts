@@ -209,7 +209,7 @@ export function downloadTray(): HTMLElement {
         ? `Preparing ${running.label}…`
         : `Downloading ${running.label} · ${Math.floor(running.ratio * 100)}%`;
     const then = waiting.length
-      ? ` — then ${waiting.map((w) => w.label).join(', ')}. Downloads run one at a time.`
+      ? `, then ${waiting.map((w) => w.label).join(', ')}`
       : '';
     tray.textContent = now + then;
   };
@@ -433,7 +433,7 @@ export function downloadViaWorker(
     const report = (): void => {
       if (compiled && alongDone) {
         progress.set(1);
-        progress.note('Downloaded — preparing the model…');
+        progress.note('Downloaded. Preparing…');
         return;
       }
       const loaded = (compiled ? model.total : model.loaded) + alongLoaded;

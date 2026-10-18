@@ -61,7 +61,7 @@ async function chooseTheme(choice: ThemeChoice): Promise<void> {
   theme = choice;
   applyTheme(document, choice);
   await setSettings({ theme: choice });
-  toast(`Theme: ${THEME_LABEL[choice].toLowerCase()} — applied everywhere Aloud draws`, 'ok');
+  toast(`Theme: ${THEME_LABEL[choice].toLowerCase()}`, 'ok');
 }
 
 // ---- the control-bar diagram -----------------------------------------------
@@ -74,7 +74,7 @@ interface Callout {
 
 const CALLOUTS: Callout[] = [
   { key: 'play', name: 'Play and pause', text: 'Or press Space anywhere in the bar.' },
-  { key: 'prev', name: 'Back a sentence', text: 'And forward again — one sentence at a time.' },
+  { key: 'prev', name: 'Back a sentence', text: 'And forward again, a sentence at a time.' },
   {
     key: 'progress',
     name: 'Where you are',
@@ -195,7 +195,7 @@ async function toggleDemo(): Promise<void> {
 
   button.classList.add('busy');
   button.textContent = 'Starting…';
-  status.textContent = 'Preparing the voice — the bar at the bottom shows how far along it is.';
+  status.textContent = 'Preparing the voice. The bar at the bottom shows how far along it is.';
 
   const root = $('demoText');
   const session = new ReaderSession();
@@ -208,10 +208,10 @@ async function toggleDemo(): Promise<void> {
     if (demo !== session) return;
     if (state === 'playing' && !spoke) {
       spoke = true;
-      status.textContent = 'That bar at the bottom is the real thing — try its buttons.';
+      status.textContent = 'That bar at the bottom is the real thing. Try its buttons.';
     } else if (state === 'error') {
       status.textContent = `The voice could not start${error ? `: ${error}` : ''}. The settings page can download a voice by hand.`;
-      toast('The demo could not start — see the settings page', 'error');
+      toast('The demo could not start. See the settings page', 'error');
     }
   };
   try {
@@ -234,7 +234,7 @@ async function toggleDemo(): Promise<void> {
     button.classList.remove('busy');
     button.textContent = 'Hear it now';
     status.textContent = 'The demo could not start. The settings page can download a voice by hand.';
-    toast('The demo could not start — see the settings page', 'error');
+    toast('The demo could not start. See the settings page', 'error');
     demo = null;
   }
 }
@@ -326,7 +326,7 @@ function wire(): void {
     // An extension page may close itself; if the browser refuses, say something rather than
     // leaving a button that appears to do nothing.
     window.close();
-    setTimeout(() => toast('You can close this tab whenever you like — Aloud is ready.', 'ok'), 150);
+    setTimeout(() => toast('Aloud is ready. You can close this tab.', 'ok'), 150);
   };
   $('done').addEventListener('click', finish);
   // Skipping ends the tour the same way finishing it does. It can be reopened from the settings.
