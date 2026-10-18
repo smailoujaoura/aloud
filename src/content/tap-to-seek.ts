@@ -36,6 +36,9 @@ export interface TapToSeekOptions {
 
 export class TapToSeek {
   private handler: ((e: MouseEvent) => void) | null = null;
+  private onDown: ((e: PointerEvent) => void) | null = null;
+  /** Where the press started, and whether text was selected then (see `onClick`). */
+  private press: { x: number; y: number; hadSelection: boolean } | null = null;
 
   constructor(
     private readonly doc: Document,
@@ -55,14 +58,22 @@ export class TapToSeek {
 
   private attach(): void {
     const handler = (e: MouseEvent): void => this.onClick(e);
+    const onDown = (e: PointerEvent): void => {
+      const selection = this.doc.defaultView?.getSelection();
+      this.press = { x: e.clientX, y: e.clientY, hadSelection: !!selection && !selection.isCollapsed };
+    };
     this.handler = handler;
+    this.onDown = onDown;
+    this.doc.addEventListener('pointerdown', onDown, true);
     this.doc.addEventListener('click', handler, true);
   }
 
   private detach(): void {
     if (!this.handler) return;
     this.doc.removeEventListener('click', this.handler, true);
+    if (this.onDown) this.doc.removeEventListener('pointerdown', this.onDown, true);
     this.handler = null;
+    this.onDown = null;
   }
 
   private onClick(e: MouseEvent): void {
@@ -74,9 +85,13 @@ export class TapToSeek {
     if (target.closest(INTERACTIVE_SELECTOR)) return;
     if (e.composedPath().some((n) => n instanceof HTMLElement && n.id === CONTROL_HOST_ID)) return;
 
-    // The user is selecting text, not asking to jump.
+    // The user is selecting text, not asking to jump: a selection now, a press that dragged, or a
+    // click (a tap) that only cleared the selection there was — that last one used to jump.
     const selection = this.doc.defaultView?.getSelection();
     if (selection && !selection.isCollapsed) return;
+    const press = this.press;
+    this.press = null;
+    if (press && (press.hadSelection || Math.hypot(e.clientX - press.x, e.clientY - press.y) > 6)) return;
 
     const playId = this.opts.hitTest(e.clientX, e.clientY);
     if (playId != null) this.opts.onSeek(playId);

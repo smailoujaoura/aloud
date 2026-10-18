@@ -67,6 +67,49 @@ export const DEFAULT_SKIP: SkipSettings = { code: true, tables: false, captions:
  * so the control is injected into a tab by its own shortcut, or — for sites listed in
  * `alwaysOn` — by a script registered only after you grant that site.
  */
+/**
+ * Single keys for the reading bar's controls, while a page is being read: never while typing,
+ * never with Ctrl, Alt or ⌘. One character each; '' for none. Chosen clear of the video speed
+ * keys (D S R G Z X) and of K, which keeps a selection.
+ */
+export interface ReaderKeys {
+  playPause: string;
+  back: string;
+  previous: string;
+  next: string;
+  slower: string;
+  faster: string;
+  note: string;
+  follow: string;
+  jump: string;
+  highlight: string;
+  toolbar: string;
+  sleep: string;
+  save: string;
+  voice: string;
+  settings: string;
+  close: string;
+}
+
+export const DEFAULT_READER_KEYS: ReaderKeys = {
+  playPause: 'p',
+  back: 'b',
+  previous: '[',
+  next: ']',
+  slower: '-',
+  faster: '=',
+  note: 'n',
+  follow: 'f',
+  jump: 'j',
+  highlight: 'h',
+  toolbar: 't',
+  sleep: 'l',
+  save: 'm',
+  voice: 'v',
+  settings: 'o',
+  close: 'q',
+};
+
 export interface MediaSpeedSettings {
   /** The whole feature, including the shortcut. */
   enabled: boolean;
@@ -190,6 +233,8 @@ export interface Settings {
   mediaSpeed: MediaSpeedSettings;
   /** Highlights and notes on web pages (see `AnnotateSettings`). */
   annotate: AnnotateSettings;
+  /** The reading bar's controls as single keys (see `ReaderKeys`). */
+  readerKeys: ReaderKeys;
   /** Active synthesis engine. */
   engine: EngineId;
   /** Piper voice key, e.g. `en_US-hfc_female-medium`. Must exist in models.json. */
@@ -305,6 +350,7 @@ export const DEFAULT_SETTINGS: Settings = {
   speed: 1,
   mediaSpeed: DEFAULT_MEDIA_SPEED,
   annotate: DEFAULT_ANNOTATE,
+  readerKeys: DEFAULT_READER_KEYS,
   preferWebGPU: true,
   highlight: true,
   highlightColor: 'rgba(255, 214, 10, 0.45)',
@@ -430,6 +476,7 @@ export function withDefaults(stored: Partial<Settings> | null | undefined): Sett
       // Checked on every read, not just on import: storage damaged by an older restore heals.
       pageKeys: pageKeys(stored?.annotate?.pageKeys),
     },
+    readerKeys: readerKeys(stored?.readerKeys),
     mediaSpeed: {
       ...DEFAULT_MEDIA_SPEED,
       ...stored?.mediaSpeed,
@@ -504,6 +551,7 @@ export function sanitizeSettings(raw: Settings): Settings {
       alwaysOn: hosts(raw.annotate?.alwaysOn),
       pageKeys: pageKeys(raw.annotate?.pageKeys),
     },
+    readerKeys: readerKeys(raw.readerKeys),
     mediaSpeed: {
       ...DEFAULT_MEDIA_SPEED,
       ...raw.mediaSpeed,
@@ -546,6 +594,16 @@ function mediaKeys(keys: unknown): MediaSpeedSettings['keys'] {
       const value = (keys as Record<string, unknown>)[name];
       if (typeof value === 'string' && value.length <= 40) out[name] = value;
     }
+  }
+  return out;
+}
+
+/** Every reader key one character (or none); missing ones get their default. */
+function readerKeys(keys: unknown): ReaderKeys {
+  const k = (keys && typeof keys === 'object' ? keys : {}) as Record<string, unknown>;
+  const out = { ...DEFAULT_READER_KEYS };
+  for (const name of Object.keys(out) as Array<keyof ReaderKeys>) {
+    if (typeof k[name] === 'string') out[name] = (k[name] as string).slice(0, 1).toLowerCase();
   }
   return out;
 }

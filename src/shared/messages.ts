@@ -26,6 +26,8 @@ export interface SessionState {
   hint?: string;
   /** Error text when status === 'error'. */
   error?: string;
+  /** Listening left from the current sentence, at the current speed: only what will be read. */
+  secondsLeft?: number | null;
 }
 
 export type ActivateMode = 'article' | 'selection' | 'from-cursor';

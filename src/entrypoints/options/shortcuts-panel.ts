@@ -13,7 +13,7 @@
 import { browser } from 'wxt/browser';
 import { capabilities } from '@/shared/browser-env';
 import { el } from '@/shared/dom';
-import type { AnnotateSettings } from '@/shared/settings';
+import { DEFAULT_MEDIA_SPEED, DEFAULT_READER_KEYS, type AnnotateSettings, type ReaderKeys } from '@/shared/settings';
 import { reservedUse } from './reserved-keys';
 
 export interface ShortcutsPanelOptions {
@@ -21,7 +21,30 @@ export interface ShortcutsPanelOptions {
   /** The single keys that work on pages Aloud is running on (settings: annotate.pageKeys). */
   pageKeys: AnnotateSettings['pageKeys'];
   savePageKeys(keys: AnnotateSettings['pageKeys']): Promise<void>;
+  /** The reading bar's controls as single keys (settings: readerKeys). */
+  readerKeys: ReaderKeys;
+  saveReaderKeys(keys: ReaderKeys): Promise<void>;
 }
+
+/** The reader keys, in the bar's order, with what each does. */
+const READER_ROWS: Array<[keyof ReaderKeys, string, string]> = [
+  ['playPause', 'Play or pause', ''],
+  ['back', 'Back a little', 'Replay the last few seconds'],
+  ['previous', 'Previous sentence', ''],
+  ['next', 'Next sentence', ''],
+  ['slower', 'Slower', ''],
+  ['faster', 'Faster', ''],
+  ['note', 'Save to Notes', 'What you just heard'],
+  ['follow', 'Follow the reading', 'On or off'],
+  ['jump', 'Click a sentence to jump there', 'On or off — off lets you click and select freely'],
+  ['highlight', 'Highlight the sentence', 'On or off'],
+  ['toolbar', 'Colour toolbar when you select text', 'On or off'],
+  ['sleep', 'Sleep timer', ''],
+  ['save', 'Save as MP3', ''],
+  ['voice', 'Voice and language', ''],
+  ['settings', 'Settings', ''],
+  ['close', 'Close the reader', ''],
+];
 
 /** In the order they matter, with plainer words than the manifest's descriptions. */
 const COMMANDS: Array<{ name: string; label: string; hint: string }> = [
@@ -125,15 +148,89 @@ export async function renderShortcutsPanel(host: HTMLElement, opts: ShortcutsPan
     el(document, 'p', { class: 'sub-label' }, 'Browser shortcuts — they work on any page'),
     keys,
     ...foot,
-    el(document, 'p', { class: 'sub-label' }, 'Single keys, on pages Aloud is running on'),
-    el(
-      document,
-      'p',
-      { class: 'row-hint' },
-      'No browser menu can take these: they work while a page is being read, and on the sites listed under Highlights & notes. Never while you are typing, and “keep” only with text selected.',
-    ),
+    el(document, 'p', { class: 'sub-label' }, 'While a page is being read'),
+    el(document, 'p', { class: 'row-hint' }, 'One key each. Never while you type.'),
+    readerKeyRows(host, opts),
+    el(document, 'p', { class: 'sub-label' }, 'Notes, on pages Aloud is running on'),
     pageKeyRows(opts),
   );
+}
+
+/** One row per reader key; a key already used elsewhere in Aloud is refused, saying where. */
+function readerKeyRows(host: HTMLElement, opts: ShortcutsPanelOptions): HTMLElement {
+  const keys = { ...opts.readerKeys };
+  const box = el(document, 'div', { class: 'speed-keys' });
+  for (const [field, label, hint] of READER_ROWS) {
+    box.append(
+      singleKeyRow(label, hint, () => keys[field], (next) => {
+        if (next) {
+          const reader = READER_ROWS.find(([f]) => f !== field && keys[f] === next);
+          const note = next === opts.pageKeys.keep ? 'Keep the selected text' : next === opts.pageKeys.panel ? 'Show my notes' : null;
+          const video = Object.values(DEFAULT_MEDIA_SPEED.keys).includes(next) ? 'the video speed keys' : null;
+          const clash = reader?.[1] ?? note ?? video;
+          if (clash) {
+            opts.toast(`${next.toUpperCase()} is already ${clash}`, 'error');
+            return false;
+          }
+        }
+        keys[field] = next;
+        void opts.saveReaderKeys({ ...keys });
+        return true;
+      }, opts),
+    );
+  }
+  const reset = el(document, 'button', { type: 'button', class: 'ghost btn-sm' }, 'Reset these keys');
+  reset.addEventListener('click', () => {
+    void opts.saveReaderKeys({ ...DEFAULT_READER_KEYS }).then(() => {
+      opts.readerKeys = { ...DEFAULT_READER_KEYS };
+      void renderShortcutsPanel(host, opts);
+    });
+  });
+  const foot = el(document, 'div', { class: 'speed-forget' });
+  foot.append(reset);
+  const wrap = el(document, 'div');
+  wrap.append(box, foot);
+  return wrap;
+}
+
+/** A row whose key is set by pressing it: one key, no Ctrl or Alt. Esc keeps it; Backspace clears it. */
+function singleKeyRow(
+  label: string,
+  hint: string,
+  current: () => string,
+  set: (next: string) => boolean,
+  opts: Pick<ShortcutsPanelOptions, 'toast'>,
+): HTMLElement {
+  const wrap = el(document, 'div', { class: 'key-row' });
+  const text = el(document, 'div', { class: 'key-text' });
+  text.append(el(document, 'span', {}, label));
+  if (hint) text.append(el(document, 'span', { class: 'muted small' }, hint));
+  const button = el(document, 'button', { type: 'button', class: 'key-button' }, keyLabel(current())) as HTMLButtonElement;
+  button.title = 'Click, then press one key. Esc keeps it; Backspace clears it.';
+  button.addEventListener('click', () => {
+    button.classList.add('listening');
+    button.textContent = 'Press a key…';
+    const done = (next: string | null): void => {
+      window.removeEventListener('keydown', onKey, true);
+      button.classList.remove('listening');
+      if (next != null && set(next)) button.textContent = keyLabel(next);
+      else button.textContent = keyLabel(current());
+    };
+    const onKey = (e: KeyboardEvent): void => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === 'Escape') return done(null);
+      if (e.key === 'Backspace') return done('');
+      if (e.ctrlKey || e.altKey || e.metaKey) {
+        opts.toast('One key on its own here — the shortcuts above are the ones with Ctrl or Alt', 'error');
+        return done(null);
+      }
+      if (e.key.length === 1 && e.key.trim()) done(e.key.toLowerCase());
+    };
+    window.addEventListener('keydown', onKey, true);
+  });
+  wrap.append(text, button);
+  return wrap;
 }
 
 /** The single-key rows: "keep the selection" and "show my notes". */
@@ -163,6 +260,12 @@ function pageKeyRows(opts: ShortcutsPanelOptions): HTMLElement {
         if (next && next === other) {
           button.textContent = keyLabel(keys[field]);
           opts.toast(`${next.toUpperCase()} is already the other key`, 'error');
+          return;
+        }
+        const reader = READER_ROWS.find(([f]) => opts.readerKeys[f] === next);
+        if (next && reader) {
+          button.textContent = keyLabel(keys[field]);
+          opts.toast(`${next.toUpperCase()} is already “${reader[1]}” while a page is read`, 'error');
           return;
         }
         keys[field] = next;

@@ -29,7 +29,7 @@ import { CONTROL_HOST_ID, ControlBar, type BarVoice, type ExportState, type Lang
 import { voicePortrait } from '@/ui/voice-portraits';
 import type { EngineConfig, WordTiming } from '@/engine/protocol';
 import type { ModelManifest } from '@/engine/engines/types';
-import { DEFAULT_SETTINGS, getSettings, setSettings, activeVoice, voiceKeyFor, type EngineId, type Settings, type VoiceRef } from '@/shared/settings';
+import { DEFAULT_SETTINGS, getSettings, setSettings, activeVoice, voiceKeyFor, type EngineId, type ReaderKeys, type Settings, type VoiceRef } from '@/shared/settings';
 import { ENGINE_IDS, engineInfo, supertonicStepsFor } from '@/shared/engine-catalog';
 import { languageName, primaryLanguage, voiceLanguage, type CandidateVoice } from '@/shared/language-voice';
 import { planLanguages, type Detection, type Detector, type PassageInput, type PassageLanguage } from './language-plan';
@@ -53,6 +53,7 @@ import { recordListening } from '@/shared/reading-history';
 import { countWords, recordCompleted, recordHeard, type Heard } from '@/shared/listening-stats';
 import { log } from '@/shared/log';
 import { capabilities } from '@/shared/browser-env';
+import { isTypingEvent } from '@/media-speed/keys';
 import { GPU_GUIDE_URL } from '@/shared/links';
 
 import { backendOf, tuningFor, type SynthBackend } from './engine-tuning';
@@ -132,6 +133,8 @@ interface SelectionSnapshot {
 
 /** Below this many characters a selection isn't worth reading — fall back to the whole article. */
 const MIN_SELECTION_CHARS = 15;
+/** Following, rested by your own scrolling, comes back at the next sentence after this long without it. */
+const FOLLOW_RESUME_MS = 5000;
 
 /** How often, at most, the reading position is written while playing. */
 const POSITION_SAVE_INTERVAL_MS = 4000;
@@ -224,7 +227,7 @@ export class ReaderSession {
   private sourceHint: BeginOptions['source'] | null = null;
   private keepHistory = true;
   /** Listening not yet written to history, and what this session has measured of the voice's pace. */
-  private listening = { pendingSeconds: 0, spokenChars: 0, spokenSeconds: 0, lastWrite: 0 };
+  private listening = { pendingSeconds: 0, spokenChars: 0, spokenSeconds: 0, lastWrite: 0, pace1xSeconds: 0 };
   private charsBefore: number[] | null = null;
   /** The sentence playing now, as page ranges for its words, and the word last marked. */
   private words: { playId: number; spans: Array<{ start: number; range: Range }>; shown: number } | null = null;
@@ -440,8 +443,10 @@ export class ReaderSession {
       autoHide: this.settings.barAutoHide,
     });
     this.renderFollow();
+    this.bar.setKeyHints(this.settings.readerKeys);
     void this.refreshBarVoices();
     this.watchViewport();
+    this.watchReaderKeys();
 
     this.highlighter = new Highlighter(document, {
       color: this.settings.highlightColor,
@@ -1847,6 +1852,9 @@ export class ReaderSession {
       const item = this.playlist[playId];
       const range = item?.range ?? item?.blockRange ?? this.lastShownRange;
       if (range) this.lastShownRange = range;
+      // Following rested while you looked elsewhere; a few quiet seconds later it picks the
+      // reading up again, at this sentence — rather than staying off until you press Follow.
+      if (this.followPaused && Date.now() - this.userScrollIntent > FOLLOW_RESUME_MS) this.setFollowPaused(false);
       this.highlighter?.show(range);
     }
 
@@ -2003,6 +2011,8 @@ export class ReaderSession {
     if (seconds > 0) {
       this.listening.spokenSeconds += seconds;
       this.listening.spokenChars += this.playlist[playId]?.spokenText.length ?? 0;
+      // Audio is made at the speed asked for: at 1× this chunk would have lasted `seconds × speed`.
+      this.listening.pace1xSeconds += seconds * this.settings.speed;
     }
     if (playId >= this.playlist.length - 1) return;
     this.ensureSynth(playId + 1);
@@ -2250,6 +2260,63 @@ export class ReaderSession {
   // ---- settings ------------------------------------------------------------
 
   /** Persist the click-to-jump toggle (flipped from the in-page bar) and apply it live. */
+  // ---- reader keys ----------------------------------------------------------
+
+  private stopReaderKeys: (() => void) | null = null;
+  /** A reader key is applying its own change: it says what changed, so no "Settings updated". */
+  private ownChange = false;
+
+  private async applyOwnChange(patch: Partial<Settings>): Promise<void> {
+    // Held as current before the relayed copy of this change arrives, so that copy changes nothing.
+    const prev = this.settings;
+    this.settings = await setSettings(patch);
+    this.ownChange = true;
+    try {
+      await this.onSettingsChanged(prev);
+    } finally {
+      this.ownChange = false;
+    }
+  }
+
+  /**
+   * Every control on the bar as one key, for the whole page while it is read (settings:
+   * readerKeys) — not only while the bar has focus. Taken before the page's own handlers (capture),
+   * but never while typing, never with Ctrl, Alt or ⌘. Phones and tablets have no keyboard to
+   * speak of, so none there.
+   */
+  private watchReaderKeys(): void {
+    if (capabilities().touchFirst || this.stopReaderKeys) return;
+    const onKey = (e: KeyboardEvent): void => this.onReaderKey(e);
+    window.addEventListener('keydown', onKey, true);
+    this.stopReaderKeys = () => window.removeEventListener('keydown', onKey, true);
+  }
+
+  private onReaderKey(e: KeyboardEvent): void {
+    if (this.disposed || e.ctrlKey || e.altKey || e.metaKey || e.defaultPrevented || e.isComposing) return;
+    if (e.key.length !== 1 || e.key === ' ' || isTypingEvent(e)) return;
+    const key = e.key.toLowerCase();
+    const keys = this.settings.readerKeys;
+    const action = (Object.keys(keys) as Array<keyof ReaderKeys>).find((name) => keys[name] === key);
+    if (!action) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (action === 'highlight') void this.toggleSentenceHighlight();
+    else if (action === 'toolbar') void this.toggleSelectionToolbar();
+    else this.bar?.press(action);
+  }
+
+  private async toggleSentenceHighlight(): Promise<void> {
+    const on = !this.settings.highlight;
+    await this.applyOwnChange({ highlight: on });
+    this.bar?.flash(on ? 'Highlighting the sentence being read' : 'Sentence highlight off', on ? 'ok' : 'info');
+  }
+
+  private async toggleSelectionToolbar(): Promise<void> {
+    const on = !this.settings.annotate.toolbar;
+    await this.applyOwnChange({ annotate: { ...this.settings.annotate, toolbar: on } });
+    this.bar?.flash(on ? 'Colour toolbar on when you select text' : 'No toolbar when you select text', on ? 'ok' : 'info');
+  }
+
   private async setTapToSeek(on: boolean): Promise<void> {
     this.settings = await setSettings({ tapToSeek: on });
     this.tapToSeek?.setEnabled(on);
@@ -2260,10 +2327,10 @@ export class ReaderSession {
     );
   }
 
-  private async onSettingsChanged(): Promise<void> {
-    const prev = this.settings;
+  private async onSettingsChanged(prev = this.settings): Promise<void> {
     const prevEngine = engineIdentity(this.engineConfig());
     this.settings = await getSettings();
+    this.bar?.setKeyHints(this.settings.readerKeys);
 
     // Which voice reads which passage: Auto, the voices chosen per language, the saved voice, and
     // the Voice page's last row — who reads every other language, whether those are skipped, and
@@ -2331,7 +2398,7 @@ export class ReaderSession {
       this.pendingVoiceLabel = this.voiceLabel(this.voice);
       this.bar?.flash(`Loading ${this.pendingVoiceLabel}…`);
       await this.reloadEngine();
-    } else if (!respoken && changedVisibly(prev, this.settings)) {
+    } else if (!respoken && !this.ownChange && changedVisibly(prev, this.settings)) {
       // Only for changes that came from somewhere else — the bar's own controls confirm
       // themselves as they are used, and `this.settings` is already up to date by the time the
       // relayed change arrives, so those produce no second message.
@@ -2452,7 +2519,7 @@ export class ReaderSession {
 
   // ---- following the reading ----------------------------------------------
 
-  /** Following rests while the reader looks elsewhere on the page. */
+  /** Following rests while the reader looks elsewhere on the page (until `FOLLOW_RESUME_MS` of quiet). */
   private followPaused = false;
   /** When the reader last scrolled the page themselves (wheel, touch, keys) — not Aloud. */
   private userScrollIntent = 0;
@@ -2569,8 +2636,26 @@ export class ReaderSession {
     this.pushState();
   }
 
+  /**
+   * Listening left from the current sentence: the text still to be read (what the plan holds —
+   * skipped references, code and hidden text are not in it) at this voice's measured pace, or
+   * about 14 characters a second at 1× before there is a measurement, divided by the speed.
+   */
+  private secondsLeft(): number | null {
+    if (!this.playlist.length) return null;
+    let chars = 0;
+    for (let i = Math.max(0, this.state.currentIndex); i < this.playlist.length; i++) {
+      const item = this.playlist[i]!;
+      if (item.eligible !== false) chars += item.spokenText.length;
+    }
+    const { spokenChars, pace1xSeconds } = this.listening;
+    const perChar = spokenChars > 200 && pace1xSeconds > 0 ? pace1xSeconds / spokenChars : 1 / 14;
+    return (chars * perChar) / Math.max(0.25, this.settings.speed);
+  }
+
   private pushState(): void {
     if (this.disposed) return;
+    this.state.secondsLeft = this.secondsLeft();
     this.bar?.update(this.state);
     this.media?.setPlaying(this.state.status === 'playing' ? 'playing' : 'paused');
     try {
@@ -2609,6 +2694,8 @@ export class ReaderSession {
     this.disposed = true;
     // Anything still working through `begin()` stops at its next checkpoint.
     this.generation++;
+    this.stopReaderKeys?.();
+    this.stopReaderKeys = null;
 
     this.eligibilityObserver?.disconnect();
     this.eligibilityObserver = null;

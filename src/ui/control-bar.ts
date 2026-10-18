@@ -20,7 +20,7 @@
 import { el, svgIcon } from '@/shared/dom';
 import type { SessionState } from '@/shared/messages';
 import type { ThemeChoice } from '@/shared/settings';
-import { CONTROL_BAR_CSS } from './control-bar-styles';
+import { CONTROL_BAR_CSS, NARROW_BREAKPOINT_PX } from './control-bar-styles';
 import { ICON_PATHS } from './icons';
 import { resolveTheme, watchSystemTheme } from './theme';
 import type { SleepChoice, SleepState } from '@/content/sleep-timer';
@@ -50,6 +50,9 @@ export interface BarVoice {
 
 /** Following the reading: on, on but paused while you look elsewhere, or off. */
 export type FollowState = 'on' | 'away' | 'off';
+
+/** What a reader key can do on the bar (settings: ReaderKeys, less the page-wide toggles). */
+export type BarAction = 'playPause' | 'back' | 'previous' | 'next' | 'slower' | 'faster' | 'note' | 'follow' | 'jump' | 'sleep' | 'save' | 'voice' | 'settings' | 'close';
 
 /** The passage being read: its language, the voice reading it, and what can be changed. */
 export interface LanguageInfo {
@@ -190,6 +193,15 @@ export class ControlBar {
   private knobEl!: HTMLElement;
   private scrubEl!: HTMLElement;
   private countEl!: HTMLElement;
+  /** Listening left, beside the counter. */
+  private etaEl!: HTMLElement;
+  /** Ends the first row when the bar is stacked (see `fitLayout`). */
+  private breakEl!: HTMLElement;
+  private resizeWatch: ResizeObserver | null = null;
+  /** The buttons a reader key presses (session.ts: onReaderKey), and their titles without the key. */
+  private keyed: Partial<Record<BarAction, HTMLButtonElement>> = {};
+  private readonly baseTitles = new Map<BarAction, string>();
+  private keyHints: Partial<Record<BarAction, string>> = {};
   private speedEl!: HTMLSelectElement;
   /** Live words a minute, beside the speed multiplier. */
   private rateEl!: HTMLElement;
@@ -290,12 +302,12 @@ export class ControlBar {
 
     this.toast = this.make('div', { class: 'toast', role: 'status', 'aria-live': 'polite', hidden: '' });
 
-    this.playBtn = this.iconButton('play', 'Play', ICON_PATHS.play, 'Play / pause (Space)');
-    this.prevBtn = this.iconButton('prev', 'Previous sentence', ICON_PATHS.prev, 'Previous sentence (←)');
-    this.nextBtn = this.iconButton('next', 'Next sentence', ICON_PATHS.next, 'Next sentence (→)');
-    const backBtn = this.iconButton('back', 'Back a little', ICON_PATHS.replay, 'Back a little — replay the last few seconds (B)');
+    this.playBtn = this.iconButton('play', 'Play', ICON_PATHS.play, 'Play / pause');
+    this.prevBtn = this.iconButton('prev', 'Previous sentence', ICON_PATHS.prev, 'Previous sentence');
+    this.nextBtn = this.iconButton('next', 'Next sentence', ICON_PATHS.next, 'Next sentence');
+    const backBtn = this.iconButton('back', 'Back a little', ICON_PATHS.replay, 'Back a little — replay the last few seconds');
     backBtn.addEventListener('click', () => this.cb.onBackALittle());
-    const noteBtn = this.iconButton('note', 'Save to Notes', ICON_PATHS.bookmark, 'Save what you just heard to Notes (N)');
+    const noteBtn = this.iconButton('note', 'Save to Notes', ICON_PATHS.bookmark, 'Save what you just heard to Notes');
     noteBtn.addEventListener('click', () => this.cb.onSaveNote());
     this.followBtn = this.iconButton('follow', 'Follow the reading', ICON_PATHS.snap);
     this.followBtn.setAttribute('aria-pressed', 'true');
@@ -314,6 +326,7 @@ export class ControlBar {
     this.saveBtn.appendChild(this.saveBadge);
     this.saveBtn.addEventListener('click', () => this.toggleExportMenu());
     const closeBtn = this.iconButton('close', 'Close', ICON_PATHS.close, 'Stop reading and close');
+    const keyed = { playPause: this.playBtn, back: backBtn, previous: this.prevBtn, next: this.nextBtn, note: noteBtn, follow: this.followBtn, jump: this.tapBtn, sleep: this.sleepBtn, save: this.saveBtn, settings: gearBtn, close: closeBtn };
 
     this.progressEl = this.make('div', {
       class: 'progress',
@@ -331,6 +344,8 @@ export class ControlBar {
     this.scrubEl = this.make('div', { class: 'scrub', hidden: '' });
 
     this.countEl = this.make('span', { class: 'count' }, '–/–');
+    this.etaEl = this.make('span', { class: 'eta', hidden: '', title: 'Listening left at this speed' });
+    this.breakEl = this.make('span', { class: 'break', 'aria-hidden': 'true' });
 
     this.speedEl = this.make('select', { class: 'speed', 'aria-label': 'Speed', title: 'Speed (↑ / ↓)' });
     // The pace sits under the multiplier rather than beside it: one narrow column for both.
@@ -352,6 +367,8 @@ export class ControlBar {
     faceWrap.append(this.voiceFace, this.voiceBadge);
     this.voiceBtn.append(faceWrap, this.voiceName);
     this.voiceBtn.addEventListener('click', () => this.toggleVoiceMenu());
+    this.keyed = { ...keyed, voice: this.voiceBtn };
+    for (const [action, btn] of Object.entries(this.keyed)) this.baseTitles.set(action as BarAction, btn.title || btn.getAttribute('aria-label') || '');
     this.reflectTapToSeek();
 
     // The four secondary buttons travel together in a group. On a phone the row cannot hold
@@ -368,6 +385,8 @@ export class ControlBar {
       this.make('span', { class: 'sep' }),
       this.progressEl,
       this.countEl,
+      this.etaEl,
+      this.breakEl,
       // Only takes up space in the narrow layout, where the progress bar has moved to its own
       // row and the transport controls would otherwise stretch across the whole width.
       this.make('span', { class: 'spacer' }),
@@ -399,6 +418,41 @@ export class ControlBar {
     this.wireProgress();
     this.bar.addEventListener('keydown', (e) => this.onKey(e));
     this.watchScrolling();
+    if (typeof ResizeObserver !== 'undefined') {
+      this.resizeWatch = new ResizeObserver(() => this.fitLayout());
+      this.resizeWatch.observe(this.bar);
+      this.offWindow.push(() => this.resizeWatch?.disconnect());
+    }
+  }
+
+  /**
+   * One row when everything fits, else two clean ones: the progress bar with its counter and time
+   * left across the top, every control below. Decided by measuring, not by a fixed width — a
+   * three-digit counter, the words-a-minute figure and a long voice name each take room, and a
+   * row that wrapped by itself left the side buttons stranded on a line of their own.
+   * (Phones have their own three-row layout in the stylesheet.)
+   */
+  private fitLayout(): void {
+    const bar = this.bar;
+    const view = this.doc.defaultView;
+    if (!bar?.isConnected || !view) return;
+    if (view.matchMedia(`(max-width: ${NARROW_BREAKPOINT_PX}px)`).matches) {
+      bar.classList.remove('stacked');
+      return;
+    }
+    const style = view.getComputedStyle(bar);
+    const gap = parseFloat(style.columnGap) || 6;
+    let need = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight) + 2;
+    let shown = 0;
+    for (const child of [...bar.children] as HTMLElement[]) {
+      if (child === this.scrubEl || child === this.breakEl || child.classList.contains('spacer')) continue;
+      if (child.hidden || view.getComputedStyle(child).display === 'none') continue;
+      shown++;
+      // The progress bar stretches: in one row it needs room enough to aim at.
+      need += child === this.progressEl ? 140 : child.getBoundingClientRect().width;
+    }
+    need += gap * Math.max(0, shown - 1);
+    bar.classList.toggle('stacked', bar.clientWidth < need);
   }
 
   /**
@@ -552,30 +606,20 @@ export class ControlBar {
     switch (e.key) {
       case ' ':
       case 'Spacebar':
-      case 'k':
         // A focused button handles Space itself; anywhere else in the bar it is play/pause.
-        if (onButton && e.key !== 'k') return;
+        // (Letters are the reader keys, handled for the whole page: session.ts onReaderKey.)
+        if (onButton) return;
         e.preventDefault();
         if (this.playing) this.cb.onPause();
         else this.cb.onPlay();
         return;
       case 'Enter':
         return; // focused button handles it
-      case 'b':
-        e.preventDefault();
-        this.cb.onBackALittle();
-        return;
-      case 'n':
-        e.preventDefault();
-        this.cb.onSaveNote();
-        return;
       case 'ArrowLeft':
-      case 'j':
         e.preventDefault();
         this.cb.onPrev();
         return;
       case 'ArrowRight':
-      case 'l':
         e.preventDefault();
         this.cb.onNext();
         return;
@@ -640,18 +684,46 @@ export class ControlBar {
     if (!on) this.setTucked(false);
   }
 
+  /** A reader key: press the control it names, as a click would. */
+  press(action: BarAction): void {
+    if (action === 'slower' || action === 'faster') {
+      this.nudgeSpeed(action === 'faster' ? 1 : -1);
+      return;
+    }
+    const btn = this.keyed[action];
+    if (!btn || btn.disabled || btn.hidden) return;
+    btn.click();
+  }
+
+  /** Show each control's key in its tooltip ("Follow the reading — F"). */
+  setKeyHints(keys: Partial<Record<BarAction, string>>): void {
+    this.keyHints = keys;
+    for (const action of this.baseTitles.keys()) this.titleWithKey(action);
+  }
+
+  private titleWithKey(action: BarAction, base?: string): void {
+    const btn = this.keyed[action];
+    if (!btn) return;
+    if (base != null) this.baseTitles.set(action, base);
+    const title = this.baseTitles.get(action) ?? '';
+    const key = this.keyHints[action];
+    btn.title = key ? `${title} (${key.toUpperCase()})` : title;
+  }
+
   /** On, on but resting while you look elsewhere on the page, or off. */
   setFollow(state: FollowState, offScreen = false): void {
     this.followState = state;
     this.followBtn.setAttribute('aria-pressed', String(state !== 'off'));
     this.followBtn.classList.toggle('on', state === 'on');
     this.followBtn.classList.toggle('offscreen', state === 'away' || (state === 'off' && offScreen));
-    this.followBtn.title =
+    this.titleWithKey(
+      'follow',
       state === 'on'
         ? 'Following the reading — click to stop'
         : state === 'away'
-          ? 'Paused while you look around — click to go back to the sentence being read'
-          : 'Not following — click to go to the sentence being read and follow it';
+          ? 'Resting while you look around (back in a few seconds) — click to go back now'
+          : 'Not following — click to go to the sentence being read and follow it',
+    );
   }
 
   /** A voice's face: its portrait, or the one stand-in avatar. */
@@ -1218,7 +1290,14 @@ export class ControlBar {
   private renderProgress(state: SessionState): void {
     const total = state.totalChunks || 0;
     const current = Math.min(state.currentIndex + 1, total);
-    this.countEl.textContent = total ? `${current}/${total}` : '–/–';
+    const count = total ? `${current}/${total}` : '–/–';
+    const eta = state.secondsLeft != null && total && state.currentIndex < total ? `${shortTime(state.secondsLeft)} left` : '';
+    if (this.countEl.textContent !== count || this.etaEl.textContent !== eta) {
+      this.countEl.textContent = count;
+      this.etaEl.textContent = eta;
+      this.etaEl.hidden = !eta;
+      this.fitLayout();
+    }
     if (this.dragFraction != null) return; // the pointer owns the fill mid-drag
 
     const percent = total ? (state.currentIndex / total) * 100 : 0;
@@ -1276,9 +1355,7 @@ export class ControlBar {
   private reflectTapToSeek(): void {
     this.tapBtn.classList.toggle('on', this.tapToSeek);
     this.tapBtn.setAttribute('aria-pressed', String(this.tapToSeek));
-    this.tapBtn.title = this.tapToSeek
-      ? 'Click-to-jump is ON — click a sentence in the page to jump there'
-      : 'Click-to-jump is OFF';
+    this.titleWithKey('jump', this.tapToSeek ? 'Click-to-jump is on: click a sentence to jump there' : 'Click-to-jump is off');
   }
 }
 
@@ -1307,4 +1384,14 @@ function readableLanguage(label: string): string {
   } catch {
     return label;
   }
+}
+
+/** "under 1 min", "12 min", "1 h 5 min": short enough for the bar. */
+export function shortTime(seconds: number): string {
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 1) return 'under 1 min';
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m ? `${h} h ${m} min` : `${h} h`;
 }

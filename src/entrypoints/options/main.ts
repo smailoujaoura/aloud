@@ -508,6 +508,11 @@ async function renderNow(): Promise<void> {
       settings = await setSettings({ annotate: { ...settings.annotate, pageKeys } });
       flashSaved();
     },
+    readerKeys: settings.readerKeys,
+    saveReaderKeys: async (readerKeys) => {
+      settings = await setSettings({ readerKeys });
+      flashSaved();
+    },
   });
   if (!backupRendered) {
     // Drawn once: a restore in progress keeps its steps while the rest of the page redraws.
@@ -818,6 +823,9 @@ watchSettings((next) => {
   settings = next;
   void render();
 });
+// Phones and tablets have no keyboard to speak of: no Shortcuts view, and the reader takes no
+// keys there (session.ts: watchReaderKeys). The rest of the page is the same.
+if (capabilities().touchFirst) document.querySelector<HTMLElement>('.nav-item[data-view="shortcuts"]')?.remove();
 // Note fields are sized to their text, which only measures while the Notes view is showing.
 onViewChange((view) => {
   if (view === 'notes') requestAnimationFrame(refitNotes);

@@ -89,7 +89,7 @@ export const CONTROL_BAR_CSS = `
   transform: translateX(-50%);
   z-index: 2147483647;
   box-sizing: border-box;
-  width: min(760px, calc(100vw - 20px));
+  width: min(880px, calc(100vw - 20px));
   display: flex; flex-direction: column; align-items: center; gap: 8px;
   /* The bar lays itself out by its own width (the container queries below), not the window's. */
   container-type: inline-size; container-name: aloud-dock;
@@ -287,6 +287,9 @@ select optgroup { color: var(--bar-muted); font-weight: 600; }
 .speedbox { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; line-height: 1; gap: 1px; }
 .speedbox select { padding: 3px 7px; }
 .speedbox .rate { padding: 0; font-size: 9.5px; letter-spacing: .01em; }
+/* The pace line keeps its room before it has a figure, so nothing in the bar moves when it appears. */
+.speedbox .rate[hidden] { display: block; visibility: hidden; }
+.speedbox .rate:empty::before { content: '\\00a0'; }
 
 /* The voice reading now, with the passage's language on its face. */
 .voice {
@@ -338,18 +341,26 @@ select optgroup { color: var(--bar-muted); font-weight: 600; }
 .voice-menu .menu-action.subtle { color: var(--bar-muted); font-size: 12.5px; }
 
 /*
- * The bar by its own width. Where one row cannot hold everything, the progress bar takes a row
- * of its own; narrower still, the voice shows its face without its name. The secondary buttons
- * — settings and close among them — never leave the bar.
+ * The bar by its own width. Where one row cannot hold everything (control-bar.ts: fitLayout
+ * measures), the progress bar, its counter and the time left take the top row and every control
+ * sits below; narrower still, the voice shows its face without its name. The secondary buttons —
+ * settings and close among them — never leave the bar.
  */
 .bar { flex-wrap: wrap; }
 .progress { min-width: 90px; }
-@container aloud-dock (max-width: 700px) {
-  .bar { row-gap: 4px; }
-  .progress { order: 10; flex: 1 1 70%; }
-  .count { order: 11; }
-  .spacer { flex: 1 1 auto; }
-  .sep:nth-of-type(2) { display: none; }
+.eta {
+  flex: 0 0 auto; font-variant-numeric: tabular-nums; color: var(--bar-muted);
+  white-space: nowrap; font-size: 12px;
+}
+.eta[hidden] { display: none; }
+.break { display: none; }
+@media (min-width: ${NARROW_BREAKPOINT_PX + 1}px) {
+  .bar.stacked { row-gap: 6px; }
+  .bar.stacked .progress { order: -3; flex: 1 1 0; min-width: 0; }
+  .bar.stacked .count, .bar.stacked .eta { order: -3; }
+  .bar.stacked .break { display: block; order: -2; flex: 0 0 100%; height: 0; }
+  .bar.stacked .sep { display: none; }
+  .bar.stacked .spacer { flex: 1 1 auto; }
 }
 @container aloud-dock (max-width: 620px) {
   .voice .voice-name { display: none; }
@@ -468,7 +479,7 @@ select optgroup { color: var(--bar-muted); font-weight: 600; }
   .progress > .track { height: 10px; border-radius: 5px; }
   .progress > .track > i { border-radius: 5px; }
   .progress > .knob { width: 16px; height: 16px; margin-left: -8px; transform: translateY(-50%) scale(1); }
-  .count { order: 11; }
+  .count, .eta { order: 11; }
   .side { order: 12; flex: 1 1 100%; justify-content: space-between; }
   /* The voice stays in the first row, by its face: on a phone it is the only way to change it. */
   .voice { height: 40px; padding: 0 6px 0 4px; }
