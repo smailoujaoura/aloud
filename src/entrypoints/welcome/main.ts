@@ -23,7 +23,7 @@ import { probeGpu } from '@/shared/gpu-probe';
 import { loadWorkerGpu } from '@/shared/backend-memory';
 import { ReaderSession } from '@/content/session';
 import { log } from '@/shared/log';
-import { answerTabQueries } from '@/shared/own-tab';
+import { answerTabQueries, findOwnTab } from '@/shared/own-tab';
 
 // First, before anything here can fail: lets the background find this tab without the "tabs"
 // permission (shared/own-tab.ts). Registered late, an earlier error meant a new tab every time.
@@ -309,17 +309,33 @@ const dots: HTMLButtonElement[] = steps.map((step, i) => {
 // ---- wiring ----------------------------------------------------------------
 
 function wire(): void {
-  const openSettings = (): void => {
-    toast('Opening settings…', 'info');
-    void browser.runtime.openOptionsPage();
+  /**
+   * To the settings without another tab: back to the settings tab this walkthrough was opened from
+   * (closing this one, as Done does), or else this tab becomes the settings.
+   */
+  const openSettings = async (view = ''): Promise<void> => {
+    const url = browser.runtime.getURL(`/options.html${view ? `#${view}` : ''}`);
+    const existing = await findOwnTab('/options.html');
+    if (existing) {
+      try {
+        await browser.tabs.update(existing.id, { active: true, ...(view ? { url } : {}) });
+        if (existing.windowId != null) await browser.windows?.update(existing.windowId, { focused: true }).catch(() => undefined);
+        void demo?.dispose();
+        window.close();
+        return;
+      } catch {
+        /* closed in the meantime: open them here */
+      }
+    }
+    location.assign(url);
   };
-  $('next').addEventListener('click', () => (index === steps.length - 1 ? openSettings() : showStep(index + 1)));
+  $('next').addEventListener('click', () => (index === steps.length - 1 ? void openSettings() : showStep(index + 1)));
   $('back').addEventListener('click', () => showStep(index - 1));
   $('dots').replaceChildren(...dots);
 
   $('demo').addEventListener('click', () => void toggleDemo());
 
-  $('toVoices').addEventListener('click', openSettings);
+  $('toVoices').addEventListener('click', () => void openSettings('voice'));
 
   const finish = (): void => {
     void demo?.dispose();
