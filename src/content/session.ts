@@ -32,7 +32,7 @@ import type { ModelManifest } from '@/engine/engines/types';
 import { DEFAULT_SETTINGS, getSettings, setSettings, activeVoice, voiceKeyFor, type EngineId, type ReaderKeys, type Settings, type VoiceRef } from '@/shared/settings';
 import { ENGINE_IDS, engineInfo, supertonicStepsFor } from '@/shared/engine-catalog';
 import { languageName, primaryLanguage, voiceLanguage, type CandidateVoice } from '@/shared/language-voice';
-import { planLanguages, type Detection, type Detector, type PassageInput, type PassageLanguage } from './language-plan';
+import { planLanguages, scriptFits, type Detection, type Detector, type PassageInput, type PassageLanguage } from './language-plan';
 import { routeFor, voiceKey, type Route, type RouteContext } from './voice-routing';
 import { MAX_LANES, VoiceLanes } from './voice-lanes';
 import { listVoices, parseVoiceValue, voiceValue, type EngineVoice, type VoiceOption } from '@/shared/voice-catalog';
@@ -51,7 +51,7 @@ import { NOTES_FULL_MESSAGE, addNote } from '@/shared/notes';
 import { createAnchor, type TextAnchor } from '@/annotate/anchor';
 import { anchorForRange } from '@/annotate/page-anchoring';
 import { recordListening } from '@/shared/reading-history';
-import { countWords, recordCompleted, recordHeard, type Heard } from '@/shared/listening-stats';
+import { countWords, loadStats, recordCompleted, recordHeard, type Heard } from '@/shared/listening-stats';
 import { log } from '@/shared/log';
 import { capabilities } from '@/shared/browser-env';
 import { isTypingEvent } from '@/media-speed/keys';
@@ -147,8 +147,6 @@ interface SelectionSnapshot {
   range: Range | null;
 }
 
-/** Below this many characters a selection isn't worth reading — fall back to the whole article. */
-const MIN_SELECTION_CHARS = 15;
 /** Following, rested by your own scrolling, comes back at the next sentence after this long without it. */
 const FOLLOW_RESUME_MS = 5000;
 
@@ -663,7 +661,10 @@ export class ReaderSession {
     // the document, so only a real page's declaration is kept as a hint.
     this.declaredLanguage = known ? '' : article.lang;
 
-    const useSelection = this.mode === 'selection' && this.selection.text.length > MIN_SELECTION_CHARS;
+    // Any selection with a word in it is read as it is: one word selected is a question about how
+    // that word sounds. Selections shorter than 15 characters used to start the whole article
+    // from the top instead.
+    const useSelection = this.mode === 'selection' && isSpeakable(this.selection.text);
     if (useSelection) {
       this.state.title = 'Selection';
       this.textIndex = buildTextIndex(selectionRoot(this.selection), { forReader: true });
@@ -760,6 +761,7 @@ export class ReaderSession {
       onClose: () => this.stop('user'),
       onPassageLanguage: (code: string) => void this.setPassageLanguage(code),
       onVoiceLock: (locked: boolean) => void this.setVoiceLock(locked),
+      onAutoHide: (on: boolean) => void this.setBarAutoHide(on),
       onLanguageVoice: (code: string, value: string) => void this.setLanguageVoice(code, value),
       onMissingVoice: (code: string, choice: 'get' | 'skip' | 'read') => void this.onMissingVoice(code, choice),
       onFollow: () => void this.toggleFollow(),
@@ -1416,6 +1418,7 @@ export class ReaderSession {
     this.routeItems(0);
     this.languageVoice = this.pickPrimary();
     this.reportLanguages();
+    this.offerSelectionLanguage();
   }
 
   /** Every downloaded voice of every engine, with the language it speaks. */
@@ -1497,13 +1500,73 @@ export class ReaderSession {
     } catch {
       /* no detector: the page language stays unknown */
     }
+    const familiar = this.mode === 'selection' ? await this.familiarLanguages() : undefined;
     try {
-      this.passageLanguages = await planLanguages(passages, this.detect, page, this.languageCache, this.declaredLanguage);
+      this.passageLanguages = await planLanguages(passages, this.detect, page, this.languageCache, this.declaredLanguage, familiar);
     } catch (err) {
       log.warn('could not plan languages:', err);
       this.passageLanguages = passages.map(() => ({ language: primaryLanguage(page), source: 'page' as const }));
     }
     this.applyLanguages();
+  }
+
+  /**
+   * Languages this reader is known to read, for a selection too short to be sure of: the browser's
+   * languages, the page's declared one, those with a voice chosen for them or a single-language
+   * voice downloaded, and those listened to before.
+   */
+  private async familiarLanguages(): Promise<Set<string>> {
+    const out = new Set<string>();
+    const add = (code: string | null | undefined): void => {
+      const primary = primaryLanguage(code ?? '');
+      if (primary) out.add(primary);
+    };
+    for (const code of navigator.languages ?? []) add(code);
+    add(this.declaredLanguage);
+    for (const code of Object.keys(this.settings.languageVoices)) add(code);
+    for (const voice of this.installedVoiceList) if (voice.engine === 'piper') add(voice.language);
+    try {
+      for (const day of Object.values((await loadStats()).days)) {
+        for (const [code, tally] of Object.entries(day.languages)) if (tally.seconds >= 30) add(code);
+      }
+    } catch {
+      /* no statistics: the rest will do */
+    }
+    return out;
+  }
+
+  /**
+   * A selection read in one language while the detector, unsure, named another its alphabet allows:
+   * say which, with the other one a tap away ("bordereau de change", read as English on an English
+   * page, is French).
+   */
+  private offerSelectionLanguage(): void {
+    if (this.mode !== 'selection' || this.manualVoice) return;
+    const reading = this.playlist.find((p) => p.eligible && p.language)?.language;
+    if (!reading) return;
+    const guesses = new Set<string>();
+    for (const item of this.playlist) {
+      const found = this.languageCache.get(item.sourceText.trim());
+      const guess = primaryLanguage(found?.language ?? '');
+      if (guess && guess !== 'und' && guess !== item.language && scriptFits(guess, item.sourceText)) guesses.add(guess);
+    }
+    if (guesses.size !== 1) return;
+    const [guess] = [...guesses] as [string];
+    // Only a language a downloaded voice reads: a wrong guess with no voice is no help.
+    const route = routeFor(guess, this.routeContext());
+    if (route.kind !== 'voice' || !['preference', 'saved', 'match'].includes(route.reason)) return;
+    this.bar?.flash(`Reading this as ${languageName(reading)}`, 'info', {
+      label: `Read as ${languageName(guess)}`,
+      run: () => void this.setSelectionLanguage(guess),
+    });
+  }
+
+  /** The whole selection is in `code`, as the reader says. */
+  private async setSelectionLanguage(code: string): Promise<void> {
+    for (const item of this.playlist) if (item.passage != null) this.correctedPassages.set(item.passage, primaryLanguage(code));
+    this.applyLanguages();
+    this.bar?.flash(`Reading this as ${languageName(code)}`, 'ok');
+    await this.reroute();
   }
 
   /** Each item takes its passage's language, or the reader's correction of it. */
@@ -2333,6 +2396,13 @@ export class ReaderSession {
     if (action === 'highlight') void this.toggleSentenceHighlight();
     else if (action === 'toolbar') void this.toggleSelectionToolbar();
     else this.bar?.press(action);
+  }
+
+  /** The bar's Hide button (and its key): out of the way until the pointer comes near it. */
+  private async setBarAutoHide(on: boolean): Promise<void> {
+    await this.applyOwnChange({ barAutoHide: on });
+    this.bar?.setAutoHide(on);
+    if (!on) this.bar?.flash('The bar stays on screen', 'info');
   }
 
   private async toggleSentenceHighlight(): Promise<void> {

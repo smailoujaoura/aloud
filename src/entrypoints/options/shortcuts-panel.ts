@@ -43,6 +43,7 @@ const READER_ROWS: Array<[keyof ReaderKeys, string, string]> = [
   ['save', 'Save as MP3', ''],
   ['voice', 'Voice and language', ''],
   ['settings', 'Settings', ''],
+  ['hide', 'Hide the bar', 'Until you come near the bottom'],
   ['close', 'Close the reader', ''],
 ];
 

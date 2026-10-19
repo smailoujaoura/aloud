@@ -39,6 +39,8 @@ export const ICON_PATHS = {
   /** Arrow into a tray — save the document as an audio file. */
   download: ['M7 1.5h2v6l2.2-2.2 1.4 1.4L8 11.4 3.4 6.7l1.4-1.4L7 7.5z', 'M3 13h10v1.8H3z'],
   moon: ['M6.6 1.4a6.6 6.6 0 108 8 5.2 5.2 0 01-8-8z'],
+  /** A chevron down onto the edge — "hide the bar until I come near it". */
+  hide: ['M3 4.4l1.2-1.2L8 7l3.8-3.8L13 4.4l-5 5z', 'M2.5 12h11v1.7h-11z'],
   monitor: ['M1.5 2h13a1 1 0 011 1v7.5a1 1 0 01-1 1H9v1.7h2.5V15h-7v-1.8H7v-1.7H1.5a1 1 0 01-1-1V3a1 1 0 011-1zm.6 1.6v6.3h11.8V3.6z'],
   /** Question mark in a circle — "show me how this works". */
   help: [

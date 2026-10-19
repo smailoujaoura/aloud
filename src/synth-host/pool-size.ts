@@ -52,6 +52,20 @@ export function autoPoolSize(engine: EngineId, gpu: boolean, env: PoolEnvironmen
 }
 
 /**
+ * Workers for a Piper voice, from how fast it turned out to be (`rtf`: seconds of work per second
+ * of speech, over the last sentences).
+ *
+ * A medium voice is faster than speech on one worker. A high-quality one is about three times the
+ * work, and on a slower processor falls behind: Lessac took 2.7 s per second of speech on one
+ * worker, so every sentence waited about 20 s for the next. Each worker takes another sentence, so
+ * enough of them bring it back under real time. Phones keep one: memory is the limit there.
+ */
+export function piperPoolForRate(rtf: number, env: PoolEnvironment): number {
+  if (env.touchFirst || !(rtf > 0.8)) return 1;
+  return clamp(Math.ceil(rtf / 0.7), 1, clamp(Math.max(1, env.cores) - 2, 1, 4));
+}
+
+/**
  * The pool size the engine's *actual* execution provider justifies.
  *
  * Worker 0 reports the provider it ended up on (`ready.executionProvider`), which is the only

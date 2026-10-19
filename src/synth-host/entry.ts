@@ -28,7 +28,7 @@ import type { EngineConfig, WorkerRequest, WorkerResponse } from '@/engine/proto
 import { capabilities } from '@/shared/browser-env';
 import { probeGpu } from '@/shared/gpu-probe';
 import { JobQueue } from './job-queue';
-import { MAX_POOL, autoPoolSize, clampPool, poolSizeForProvider } from './pool-size';
+import { MAX_POOL, autoPoolSize, clampPool, piperPoolForRate, poolSizeForProvider } from './pool-size';
 
 const WORKER_URL = new URL('/tts-worker.js', location.href).href;
 
@@ -315,6 +315,7 @@ function onWorkerMessage(w: Worker, data: WorkerResponse | undefined): void {
           `→ ${seconds.toFixed(1)}s audio · RTF ${seconds > 0 ? (took / seconds).toFixed(2) : '?'}× · ` +
           poolState(),
       );
+      if (seconds >= 1 && took > 0) growPiperPool(took / seconds);
       jobs.release(w, readyWorkers);
       relay(data);
       return;
@@ -466,6 +467,7 @@ async function startPool(msg: Extract<WorkerRequest, { kind: 'init' }>, gen: num
   if (disposed || gen !== initGeneration) return; // superseded by a newer init while probing
 
   poolIsFixed = requested > 0;
+  piperRates.length = 0;
   targetSize =
     engine === 'piper'
       ? 1
@@ -509,6 +511,24 @@ function resizePoolForProvider(provider: string): void {
     `[aloud] ${clock()} engine reported "${provider}"; growing pool ${targetSize} → ${wanted} worker(s)`,
   );
   targetSize = wanted;
+}
+
+/** The last few sentences' work per second of speech, for a Piper voice (see piperPoolForRate). */
+const piperRates: number[] = [];
+
+/** A Piper voice slower than speech gets more workers, as Kokoro and Supertonic always do. */
+function growPiperPool(rtf: number): void {
+  if (!initMsg || poolIsFixed || initMsg.config.engine !== 'piper') return;
+  piperRates.push(rtf);
+  if (piperRates.length > 3) piperRates.shift();
+  // Two sentences agreeing, not one: the first after loading is slow for reasons of its own.
+  if (piperRates.length < 2) return;
+  const wanted = piperPoolForRate(Math.min(...piperRates.slice(-2)), poolEnv());
+  if (wanted <= targetSize) return;
+  // eslint-disable-next-line no-console
+  console.info(`[aloud] ${clock()} piper is slower than speech here (RTF ${piperRates.at(-1)!.toFixed(2)}×); growing pool ${targetSize} → ${wanted} worker(s)`);
+  targetSize = wanted;
+  spawnRest();
 }
 
 function handleFromContent(msg: WorkerRequest): void {

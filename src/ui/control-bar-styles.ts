@@ -89,7 +89,7 @@ export const CONTROL_BAR_CSS = `
   transform: translateX(-50%);
   z-index: 2147483647;
   box-sizing: border-box;
-  width: min(880px, calc(100vw - 20px));
+  width: min(920px, calc(100vw - 20px));
   display: flex; flex-direction: column; align-items: center; gap: 8px;
   /* The bar lays itself out by its own width (the container queries below), not the window's. */
   container-type: inline-size; container-name: aloud-dock;
@@ -101,6 +101,21 @@ export const CONTROL_BAR_CSS = `
 .dock { transition: transform 220ms ease, opacity 220ms ease; }
 .dock.is-tucked { transform: translate(-50%, calc(100% + 40px)); opacity: 0; }
 .dock.is-tucked > * { pointer-events: none; }
+.hide.on { box-shadow: inset 0 0 0 1.5px var(--accent); }
+/* The handle left at the bottom edge while the bar is hidden, filled as far as the reading has got. */
+.peek {
+  position: fixed; left: 50%; bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 2147483647;
+  width: 64px; height: 12px; padding: 0; border-radius: 6px;
+  border: 1px solid var(--bar-border);
+  background: linear-gradient(var(--accent), var(--accent)) left / var(--progress, 0%) 100% no-repeat, var(--bar-bg);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .25);
+  cursor: pointer;
+}
+.peek:hover { height: 16px; }
+.peek[hidden] { display: none; }
+@media (pointer: coarse) { .peek { width: 88px; height: 18px; border-radius: 9px; } }
 @media (prefers-reduced-motion: reduce) { .dock { transition: none; } }
 
 .bar {

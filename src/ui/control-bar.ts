@@ -52,7 +52,7 @@ export interface BarVoice {
 export type FollowState = 'on' | 'away' | 'off';
 
 /** What a reader key can do on the bar (settings: ReaderKeys, less the page-wide toggles). */
-export type BarAction = 'playPause' | 'back' | 'previous' | 'next' | 'slower' | 'faster' | 'note' | 'follow' | 'jump' | 'sleep' | 'save' | 'voice' | 'settings' | 'close';
+export type BarAction = 'playPause' | 'back' | 'previous' | 'next' | 'slower' | 'faster' | 'note' | 'follow' | 'jump' | 'sleep' | 'save' | 'voice' | 'settings' | 'hide' | 'close';
 
 /** The passage being read: its language, the voice reading it, and what can be changed. */
 export interface LanguageInfo {
@@ -111,6 +111,8 @@ export interface ControlBarCallbacks {
   onPassageLanguage?(code: string): void;
   /** Lock this page to the voice reading now (true), or back to Auto (false). */
   onVoiceLock?(locked: boolean): void;
+  /** Hide the bar until the pointer comes near it (true), or keep it on screen (false). */
+  onAutoHide?(on: boolean): void;
   /** Remember `value` as the voice for `code`, on every page. */
   onLanguageVoice?(code: string, value: string): void;
   /** No voice for `code`: get one, skip its passages, or read them with the usual voice. */
@@ -127,7 +129,7 @@ export interface ControlBarOptions {
   speed: number;
   tapToSeek: boolean;
   theme: ThemeChoice;
-  /** Slide out of the way while you scroll down the page (settings: barAutoHide). */
+  /** Out of the way until the pointer comes near the bottom of the window (settings: barAutoHide). */
   autoHide?: boolean;
 }
 
@@ -137,6 +139,10 @@ const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4];
 const FLASH_MS = 1900;
 /** …and one that carries a button, which needs time to be read *and* reached. */
 const FLASH_ACTION_MS = 8000;
+/** A bar set to hide comes back while the pointer is this close to the bottom of the window. */
+const REVEAL_BAND_PX = 96;
+/** …and goes this long after the pointer moves away. */
+const HIDE_DELAY_MS = 1200;
 
 /** A one-click follow-up offered inside a flash, e.g. "Start over" after resuming. */
 export interface FlashAction {
@@ -220,8 +226,14 @@ export class ControlBar {
   private autoHide: boolean;
 
   private playing = false;
-  /** Slid out of the way while you scroll down the page (see `watchScrolling`). */
+  /** Slid out of the way (see `watchScrolling`, `setAutoHide`). */
   private tucked = false;
+  private hideBtn!: HTMLButtonElement;
+  /** The handle left at the bottom edge while the bar is hidden. */
+  private peek!: HTMLButtonElement;
+  private hideTimer = 0;
+  /** The pointer is over the bottom of the window, or on the bar: it stays. */
+  private pointerNear = false;
   /** When the reader last did something that scrolls — so the page's own scrolling is ignored. */
   private userScrollAt = 0;
   private readonly lastScrollTop = new WeakMap<object, number>();
@@ -260,6 +272,7 @@ export class ControlBar {
     (doc.documentElement ?? doc.body).appendChild(this.host);
 
     this.build(opts.speed);
+    this.setAutoHide(this.autoHide);
     this.applyTheme();
     // "Match the system" has to keep matching it: the OS can flip to dark while a page is open.
     this.unwatchTheme = watchSystemTheme(() => {
@@ -325,8 +338,10 @@ export class ControlBar {
     this.saveBadge = this.make('span', { class: 'badge', hidden: '' });
     this.saveBtn.appendChild(this.saveBadge);
     this.saveBtn.addEventListener('click', () => this.toggleExportMenu());
+    this.hideBtn = this.iconButton('hide', 'Hide the bar', ICON_PATHS.hide, 'Hide the bar until you come near the bottom');
+    this.hideBtn.setAttribute('aria-pressed', 'false');
     const closeBtn = this.iconButton('close', 'Close', ICON_PATHS.close, 'Stop reading and close');
-    const keyed = { playPause: this.playBtn, back: backBtn, previous: this.prevBtn, next: this.nextBtn, note: noteBtn, follow: this.followBtn, jump: this.tapBtn, sleep: this.sleepBtn, save: this.saveBtn, settings: gearBtn, close: closeBtn };
+    const keyed = { playPause: this.playBtn, back: backBtn, previous: this.prevBtn, next: this.nextBtn, note: noteBtn, follow: this.followBtn, jump: this.tapBtn, sleep: this.sleepBtn, save: this.saveBtn, settings: gearBtn, hide: this.hideBtn, close: closeBtn };
 
     this.progressEl = this.make('div', {
       class: 'progress',
@@ -375,7 +390,7 @@ export class ControlBar {
     // every control, and a group is what stops the wrap from stranding a lone ✕ on a line of
     // its own: either they all fit beside the transport controls, or they all move down.
     const side = this.make('div', { class: 'side' });
-    side.append(noteBtn, this.followBtn, this.tapBtn, this.sleepBtn, this.saveBtn, gearBtn, closeBtn);
+    side.append(noteBtn, this.followBtn, this.tapBtn, this.sleepBtn, this.saveBtn, gearBtn, this.hideBtn, closeBtn);
 
     this.bar.append(
       this.playBtn,
@@ -400,7 +415,16 @@ export class ControlBar {
     // absolutely positioned inside it, so it can follow the pointer without moving anything.
     this.bar.appendChild(this.scrubEl);
     this.dock.append(this.toast, this.bar);
-    this.root.append(style, this.dock);
+    // What is left of the bar while it is hidden: a handle at the bottom edge, with how far the
+    // reading has got. A tap or a click brings the bar back — on a touch screen there is no
+    // pointer to come near it with.
+    this.peek = this.make('button', { class: 'peek', type: 'button', 'aria-label': 'Show the reading bar', title: 'Show the reading bar' });
+    this.peek.hidden = true;
+    this.peek.addEventListener('click', () => {
+      this.setTucked(false);
+      this.hideLater(4000);
+    });
+    this.root.append(style, this.dock, this.peek);
 
     this.playBtn.addEventListener('click', () => (this.playing ? this.cb.onPause() : this.cb.onPlay()));
     this.prevBtn.addEventListener('click', () => this.cb.onPrev());
@@ -413,6 +437,7 @@ export class ControlBar {
     });
     this.speedEl.addEventListener('change', () => this.cb.onSpeed(Number(this.speedEl.value)));
     gearBtn.addEventListener('click', () => this.cb.onOpenSettings());
+    this.hideBtn.addEventListener('click', () => this.cb.onAutoHide?.(!this.autoHide));
     closeBtn.addEventListener('click', () => this.cb.onClose());
 
     this.wireProgress();
@@ -452,7 +477,10 @@ export class ControlBar {
       need += child === this.progressEl ? 140 : child.getBoundingClientRect().width;
     }
     need += gap * Math.max(0, shown - 1);
-    bar.classList.toggle('stacked', bar.clientWidth < need);
+    // A little room to spare before going back to one row: the count and time left change width
+    // as they tick ("15 min left", "9 min left"), and the bar flipped between one row and two.
+    const stacked = bar.classList.contains('stacked');
+    bar.classList.toggle('stacked', stacked ? bar.clientWidth < need + 24 : bar.clientWidth < need);
   }
 
   /**
@@ -489,24 +517,62 @@ export class ControlBar {
         this.lastScrollTop.set(target, top);
         if (Date.now() - this.userScrollAt > 700) return;
         if (top - before > 6) this.setTucked(true);
-        else if (before - top > 6) this.setTucked(false);
+        else if (before - top > 6 && this.tucked) {
+          this.setTucked(false);
+          // Shown by scrolling back up, it goes again after a moment of reading.
+          this.hideLater(2500);
+        }
       },
       true,
     );
     on(view, 'mousemove', (e) => {
-      if (this.tucked && (e as MouseEvent).clientY > view.innerHeight - 96) this.setTucked(false);
+      const near = (e as MouseEvent).clientY > view.innerHeight - REVEAL_BAND_PX || this.overBar(e as MouseEvent);
+      if (near === this.pointerNear) return;
+      this.pointerNear = near;
+      if (near) {
+        clearTimeout(this.hideTimer);
+        this.setTucked(false);
+      } else {
+        this.hideLater();
+      }
+    });
+    // Out of the window altogether.
+    on(this.doc.documentElement, 'mouseleave', () => {
+      this.pointerNear = false;
+      this.hideLater();
     });
     this.dock.addEventListener('focusin', () => this.setTucked(false));
+    this.dock.addEventListener('focusout', () => this.hideLater());
+    // A touch on the bar keeps it a while longer: there is no pointer to stay near it with.
+    this.dock.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'mouse') this.hideLater(4000);
+    });
+  }
+
+  private overBar(e: MouseEvent): boolean {
+    const r = this.dock.getBoundingClientRect();
+    return e.clientX >= r.left - 16 && e.clientX <= r.right + 16 && e.clientY >= r.top - 24 && e.clientY <= r.bottom + 16;
+  }
+
+  /** With the bar set to hide: hide it after `ms` unless something brings it back first. */
+  private hideLater(ms = HIDE_DELAY_MS): void {
+    clearTimeout(this.hideTimer);
+    if (!this.autoHide) return;
+    this.hideTimer = this.doc.defaultView?.setTimeout(() => {
+      // Kept while the keyboard is in it; a button just clicked keeps focus too, and must not.
+      if (!this.pointerNear && !this.dock.querySelector(':focus-visible')) this.setTucked(true);
+    }, ms) ?? 0;
   }
 
   private setTucked(tucked: boolean): void {
     if (tucked === this.tucked) return;
     // Measure while it is still in place; once tucked it reports where it went, not where it was.
     if (tucked) this.covered = this.measureCovered();
-    // Never while something needs the bar: a paused reader, an open menu, a message on screen.
-    if (tucked && (!this.autoHide || !this.playing || this.popover || this.flashing)) return;
+    // Never while something needs the bar: an open menu, a message on screen.
+    if (tucked && (!this.autoHide || this.popover || this.flashing)) return;
     this.tucked = tucked;
     this.dock.classList.toggle('is-tucked', tucked);
+    this.peek.hidden = !tucked;
   }
 
   private measureCovered(): number {
@@ -678,10 +744,21 @@ export class ControlBar {
     if (body) this.renderVoiceMenu(body);
   }
 
-  /** Slide out of the way while scrolling down (true), or stay put (false). */
+  /**
+   * Out of the way until the pointer comes near the bottom of the window (true), or always on
+   * screen (false). Turned on from the bar itself, the pointer is on it: it goes once you move away.
+   */
   setAutoHide(on: boolean): void {
     this.autoHide = on;
-    if (!on) this.setTucked(false);
+    this.hideBtn.setAttribute('aria-pressed', String(on));
+    this.hideBtn.classList.toggle('on', on);
+    this.titleWithKey('hide', on ? 'Keep the bar on screen' : 'Hide the bar until you come near the bottom');
+    if (!on) {
+      clearTimeout(this.hideTimer);
+      this.setTucked(false);
+    } else {
+      this.hideLater();
+    }
   }
 
   /** A reader key: press the control it names, as a click would. */
@@ -805,6 +882,7 @@ export class ControlBar {
     const dismiss = (): void => {
       clearTimeout(this.flashTimer);
       this.flashing = false;
+      this.hideLater();
       if (this.tips) this.clearToast();
       else if (this.lastState) this.renderToast(this.lastState);
       else this.clearToast();
@@ -849,6 +927,7 @@ export class ControlBar {
   }
 
   dispose(): void {
+    clearTimeout(this.hideTimer);
     for (const off of this.offWindow) off();
     this.offWindow.length = 0;
     clearTimeout(this.flashTimer);
@@ -1311,6 +1390,7 @@ export class ControlBar {
 
   private paintProgress(percent: number): void {
     this.fillEl.style.width = `${percent}%`;
+    this.peek.style.setProperty('--progress', `${percent}%`);
     this.knobEl.style.left = `${percent}%`;
   }
 

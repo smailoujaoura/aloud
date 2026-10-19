@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { MAX_POOL, autoPoolSize, clampPool, poolSizeForProvider } from '@/synth-host/pool-size';
+import { MAX_POOL, autoPoolSize, clampPool, piperPoolForRate, poolSizeForProvider } from '@/synth-host/pool-size';
 import { backendOf, tuningFor } from '@/content/engine-tuning';
 
 const desktop = { cores: 8, touchFirst: false };
@@ -69,5 +69,22 @@ describe('tuningFor', () => {
 
   it('assumes the CPU until the engine says otherwise', () => {
     expect(tuningFor('kokoro')).toEqual(tuningFor('kokoro', 'cpu'));
+  });
+});
+
+describe('piperPoolForRate', () => {
+  const desktop = { cores: 8, touchFirst: false };
+  it('one worker while the voice keeps up', () => {
+    expect(piperPoolForRate(0.4, desktop)).toBe(1);
+    expect(piperPoolForRate(0.8, desktop)).toBe(1);
+  });
+  it('enough to bring a slow voice under real time (Lessac at 2.7×: four)', () => {
+    expect(piperPoolForRate(1.2, desktop)).toBe(2);
+    expect(piperPoolForRate(2.7, desktop)).toBe(4);
+    expect(piperPoolForRate(9, desktop)).toBe(4);
+  });
+  it('never more than the cores allow, never on a phone', () => {
+    expect(piperPoolForRate(2.7, { cores: 4, touchFirst: false })).toBe(2);
+    expect(piperPoolForRate(2.7, { cores: 8, touchFirst: true })).toBe(1);
   });
 });

@@ -120,6 +120,47 @@ export function scriptLanguage(text: string): string {
   return '';
 }
 
+/** Letters of the writing systems a language is written in, where that is not the Latin alphabet. */
+const OWN_SCRIPT: Record<string, RegExp> = {
+  ko: /\p{Script=Hangul}/gu,
+  ja: /[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/gu,
+  zh: /\p{Script=Han}/gu,
+  el: /\p{Script=Greek}/gu,
+  he: /\p{Script=Hebrew}/gu,
+  yi: /\p{Script=Hebrew}/gu,
+  th: /\p{Script=Thai}/gu,
+  ka: /\p{Script=Georgian}/gu,
+  hy: /\p{Script=Armenian}/gu,
+  ru: /\p{Script=Cyrillic}/gu,
+  uk: /\p{Script=Cyrillic}/gu,
+  bg: /\p{Script=Cyrillic}/gu,
+  be: /\p{Script=Cyrillic}/gu,
+  mk: /\p{Script=Cyrillic}/gu,
+  kk: /\p{Script=Cyrillic}/gu,
+  mn: /\p{Script=Cyrillic}/gu,
+  ar: /\p{Script=Arabic}/gu,
+  fa: /\p{Script=Arabic}/gu,
+  ur: /\p{Script=Arabic}/gu,
+  hi: /\p{Script=Devanagari}/gu,
+  mr: /\p{Script=Devanagari}/gu,
+  ne: /\p{Script=Devanagari}/gu,
+  bn: /\p{Script=Bengali}/gu,
+  ta: /\p{Script=Tamil}/gu,
+  te: /\p{Script=Telugu}/gu,
+};
+
+/**
+ * Could `text` be in `language`, by its alphabet alone? A guess of Korean for "student housing"
+ * cannot be; French for "bordereau de change" can.
+ */
+export function scriptFits(language: string, text: string): boolean {
+  const letters = letterCount(text);
+  if (!letters) return false;
+  const own = OWN_SCRIPT[primaryLanguage(language)];
+  if (own) return (text.match(own)?.length ?? 0) >= letters * 0.3;
+  return (text.match(/\p{Script=Latin}/gu)?.length ?? 0) >= letters * 0.7;
+}
+
 /**
  * Decide each passage's language. `detect` is called at most once per distinct text (`cache`
  * keeps answers across calls, e.g. after a translation is revealed).
@@ -131,8 +172,18 @@ export async function planLanguages(
   cache: Map<string, Detection | null> = new Map(),
   /** What `<html lang>` declares: the language of the site's own interface. */
   documentLanguage = '',
+  /**
+   * For a selection: languages this reader is known to read. A few selected words are too short
+   * for the detector to call its answer reliable, and it is often wrong on them ("merci beaucoup"
+   * → Serbian), so an unreliable answer is taken only when it names one of these, in its own
+   * alphabet. A page has its neighbouring passages to go by instead, and does not use this.
+   */
+  familiar?: ReadonlySet<string>,
 ): Promise<PassageLanguage[]> {
   const home = primaryLanguage(documentLanguage);
+  // A selection is asked about from a single word: what it is in is the whole question there, and
+  // a guess is only taken (or offered) after the checks above.
+  const minLetters = familiar ? 4 : MIN_LETTERS_TO_DETECT;
   /** Marked as another language than the page's, but long enough to check it is not the site's own. */
   const checkMarkup = (p: PassageInput): boolean => {
     const markup = primaryLanguage(p.markup);
@@ -143,7 +194,7 @@ export async function planLanguages(
   const ask = new Set<string>();
   for (const p of passages) {
     const key = p.text.trim();
-    if ((!primaryLanguage(p.markup) || checkMarkup(p)) && letterCount(key) >= MIN_LETTERS_TO_DETECT && !cache.has(key)) ask.add(key);
+    if ((!primaryLanguage(p.markup) || checkMarkup(p)) && letterCount(key) >= minLetters && !cache.has(key)) ask.add(key);
   }
   await Promise.all(
     [...ask].map(async (key) => {
@@ -166,13 +217,14 @@ export async function planLanguages(
     }
     const letters = letterCount(passage.text);
     let decided: PassageLanguage | null = null;
-    if (letters >= MIN_LETTERS_TO_DETECT) {
+    if (letters >= minLetters) {
       const found = cache.get(passage.text.trim());
       // CLD calls nearly every sentence under ~60 characters unreliable, yet for an ordinary
       // sentence it is right ("Let me tell you a story about a chicken." → en, not reliable).
       // Where it is wrong is a few repeated words: "No! No! Go away!" → pt, "Vattene!" → de.
       // So an unreliable answer counts for a real sentence and nothing shorter.
-      const usable = found && (found.reliable || substantial(passage.text));
+      const known = !!found && !!familiar?.has(primaryLanguage(found.language)) && scriptFits(found.language, passage.text);
+      const usable = found && (found.reliable || substantial(passage.text) || known);
       if (usable && primaryLanguage(found.language) && found.language !== 'und') {
         decided = { language: primaryLanguage(found.language), source: 'detected' };
       }

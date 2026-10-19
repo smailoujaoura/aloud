@@ -88,6 +88,7 @@ export interface ReaderKeys {
   save: string;
   voice: string;
   settings: string;
+  hide: string;
   close: string;
 }
 
@@ -107,6 +108,7 @@ export const DEFAULT_READER_KEYS: ReaderKeys = {
   save: 'm',
   voice: 'v',
   settings: 'o',
+  hide: 'd',
   close: 'q',
 };
 

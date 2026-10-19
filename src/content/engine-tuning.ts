@@ -42,7 +42,9 @@ export interface PipelineTuning {
  * queue must be deep enough to keep every worker busy — several jobs each.
  */
 const CPU_TUNING: Record<EngineId, PipelineTuning> = {
-  piper: { lookahead: 4, primeSeconds: 1.5, maxChars: 240 },
+  // Six, not four: a high-quality Piper voice on a slow processor grows to four workers
+  // (synth-host/pool-size.ts: piperPoolForRate), and each needs a sentence to work on.
+  piper: { lookahead: 6, primeSeconds: 1.5, maxChars: 240 },
   kokoro: { lookahead: 24, primeSeconds: 3.5, maxChars: 160 },
   supertonic: { lookahead: 20, primeSeconds: 3.5, maxChars: 160 },
 };

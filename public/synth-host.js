@@ -231,6 +231,19 @@
 		return clamp(cores - 2, 2, 4);
 	}
 	/**
+	* Workers for a Piper voice, from how fast it turned out to be (`rtf`: seconds of work per second
+	* of speech, over the last sentences).
+	*
+	* A medium voice is faster than speech on one worker. A high-quality one is about three times the
+	* work, and on a slower processor falls behind: Lessac took 2.7 s per second of speech on one
+	* worker, so every sentence waited about 20 s for the next. Each worker takes another sentence, so
+	* enough of them bring it back under real time. Phones keep one: memory is the limit there.
+	*/
+	function piperPoolForRate(rtf, env) {
+		if (env.touchFirst || !(rtf > .8)) return 1;
+		return clamp(Math.ceil(rtf / .7), 1, clamp(Math.max(1, env.cores) - 2, 1, 4));
+	}
+	/**
 	* The pool size the engine's *actual* execution provider justifies.
 	*
 	* Worker 0 reports the provider it ended up on (`ready.executionProvider`), which is the only
@@ -473,6 +486,7 @@
 				dispatched.delete(data.chunkIndex);
 				const took = started ? (performance.now() - started.at) / 1e3 : 0;
 				console.info(`[aloud] ${clock()} ${workerName(w)} → chunk ${data.chunkIndex} in ${took.toFixed(1)}s → ${seconds.toFixed(1)}s audio · RTF ${seconds > 0 ? (took / seconds).toFixed(2) : "?"}× · ` + poolState());
+				if (seconds >= 1 && took > 0) growPiperPool(took / seconds);
 				jobs.release(w, readyWorkers);
 				relay(data);
 				return;
@@ -585,6 +599,7 @@
 		} : await probeGpu();
 		if (disposed || gen !== initGeneration) return;
 		poolIsFixed = requested > 0;
+		piperRates.length = 0;
 		targetSize = engine === "piper" ? 1 : poolIsFixed ? clampPool(requested) : autoPoolSize(engine, probe.available, poolEnv());
 		verbose = msg.config.debug === true;
 		initMsg = msg;
@@ -611,6 +626,20 @@
 		if (wanted <= targetSize) return;
 		console.info(`[aloud] ${clock()} engine reported "${provider}"; growing pool ${targetSize} → ${wanted} worker(s)`);
 		targetSize = wanted;
+	}
+	/** The last few sentences' work per second of speech, for a Piper voice (see piperPoolForRate). */
+	var piperRates = [];
+	/** A Piper voice slower than speech gets more workers, as Kokoro and Supertonic always do. */
+	function growPiperPool(rtf) {
+		if (!initMsg || poolIsFixed || initMsg.config.engine !== "piper") return;
+		piperRates.push(rtf);
+		if (piperRates.length > 3) piperRates.shift();
+		if (piperRates.length < 2) return;
+		const wanted = piperPoolForRate(Math.min(...piperRates.slice(-2)), poolEnv());
+		if (wanted <= targetSize) return;
+		console.info(`[aloud] ${clock()} piper is slower than speech here (RTF ${piperRates.at(-1).toFixed(2)}×); growing pool ${targetSize} → ${wanted} worker(s)`);
+		targetSize = wanted;
+		spawnRest();
 	}
 	function handleFromContent(msg) {
 		if (!msg || typeof msg !== "object") return;

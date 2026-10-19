@@ -149,3 +149,31 @@ describe('planLanguages', () => {
     expect(plan[0]).toEqual({ language: 'el', source: 'script' });
   });
 });
+
+describe('a short selection', () => {
+  /** The browser's detector on a few words: an answer, never a reliable one, often wrong. */
+  const short: Detector = async (text) => {
+    const answers: Record<string, string> = { 'bordereau de change': 'fr', 'student housing': 'ko', 'merci beaucoup': 'sr' };
+    return { language: answers[text] ?? 'und', reliable: false };
+  };
+
+  it('takes an unsure answer that names a language the reader reads, in its own alphabet', async () => {
+    const plan = await planLanguages([p('bordereau de change')], short, 'en', new Map(), 'en', new Set(['en', 'fr']));
+    expect(plan[0]).toEqual({ language: 'fr', source: 'detected' });
+  });
+
+  it('keeps the page language when the language is not one the reader reads', async () => {
+    const plan = await planLanguages([p('merci beaucoup')], short, 'en', new Map(), 'en', new Set(['en', 'it']));
+    expect(plan[0]!.language).toBe('en');
+  });
+
+  it('never takes a language whose alphabet the words are not written in', async () => {
+    const plan = await planLanguages([p('student housing')], short, 'en', new Map(), 'en', new Set(['en', 'ko']));
+    expect(plan[0]!.language).toBe('en');
+  });
+
+  it('a page (no familiar languages given) is unchanged', async () => {
+    const plan = await planLanguages([p('bordereau de change')], short, 'en', new Map(), 'en');
+    expect(plan[0]!.language).toBe('en');
+  });
+});
