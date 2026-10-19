@@ -40,3 +40,13 @@ describe('commandShortcutFor', () => {
     expect(prettyShortcut('')).toBe('Not set');
   });
 });
+
+describe('default single keys', () => {
+  it('the reader, the note keys and the video keys never share one', async () => {
+    const { DEFAULT_READER_KEYS, DEFAULT_MEDIA_SPEED, DEFAULT_ANNOTATE } = await import('@/shared/settings');
+    const reader = Object.values(DEFAULT_READER_KEYS);
+    const others = [...Object.values(DEFAULT_MEDIA_SPEED.keys), DEFAULT_ANNOTATE.pageKeys.keep, DEFAULT_ANNOTATE.pageKeys.panel].filter((k) => k && k.length === 1);
+    expect(new Set(reader).size).toBe(reader.length);
+    expect(reader.filter((k) => others.includes(k))).toEqual([]);
+  });
+});

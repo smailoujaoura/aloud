@@ -108,7 +108,8 @@ export const DEFAULT_READER_KEYS: ReaderKeys = {
   save: 'm',
   voice: 'v',
   settings: 'o',
-  hide: 'd',
+  // Not D: that is the video speed's "faster".
+  hide: 'a',
   close: 'q',
 };
 
