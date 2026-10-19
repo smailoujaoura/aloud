@@ -268,7 +268,8 @@ export class ControlBar {
     this.host.id = CONTROL_HOST_ID;
     this.host.style.cssText = 'all: initial; position: static;';
     this.root = this.host.attachShadow({ mode: 'closed' });
-    containTyping(this.root); // removed with the host
+    // Unhooked on dispose: the registry it joins is shared, and held on to every closed bar.
+    this.offWindow.push(containTyping(this.root));
     (doc.documentElement ?? doc.body).appendChild(this.host);
 
     this.build(opts.speed);

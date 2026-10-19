@@ -77,3 +77,14 @@ describe('the voice and language button', () => {
     expect(cb.onFollow).toHaveBeenCalled();
   });
 });
+
+describe('a closed bar', () => {
+  it('lets go of its place in the shared typing registry', () => {
+    const roots = () => (globalThis as { __aloudTypingRoots?: Set<ShadowRoot> }).__aloudTypingRoots;
+    const { b, root } = bar();
+    expect(roots()?.has(root)).toBe(true);
+    b.dispose();
+    // Held there, every bar a tab ever showed stayed in memory until the page was left.
+    expect(roots()?.has(root)).toBe(false);
+  });
+});
