@@ -12,6 +12,8 @@ import { log } from '@/shared/log';
 import { extractArticle } from '@/extract/readability';
 import type { NewQueueItem } from '@/shared/reading-queue';
 import { replyLater } from '@/shared/reply';
+import { normalizePosition } from '@/shared/record-shapes';
+import type { SavedPosition } from '@/shared/reading-positions';
 
 interface AloudGlobal {
   __aloudLoaded?: boolean;
@@ -27,7 +29,7 @@ export default defineUnlistedScript(() => {
   if (w.__aloudLoaded) return;
   w.__aloudLoaded = true;
 
-  const activate = (mode: ActivateMode, targetElement?: Element | null, fresh = false): void => {
+  const activate = (mode: ActivateMode, targetElement?: Element | null, fresh = false, resumeAt: SavedPosition | null = null): void => {
     // Chromium hands a PDF tab to a plugin `<embed>`: the document's URL is the PDF, but its DOM
     // holds no text at all, so extraction can only ever fail here ("this page doesn't look like
     // an article"). The background opens Aloud's own PDF reader instead — it catches PDFs by URL
@@ -49,14 +51,14 @@ export default defineUnlistedScript(() => {
     if (session) void session.dispose();
     const next = new ReaderSession();
     w.__aloudSession = next;
-    void next.begin(mode, { targetElement: targetElement ?? null }).catch((err) =>
+    void next.begin(mode, { targetElement: targetElement ?? null, resumeAt }).catch((err) =>
       log.error('session failed to start:', err),
     );
   };
   w.__aloudActivate = activate;
 
   browser.runtime.onMessage.addListener((msg: unknown, _sender, sendResponse: (reply: unknown) => void) => {
-    const m = msg as { type?: string; mode?: ActivateMode; targetElementId?: number; fresh?: boolean };
+    const m = msg as { type?: string; mode?: ActivateMode; targetElementId?: number; fresh?: boolean; resumeAt?: unknown };
     // "Add page to reading queue": extract now, while the page is open and readable. Answered with
     // `sendResponse`: a returned promise arrives as `undefined` in Chromium 120 (shared/reply.ts).
     if (m?.type === 'extract-for-queue') return replyLater(sendResponse, extractForQueue());
@@ -70,7 +72,7 @@ export default defineUnlistedScript(() => {
         /* not available / stale id */
       }
     }
-    activate(m.mode ?? 'article', target, m.fresh === true);
+    activate(m.mode ?? 'article', target, m.fresh === true, m.resumeAt == null ? null : normalizePosition(m.resumeAt));
     return false;
   });
 

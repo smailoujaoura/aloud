@@ -11,7 +11,7 @@
  */
 import type { Block } from '@/extract/block-model';
 import type { SkipSettings } from '@/shared/settings';
-import { apparatusText, endSectionHeading, skipSelector, type PageRules } from '@/extract/site-rules';
+import { apparatusText, endSectionHeading, rulesFor, skipSelector, SKIP_MARK, type Category, type PageRules } from '@/extract/site-rules';
 
 /** Headings that open an end-of-article apparatus rather than more of the article. */
 const REFERENCE_HEADING =
@@ -105,4 +105,61 @@ export function readableLength(root: Element, skip: SkipSettings, rules?: PageRu
     chars += (node.nodeValue ?? '').replace(/\s+/g, ' ').length;
   }
   return chars;
+}
+
+/**
+ * Before a page is saved for later (the reading queue), mark on the copy what this page's rules
+ * would leave unread — citation markers, infoboxes, the reference list and everything under
+ * "References" — with why (SKIP_MARK). Read later from the copy, a saved Wikipedia article said
+ * 190 "[12]"s and ended on its bibliography: the copy had lost the classes the rules look for, and
+ * the "References" heading itself.
+ *
+ * `copyOf` maps an element of the live page to its copy, which may have been removed already.
+ */
+export function markUnread(live: Document, copyOf: (el: Element) => Element | undefined, url?: string): void {
+  const rules = rulesFor(live, url);
+  const marks = new Map<Element, Set<Category>>();
+  const mark = (el: Element, why: Category): void => {
+    const set = marks.get(el) ?? new Set<Category>();
+    set.add(why);
+    marks.set(el, set);
+  };
+  const selectors: Record<Category, string[]> = {
+    ...rules.skip,
+    references: [...rules.skip.references, REFERENCE_LIST, 'sup.reference'],
+  };
+  for (const why of Object.keys(selectors) as Category[]) {
+    for (const selector of selectors[why]) {
+      try {
+        live.querySelectorAll(selector).forEach((el) => mark(el, why));
+      } catch {
+        /* a selector this browser cannot parse */
+      }
+    }
+  }
+
+  // End sections: the heading, and everything after it up to the next heading of its level.
+  const body = live.body;
+  if (body) {
+    const headings = [...body.querySelectorAll('h1, h2, h3, h4, h5, h6')];
+    const all = [...body.querySelectorAll('*')];
+    headings.forEach((heading, i) => {
+      const key = headingKey(heading.textContent ?? '');
+      const why: Category | null = REFERENCE_HEADING.test(key) ? 'references' : (rules.sections.find((s) => s.re.test(key))?.as ?? null);
+      if (!why) return;
+      const level = HEADING_LEVEL[heading.tagName] ?? 2;
+      const stop = headings.slice(i + 1).find((h) => (HEADING_LEVEL[h.tagName] ?? 2) <= level) ?? null;
+      const inSection = (el: Element): boolean =>
+        !!(heading.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) &&
+        !heading.contains(el) &&
+        (!stop || (!!(el.compareDocumentPosition(stop) & Node.DOCUMENT_POSITION_FOLLOWING) && !el.contains(stop)));
+      mark(heading, why);
+      for (const el of all) {
+        // Only the outermost: a mark covers what is inside it.
+        if (inSection(el) && !(el.parentElement && inSection(el.parentElement))) mark(el, why);
+      }
+    });
+  }
+
+  for (const [el, why] of marks) copyOf(el)?.setAttribute(SKIP_MARK, [...why].join(' '));
 }

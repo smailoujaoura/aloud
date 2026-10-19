@@ -13,7 +13,7 @@ import { browser } from 'wxt/browser';
 import { ReaderSession } from '@/content/session';
 import { elementToText, extractArticle } from '@/extract/readability';
 import { el } from '@/shared/dom';
-import { documentKey } from '@/shared/position-match';
+import { documentKey, type SavedPosition } from '@/shared/position-match';
 import { formatListeningTime } from '@/shared/reading-history';
 import {
   clearQueue,
@@ -27,7 +27,7 @@ import {
 } from '@/shared/reading-queue';
 import { DEFAULT_SKIP, getSettings, type SkipSettings } from '@/shared/settings';
 import { readableLength } from '@/content/skip-rules';
-import { rulesFor } from '@/extract/site-rules';
+import { savedRules } from '@/extract/site-rules';
 import { log } from '@/shared/log';
 import { $, toast } from './feedback';
 import { heldCount, releaseHeld, sanitised } from './article-sanitise';
@@ -54,7 +54,7 @@ function listeningSeconds(item: QueueItem): number | null {
   if (chars == null) {
     try {
       const doc = new DOMParser().parseFromString(item.article.html || '', 'text/html');
-      chars = item.article.html ? readableLength(doc.body, skipRules, rulesFor(doc, item.url)) : item.article.text.length;
+      chars = item.article.html ? readableLength(doc.body, skipRules, savedRules(doc)) : item.article.text.length;
     } catch {
       chars = item.article.text.length;
     }
@@ -168,7 +168,8 @@ async function removeItem(id: string): Promise<void> {
 
 // ---- playing ---------------------------------------------------------------
 
-export async function play(id: string): Promise<void> {
+/** `resumeAt`: start there (a note's sentence), not where this article was last left. */
+export async function play(id: string, resumeAt: SavedPosition | null = null): Promise<void> {
   const item = queue.find((q) => q.id === id);
   if (!item) return;
   await stopPlaying();
@@ -202,10 +203,12 @@ export async function play(id: string): Promise<void> {
         title: item.title,
         lang: article.lang,
         key: documentKey(item.url),
+        savedPage: true,
       },
       source: { title: item.title, site: item.site, reopen: { kind: 'queue', id: item.id, url: item.url } },
       autoplay: true,
       showTips: false,
+      resumeAt,
       onFinished: () => void next(id),
     })
     .catch((err) => log.error('[queue] reader failed to start:', err));
@@ -316,7 +319,7 @@ async function downloadArticle(item: QueueItem): Promise<QueuedArticle | null> {
     const base = doc.createElement('base');
     base.href = res.url;
     doc.head.prepend(base);
-    const extracted = extractArticle(doc);
+    const extracted = extractArticle(doc, { forSaving: true, url: res.url });
     if (!extracted.html && extracted.text.length < 200) throw new Error("it doesn't look like an article");
     const article: QueuedArticle = { html: extracted.html, text: extracted.text, lang: extracted.lang, byline: extracted.byline };
     const title = extracted.title || item.title;

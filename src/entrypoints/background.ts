@@ -22,7 +22,7 @@ import { defineBackground } from 'wxt/utils/define-background';
 import { PORT_NAME, type ActivateMode, type LibraryTab, type ToBackgroundMessage } from '@/shared/messages';
 import { NOTES_FULL_MESSAGE, addNote } from '@/shared/notes';
 import { siteOf } from '@/shared/doc-source';
-import { documentKey } from '@/shared/position-match';
+import { documentKey, type SavedPosition } from '@/shared/position-match';
 import { putPdf, sweepPdfHandoffs } from '@/pdf/handoff';
 import { readCacheSizes, readingOnGpu, usableVoices } from '@/engine/installed-voices';
 import { addToQueue, type NewQueueItem } from '@/shared/reading-queue';
@@ -36,7 +36,7 @@ import { replyLater } from '@/shared/reply';
 import { findOwnTab, isOwnTab } from '@/shared/own-tab';
 import { persistChanges, type MarksHandoff } from '@/pdf/annotations/sync';
 import type { Mark } from '@/pdf/annotations/model';
-import { normalizeStoredMarks } from '@/shared/record-shapes';
+import { normalizePosition, normalizeStoredMarks } from '@/shared/record-shapes';
 
 const CONTENT_FILE = '/reader-inject.js';
 /** The media speed control (src/entrypoints/speed-inject.ts). */
@@ -247,8 +247,9 @@ export default defineBackground({
       } else if (m?.type === 'open-queue') {
         void openLibrary('queue');
       } else if (m?.type === 'open-and-read') {
-        const url = (m as { url?: string }).url;
-        if (url) void openAndRead(url).catch((err) => console.warn('[aloud] could not reopen', url, err));
+        const { url, at } = m as { url?: string; at?: unknown };
+        const resumeAt = at == null ? null : normalizePosition(at);
+        if (url) void openAndRead(url, resumeAt).catch((err) => console.warn('[aloud] could not reopen', url, err));
       } else if (m?.type === 'open-note') {
         const note = m as { id?: string; url?: string; fragmentUrl?: string; canInject?: boolean; checkAccess?: boolean };
         if (note.id && note.url) {
@@ -407,7 +408,13 @@ async function openWalkthrough(): Promise<void> {
   }
 }
 
-async function activate(tabId: number, mode: ActivateMode, targetElementId?: number, fresh = false): Promise<void> {
+async function activate(
+  tabId: number,
+  mode: ActivateMode,
+  targetElementId?: number,
+  fresh = false,
+  resumeAt: SavedPosition | null = null,
+): Promise<void> {
   // A PDF is never an article: Chromium hands the tab to a plugin <embed> with no text in its
   // DOM, and Firefox renders it in a privileged viewer no content script can touch. Read it in
   // Aloud's own PDF page instead of injecting into something unreadable.
@@ -454,7 +461,7 @@ async function activate(tabId: number, mode: ActivateMode, targetElementId?: num
     return;
   }
   void browser.scripting.executeScript({ target: { tabId }, files: [ANNOTATE_FILE] }).catch(() => undefined);
-  await sendActivate(tabId, mode, targetElementId, 2, fresh);
+  await sendActivate(tabId, mode, targetElementId, 2, fresh, resumeAt);
 }
 
 
@@ -506,13 +513,14 @@ async function sendActivate(
   targetElementId: number | undefined,
   retries: number,
   fresh = false,
+  resumeAt: SavedPosition | null = null,
 ): Promise<void> {
   try {
-    await browser.tabs.sendMessage(tabId, { type: 'activate', mode, targetElementId, fresh });
+    await browser.tabs.sendMessage(tabId, { type: 'activate', mode, targetElementId, fresh, resumeAt });
   } catch (err) {
     if (retries > 0) {
       await new Promise((r) => setTimeout(r, 120));
-      return sendActivate(tabId, mode, targetElementId, retries - 1, fresh);
+      return sendActivate(tabId, mode, targetElementId, retries - 1, fresh, resumeAt);
     }
     console.warn('[aloud] activate message not delivered:', err);
   }
@@ -746,7 +754,7 @@ async function sendWithRetry<T>(tabId: number, message: unknown, retries: number
  * "Continue" / "Listen from here" in the Library: open the document and start the reader, which
  * resumes at the saved position. The Library has already asked for permission for the site.
  */
-async function openAndRead(url: string): Promise<void> {
+async function openAndRead(url: string, resumeAt: SavedPosition | null = null): Promise<void> {
   if (looksLikePdf(url)) {
     await openPdfReader(url, null);
     return;
@@ -758,13 +766,15 @@ async function openAndRead(url: string): Promise<void> {
   if (open?.id != null) {
     await browser.tabs.update(open.id, { active: true });
     await focusWindow(open.windowId);
-    await activate(open.id, 'article', undefined, true);
+    // The sentence asked for goes with the activation: the reader being replaced saves its own
+    // place as it closes, over the one the Library stored.
+    await activate(open.id, 'article', undefined, true, resumeAt);
     return;
   }
   const tab = await browser.tabs.create({ url });
   if (tab.id == null) return;
   await waitForLoad(tab.id);
-  await activate(tab.id, 'article');
+  await activate(tab.id, 'article', undefined, false, resumeAt);
 }
 
 /**

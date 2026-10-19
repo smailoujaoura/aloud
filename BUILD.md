@@ -57,15 +57,19 @@ Loading `.output/firefox-mv3` in Chrome produces:
 toolbar button does nothing, because the background never loaded and therefore never registered
 `action.onClicked`. Load `.output/chrome-mv3` instead.
 
-The synthesis worker bundle is deliberately **not** per-browser: `scripts/build-worker.mjs`
-targets `['firefox128', 'chrome120']` and lets esbuild take the lower bound, so the shared
-`public/` output cannot be clobbered by whichever browser was built last. Runtime differences in
-the worker are capability checks (`src/shared/browser-env.ts`), not build flags.
+The synthesis worker targets `['firefox128', 'chrome120']` for both browsers (esbuild takes the
+lower bound), and its runtime differences are capability checks (`src/shared/browser-env.ts`).
+It is rebuilt for each browser by the `build:before` hook for one reason only: the Chrome build
+removes transformers.js's unused cdn.jsdelivr.net default for ONNX Runtime (Chrome asks for unused
+remote-code paths to be removed), while the Firefox build bundles transformers.js exactly as
+published (Mozilla does not allow modified libraries). See `scripts/build-worker.mjs`.
 
 ## What `npm run build` does
 
-1. `wxt.config.ts`'s `build:before` hook runs `scripts/prebuild.mjs`, which:
-   - `scripts/gen-voices.mjs` — regenerates `public/models.json` from `scripts/models.base.json`.
+1. `wxt.config.ts`'s `build:before` hook runs `scripts/prebuild.mjs <browser>`, which:
+   - uses the committed `public/models.json` as it is. Refreshing the voice catalogue from Hugging
+     Face is a separate maintainer step (`npm run voices`, i.e. `scripts/gen-voices.mjs`), reviewed
+     as an ordinary diff, so a build needs no network after `npm ci`.
    - `scripts/sync-assets.mjs` — copies ONNX Runtime Web's `ort.bundle.min.mjs` +
      `ort-wasm-simd-threaded[.jsep].{mjs,wasm}` from `node_modules` into `public/vendor/ort/`,
      and pdf.js's `pdf.min.mjs` + `pdf.worker.min.mjs`, plus its `standard_fonts/` (the Base-14
@@ -115,7 +119,7 @@ is verified after download (`src/engine/model-cache.ts`).
 
 | Warning | Count | Why it is expected |
 |---|---|---|
-| `DANGEROUS_EVAL` in `vendor/ort/ort.bundle.min.mjs` and `vendor/ort/ort-wasm-simd-threaded.jsep.mjs` | 2 | ONNX Runtime's WASM bootstrap. Covered by our CSP `'wasm-unsafe-eval'`. |
+| `DANGEROUS_EVAL` in `vendor/ort/ort.bundle.min.mjs` and `vendor/ort/ort-wasm-simd-threaded.jsep.mjs` | 2 | Emscripten's way of finding the global object: `typeof globalThis == "object" ? globalThis : Function("return this")()`. Every browser Aloud supports has `globalThis`, so the `Function` branch never runs, and the extension CSP (no `'unsafe-eval'`) would refuse it if it did. (`'wasm-unsafe-eval'` is for compiling WebAssembly, not for this.) |
 | `DANGEROUS_EVAL` in `vendor/pdfjs/pdf.min.mjs` and `vendor/pdfjs/pdf.worker.min.mjs` | 2 | pdf.js's optional expression evaluator for PDF function objects. We load it with `isEvalSupported: false` (`src/pdf/load-pdf.ts`), so the branch is never taken. |
 | `UNSAFE_VAR_ASSIGNMENT` "call to import" in `vendor/rt/ort-loader-*.js`, `vendor/ort/ort.bundle.min.mjs`, `chunks/pdf-*.js` and `vendor/pdfjs/pdf*.min.mjs` | 4 | Deliberate runtime `import()` of a vendored module by URL — both loaders resolve it with `browser.runtime.getURL`, so the argument is never page-controlled. |
 | `UNSAFE_VAR_ASSIGNMENT` "assignment to innerHTML" in `reader-inject.js` and `chunks/session-*.js` | 4 | Inside the bundled `@mozilla/readability`, which parses a *clone* of the document and is bundled into the content script and into the shared reader-session chunk the PDF page and the walkthrough both load. None of our own code assigns `innerHTML`; the control bar, options page, PDF reader and walkthrough build every node with `createElement` (see `src/shared/dom.ts`). |

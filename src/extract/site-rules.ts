@@ -17,7 +17,16 @@
 import data from './site-rules.json';
 import type { SkipSettings } from '@/shared/settings';
 
-type Category = 'always' | keyof SkipSettings;
+export type Category = 'always' | keyof SkipSettings;
+const CATEGORIES: readonly Category[] = ['always', 'references', 'captions', 'tables', 'code'];
+
+/**
+ * On a saved copy of a page (the reading queue), what the page's rules would not read, and why:
+ * `data-aloud-skip="references"`. Saving loses the page's classes and much of its structure
+ * (Readability), so the rules could not find these again; the mark survives, and whether each
+ * kind is read is still the reader's settings when it plays (see `markUnread`, `savedRules`).
+ */
+export const SKIP_MARK = 'data-aloud-skip';
 
 interface RawRule {
   id: string;
@@ -101,6 +110,18 @@ export function rulesFor(doc: Document, url: string = doc.location?.href ?? ''):
     }
   }
   return out;
+}
+
+/**
+ * Rules for a saved copy: what was marked when it was saved, and the generic rules that go by
+ * words (end-section headings, "Was this page helpful?"), which need no markup.
+ */
+export function savedRules(doc: Document): PageRules {
+  const rules = rulesFor(doc, '');
+  rules.ids.push('saved-copy');
+  rules.roots = [];
+  for (const why of CATEGORIES) rules.skip[why].push(`[${SKIP_MARK}~="${why}"]`);
+  return rules;
 }
 
 /** One selector for everything not to be said, given the reader's skip settings ('' for none). */

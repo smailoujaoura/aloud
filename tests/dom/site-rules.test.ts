@@ -2,9 +2,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { buildTextIndex } from '@/extract/text-index';
 import { buildArticlePlaylist } from '@/content/playlist';
-import { rulesFor, skipSelector, ruleRoot } from '@/extract/site-rules';
+import { rulesFor, skipSelector, ruleRoot, savedRules } from '@/extract/site-rules';
+import { extractArticle } from '@/extract/readability';
 import { readableLength } from '@/content/skip-rules';
-import { DEFAULT_SKIP } from '@/shared/settings';
+import { DEFAULT_SKIP, type SkipSettings } from '@/shared/settings';
 
 /** Current MediaWiki (Parsoid) markup, cut down: what a Wikipedia article looks like to the reader. */
 const WIKI = `
@@ -51,5 +52,36 @@ describe('site rules on a Wikipedia article', () => {
     const read = readableLength(document.querySelector('.mw-parser-output')!, DEFAULT_SKIP, rules);
     expect(read).toBeLessThan(all * 0.65);
     expect(read).toBeGreaterThan(200);
+  });
+});
+
+describe('a Wikipedia article saved for later (the reading queue)', () => {
+  /** Save as the queue does, then plan the saved copy as the queue's reader does. */
+  function savedPlan(skip: SkipSettings): string {
+    document.head.innerHTML = '<meta name="generator" content="MediaWiki 1.47.0-wmf.24"><title>Ayahuasca</title>';
+    document.body.innerHTML = WIKI.replace(/<meta[^>]*>/, '');
+    const saved = extractArticle(document, { forSaving: true, url: 'https://en.wikipedia.org/wiki/Ayahuasca' });
+    const host = document.createElement('article');
+    host.innerHTML = saved.html;
+    document.body.replaceChildren(host);
+    const rules = savedRules(document);
+    const index = buildTextIndex(host, { forReader: true, skip: skipSelector(rules, skip) });
+    const plan = buildArticlePlaylist({ index, lang: 'en', maxChars: 300, normalize: (t) => t, referenceText: index.fullText, title: '', skip, rules });
+    return plan.filter((p) => p.eligible).map((p) => p.spokenText).join(' | ');
+  }
+
+  it('is read as the page was: no markers, [edit], infobox, notes or links', () => {
+    const said = savedPlan(DEFAULT_SKIP);
+    expect(said).toContain('Ayahuasca is a South American psychoactive decoction prepared from the vine.');
+    expect(said).toContain('Sections of the vine are macerated');
+    expect(said).not.toMatch(/\[|note 1|edit|modifica|Source plant|Pronounced|external link/);
+  });
+
+  it('keeps what was marked, so references are read again when the setting says so', () => {
+    const said = savedPlan({ ...DEFAULT_SKIP, references: false });
+    expect(said).toContain('Pronounced as ayahuasca');
+    expect(said).toMatch(/\[1\]/);
+    // Never read either way: the infobox and the edit links.
+    expect(said).not.toMatch(/Source plant|modifica/);
   });
 });

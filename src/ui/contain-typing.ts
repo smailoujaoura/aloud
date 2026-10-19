@@ -17,13 +17,35 @@ function editable(target: EventTarget | null): boolean {
   return false;
 }
 
+/**
+ * Every root whose typing is contained, so its focused field can be asked about (below). Kept on
+ * the global object, not in this module: the reader and the note editor are injected as separate
+ * scripts, each with its own copy of this module, and only the global is shared between them.
+ */
+const roots: Set<ShadowRoot> = ((globalThis as { __aloudTypingRoots?: Set<ShadowRoot> }).__aloudTypingRoots ??= new Set());
+
 /** Contain typing in `root`'s text fields; returns the unhook. */
 export function containTyping(root: ShadowRoot): () => void {
   const stop = (e: Event): void => {
     if (editable(e.composedPath()[0] ?? null)) e.stopPropagation();
   };
   for (const type of KEY_EVENTS) root.addEventListener(type, stop);
+  roots.add(root);
   return () => {
     for (const type of KEY_EVENTS) root.removeEventListener(type, stop);
+    roots.delete(root);
   };
+}
+
+/**
+ * Is one of Aloud's own text fields focused — a note, a tag, a search?
+ *
+ * Aloud's own key listeners on the window (the reader's one-key controls) hear a key before it
+ * reaches the field, and a closed shadow root hides the field from them: the event's target and
+ * path stop at the root's host. Typing "banana" into a note saved "aa"; the other letters were
+ * reader keys. The roots themselves can say what has focus inside them.
+ */
+export function typingInOwnField(): boolean {
+  for (const root of roots) if (root.host.isConnected && editable(root.activeElement)) return true;
+  return false;
 }

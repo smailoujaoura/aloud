@@ -12,7 +12,7 @@
 
 import { SmoothScroller, scrollerOf } from './smooth-scroll';
 import type { WordHighlightStyle } from '@/shared/settings';
-import { backgroundUnder, cssColor, parseColor, readableTextColor, toneOf, washFor, type PageTone } from './contrast';
+import { backgroundUnder, blend, cssColor, parseColor, readableTextColor, toneOf, washFor, type PageTone, type Rgba } from './contrast';
 
 const HIGHLIGHT_NAME = 'aloud-sentence';
 const WORD_HIGHLIGHT_NAME = 'aloud-word';
@@ -298,6 +298,7 @@ export class Highlighter {
       dark: WORD_DARK_TEXT_NAME,
       light: WORD_LIGHT_TEXT_NAME,
       priority: 2,
+      word: true,
       held: (h) => (this.wordHighlight = h),
     });
   }
@@ -308,9 +309,9 @@ export class Highlighter {
    */
   private paint(
     range: Range,
-    names: { plain: string; dark: string; light: string; priority?: number; held: (h: Highlight) => void },
+    names: { plain: string; dark: string; light: string; priority?: number; word?: boolean; held: (h: Highlight) => void },
   ): void {
-    const ink = this.opts.keepReadable === false ? null : this.inkFor(range);
+    const ink = this.opts.keepReadable === false ? null : this.inkFor(range, names.word === true);
     const wanted = ink === DARK_INK ? names.dark : ink === LIGHT_INK ? names.light : names.plain;
     for (const name of [names.plain, names.dark, names.light]) {
       const existing = CSS.highlights.get(name);
@@ -335,7 +336,7 @@ export class Highlighter {
    * paints a background (everything above it is transparent by default, and `html` falls back to
    * white — or to the canvas colour a dark page sets).
    */
-  private inkFor(range: Range): string | null {
+  private inkFor(range: Range, word = false): string | null {
     const node = range.startContainer;
     const element = (node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement) as Element | null;
     const view = this.doc.defaultView;
@@ -358,6 +359,10 @@ export class Highlighter {
     // Invisible text stays invisible: the PDF page's text layer lies over the drawn page, and
     // giving its letters a colour drew a second, larger, shifted copy of every highlighted line.
     if (text.alpha < 0.05) return null;
+    // A word sits on its own fill, over the sentence's: judged against the sentence alone, a
+    // black word colour at full strength left black letters on black.
+    const fill = word ? wordFill(this.wash, this.opts.wordStyle ?? 'darker', this.wordMark) : null;
+    if (fill) return readableTextColor(text, blend(highlight, background), fill);
     return readableTextColor(text, background, highlight);
   }
 
@@ -397,13 +402,25 @@ export interface WordMark {
   tone: PageTone;
 }
 
+/** The chosen word colour as painted: on a dark page lifted towards white, as the sentence wash is. */
+function markRgb(mark: WordMark): Rgba['rgb'] {
+  const lift = (v: number): number => Math.round(v + (255 - v) * 0.3);
+  return (mark.tone === 'dark' ? mark.rgb.map(lift) : mark.rgb) as Rgba['rgb'];
+}
+
+/** What the word is filled with, as wordStyleCss paints it; null for an underline (no fill). */
+export function wordFill(color: string, style: WordHighlightStyle, mark?: WordMark | null): Rgba | null {
+  if (style === 'underline') return null;
+  if (mark) return { rgb: markRgb(mark), alpha: Math.min(1, Math.max(0.15, mark.strength)) };
+  return parseColor(wordTone(color).fill);
+}
+
 export function wordStyleCss(color: string, style: WordHighlightStyle, mark?: WordMark | null): string {
   if (mark) {
     const strength = Math.min(1, Math.max(0.15, mark.strength));
     // On a dark page the colour is lifted towards white, as the sentence wash is, so the word
     // glows rather than going muddy; its line is the light tone there and a deep one on white.
-    const lift = (v: number): number => Math.round(v + (255 - v) * 0.3);
-    const rgb = mark.tone === 'dark' ? mark.rgb.map(lift) : mark.rgb;
+    const rgb = markRgb(mark);
     const line = mark.tone === 'dark' ? rgb : mark.rgb.map((v) => Math.round(v * 0.7));
     if (style === 'underline') return `color: inherit; text-decoration: underline 3px rgb(${line.join(', ')}); text-underline-offset: 2px;`;
     return `background-color: rgba(${rgb.join(', ')}, ${strength.toFixed(2)}); color: inherit;`;

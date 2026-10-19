@@ -43,6 +43,7 @@ import {
   loadPosition,
   resumeIndex,
   savePosition,
+  type SavedPosition,
 } from '@/shared/reading-positions';
 import { PORT_NAME, type ActivateMode, type SessionState } from '@/shared/messages';
 import { siteOf, type DocSource } from '@/shared/doc-source';
@@ -54,8 +55,9 @@ import { countWords, recordCompleted, recordHeard, type Heard } from '@/shared/l
 import { log } from '@/shared/log';
 import { capabilities } from '@/shared/browser-env';
 import { isTypingEvent } from '@/media-speed/keys';
+import { typingInOwnField } from '@/ui/contain-typing';
 import { estimatedWordTimings } from '@/audio/estimate-words';
-import { ruleRoot, rulesFor, skipSelector } from '@/extract/site-rules';
+import { ruleRoot, rulesFor, savedRules, skipSelector } from '@/extract/site-rules';
 import { GPU_GUIDE_URL } from '@/shared/links';
 
 import { backendOf, tuningFor, type SynthBackend } from './engine-tuning';
@@ -86,6 +88,12 @@ interface BeginOptions {
    * unchanged; only the "what is the article, and where does it live" step is skipped.
    */
   knownArticle?: KnownArticle | null;
+  /**
+   * Where to start, as the Library asked ("Listen from here", "Continue"). Used as given rather
+   * than read back from storage: a reader already open in that tab saves its own place as it
+   * closes, after the Library saved this one, and the new reader started at the old place.
+   */
+  resumeAt?: SavedPosition | null;
   /**
    * Whether this session may show the one-time tips card above the bar. The walkthrough passes
    * `false`: its demo session exists to *show* the bar, with every one of those tips already
@@ -125,6 +133,12 @@ export interface KnownArticle {
    * reader supplies its own.
    */
   key?: string;
+  /**
+   * A web page saved for later (the reading queue), not a PDF: what its site's rules would not
+   * read was marked when it was saved (content/skip-rules.ts: markUnread), and is skipped here
+   * as it would be on the page.
+   */
+  savedPage?: boolean;
 }
 
 /** A selection snapshot, taken before any async work can disturb it. */
@@ -227,6 +241,7 @@ export class ReaderSession {
   /** Seconds of speech in each synthesised sentence, lead silence excluded. */
   private readonly audioSeconds = new Map<number, number>();
   private sourceHint: BeginOptions['source'] | null = null;
+  private requestedResume: SavedPosition | null = null;
   private keepHistory = true;
   /** Listening not yet written to history, and what this session has measured of the voice's pace. */
   private listening = { pendingSeconds: 0, spokenChars: 0, spokenSeconds: 0, lastWrite: 0, pace1xSeconds: 0 };
@@ -325,6 +340,7 @@ export class ReaderSession {
     this.statusHook = opts.onStatus ?? null;
     this.sourceHint = opts.source ?? null;
     this.keepHistory = opts.keepHistory ?? true;
+    this.requestedResume = opts.resumeAt ?? null;
     // Snapshot the page selection *now*, before any await or DOM work can disturb it.
     if (mode === 'selection') this.selection = snapshotSelection();
     // "Read selection" / "Read from here" are explicit "start reading now" actions.
@@ -664,9 +680,9 @@ export class ReaderSession {
         throw new Error("This page doesn't look like an article.");
       }
       // What the site rules say (extract/site-rules.ts): where the article is, and what in it is
-      // never said — citation markers, edit links, infoboxes, share bars. Not for an article
-      // Aloud already holds (a PDF), whose text has none of a site's markup.
-      const rules = known ? null : rulesFor(document);
+      // never said — citation markers, edit links, infoboxes, share bars. A saved page carries
+      // what they found as marks; a PDF has none of a site's markup.
+      const rules = known ? (known.savedPage ? savedRules(document) : null) : rulesFor(document);
       if (rules) log.info('site rules:', rules.ids.filter((id) => !id.startsWith('generic.')).join(', ') || 'generic only');
       const liveRoot = known ? known.root : (rules && ruleRoot(rules, document)) ?? resolveLiveRoot(article, document);
       this.textIndex = buildTextIndex(liveRoot, { forReader: true, skip: rules ? skipSelector(rules, this.settings.skip) : '' });
@@ -2238,9 +2254,12 @@ export class ReaderSession {
    */
   private async maybeResume(): Promise<void> {
     if (this.mode !== 'article' || this.currentPlayId > 0 || !this.docKey) return;
-    const saved = await loadPosition(this.docKey);
+    const requested = this.requestedResume;
+    const saved = requested ?? (await loadPosition(this.docKey));
     const at = resumeIndex(saved, this.playlist.map((p) => p.spokenText));
     if (at == null) return;
+    // Stored as well, over whatever the closing reader wrote, so the page opens here next time too.
+    if (requested) void savePosition(this.docKey, { ...requested, savedAt: Date.now() });
 
     this.currentPlayId = at;
     this.state.currentIndex = at;
@@ -2304,7 +2323,7 @@ export class ReaderSession {
 
   private onReaderKey(e: KeyboardEvent): void {
     if (this.disposed || e.ctrlKey || e.altKey || e.metaKey || e.defaultPrevented || e.isComposing) return;
-    if (e.key.length !== 1 || e.key === ' ' || isTypingEvent(e)) return;
+    if (e.key.length !== 1 || e.key === ' ' || isTypingEvent(e) || typingInOwnField()) return;
     const key = e.key.toLowerCase();
     const keys = this.settings.readerKeys;
     const action = (Object.keys(keys) as Array<keyof ReaderKeys>).find((name) => keys[name] === key);
@@ -2493,6 +2512,7 @@ export class ReaderSession {
     const intent = (e: Event): void => {
       if ((e.target as Element | null)?.id === CONTROL_HOST_ID) return;
       if (e.type === 'keydown' && !/^(ArrowDown|ArrowUp|PageDown|PageUp|Home|End| )$/.test((e as KeyboardEvent).key)) return;
+      if (e.type === 'keydown' && (isTypingEvent(e) || typingInOwnField())) return; // a space in a note
       this.userScrollIntent = Date.now();
     };
     const intents = ['wheel', 'touchmove', 'keydown'] as const;
@@ -2656,8 +2676,10 @@ export class ReaderSession {
     if (!this.playlist.length) return null;
     let chars = 0;
     for (let i = Math.max(0, this.state.currentIndex); i < this.playlist.length; i++) {
+      // What will actually be said: not hidden text, and not a passage in a language set to be
+      // skipped.
       const item = this.playlist[i]!;
-      if (item.eligible !== false) chars += item.spokenText.length;
+      if (this.readable(item)) chars += item.spokenText.length;
     }
     const { spokenChars, pace1xSeconds } = this.listening;
     const perChar = spokenChars > 200 && pace1xSeconds > 0 ? pace1xSeconds / spokenChars : 1 / 14;

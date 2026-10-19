@@ -23,11 +23,12 @@ export async function reopen(source: DocSource, at: NotePosition | null, showQue
   const permission =
     origin && !(how.kind === 'queue' && inQueue(how.id)) ? browser.permissions.request({ origins: [origin] }).catch(() => false) : null;
 
-  if (at) await savePosition(source.key, { ...at, savedAt: Date.now() });
+  const position = at ? { ...at, savedAt: Date.now() } : null;
+  if (position) await savePosition(source.key, position);
 
   if (how.kind === 'queue' && inQueue(how.id)) {
     showQueue();
-    await play(how.id);
+    await play(how.id, position);
     return;
   }
   if (how.kind === 'file') {
@@ -37,9 +38,13 @@ export async function reopen(source: DocSource, at: NotePosition | null, showQue
   }
   if (how.kind === 'pdf' || (await permission)) {
     // The browser will still want a click on ▶ before audio plays in the new tab.
-    await browser.runtime.sendMessage({ type: 'open-and-read', url: how.url });
+    // The position goes along too: a reader already open in that tab overwrites the stored one
+    // as it closes.
+    await browser.runtime.sendMessage({ type: 'open-and-read', url: how.url, at: position });
     return;
   }
+  // Without that site's permission Aloud cannot see which tabs show it (it has no "tabs"
+  // permission, by design), so it cannot pick out an open one: a new tab, resuming from storage.
   await browser.tabs.create({ url: how.url });
   toast('Press the Aloud button on that page to pick up where you were');
 }

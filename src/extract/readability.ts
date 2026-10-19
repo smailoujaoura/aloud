@@ -7,6 +7,7 @@
  * resolved separately against the live DOM (see live-container.ts + fuzzy-align.ts).
  */
 import { Readability, isProbablyReaderable } from '@mozilla/readability';
+import { markUnread } from '@/content/skip-rules';
 import { Eligibility, invisible, revealPending } from './eligibility';
 
 /**
@@ -16,13 +17,26 @@ import { Eligibility, invisible, revealPending } from './eligibility';
  * (`forSaving`): read live, it stays a candidate, read when revealed (content/playlist.ts).
  * Elements are paired by document order, which `cloneNode` preserves.
  */
-function pruneCopy(live: Document, copy: Document, forSaving: boolean): void {
+function pruneCopy(live: Document, copy: Document, forSaving: boolean, url?: string): void {
   const liveEls = live.documentElement.querySelectorAll('*');
   const copyEls = copy.documentElement.querySelectorAll('*');
   if (liveEls.length !== copyEls.length) return; // the page changed under us: prune nothing
   const check = new Eligibility();
   const drop: Element[] = [];
   const blank: Element[] = [];
+  // What the page's rules would not read is marked now, while there is a page to apply them to.
+  if (forSaving) {
+    const index = new Map<Element, number>();
+    liveEls.forEach((el, i) => index.set(el, i));
+    markUnread(
+      live,
+      (el) => {
+        const i = index.get(el);
+        return i == null ? undefined : copyEls[i];
+      },
+      url,
+    );
+  }
   liveEls.forEach((el, i) => {
     if (check.control(el) || (forSaving && el.ownerDocument.defaultView && check.hidden(el))) drop.push(copyEls[i]!);
     // `visibility: hidden` is inherited but can be undone below: the element's own text goes, and a
@@ -35,6 +49,9 @@ function pruneCopy(live: Document, copy: Document, forSaving: boolean): void {
   });
   for (const el of blank) for (const n of [...el.childNodes]) if (n.nodeType === Node.TEXT_NODE) n.remove();
   for (const el of drop) el.remove();
+  // A wiki's "[edit]" link beside every heading made Readability take the heading for link clutter
+  // and drop it: a saved Wikipedia article had no section titles. Never read, never needed.
+  if (forSaving) for (const el of copy.querySelectorAll('.mw-editsection, .editsection')) el.remove();
   // Read live, hidden prose stays a candidate (a disclosure may reveal it), so Readability must see
   // it: it skips anything marked `hidden` or `aria-hidden`, and the reader only plans what
   // Readability kept. The live page decides what is read now (extract/eligibility.ts).
@@ -114,7 +131,12 @@ function skipSubtree(walker: TreeWalker): Node | null {
   return n;
 }
 
-export function extractArticle(doc: Document = document, opts: { forSaving?: boolean } = {}): ExtractedArticle {
+/**
+ * `forSaving`: the article is kept for later (the reading queue): only what shows now is kept, and
+ * what the site's rules would not read is marked (content/skip-rules.ts: markUnread). `url`: where
+ * the document came from, when it is not its own address (a downloaded page).
+ */
+export function extractArticle(doc: Document = document, opts: { forSaving?: boolean; url?: string } = {}): ExtractedArticle {
   const readerable = safeIsReaderable(doc);
   const lang =
     doc.documentElement.getAttribute('lang')?.trim().split('-')[0] ||
@@ -128,7 +150,7 @@ export function extractArticle(doc: Document = document, opts: { forSaving?: boo
 
   try {
     const clone = doc.cloneNode(true) as Document;
-    pruneCopy(doc, clone, opts.forSaving === true);
+    pruneCopy(doc, clone, opts.forSaving === true, opts.url);
     const article = new Readability(clone, {
       charThreshold: 250,
       keepClasses: false,
