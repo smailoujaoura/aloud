@@ -472,6 +472,107 @@ footer .by b { color: var(--ink); }
 @media (max-width: 520px) { .lang-points { grid-template-columns: minmax(0, 1fr); } }
 .gpu-link { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
 .audio-note { margin-top: 18px; font-size: 0.85rem; color: var(--ink-faint); }
+
+/* ---------- the tour: a route of stops, and where you are on it ---------- */
+.top { position: sticky; }
+.progress {
+  position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; pointer-events: none;
+  background: var(--amber-solid); transform-origin: 0 50%; transform: scaleX(var(--p, 0));
+}
+
+.tour { background: var(--surface); }
+.route { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); position: relative; }
+.route::before {
+  content: ""; position: absolute; left: 5.5%; right: 5.5%; top: 21px;
+  border-top: 2px dashed var(--amber-solid);
+}
+.route a { position: relative; display: grid; justify-items: center; align-content: start; text-align: center; gap: 6px; padding: 0 4px; text-decoration: none; color: var(--ink); }
+.route .dot {
+  width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--amber-solid) 18%, var(--surface)); border: 2px solid var(--amber-solid);
+  font: 700 1.05rem/1 var(--display); transition: transform 160ms, background 160ms;
+}
+.route a:hover .dot, .route .end .dot { background: var(--amber-solid); color: var(--amber-on); }
+.route a:hover .dot { transform: translateY(-2px); }
+.route b { font: 600 0.95rem/1.25 var(--sans); }
+.route small { font-size: 0.8rem; line-height: 1.3; color: var(--ink-faint); }
+@media (max-width: 900px) {
+  .route { grid-template-columns: minmax(0, 1fr); gap: 6px; max-width: 26rem; margin-inline: auto; }
+  .route::before { left: 21px; right: auto; top: 22px; bottom: 22px; border-top: 0; border-left: 2px dashed var(--amber-solid); }
+  .route a { grid-template-columns: 44px minmax(0, 1fr); justify-items: start; text-align: left; column-gap: 14px; row-gap: 0; align-items: center; padding: 4px 0; }
+  .route .dot { grid-row: span 2; }
+}
+
+.stop-head { display: flex; align-items: center; gap: 12px; }
+.stop-num {
+  width: 38px; height: 38px; border-radius: 50%; flex: none; display: grid; place-items: center;
+  background: var(--amber-solid); color: var(--amber-on); font: 700 1.05rem/1 var(--display);
+}
+.next-stop { margin-top: clamp(36px, 5vw, 56px); display: flex; justify-content: flex-end; }
+.next-stop a {
+  display: inline-flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 999px;
+  border: 1px solid var(--rule-strong); text-decoration: none; font: 600 0.92rem/1 var(--sans); color: var(--ink);
+}
+.next-stop a:hover { background: var(--surface-2); }
+.next-stop a span { color: var(--ink-faint); font-weight: 500; }
+
+/* Beside the page, on wide screens: the stops as dots, the current one lit. */
+.rail {
+  position: fixed; left: 20px; top: 50%; transform: translateY(-50%); z-index: 9;
+  display: none; flex-direction: column; gap: 12px; list-style: none; margin: 0; padding: 0;
+  opacity: 0; pointer-events: none; transition: opacity 220ms;
+}
+@media (min-width: 1380px) { .rail { display: flex; } }
+.rail.on { opacity: 1; pointer-events: auto; }
+.rail a { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink-faint); font: 500 0.78rem/1 var(--sans); }
+.rail i { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--rule-strong); background: var(--bg); flex: none; transition: transform 160ms, background 160ms, border-color 160ms; }
+.rail span { opacity: 0; transform: translateX(-4px); transition: opacity 160ms, transform 160ms; white-space: nowrap; background: var(--bg); padding: 2px 4px; border-radius: 4px; }
+.rail:hover span { opacity: 1; transform: none; }
+.rail a.done i { border-color: var(--amber-solid); }
+.rail a.here { color: var(--ink); }
+.rail a.here i { background: var(--amber-solid); border-color: var(--amber-solid); transform: scale(1.35); }
+
+.stop-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); gap: clamp(28px, 4vw, 56px); align-items: start; }
+@media (max-width: 900px) { .stop-grid { grid-template-columns: minmax(0, 1fr); } }
+.points { display: grid; gap: 22px; }
+
+/* Stop 1: a cluttered page, and what of it is read. */
+.page-mock {
+  padding: 18px clamp(18px, 3vw, 28px) 20px; border-radius: var(--radius);
+  background: var(--surface); border: 1px solid var(--rule); box-shadow: var(--shadow);
+  font-family: var(--display); overflow: hidden;
+}
+.page-mock .strip { display: flex; flex-wrap: wrap; gap: 6px 14px; padding-bottom: 12px; margin-bottom: 16px; border-bottom: 1px solid var(--rule); font: 0.78rem var(--sans); }
+.page-mock h3 { font-size: 1.45rem; margin: 0 0 12px; }
+.page-mock h3 .quiet { font: 0.75rem var(--sans); margin-left: 8px; vertical-align: 4px; }
+.page-mock p { font-size: 1rem; line-height: 1.8; margin: 0 0 12px; }
+.page-mock .box { float: right; width: 34%; margin: 4px 0 10px 16px; padding: 10px 12px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface-2); font: 0.78rem/1.55 var(--sans); }
+.page-mock sup { font: 0.68rem var(--sans); }
+.page-mock .share { clear: both; font: 0.8rem var(--sans); margin: 4px 0 14px; }
+.page-mock .refs-h { font: 600 0.95rem var(--sans); margin: 0 0 4px; }
+.page-mock ol { margin: 0; padding-left: 1.3em; font: 0.8rem/1.6 var(--sans); }
+.page-mock .read { background: var(--wash); border-radius: 3px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.quiet { color: var(--ink-faint); text-decoration: line-through; text-decoration-thickness: 1.5px; text-decoration-color: color-mix(in srgb, var(--no) 65%, transparent); }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 14px; font: 0.82rem var(--sans); color: var(--ink-muted); }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.legend i { width: 22px; height: 12px; border-radius: 3px; background: var(--wash); }
+.legend i.q { height: 0; border-top: 1.5px solid var(--no); border-radius: 0; background: none; }
+
+/* Stop 2: the bar, every button with its key. */
+.keybar {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 2px; padding: 16px 14px 12px;
+  border-radius: 18px; background: var(--bar-bg); border: 1px solid var(--rule); box-shadow: var(--shadow-lg);
+}
+.keybar .kb { display: grid; justify-items: center; align-content: start; gap: 7px; width: 58px; }
+.keybar .b { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; color: var(--ink); background: var(--surface-2); }
+.keybar .kb.play .b { border-radius: 50%; background: var(--amber-solid); color: var(--amber-on); }
+.keybar svg { width: 16px; height: 16px; fill: currentColor; }
+.keybar kbd { font-size: 0.76rem; }
+.keybar .pair { display: flex; gap: 3px; }
+.keybar small { font: 0.68rem/1.25 var(--sans); color: var(--ink-faint); text-align: center; }
+.keybar-note { margin-top: 12px; text-align: center; font-size: 0.88rem; color: var(--ink-muted); }
+.anywhere { margin-top: clamp(36px, 5vw, 52px); }
+.anywhere h3 { font: 600 1rem/1.3 var(--sans); margin-bottom: 4px; }
 </style>
 </head>
 <!-- Before the store listings are live: data-stores="soon". Once they are: "live", and check the
@@ -482,31 +583,44 @@ footer .by b { color: var(--ink); }
   <div class="wrap">
     <a class="brand" href="#"><img src="assets/icon.svg" alt="">Aloud</a>
     <nav aria-label="Sections">
+      <a href="#tour">The tour</a>
       <a href="#voices">Voices</a>
       <a href="#languages">Languages</a>
-      <a href="#see">See it</a>
-      <a href="#features">Features</a>
+      <a href="#keep">Notes</a>
       <a href="#privacy">Privacy</a>
       <a href="#built">How it's built</a>
       <a class="keep btn primary" href="#install"><span class="when-live">Install</span><span class="when-soon">Get Aloud</span></a>
     </nav>
   </div>
+  <div class="progress" id="progress" aria-hidden="true"></div>
 </header>
+
+<!-- The tour's stops, beside the page on wide screens. -->
+<ol class="rail" id="rail" aria-label="Stops on the tour">
+  <li><a href="#open"><i></i><span>Open a page</span></a></li>
+  <li><a href="#play"><i></i><span>Press play</span></a></li>
+  <li><a href="#follow"><i></i><span>Follow along</span></a></li>
+  <li><a href="#voices"><i></i><span>Pick a voice</span></a></li>
+  <li><a href="#languages"><i></i><span>Any language</span></a></li>
+  <li><a href="#keep"><i></i><span>Keep what matters</span></a></li>
+  <li><a href="#later"><i></i><span>Come back later</span></a></li>
+  <li><a href="#privacy"><i></i><span>Yours alone</span></a></li>
+</ol>
 
 <main>
   <div class="wrap hero">
     <div class="hero-grid">
       <div class="hero-copy">
         <p class="eyebrow">Free browser extension · Firefox, Android, Chrome</p>
-        <h1>Listen to the web, <em>in a voice that lives on your device.</em></h1>
-        <p class="lede">Aloud turns any article or PDF into natural speech and lights up every word as it's read. The voice is a neural network running inside your browser, so it works offline and nothing you read is ever sent anywhere. When the page changes language, so does the voice. No account, no subscription.</p>
+        <h1>Your reading, <em>read aloud.</em></h1>
+        <p class="lede">Open an article or a PDF, press play, and a natural voice reads it to you while every word lights up on the page. The voice lives in your browser, so it keeps working offline and what you read stays yours. No account, nothing to pay.</p>
         <div class="ctas">
           <a class="btn primary when-live" id="hero-install" href="#install">Get Aloud, it's free</a>
           <button class="btn primary when-soon" type="button" data-hear><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg>Hear it read</button>
           <button class="btn when-live" type="button" data-hear><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg>Hear it read</button>
-          <a class="btn when-soon" href="#install">Coming to the add-on stores</a>
+          <a class="btn" href="#tour">Take the tour</a>
         </div>
-        <p class="browsers" id="hero-browsers">Firefox · Firefox for Android · Chrome, Brave, Edge, Opera, Vivaldi</p>
+        <p class="browsers" id="hero-browsers">Firefox · Firefox for Android · Chrome, Brave, Edge, Opera, Vivaldi<span class="when-soon"> · coming soon to the add-on stores</span></p>
       </div>
 
       <div class="demo" id="demo" aria-label="Aloud reading an article, with real audio">
@@ -540,19 +654,140 @@ footer .by b { color: var(--ink); }
     </div>
   </div>
 
-  <section id="voices">
+  <section id="tour" class="tour">
     <div class="wrap">
       <div class="head measure center">
-        <p class="eyebrow">Voices</p>
-        <h2>Pick a voice you'd happily listen to for an hour.</h2>
-        <p class="lede">Every face below is a voice Aloud offers. Click one to hear it. Every clip is Aloud's own output, made by the extension itself. Nothing here is a studio recording.</p>
+        <p class="eyebrow">The tour</p>
+        <h2>Your first ten minutes with Aloud.</h2>
+        <p class="lede">Eight short stops, from the first page you open to the notes you keep. Scroll along, or jump straight to the one you're curious about.</p>
+      </div>
+      <ol class="route">
+        <li><a href="#open"><span class="dot">1</span><b>Open a page</b><small>It finds the article</small></a></li>
+        <li><a href="#play"><span class="dot">2</span><b>Press play</b><small>One click, or one key</small></a></li>
+        <li><a href="#follow"><span class="dot">3</span><b>Follow along</b><small>Every word lights up</small></a></li>
+        <li><a href="#voices"><span class="dot">4</span><b>Pick a voice</b><small>222 to choose from</small></a></li>
+        <li><a href="#languages"><span class="dot">5</span><b>Any language</b><small>Each in its own voice</small></a></li>
+        <li><a href="#keep"><span class="dot">6</span><b>Keep what matters</b><small>Highlights and notes</small></a></li>
+        <li><a href="#later"><span class="dot">7</span><b>Come back later</b><small>It remembers</small></a></li>
+        <li><a href="#privacy"><span class="dot">8</span><b>Yours alone</b><small>Nothing leaves your device</small></a></li>
+        <li class="end"><a href="#install"><span class="dot">★</span><b>Your turn</b><small>Free, no account</small></a></li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="open" data-stop>
+    <div class="wrap">
+      <div class="stop-grid">
+        <div>
+          <div class="head">
+            <div class="stop-head"><span class="stop-num">1</span><p class="eyebrow">Open a page</p></div>
+            <h2>Open something worth reading.</h2>
+            <p class="lede">A long essay, the morning news, a Wikipedia rabbit hole, a PDF from work. Aloud finds the article on the page and quietly leaves out everything around it.</p>
+          </div>
+          <div class="page-mock" aria-label="A page as Aloud reads it: the article is read, the clutter around it is not">
+            <div class="strip quiet">Home · World · Science · Sign in · Subscribe</div>
+            <h3>Bell Rock Lighthouse<span class="quiet">[edit]</span></h3>
+            <div class="box quiet">Location: North Sea, off Angus<br>Built: 1807 to 1810<br>Height: 35 m</div>
+            <p><span class="read">The Bell Rock Lighthouse is the oldest surviving sea-washed lighthouse in the world.</span><sup class="quiet">[1]</sup> <span class="read">It was built between 1807 and 1810 on a reef in the North Sea, eleven miles off the coast of Scotland.</span><sup class="quiet">[2][3]</sup></p>
+            <p class="share quiet">Share this: Facebook · X · Email</p>
+            <p class="refs-h quiet">References</p>
+            <ol class="quiet"><li>Bathurst, B. (1999). The Lighthouse Stevensons.</li><li>Northern Lighthouse Board. Retrieved 2 March.</li></ol>
+          </div>
+          <div class="legend" aria-hidden="true"><span><i></i>Read aloud</span><span><i class="q"></i>Passed over</span></div>
+        </div>
+        <div class="points">
+          <div class="callout"><h3>Just the article</h3><p>Menus, ads, cookie banners, share buttons and "you might also like" stay silent.</p></div>
+          <div class="callout"><h3>No "[12]" every few seconds</h3><p>Citation markers, "edit" links, info boxes and reference lists are skipped, on Wikipedia, WordPress, Substack and many more. Want the references after all? It's one switch.</p></div>
+          <div class="callout"><h3>An honest time</h3><p>"About 12 min" counts only what will be read, and the bar shows how long is left as you go.</p></div>
+          <div class="callout"><h3>PDFs too</h3><p>They open in Aloud's own reader as real pages. Zoom stays sharp, a page counter shows where you are, and your marks are saved into the PDF.</p></div>
+        </div>
+      </div>
+      <p class="next-stop"><a href="#play"><span>Next stop</span>Press play →</a></p>
+    </div>
+  </section>
+
+  <section id="play" data-stop>
+    <div class="wrap">
+      <div class="head measure">
+        <div class="stop-head"><span class="stop-num">2</span><p class="eyebrow">Press play</p></div>
+        <h2>One click, or Alt+R. That's it.</h2>
+        <p class="lede">Click the Aloud button in your toolbar, or press the shortcut. The first time, Aloud downloads its voice, once. After that it starts in a moment, even on a plane.</p>
+      </div>
+      <div class="keybar" role="img" aria-label="Aloud's reading bar, with the single key for each button: P play, B back, open and close brackets for previous and next, minus and equals for slower and faster, N keep, F follow, J jump, L sleep timer, M save as MP3, V voice, O settings, A hide, Q close">
+        <span class="kb play"><span class="b"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg></span><kbd>P</kbd><small>Play</small></span>
+        <span class="kb"><span class="b"><svg viewBox="0 0 16 16"><path d="M8 2.2a5.8 5.8 0 11-5.6 7.3l1.6-.4A4.1 4.1 0 108 3.9a4 4 0 00-2.9 1.2l1.7 1.7H2.2V2.2l1.7 1.7A5.8 5.8 0 018 2.2z"/></svg></span><kbd>B</kbd><small>Back a little</small></span>
+        <span class="kb"><span class="b"><svg viewBox="0 0 16 16"><path d="M5 2.5v11H3.5v-11z"/><path d="M13 2.5v11l-7-5.5z"/></svg></span><kbd>[</kbd><small>Previous</small></span>
+        <span class="kb"><span class="b"><svg viewBox="0 0 16 16"><path d="M11 2.5v11h1.5v-11z"/><path d="M3 2.5v11l7-5.5z"/></svg></span><kbd>]</kbd><small>Next</small></span>
+        <span class="kb"><span class="b" style="font:600 0.8rem var(--mono)">1×</span><span class="pair"><kbd>-</kbd><kbd>=</kbd></span><small>Slower, faster</small></span>
+        <span class="kb"><span class="b"><svg viewBox="0 0 16 16"><path d="M4 1.5h8a1 1 0 011 1v12.3l-5-3.2-5 3.2V2.5a1 1 0 011-1zm.7 1.7v8.9L8 10l3.3 2.1V3.2z"/><path d="M7.2 4.4h1.6v1.8h1.8v1.6H8.8v1.8H7.2V7.8H5.4V6.2h1.8z"/></svg></span><kbd>N</kbd><small>Keep it</small></span>
+        <span class="kb"><span class="b"><svg viewBox="0 0 16 16"><path d="M2.2 2.4h11.6v1.5H2.2z"/><path d="M6 7.25h7.8v1.5H6z"/><path d="M2.2 12.1h11.6v1.5H2.2z"/><path d="M1.4 6.1l3.2 1.9-3.2 1.9z"/></svg></span><kbd>F</kbd><small>Follow</small></span>
+        <span class="kb"><span class="b"><svg viewBox="0 0 16 16"><path d="M8 0a1 1 0 011 1v1.06A6 6 0 0113.94 7H15a1 1 0 010 2h-1.06A6 6 0 019 13.94V15a1 1 0 01-2 0v-1.06A6 6 0 012.06 9H1a1 1 0 010-2h1.06A6 6 0 017 2.06V1a1 1 0 011-1zm0 4a4 4 0 100 8 4 4 0 000-8z"/><path d="M8 6.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3z"/></svg></span><kbd>J</kbd><small>Click to jump</small></span>
+        <span class="kb"><span class="b"><svg viewBox="0 0 16 16"><path d="M6.6 1.4a6.6 6.6 0 108 8 5.2 5.2 0 01-8-8z"/></svg></span><kbd>L</kbd><small>Sleep timer</small></span>
+        <span class="kb"><span class="b"><svg viewBox="0 0 16 16"><path d="M7 1.5h2v6l2.2-2.2 1.4 1.4L8 11.4 3.4 6.7l1.4-1.4L7 7.5z"/><path d="M3 13h10v1.8H3z"/></svg></span><kbd>M</kbd><small>Save MP3</small></span>
+        <span class="kb"><span class="b"><img src="assets/portraits/piper-alba.webp" alt="" style="width:26px;height:26px;border-radius:50%"></span><kbd>V</kbd><small>Voice</small></span>
+        <span class="kb"><span class="b"><svg viewBox="0 0 16 16"><path d="M8 5a3 3 0 100 6 3 3 0 000-6zm6 3a6 6 0 01-.1 1l1.7 1.3-1.6 2.8-2-.8a6 6 0 01-1.7 1l-.3 2.1H6.3L6 15.6a6 6 0 01-1.7-1l-2 .8L.7 12.6 2.4 11a6 6 0 010-2L.7 7.7l1.6-2.8 2 .8A6 6 0 016 2.7L6.3.6h3.4l.3 2.1a6 6 0 011.7 1l2-.8 1.6 2.8L13.9 7q.1.5.1 1z"/></svg></span><kbd>O</kbd><small>Settings</small></span>
+        <span class="kb"><span class="b"><svg viewBox="0 0 16 16"><path d="M3 4.4l1.2-1.2L8 7l3.8-3.8L13 4.4l-5 5z"/><path d="M2.5 12h11v1.7h-11z"/></svg></span><kbd>A</kbd><small>Hide the bar</small></span>
+        <span class="kb"><span class="b"><svg viewBox="0 0 16 16"><path d="M4 3l4 4 4-4 1 1-4 4 4 4-1 1-4-4-4 4-1-1 4-4-4-4z"/></svg></span><kbd>Q</kbd><small>Close</small></span>
+      </div>
+      <p class="keybar-note">On a computer, every button on the reading bar has a key of its own while Aloud reads. Change any of them in Settings.</p>
+
+      <div class="callouts">
+        <div class="callout"><h3>Lost the thread?</h3><p>Press <kbd>B</kbd> to go back a few seconds, and see where that is on the page.</p></div>
+        <div class="callout"><h3>Just one word</h3><p>Select a word, right-click and choose <b>Read selection aloud</b> to hear how it's said. Handy when you're learning a language.</p></div>
+        <div class="callout"><h3>Jump anywhere</h3><p>Click a sentence and the reading moves there. <kbd>J</kbd> turns that on or off, so selecting text never gets in the way.</p></div>
+        <div class="callout"><h3>Need the room?</h3><p>Hide the bar with <kbd>A</kbd>. Bring your pointer to the bottom of the window and it's back, or tap the little handle on a phone.</p></div>
+      </div>
+
+      <div class="anywhere">
+        <h3>Anywhere in the browser</h3>
+        <div class="keys">
+          <div class="key"><span>Read this page</span><span class="k"><kbd>Alt</kbd><kbd>R</kbd></span></div>
+          <div class="key"><span>Keep what you just heard</span><span class="k"><kbd>Alt</kbd><kbd>K</kbd></span></div>
+          <div class="key"><span>Show this page's notes</span><span class="k"><kbd>Alt</kbd><kbd>N</kbd></span></div>
+          <div class="key"><span>Back about ten seconds</span><span class="k"><kbd>Alt</kbd><kbd>,</kbd></span></div>
+        </div>
+        <p class="keys-note">On Chrome, "back ten seconds" has no shortcut until you give it one in the browser's shortcut settings; the bar's button and <kbd>B</kbd> always work.</p>
+      </div>
+      <p class="next-stop"><a href="#follow"><span>Next stop</span>Follow along →</a></p>
+    </div>
+  </section>
+
+  <section id="follow" data-stop>
+    <div class="wrap">
+      <div class="head measure">
+        <div class="stop-head"><span class="stop-num">3</span><p class="eyebrow">Follow along</p></div>
+        <h2>Watch the words light up as you listen.</h2>
+        <p class="lede">The sentence being read is shaded right where it sits, and the word inside it is marked as it's spoken. The page glides along with the voice. Scroll off to look at something and Aloud waits for you, then catches up.</p>
+      </div>
+      <figure class="shot">
+        <picture>
+          <source srcset="assets/shots/reading-dark.webp" media="(prefers-color-scheme: dark)">
+          <img src="assets/shots/reading-light.webp" width="1600" height="1100" loading="lazy" alt="An essay being read by Aloud: the current sentence is shaded and the word century is marked inside it; two passages kept earlier stay highlighted in yellow and pink, one is underlined in green, and the reading bar at the bottom shows sentence 5 of 14 and one minute left.">
+        </picture>
+      </figure>
+      <div class="callouts">
+        <div class="callout"><h3>Word by word</h3><p>A deeper mark on the word being spoken. Pick its colour and how strong it is.</p></div>
+        <div class="callout"><h3>Following, your way</h3><p>Keep the sentence in view, snap it to the middle, or never scroll at all. <kbd>F</kbd> turns following on or off.</p></div>
+        <div class="callout"><h3>Your highlights stay yours</h3><p>Passages you kept keep their colours while Aloud reads over them.</p></div>
+        <div class="callout"><h3>Easy on dark pages</h3><p>The highlight adapts to the page, so the text under it stays easy to read.</p></div>
+      </div>
+      <p class="next-stop"><a href="#voices"><span>Next stop</span>Pick a voice →</a></p>
+    </div>
+  </section>
+
+  <section id="voices" data-stop>
+    <div class="wrap">
+      <div class="head measure center">
+        <div class="stop-head"><span class="stop-num">4</span><p class="eyebrow">Pick a voice</p></div>
+        <h2>Find a voice you'd happily listen to for an hour.</h2>
+        <p class="lede">Every face below is a voice Aloud offers. Click one to hear it. These clips are Aloud's own output, made by the extension itself, not studio recordings.</p>
       </div>
 
       <div class="faces" id="faces">
-        <button class="face" type="button" data-src="supertonic-F1-de" data-line="Ich lese Deutsch, Russisch, Japanisch und achtundzwanzig weitere Sprachen, alles auf diesem Gerät. — I read German, Russian, Japanese and twenty-eight more languages, all on this device."><span class="ring"><img src="assets/portraits/supertonic-F1.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Female 1<small>Supertonic · German</small></span></button>
-        <button class="face" type="button" data-src="supertonic-M1-es" data-line="Leo artículos en español sin enviar nada a ningún sitio. — I read articles in Spanish without sending anything anywhere."><span class="ring"><img src="assets/portraits/supertonic-M1.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Male 1<small>Supertonic · Spanish</small></span></button>
-        <button class="face" type="button" data-src="supertonic-F2-ja" data-line="日本語の記事も、この端末の中で読み上げます。 — I read Japanese articles aloud too, right on this device."><span class="ring"><img src="assets/portraits/supertonic-F2.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Female 2<small>Supertonic · Japanese</small></span></button>
-        <button class="face" type="button" data-src="supertonic-M5-ru" data-line="Я читаю по-русски, и всё это работает без интернета. — I read Russian, and all of it works without the internet."><span class="ring"><img src="assets/portraits/supertonic-M5.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Male 5<small>Supertonic · Russian</small></span></button>
+        <button class="face" type="button" data-src="supertonic-F1-de" data-line="Ich lese Deutsch, Russisch, Japanisch und achtundzwanzig weitere Sprachen, alles auf diesem Gerät. I read German, Russian, Japanese and twenty-eight more languages, all on this device."><span class="ring"><img src="assets/portraits/supertonic-F1.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Female 1<small>Supertonic · German</small></span></button>
+        <button class="face" type="button" data-src="supertonic-M1-es" data-line="Leo artículos en español sin enviar nada a ningún sitio. I read articles in Spanish without sending anything anywhere."><span class="ring"><img src="assets/portraits/supertonic-M1.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Male 1<small>Supertonic · Spanish</small></span></button>
+        <button class="face" type="button" data-src="supertonic-F2-ja" data-line="日本語の記事も、この端末の中で読み上げます。 I read Japanese articles aloud too, right on this device."><span class="ring"><img src="assets/portraits/supertonic-F2.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Female 2<small>Supertonic · Japanese</small></span></button>
+        <button class="face" type="button" data-src="supertonic-M5-ru" data-line="Я читаю по-русски, и всё это работает без интернета. I read Russian, and all of it works without the internet."><span class="ring"><img src="assets/portraits/supertonic-M5.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Male 5<small>Supertonic · Russian</small></span></button>
         <button class="face" type="button" data-src="kokoro-af_heart" data-line="Hi, I'm Heart. Open any article, press Alt R, and I'll read it to you."><span class="ring"><img src="assets/portraits/kokoro-af_heart.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Heart<small>Kokoro · US</small></span></button>
         <button class="face" type="button" data-src="kokoro-bm_george" data-line="I'm George. Every word I say is made right here, on your own computer."><span class="ring"><img src="assets/portraits/kokoro-bm_george.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">George<small>Kokoro · GB</small></span></button>
         <button class="face" type="button" data-src="piper-alba" data-line="I'm Alba. I work offline, so I'll keep reading on a train or a plane."><span class="ring"><img src="assets/portraits/piper-alba.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Alba<small>Piper · GB</small></span></button>
@@ -574,35 +809,35 @@ footer .by b { color: var(--ink); }
 
       <div class="engines">
         <div class="engine">
-          <h3>Piper</h3>
-          <p class="meta">171 voices · 49 languages · 21–137 MB each</p>
-          <p>Fast on anything, phones included. The comfortable default on Firefox, and the voice to use on Android.</p>
-        </div>
-        <div class="engine">
           <h3>Supertonic 3</h3>
-          <p class="meta">10 voices, each in all 31 languages · one download: ~402 MB</p>
-          <p>Natural voices for languages Kokoro doesn't speak, from German and Russian to Japanese and Korean — clearer than Piper's. Quicker with a graphics card, and on a processor two to three times faster than Kokoro: Aloud picks it first.</p>
+          <p class="meta">10 voices, each in all 31 languages · one download, about 402 MB</p>
+          <p>Natural and clear, from German and Russian to Japanese and Korean. It keeps up on an ordinary processor, so it's the voice Aloud reaches for first.</p>
         </div>
         <div class="engine">
           <h3>Kokoro-82M</h3>
-          <p class="meta">41 voices · English, Spanish, French, Italian, Portuguese, Hindi · one download for all: ~347 MB with a graphics card, ~114 MB without</p>
-          <p>The most natural-sounding of the three. On a graphics card it is both the richest voice and a fast one. <a href="gpu.html">Using your graphics card →</a></p>
+          <p class="meta">41 voices · English, Spanish, French, Italian, Portuguese, Hindi · about 347 MB with a graphics card, 114 MB without</p>
+          <p>The richest-sounding voices of the three, at their best on a graphics card. <a href="gpu.html">Using your graphics card →</a></p>
+        </div>
+        <div class="engine">
+          <h3>Piper</h3>
+          <p class="meta">171 voices · 49 languages · 21 to 137 MB each</p>
+          <p>Small, quick and happy on a phone. Its "high" quality voices sound fuller and work harder; when one falls behind, Aloud runs extra copies side by side.</p>
         </div>
       </div>
 
       <details class="fit">
-        <summary>Which engine suits my browser?</summary>
+        <summary>Which voices suit my browser?</summary>
         <div class="table-scroll">
           <table>
-            <thead><tr><th scope="col">Your setup</th><th scope="col">Piper</th><th scope="col">Supertonic 3</th><th scope="col">Kokoro-82M</th></tr></thead>
+            <thead><tr><th scope="col">Your setup</th><th scope="col">Supertonic 3</th><th scope="col">Kokoro-82M</th><th scope="col">Piper</th></tr></thead>
             <tbody>
-              <tr><th scope="row">Chrome or Firefox, with WebGPU</th><td>fast</td><td>good, in 31 languages</td><td class="best">best, and faster than Piper</td></tr>
-              <tr><th scope="row">Chrome or Firefox, processor only</th><td class="best">best choice, fast</td><td>keeps up with two copies at once, on a desktop</td><td>works, about 3× slower than real time</td></tr>
-              <tr><th scope="row">Firefox for Android</th><td class="best">the one to use</td><td>works, slower than speech on older phones: it pauses to catch up now and then</td><td>too slow</td></tr>
+              <tr><th scope="row">Chrome or Firefox, with WebGPU</th><td>quick, in 31 languages</td><td class="best">the richest, and faster than speech</td><td>fast</td></tr>
+              <tr><th scope="row">Chrome or Firefox, processor only</th><td class="best">the best voice that keeps up</td><td>works, about 3× slower than speech</td><td>fastest</td></tr>
+              <tr><th scope="row">Firefox for Android</th><td>works, but slower than speech on older phones, so it pauses to catch up now and then</td><td>too slow</td><td class="best">the one to use</td></tr>
             </tbody>
           </table>
         </div>
-        <p class="fit-note">Chrome and Firefox do equally well: what matters is whether the voice can reach your graphics card through WebGPU. Chrome has it on already. Firefox keeps it switched off for now, and it takes a minute to <a href="#firefox-webgpu" data-open="firefox-webgpu">turn on</a>. Aloud's settings test your machine and tell you which case you're in. <a class="gpu-link" href="gpu.html">Why it's safe, and how to turn it on in every browser →</a></p>
+        <p class="fit-note">Chrome and Firefox do equally well: what matters is whether the voice can reach your graphics card through WebGPU. Chrome has it on already. Firefox keeps it off for now, and it takes a minute to <a href="#firefox-webgpu" data-open="firefox-webgpu">turn on</a>. Aloud's settings test your machine and tell you which case you're in. <a class="gpu-link" href="gpu.html">Why it's safe, and how to turn it on in every browser →</a></p>
         <details class="howto" id="firefox-webgpu">
           <summary>Turn on WebGPU in Firefox</summary>
           <ol>
@@ -615,15 +850,16 @@ footer .by b { color: var(--ink); }
           <p class="howto-note">To undo it, search for the same names and click the reset arrow next to each.</p>
         </details>
       </details>
+      <p class="next-stop"><a href="#languages"><span>Next stop</span>Any language →</a></p>
     </div>
   </section>
 
-  <section id="languages">
+  <section id="languages" data-stop>
     <div class="wrap">
       <div class="head measure">
-        <p class="eyebrow">Every language on the page</p>
-        <h2>An Italian story with English translations, read in two voices.</h2>
-        <p class="lede">Aloud works out the language of every paragraph, from the page's own markup, your browser's built-in language detector and the paragraphs around a short reply, and hands each one to a voice that speaks it. It reads only what the page shows: a collapsed translation or a "Translate?" button is passed over, and a translation you open while listening is read when it's reached.</p>
+        <div class="stop-head"><span class="stop-num">5</span><p class="eyebrow">Any language</p></div>
+        <h2>A page in two languages? Two voices.</h2>
+        <p class="lede">Aloud works out the language of every paragraph and hands each one to a voice that speaks it. A folded-away translation or a "Translate?" button stays quiet; open one while you listen, and it's read in its turn.</p>
       </div>
       <div class="lang-demo">
         <div>
@@ -639,119 +875,92 @@ footer .by b { color: var(--ink); }
           <div class="board" id="lang-board" aria-label="Which voice reads which language">
             <div class="row" data-lang="en"><span class="lang">English<small>auto</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/kokoro-af_heart.webp" alt=""><span>Heart<small>Kokoro · US</small></span></span></div>
             <div class="row" data-lang="it"><span class="lang">Italian<small>chosen by you</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/kokoro-if_sara.webp" alt=""><span>Sara<small>Kokoro · IT</small></span></span></div>
-            <div class="row" data-lang="fr"><span class="lang">French<small>auto</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/kokoro-ff_siwis.webp" alt=""><span>Siwis<small>Kokoro · FR</small></span></span></div>
-            <div class="row" data-lang="es"><span class="lang">Spanish<small>auto</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/kokoro-ef_dora.webp" alt=""><span>Dora<small>Kokoro · ES</small></span></span></div>
-            <div class="row" data-lang="hi"><span class="lang">Hindi<small>auto</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/kokoro-hf_alpha.webp" alt=""><span>Alpha<small>Kokoro · IN</small></span></span></div>
+            <div class="row" data-lang="fr"><span class="lang">French<small>auto</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/supertonic-F1.webp" alt=""><span>Female 1<small>Supertonic · FR</small></span></span></div>
+            <div class="row" data-lang="es"><span class="lang">Spanish<small>chosen by you</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/supertonic-M1.webp" alt=""><span>Male 1<small>Supertonic · ES</small></span></span></div>
+            <div class="row" data-lang="de"><span class="lang">German<small>chosen by you</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/supertonic-F2.webp" alt=""><span>Female 2<small>Supertonic · DE</small></span></span></div>
           </div>
-          <p class="board-note">Aloud's voice settings, in miniature: each language wired to the voice that reads it. On Auto, a language is read by your voice if it speaks it, and otherwise by a downloaded voice that does; or click a face to choose one.</p>
+          <p class="board-note">Aloud's voice settings in miniature: each language wired to the voice that reads it. Leave a language on Auto, or click a face to choose one yourself.</p>
         </div>
       </div>
       <div class="lang-points">
-        <div class="callout"><h3>A voice per language</h3><p>Italian with an Italian voice, English with an English one, on the same page, without a click. Up to three voice models stay ready at once.</p></div>
-        <div class="callout"><h3>Only what you can see</h3><p>Hidden translations, buttons dressed as text and closed sections are skipped. Open one while listening and it's read in its turn.</p></div>
-        <div class="callout"><h3>Your choice, per language</h3><p>Leave a language on Auto or pick its voice once, hearing each first. Rather not hear one in its own voice? Remove it, and it's read like the rest.</p></div>
-        <div class="callout"><h3>No voice? It says so</h3><p>A language you have no voice for is read in English, and named, with a link to its voices. Or have such languages skipped.</p></div>
+        <div class="callout"><h3>A voice per language</h3><p>Italian in an Italian voice, English in an English one, on the same page, without a single click.</p></div>
+        <div class="callout"><h3>Only what you can see</h3><p>Hidden translations, closed sections and buttons dressed up as text are passed over.</p></div>
+        <div class="callout"><h3>One word at a time</h3><p>Select a single word from another language and hear it in a voice that speaks it. Not sure what a phrase is in? Aloud offers "Read as French" with one tap.</p></div>
+        <div class="callout"><h3>No voice yet? It says so</h3><p>A language you have no voice for is read in English, and named, with a link to its voices. Or have it skipped.</p></div>
       </div>
       <p class="audio-note muted">The audio is Aloud's own: Kokoro's Sara and Heart reading this story in Chrome, recorded from the extension.</p>
-    </div>
-  </section>
-
-  <section id="see">
-    <div class="wrap">
-      <div class="head measure">
-        <p class="eyebrow">On a real page</p>
-        <h2>It reads where the article is, without breaking it.</h2>
-        <p class="lede">No copy-and-paste, no separate reader window. Open an article, press <kbd>Alt</kbd>+<kbd>R</kbd>, and Aloud follows along on the page itself.</p>
-      </div>
-      <figure class="shot">
-        <picture>
-          <source srcset="assets/shots/notes-dark.webp" media="(prefers-color-scheme: dark)">
-          <img src="assets/shots/notes-light.webp" width="1600" height="1000" loading="lazy" alt="An article being read by Aloud: the current sentence is highlighted, earlier highlights show as coloured underlines, the reading bar sits at the bottom and the notes panel lists this page's three notes.">
-        </picture>
-      </figure>
-      <div class="callouts">
-        <div class="callout"><h3>The sentence, lit up</h3><p>What's being read is highlighted where it sits, and the page glides along with it. Scroll away to look at something and it lets you; Follow brings you back.</p></div>
-        <div class="callout"><h3>Your highlights, kept</h3><p>Select, press <kbd>K</kbd>. While Aloud reads, your marks turn into underlines so the two never clash.</p></div>
-        <div class="callout"><h3>A bar that stays put</h3><p>Play, skip, speed, the voice with its language, save as MP3. It never jumps under your pointer, and fits a phone. Hiding it while you scroll is a setting.</p></div>
-        <div class="callout"><h3>Notes beside the text</h3><p>Press <kbd>Alt</kbd>+<kbd>N</kbd> for this page's notes, or search all of them. Each one is a click from its passage.</p></div>
-      </div>
 
       <div class="shot-pair">
         <div class="copy">
-          <p class="eyebrow">Settings that explain themselves</p>
-          <h2>Who reads what, drawn instead of listed.</h2>
-          <p>Every language you have a voice for, wired to the face that reads it, with a flag. Click another face and the wire swings over; press its ▶ to hear it first. The last row says who reads every other language. All 222 voices are listed below it.</p>
+          <p class="eyebrow">Settings that show, not tell</p>
+          <h2>Who reads what, at a glance.</h2>
+          <p>Every language you have a voice for, wired to the face that reads it. Click another face and the wire swings over; press its ▶ to hear it first. The last row says who reads every other language, and all 222 voices are a click away.</p>
         </div>
         <figure class="shot">
           <picture>
             <source srcset="assets/shots/voice-dark.webp" media="(prefers-color-scheme: dark)">
-            <img src="assets/shots/voice-light.webp" width="1408" height="2316" loading="lazy" alt="Aloud's voice settings: a board titled Who reads what, each language with its flag wired to the face that reads it — English to Heart, French to Siwis, German to Supertonic's Female 1, Hindi to Alpha, Italian to Sara, Portuguese and Spanish to Dora — beside the other voices that could, Supertonic's among them; a last row says every other language is read by Heart, and names the languages Supertonic reads in their own voice.">
+            <img src="assets/shots/voice-light.webp" width="1408" height="2316" loading="lazy" alt="Aloud's voice settings: a board titled Who reads what, each language with its flag wired to the face that reads it. English to Heart, French, Hindi and Portuguese to Supertonic's Female 1 on Auto, German to Female 2, Spanish to Male 1 and Italian to Sara, chosen by hand; a last row says every other language is read by Heart, and names the languages Supertonic reads in their own voice.">
           </picture>
         </figure>
       </div>
+      <p class="next-stop"><a href="#keep"><span>Next stop</span>Keep what matters →</a></p>
     </div>
   </section>
 
-  <section id="compare">
+  <section id="keep" data-stop>
     <div class="wrap">
       <div class="head measure">
-        <p class="eyebrow">Why Aloud</p>
-        <h2>Natural voices used to mean sending your reading to someone's server.</h2>
-        <p class="lede">Good text-to-speech has lived in the cloud: you upload the article, they send back audio, and the best voices sit behind a monthly plan. Aloud runs the same kind of neural model on your own machine. Aloud is free, with no account, no trial and nothing to cancel.</p>
+        <div class="stop-head"><span class="stop-num">6</span><p class="eyebrow">Keep what matters</p></div>
+        <h2>Keep the passages you'll want again.</h2>
+        <p class="lede">Select some text and press <kbd>K</kbd>, or pick a colour from the little toolbar. The passage stays highlighted on the page, and it's highlighted again whenever you come back. While Aloud reads, <kbd>N</kbd> keeps the sentence you just heard.</p>
       </div>
-      <div class="compare">
-        <div class="table-scroll" style="border-top:0">
-          <table>
-            <thead><tr><th scope="col"></th><th scope="col">Aloud</th><th scope="col">A typical cloud reader</th></tr></thead>
-            <tbody>
-              <tr><th scope="row">Where the voice runs</th><td class="yes">In your browser</td><td class="no">On the provider's servers</td></tr>
-              <tr><th scope="row">What you're reading</th><td class="yes">Never leaves your device</td><td class="no">Uploaded to be spoken</td></tr>
-              <tr><th scope="row">Account</th><td class="yes">None</td><td class="no">Usually required</td></tr>
-              <tr><th scope="row">Price</th><td class="yes">Free, all 222 voices</td><td class="no">Best voices often on a subscription</td></tr>
-              <tr><th scope="row">Without a connection</th><td class="yes">Works, after one download</td><td class="no">Stops</td></tr>
-              <tr><th scope="row">Your notes and highlights</th><td class="yes">On this device, in one backup file</td><td class="no">In their cloud</td></tr>
-            </tbody>
-          </table>
-        </div>
+      <figure class="shot">
+        <picture>
+          <source srcset="assets/shots/library-notes-dark.webp" media="(prefers-color-scheme: dark)">
+          <img src="assets/shots/library-notes-light.webp" width="1300" height="900" loading="lazy" alt="The Notes page in Aloud's Library: a search box, filters for time, site and order, tag chips such as economics, italiano and research with their counts, colour filters, and notes grouped by the page they came from, each with its comment and tags.">
+        </picture>
+      </figure>
+      <div class="callouts">
+        <div class="callout"><h3>Highlight or underline</h3><p>Five colours, in either style. Your marks look the way you left them.</p></div>
+        <div class="callout"><h3>Notes and tags</h3><p>Write a line about it and add a tag or two: type one, press Enter, and it's there.</p></div>
+        <div class="callout"><h3>Find it again</h3><p>Search everything, or filter by tag, colour, site, today or this week, or just the notes you wrote something on.</p></div>
+        <div class="callout"><h3>Take them with you</h3><p>Copy them as Markdown, links included, or export everything in one file.</p></div>
       </div>
-      <p class="compare-note">“A typical cloud reader” describes how hosted text-to-speech services generally work; individual products differ.</p>
+      <p class="next-stop"><a href="#later"><span>Next stop</span>Come back later →</a></p>
     </div>
   </section>
 
-  <section id="features">
+  <section id="later" data-stop>
     <div class="wrap">
       <div class="head measure">
-        <p class="eyebrow">Features</p>
-        <h2>Built for reading long things, on pages you don't control.</h2>
+        <div class="stop-head"><span class="stop-num">7</span><p class="eyebrow">Come back later</p></div>
+        <h2>Close the tab. Aloud remembers.</h2>
+        <p class="lede">Stop in the middle of a sentence and come back tomorrow: Aloud starts at that sentence, checked against the text, so an edited page never sends you to the wrong place.</p>
       </div>
       <div class="feats">
-        <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h13"/><rect x="13" y="10" width="7" height="4" rx="1" fill="currentColor" stroke="none" opacity=".35"/></svg></span><h3>Word by word</h3><p>The sentence is shaded and the word being spoken marked inside it, timed from the voice's own pronunciation.</p></div>
-        <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M3 12h3l2-6 4 12 3-9 2 3h4"/></svg></span><h3>No gaps, no waiting</h3><p>Sentences are made a few ahead of the one you're hearing and played back to back. Uses your graphics card when it can — <a href="gpu.html">here's how</a>.</p></div>
-        <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z"/></svg></span><h3>Picks up where you stopped</h3><p>Come back tomorrow and land on the exact sentence, checked against the text so an edited page never resumes in the wrong place.</p></div>
-        <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h4"/></svg></span><h3>PDFs, properly</h3><p>Real pages with figures and columns intact, the sentence highlighted on the page. Mark up, comment, and save the marks into the PDF.</p></div>
-        <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/></svg></span><h3>Highlights and notes</h3><p>Press <kbd>K</kbd> to keep a passage in your colour. Marks are anchored to the text, so they survive the page changing. Export to Markdown.</p></div>
-        <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h9"/><path d="M17 16l4 2.5-4 2.5z" fill="currentColor"/></svg></span><h3>A reading queue</h3><p>Save articles for later and Aloud reads them one after another. Continue, Up next, Notes, History and Statistics, all in one place.</p></div>
-        <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span><h3>Your listening, counted <span class="new">New</span></h3><p>Words heard, time listened and documents finished, day by day, by site and by language. Only what you actually heard counts, and it never leaves your device.</p></div>
-        <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M4 6h11a4 4 0 0 1 0 8H9l-5 4z"/></svg></span><h3>Said the way people say it <span class="new">New</span></h3><p>“No!” he said. A reply and who said it come out as one line, French and Spanish dialogue included, and abbreviations like <i>Sig.</i> or <i>z. B.</i> don't end a sentence.</p></div>
-        <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 20h14"/></svg></span><h3>Save as MP3</h3><p>Turn a whole article or PDF into one audio file, in your voice and speed, for a walk or a commute. There's a sleep timer too.</p></div>
-        <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 3-6.2"/><path d="M4 3v5h5"/></svg></span><h3>Drifted off?</h3><p>One key goes back about ten seconds and shows you where that is on the page. Speed shows real words a minute.</p></div>
-        <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5v5l4-2.5z" fill="currentColor"/></svg></span><h3>Every video, too <span class="new">New</span></h3><p>The same speed keys for any video or audio player on the web, remembered per site. Rewind and skip, even on YouTube Shorts. And it can stop videos playing by themselves.</p></div>
+        <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z"/></svg></span><h3>Continue listening</h3><p>Everything you stopped part-way through, with how much is left. One click picks it up where you were.</p></div>
+        <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h9"/><path d="M17 16l4 2.5-4 2.5z" fill="currentColor"/></svg></span><h3>Up next</h3><p>Queue articles for later. They play one after another in the Library, even offline, or on their own page if you'd rather.</p></div>
+        <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h4"/></svg></span><h3>PDFs, in the Library</h3><p>Open a PDF from your computer or the web: real pages with figures and columns, sharp zoom, a page counter, and marks saved into the file.</p></div>
+        <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 20h14"/></svg></span><h3>Take it with you</h3><p>Save a whole article or PDF as one MP3, in your voice and speed, for a walk or a commute. And a sleep timer for reading in bed.</p></div>
+        <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span><h3>Your listening, counted</h3><p>Words heard, time listened and documents finished, by day, site and language. Only what you actually heard counts.</p></div>
+        <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5v5l4-2.5z" fill="currentColor"/></svg></span><h3>Videos too</h3><p>The same speed keys for any video on the web: <kbd>D</kbd> faster, <kbd>S</kbd> slower, <kbd>Z</kbd> and <kbd>X</kbd> to rewind and skip, even on Shorts. Remembered per site. Start it with <kbd>Alt</kbd>+<kbd>M</kbd>.</p></div>
       </div>
+      <p class="next-stop"><a href="#privacy"><span>Next stop</span>Yours alone →</a></p>
     </div>
   </section>
 
-  <section id="privacy">
+  <section id="privacy" data-stop>
     <div class="wrap">
       <div class="head measure">
-        <p class="eyebrow">Private by construction</p>
+        <div class="stop-head"><span class="stop-num">8</span><p class="eyebrow">Yours alone</p></div>
         <h2>The voice lives on your device. So does everything you read.</h2>
-        <p class="lede">Not a policy, an architecture: there is no Aloud server to send anything to. Here is the complete list of what touches the network.</p>
+        <p class="lede">Not a promise, a design: there is no Aloud server to send anything to. Here's the complete list of what ever touches the network.</p>
       </div>
       <div class="ledger">
         <div>
           <h3>Never leaves this device</h3>
           <ul>
-            <li>The speech itself: every sentence is made locally</li>
+            <li>The speech itself: every sentence is made right here</li>
             <li>Your highlights and notes, and the tags on them</li>
             <li>Where you stopped in every article and PDF</li>
             <li>Your reading queue, history and listening statistics</li>
@@ -768,65 +977,35 @@ footer .by b { color: var(--ink); }
           <p class="note">A saved article's images stay unfetched until you press <b>Load images</b>, so reopening one tells nobody you're reading it. Aloud only runs on a site when you start it there, or on sites you list yourself.</p>
         </div>
       </div>
-    </div>
-  </section>
 
-  <section id="keys">
-    <div class="wrap">
-      <div class="head measure">
-        <p class="eyebrow">Keyboard</p>
-        <h2>Hands on the keys.</h2>
+      <div class="compare" style="margin-top: clamp(36px, 5vw, 56px)">
+        <div class="table-scroll" style="border-top:0">
+          <table>
+            <thead><tr><th scope="col"></th><th scope="col">Aloud</th><th scope="col">A typical cloud reader</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Where the voice runs</th><td class="yes">In your browser</td><td class="no">On the provider's servers</td></tr>
+              <tr><th scope="row">What you're reading</th><td class="yes">Never leaves your device</td><td class="no">Uploaded to be spoken</td></tr>
+              <tr><th scope="row">Account</th><td class="yes">None</td><td class="no">Usually required</td></tr>
+              <tr><th scope="row">Price</th><td class="yes">Free, all 222 voices</td><td class="no">Best voices often on a subscription</td></tr>
+              <tr><th scope="row">Without a connection</th><td class="yes">Works, after one download</td><td class="no">Stops</td></tr>
+              <tr><th scope="row">Your notes and highlights</th><td class="yes">On this device, in one backup file</td><td class="no">In their cloud</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
-      <div class="keys">
-        <div class="key"><span>Read this page</span><span class="k"><kbd>Alt</kbd><kbd>R</kbd></span></div>
-        <div class="key"><span>Keep what you just heard</span><span class="k"><kbd>Alt</kbd><kbd>K</kbd></span></div>
-        <div class="key"><span>Show my notes</span><span class="k"><kbd>Alt</kbd><kbd>N</kbd></span></div>
-        <div class="key"><span>Back about ten seconds</span><span class="k"><kbd>Alt</kbd><kbd>,</kbd></span></div>
-        <div class="key"><span>Start video speed control</span><span class="k"><kbd>Alt</kbd><kbd>M</kbd></span></div>
-        <div class="key"><span>Video faster / slower</span><span class="k"><kbd>D</kbd><kbd>S</kbd></span></div>
-        <div class="key"><span>Video to your preferred speed</span><span class="k"><kbd>G</kbd></span></div>
-        <div class="key"><span>Video back to 1×</span><span class="k"><kbd>R</kbd></span></div>
-        <div class="key"><span>Rewind / skip 10 seconds, even on Shorts</span><span class="k"><kbd>Z</kbd><kbd>X</kbd></span></div>
-      </div>
-      <p class="keys-note">Every key can be changed. The defaults avoid the combinations browsers and big sites already use. On Chrome, “back ten seconds” has no default key; the reading bar has a button for it, and you can give it one in the browser's shortcut settings.</p>
-    </div>
-  </section>
-
-  <section id="built">
-    <div class="wrap">
-      <div class="head measure">
-        <p class="eyebrow">How it's built</p>
-        <h2>A speech engine, an audio scheduler and a PDF reader, inside a browser extension.</h2>
-        <p class="lede">Aloud is a TypeScript extension with no backend. From a cluttered web page to a spoken, highlighted sentence, every step runs on your machine.</p>
-      </div>
-      <ol class="pipe">
-        <li><span class="where">Content script</span><h3>Extract</h3><p>Mozilla Readability strips navigation and ads and keeps the article.</p></li>
-        <li><span class="where">Content script</span><h3>Plan</h3><p>Only what the page shows is kept. Each paragraph's language is decided, the text is grouped into natural utterances and mapped back to its exact place on the page.</p></li>
-        <li><span class="where">Worker pool</span><h3>Synthesise</h3><p>Neural voices run on ONNX Runtime Web: WebGPU where the browser allows it, parallel WebAssembly workers everywhere else, up to three voice models side by side.</p></li>
-        <li><span class="where">Web Audio</span><h3>Play and follow</h3><p>Audio is scheduled sample-accurately, back to back, while the sentence and word are highlighted in place.</p></li>
-      </ol>
-      <div class="eng">
-        <div><h3>Three neural engines in a tab</h3><p>Piper (VITS), Supertonic 3 (flow matching) and Kokoro-82M (StyleTTS 2), each with its own text front end and model format, behind one engine interface.</p></div>
-        <div><h3>Highlights that can't break the page</h3><p>The CSS Custom Highlight API marks text without changing the page's DOM. Notes are anchored by their text, so they find their place again after the page is edited.</p></div>
-        <div><h3>One codebase, three browsers</h3><p>Firefox, Firefox for Android and Chromium from one Manifest V3 codebase built with WXT. Differences are detected as capabilities, not guessed from the browser's name.</p></div>
-        <div><h3>Isolated from the page</h3><p>Synthesis runs in a hidden extension frame that only accepts connections carrying a one-time ticket from the extension, so a hostile page can't drive it.</p></div>
-        <div><h3>Safe with many tabs open</h3><p>Every saved change is serialised through a lock in the background, so two tabs saving notes at once can't silently overwrite each other.</p></div>
-        <div><h3>Tested by ear</h3><p>Over 500 automated tests, and every engine change is checked by transcribing its audio with speech recognition. The samples on this page were made the same way.</p></div>
-      </div>
-      <ul class="stack" aria-label="Built with">
-        <li>TypeScript</li><li>WXT</li><li>Manifest V3</li><li>ONNX Runtime Web</li><li>WebGPU</li><li>WebAssembly</li><li>Web Audio</li><li>CSS Custom Highlight API</li><li>pdf.js</li><li>Mozilla Readability</li><li>eSpeak NG</li><li>Vitest</li><li>Playwright</li>
-      </ul>
+      <p class="compare-note">"A typical cloud reader" describes how hosted text-to-speech services generally work; individual products differ.</p>
+      <p class="next-stop"><a href="#install"><span>Last stop</span>Your turn →</a></p>
     </div>
   </section>
 
   <section id="install">
     <div class="wrap">
       <div class="head measure">
-        <p class="eyebrow">Get Aloud</p>
-        <h2 class="when-live">Free on the Firefox and Chrome add-on stores.</h2>
-        <h2 class="when-soon">Coming soon to the Firefox and Chrome add-on stores.</h2>
-        <p class="lede when-live">Install it from your browser's store. Updates arrive on their own.</p>
-        <p class="lede when-soon">Aloud is in its final checks before release. It will be free, with every voice and every feature.</p>
+        <p class="eyebrow">Your turn</p>
+        <h2 class="when-live">Ready when you are.</h2>
+        <h2 class="when-soon">Almost ready.</h2>
+        <p class="lede when-live">Install Aloud from your browser's store. It's free, and updates arrive by themselves.</p>
+        <p class="lede when-soon">Aloud is in its final checks before the Firefox and Chrome add-on stores. It will be free, with every voice and every feature.</p>
       </div>
       <div class="stores">
         <a class="store" data-store="firefox" href="https://addons.mozilla.org/firefox/addon/aloud/">
@@ -851,7 +1030,34 @@ footer .by b { color: var(--ink); }
           <span class="store-where">Chrome Web Store</span>
         </a>
       </div>
-      <p class="after">No account, and nothing collected — <a href="privacy.html">read the privacy policy</a>. Installing opens a short walkthrough. Then open any article and click the Aloud button or press <kbd>Alt</kbd>+<kbd>R</kbd>. The first read downloads the voice; after that it works offline.</p>
+      <p class="after">No account, and nothing collected: <a href="privacy.html">read the privacy policy</a>. Installing opens a short welcome tour. Then open any article, press play, and enjoy the read.</p>
+    </div>
+  </section>
+
+  <section id="built">
+    <div class="wrap">
+      <div class="head measure">
+        <p class="eyebrow">For the curious</p>
+        <h2>A speech engine, an audio scheduler and a PDF reader, inside a browser extension.</h2>
+        <p class="lede">Aloud is a TypeScript extension with no backend. From a cluttered web page to a spoken, highlighted sentence, every step runs on your machine.</p>
+      </div>
+      <ol class="pipe">
+        <li><span class="where">Content script</span><h3>Extract</h3><p>Mozilla Readability keeps the article; reading rules for each kind of site take out what's left of the clutter.</p></li>
+        <li><span class="where">Content script</span><h3>Plan</h3><p>Only what the page shows is kept. Each paragraph's language is decided, and the text is grouped into natural utterances mapped back to their exact place on the page.</p></li>
+        <li><span class="where">Worker pool</span><h3>Synthesise</h3><p>Neural voices run on ONNX Runtime Web: WebGPU where the browser allows it, parallel WebAssembly workers everywhere else, up to three voice models side by side.</p></li>
+        <li><span class="where">Web Audio</span><h3>Play and follow</h3><p>Audio is scheduled sample-accurately, back to back, while the sentence and the word are highlighted in place.</p></li>
+      </ol>
+      <div class="eng">
+        <div><h3>Three neural engines in a tab</h3><p>Supertonic 3 (flow matching), Kokoro-82M (StyleTTS 2) and Piper (VITS), each with its own text front end and model format, behind one engine interface.</p></div>
+        <div><h3>Reading rules as data</h3><p>What to pass over on Wikipedia, WordPress, Substack, docs sites and more is a list of rules, not code, so it can grow without touching the reader.</p></div>
+        <div><h3>Highlights that can't break the page</h3><p>The CSS Custom Highlight API marks text without changing the page's DOM. Notes are anchored by their words, so they find their place again after the page is edited.</p></div>
+        <div><h3>One codebase, three browsers</h3><p>Firefox, Firefox for Android and Chromium from one Manifest V3 codebase built with WXT. Differences are detected as capabilities, not guessed from the browser's name.</p></div>
+        <div><h3>Isolated from the page</h3><p>Synthesis runs in a hidden extension frame that only accepts connections carrying a one-time ticket from the extension, so a hostile page can't drive it.</p></div>
+        <div><h3>Tested by ear</h3><p>Over 600 automated tests, and every engine change is checked by transcribing its audio with speech recognition. The samples on this page were made the same way.</p></div>
+      </div>
+      <ul class="stack" aria-label="Built with">
+        <li>TypeScript</li><li>WXT</li><li>Manifest V3</li><li>ONNX Runtime Web</li><li>WebGPU</li><li>WebAssembly</li><li>Web Audio</li><li>CSS Custom Highlight API</li><li>pdf.js</li><li>Mozilla Readability</li><li>eSpeak NG</li><li>Vitest</li><li>Playwright</li>
+      </ul>
     </div>
   </section>
 </main>
@@ -1103,6 +1309,30 @@ footer .by b { color: var(--ink); }
   hero.href = card.href;
   hero.textContent = label + ', free';
   document.getElementById('hero-browsers').innerHTML = 'Also on <a href="#install">other browsers</a>';
+})();
+</script>
+<script>
+(() => {
+  // ---- The tour: how far down the page you are, and which stop you're at.
+  const progress = document.getElementById('progress');
+  const rail = document.getElementById('rail');
+  const links = [...rail.querySelectorAll('a')];
+  const stops = links.map((a) => document.getElementById(a.getAttribute('href').slice(1)));
+  const end = document.getElementById('install');
+  let frame = 0;
+  const update = () => {
+    frame = 0;
+    const max = document.documentElement.scrollHeight - innerHeight;
+    progress.style.setProperty('--p', max > 0 ? String(Math.min(1, Math.max(0, scrollY / max))) : '0');
+    const line = innerHeight * 0.4;
+    let here = -1;
+    stops.forEach((s, i) => { if (s && s.getBoundingClientRect().top <= line) here = i; });
+    rail.classList.toggle('on', here >= 0 && end.getBoundingClientRect().top > line);
+    links.forEach((a, i) => { a.classList.toggle('here', i === here); a.classList.toggle('done', i < here); });
+  };
+  addEventListener('scroll', () => { frame ||= requestAnimationFrame(update); }, { passive: true });
+  addEventListener('resize', update);
+  update();
 })();
 </script>
 </body>
