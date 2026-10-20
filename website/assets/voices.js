@@ -8,6 +8,16 @@
 
   window.ALOUD_VOICES = [
     { code: 'en', label: 'English', voices: [
+      s('F1', 'en', 'Female 1', 'EN', "Hi, I'm Female 1. Ten of us share one download, and each of us speaks thirty-one languages."),
+      s('M1', 'en', 'Male 1', 'EN', "I'm Male 1. I read the news, novels, and the small print nobody else will."),
+      s('F2', 'en', 'Female 2', 'EN', "I'm Female 2. Choose a voice for each language, and I'll switch when the page does."),
+      s('M2', 'en', 'Male 2', 'EN', "I'm Male 2. Fall asleep to me tonight. The sleep timer will turn me off."),
+      s('F3', 'en', 'Female 3', 'EN', "I'm Female 3. Click any sentence, and I'll carry on reading from there."),
+      s('M3', 'en', 'Male 3', 'EN', "I'm Male 3. Faster or slower, anywhere from half speed to four times."),
+      s('F4', 'en', 'Female 4', 'EN', "I'm Female 4. I'll tell you how long an article takes, before we begin."),
+      s('M4', 'en', 'Male 4', 'EN', "I'm Male 4. Close the browser if you like. I'll remember where we were."),
+      s('F5', 'en', 'Female 5', 'EN', "I'm Female 5. Highlights, notes and tags, kept on every website you visit."),
+      s('M5', 'en', 'Male 5', 'EN', "I'm Male 5. A deep voice, a long article, and no internet needed."),
       k('af_heart', 'Heart', 'US', "Hi, I'm Heart. Open any article, press Alt R, and I'll read it to you."),
       k('af_bella', 'Bella', 'US', "I'm Bella. I highlight each sentence as I read it, right where it sits on the page."),
       k('bm_george', 'George', 'GB', "I'm George. Every word I say is made right here, on your own computer."),
@@ -54,14 +64,17 @@
       p('es_MX-claude-high', 'Claude', 'Mexico'),
     ] },
     { code: 'fr', label: 'Français', voices: [
+      s('F3', 'fr', 'Female 3', 'French', "Bonjour ! Je lis le français, et rien ne quitte votre ordinateur. / Hello! I read French, and nothing leaves your computer."),
       k('ff_siwis', 'Siwis', 'FR', 'Bonjour, je m\'appelle Siwis. Je lis vos articles à voix haute, ici même, sur votre appareil. / Hello, I\'m Siwis. I read your articles aloud, right here on your device.'),
       p('fr_FR-gilles-low', 'Gilles', 'France'),
     ] },
     { code: 'it', label: 'Italiano', voices: [
+      s('M3', 'it', 'Male 3', 'Italian', "Ciao! Leggo l'italiano, anche senza internet. / Hi! I read Italian, even without the internet."),
       k('if_sara', 'Sara', 'IT', 'Ciao, sono Sara. Leggo ad alta voce qualsiasi articolo, anche senza internet. / Hi, I\'m Sara. I read any article aloud, even without the internet.'),
       k('im_nicola', 'Nicola', 'IT', 'Sono Nicola. Seleziona una parola e ti dico come si pronuncia. / I\'m Nicola. Select a word and I\'ll tell you how it\'s said.'),
     ] },
     { code: 'pt', label: 'Português', voices: [
+      s('F4', 'pt', 'Female 4', 'Portuguese', 'Olá! Eu leio em português, direto no seu computador. / Hello! I read Portuguese, right on your computer.'),
       k('pf_dora', 'Dora', 'BR', 'Olá, eu sou a Dora. Leio qualquer artigo em voz alta, direto no seu navegador. / Hello, I\'m Dora. I read any article aloud, right in your browser.'),
       k('pm_alex', 'Alex', 'BR', 'Eu sou o Alex. Nada do que você lê sai do seu computador. / I\'m Alex. Nothing you read leaves your computer.'),
       k('pm_santa', 'Santa', 'BR', 'Olá! Eu sou o Papai Noel, e também falo português. / Hello! I\'m Santa, and I speak Portuguese too.'),
@@ -69,6 +82,7 @@
       p('pt_PT-tugo-medium', 'Tugão', 'Portugal'),
     ] },
     { code: 'hi', label: 'हिन्दी', voices: [
+      s('M2', 'hi', 'Male 2', 'Hindi', 'नमस्ते! मैं हिंदी पढ़ता हूँ, और सब कुछ आपके कंप्यूटर पर ही होता है। / Hello! I read Hindi, and everything happens on your computer.'),
       k('hf_alpha', 'Alpha', 'IN', 'नमस्ते, मैं अल्फ़ा हूँ। मैं आपके लेख ज़ोर से पढ़ सकती हूँ। / Hello, I\'m Alpha. I can read your articles aloud.'),
       k('hf_beta', 'Beta', 'IN', 'मैं बीटा हूँ। सब कुछ आपके ही कंप्यूटर पर होता है। / I\'m Beta. Everything happens on your own computer.'),
       k('hm_omega', 'Omega', 'IN', 'मैं ओमेगा हूँ। मैं पीडीएफ़ भी पढ़ता हूँ। / I\'m Omega. I read PDFs too.'),

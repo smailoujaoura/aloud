@@ -614,16 +614,25 @@
   const PLAY = '<path d="M4 2.5v11l9-5.5z"/>';
   const PAUSE = '<path d="M4 2.5h3v11H4z"/><path d="M9 2.5h3v11H9z"/>';
   const STEP = 0.25, MIN = 0.25, MAX = 4;
-  const audio = new Audio('assets/voices/film.mp3');
+  // Fetched only as the film comes near, so the rest of the page never waits for it.
+  const audio = new Audio();
   audio.preload = 'auto';
   audio.muted = true;
   audio.loop = true;
   let cues = [];
+  let length = 0;
   let visible = false;
   let raf = 0;
   let badgeTimer = 0;
   let nextBolt = 0;
-  fetch('assets/voices/film.json').then((r) => r.json()).then((j) => { cues = j.cues; draw(); }).catch(() => {});
+  const cast = document.getElementById('film-cast');
+  if (cast) cast.textContent = 'Voices: ' + [...new Map(LINES.map((l) => [l.who.name, l.who])).values()].map((w) => `${w.name}, ${w.credit}`).join(' · ');
+  const load = () => {
+    if (audio.src) return;
+    audio.src = 'assets/voices/film.mp3';
+    fetch('assets/voices/film.json').then((r) => r.json()).then((j) => { cues = j.cues; length = j.duration; draw(); }).catch(() => {});
+  };
+  new IntersectionObserver(([e]) => e.isIntersecting && load(), { rootMargin: '600px 0px' }).observe(screen);
 
   // ---- the sea, made in the browser: noise, swelling like waves, louder in the storm
   let ac = null, sea = null, swell = null;
@@ -682,7 +691,7 @@
   const fmt = (r) => r + '×';
   const draw = () => {
     const t = audio.currentTime;
-    const dur = audio.duration || 31.6;
+    const dur = audio.duration || length || 1;
     const { line, scene } = sceneAt(t);
     for (const [name, layer] of layers) {
       const on = name === scene;
@@ -733,7 +742,7 @@
     else if (key === 's') setRate(audio.playbackRate - STEP);
     else if (key === 'r') setRate(1);
     else if (key === 'z') { audio.currentTime = Math.max(0, audio.currentTime - 5); showBadge('−5 s'); }
-    else if (key === 'x') { audio.currentTime = Math.min((audio.duration || 31) - 0.5, audio.currentTime + 5); showBadge('+5 s'); }
+    else if (key === 'x') { audio.currentTime = Math.min((audio.duration || length) - 0.5, audio.currentTime + 5); showBadge('+5 s'); }
     else if (key === ' ') setPlaying(audio.paused);
     else return false;
     return true;
@@ -748,7 +757,7 @@
   sound.addEventListener('click', (e) => { e.stopPropagation(); withSound(); });
   screen.addEventListener('click', () => { if (audio.muted) withSound(); else setPlaying(audio.paused); screen.focus(); });
   playBtn.addEventListener('click', () => setPlaying(audio.paused));
-  track.addEventListener('click', (e) => { const r = track.getBoundingClientRect(); audio.currentTime = ((e.clientX - r.left) / r.width) * (audio.duration || 31.6); draw(); });
+  track.addEventListener('click', (e) => { const r = track.getBoundingClientRect(); audio.currentTime = ((e.clientX - r.left) / r.width) * (audio.duration || length); draw(); });
   for (const b of document.querySelectorAll('#film .vkeys button')) b.addEventListener('click', () => act(b.dataset.key));
   // The keys work while the film is on screen, as Aloud's do while a video is playing.
   document.addEventListener('keydown', (e) => {
@@ -758,7 +767,7 @@
   // Plays (silently, until you ask for sound) only while it can be seen.
   new IntersectionObserver(([entry]) => {
     visible = entry.isIntersecting;
-    if (visible) { if (!raf) raf = requestAnimationFrame(frame); setPlaying(true); } else { setPlaying(false); }
+    if (visible) { load(); if (!raf) raf = requestAnimationFrame(frame); setPlaying(true); } else { setPlaying(false); }
   }, { threshold: 0.4 }).observe(screen);
   draw();
 })();

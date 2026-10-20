@@ -177,6 +177,7 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
 .film-layer { position: absolute; inset: -6%; background: center / cover no-repeat; opacity: 0; transition: opacity 1.2s ease; will-change: transform, opacity; }
 .film-layer.on { opacity: 1; }
 .film-layer[data-scene="calm"] { background-image: url(assets/film/calm.webp); }
+.film-layer[data-scene="galley"] { background-image: url(assets/film/galley.webp); }
 .film-layer[data-scene="storm"] { background-image: url(assets/film/storm.webp); }
 .film-layer[data-scene="fog"] { background-image: url(assets/film/fog.webp); }
 .film-layer[data-scene="dawn"] { background-image: url(assets/film/dawn.webp); }
@@ -196,6 +197,7 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
 .film-sound { display: inline-flex; align-items: center; gap: 6px; } .film-sound svg { width: 15px; height: 15px; fill: currentColor; }
 .film-sound[hidden] { display: none; }
 .vtrack { cursor: pointer; }
+.film-cast { margin: 0; color: var(--ink-faint); font-size: 0.8rem; line-height: 1.5; }
 </style>
 </head>
 <!-- Before the store listings are live: data-stores="soon". Once they are: "live", and check the
@@ -209,7 +211,7 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
       <a href="#voices">Voices</a>
       <a href="#languages">Languages</a>
       <a href="#notes">Notes</a>
-      <a href="#video">Video speed</a>
+      <a href="#video">Speed</a>
       <a href="tour.html">The tour</a>
       <button type="button" class="theme-btn" id="theme-btn" aria-label="Switch theme"><svg class="moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></svg><svg class="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
       <a class="keep btn primary" href="#install"><span class="when-live">Install</span><span class="when-soon">Get Aloud</span></a>
@@ -387,15 +389,16 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
   <section id="video" class="show">
     <div class="wrap show-grid">
       <div class="show-copy">
-        <p class="eyebrow">Video speed</p>
-        <h2>Every video, at your speed.</h2>
-        <p class="lede">The same keys on YouTube, a lecture, a podcast or any video on the web. Aloud remembers the speed you like on each site.</p>
+        <p class="eyebrow">Video and audio speed</p>
+        <h2>Anything that plays, at your speed.</h2>
+        <p class="lede">Videos, lectures, podcasts, radio. The same keys work on almost any site, and Aloud remembers the speed you like on each one.</p>
         <p class="try">While it plays, press <kbd>D</kbd> faster, <kbd>S</kbd> slower, <kbd>R</kbd> back to 1×, <kbd>Z</kbd> and <kbd>X</kbd> to jump.</p>
-        <a class="more" href="tour.html#later">More about video speed →</a>
+        <a class="more" href="tour.html#later">More about playback speed →</a>
       </div>
       <div class="film" id="film">
-        <div class="film-screen" id="film-screen" tabindex="0" aria-label="A short film with sound. D faster, S slower, R normal speed, Z back, X forward, Space to pause">
+        <div class="film-screen" id="film-screen" tabindex="0" aria-label="A short film with sound, voiced by Aloud. D faster, S slower, R normal speed, Z back, X forward, Space to pause">
           <div class="film-layer" data-scene="calm"></div>
+          <div class="film-layer" data-scene="galley"></div>
           <div class="film-layer" data-scene="storm"></div>
           <div class="film-layer" data-scene="fog"></div>
           <div class="film-layer" data-scene="dawn"></div>
@@ -409,7 +412,7 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
         <div class="vbar">
           <button type="button" class="vplay" id="film-play" aria-label="Pause"><svg viewBox="0 0 16 16"><path d="M4 2.5h3v11H4z"/><path d="M9 2.5h3v11H9z"/></svg></button>
           <div class="vtrack" id="film-track"><div class="vfill" id="film-fill"></div></div>
-          <span class="vtime" id="film-time">0:00 / 0:32</span>
+          <span class="vtime" id="film-time">0:00</span>
           <span class="vrate" id="film-rate">1×</span>
         </div>
         <div class="vkeys">
@@ -419,6 +422,7 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
           <button type="button" data-key="z"><kbd>Z</kbd> back</button>
           <button type="button" data-key="x"><kbd>X</kbd> forward</button>
         </div>
+        <p class="film-cast" id="film-cast"></p>
       </div>
     </div>
   </section>
@@ -477,9 +481,9 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
   </div>
 </footer>
 
-<script src="assets/voices.js?v=fd71ee86"></script>
+<script src="assets/voices.js?v=fae39c5c"></script>
 <script src="assets/demos.js?v=b015c39e"></script>
-<script src="assets/film.js?v=49ed2dde"></script>
-<script src="assets/home.js?v=bc7151d6"></script>
+<script src="assets/film.js?v=1a277964"></script>
+<script src="assets/home.js?v=38f1336a"></script>
 </body>
 </html>
