@@ -521,7 +521,7 @@
   const speedBtn = document.getElementById('demo-speed');
   const PAUSE = '<path d="M4 2.5h3v11H4z"/><path d="M9 2.5h3v11H9z"/>';
   const PLAY = '<path d="M4 2.5v11l9-5.5z"/>';
-  const RATES = [1, 1.25, 1.5, 0.85];
+  const RATES = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4];
   const BASE_WPM = 185;
   const audio = new Audio();
   // The whole file, held in memory: seeking (previous, next) then works on any host, including
@@ -533,7 +533,6 @@
     .catch((e) => { loaded = null; throw e; }));
   let timing = null;
   let words = [];
-  let rate = 0;
   let frame = 0;
 
   const say = (text, call = false) => { status.textContent = text; status.classList.toggle('call', call); };
@@ -600,15 +599,34 @@
   status.addEventListener('click', () => { if (status.classList.contains('call')) play(); });
   document.getElementById('demo-prev').addEventListener('click', () => jump(-1));
   document.getElementById('demo-next').addEventListener('click', () => jump(1));
-  speedBtn.addEventListener('click', () => {
-    rate = (rate + 1) % RATES.length;
-    const r = RATES[rate];
+  // The extension's own speeds, 0.5× to 4×, in a menu over the bar.
+  const speedMenu = document.createElement('div');
+  speedMenu.className = 'speed-menu';
+  speedMenu.setAttribute('role', 'menu');
+  speedMenu.hidden = true;
+  const label = (r) => (Number.isInteger(r) ? r.toFixed(1) : String(r)) + '×';
+  const wpmAt = (r) => Math.round((BASE_WPM * r) / 5) * 5;
+  const setRate = (r) => {
     audio.playbackRate = r;
-    const wpm = Math.round((BASE_WPM * r) / 5) * 5;
-    // 1 → "1.0×", 1.25 → "1.25×", 1.5 → "1.5×", 0.85 → "0.85×".
-    speedBtn.textContent = (Number.isInteger(r) ? r.toFixed(1) : String(r)) + '× · ' + wpm + ' wpm';
+    speedBtn.textContent = label(r) + ' · ' + wpmAt(r) + ' wpm';
     speedBtn.setAttribute('aria-label', 'Reading speed: ' + r + '×. Change speed');
-  });
+    for (const b of speedMenu.children) b.setAttribute('aria-checked', String(Number(b.dataset.rate) === r));
+  };
+  for (const r of RATES) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('role', 'menuitemradio');
+    b.dataset.rate = String(r);
+    b.innerHTML = '<b>' + label(r) + '</b><span>' + wpmAt(r) + ' wpm</span>';
+    b.addEventListener('click', () => { setRate(r); speedMenu.hidden = true; });
+    speedMenu.append(b);
+  }
+  speedBtn.closest('.bar').append(speedMenu);
+  speedBtn.setAttribute('aria-haspopup', 'menu');
+  speedBtn.addEventListener('click', (e) => { e.stopPropagation(); speedMenu.hidden = !speedMenu.hidden; });
+  document.addEventListener('click', (e) => { if (!speedMenu.contains(e.target)) speedMenu.hidden = true; });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') speedMenu.hidden = true; });
+  setRate(1);
   for (const b of document.querySelectorAll('[data-hear]')) {
     b.addEventListener('click', () => {
       document.getElementById('demo').scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });

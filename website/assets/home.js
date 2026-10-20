@@ -15,7 +15,7 @@
   const speedBtn = document.getElementById('demo-speed');
   const PAUSE = '<path d="M4 2.5h3v11H4z"/><path d="M9 2.5h3v11H9z"/>';
   const PLAY = '<path d="M4 2.5v11l9-5.5z"/>';
-  const RATES = [1, 1.25, 1.5, 0.85];
+  const RATES = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4];
   const BASE_WPM = 185;
   const audio = new Audio();
   // The whole file, held in memory: seeking (previous, next) then works on any host, including
@@ -27,7 +27,6 @@
     .catch((e) => { loaded = null; throw e; }));
   let timing = null;
   let words = [];
-  let rate = 0;
   let frame = 0;
 
   const say = (text, call = false) => { status.textContent = text; status.classList.toggle('call', call); };
@@ -94,15 +93,34 @@
   status.addEventListener('click', () => { if (status.classList.contains('call')) play(); });
   document.getElementById('demo-prev').addEventListener('click', () => jump(-1));
   document.getElementById('demo-next').addEventListener('click', () => jump(1));
-  speedBtn.addEventListener('click', () => {
-    rate = (rate + 1) % RATES.length;
-    const r = RATES[rate];
+  // The extension's own speeds, 0.5× to 4×, in a menu over the bar.
+  const speedMenu = document.createElement('div');
+  speedMenu.className = 'speed-menu';
+  speedMenu.setAttribute('role', 'menu');
+  speedMenu.hidden = true;
+  const label = (r) => (Number.isInteger(r) ? r.toFixed(1) : String(r)) + '×';
+  const wpmAt = (r) => Math.round((BASE_WPM * r) / 5) * 5;
+  const setRate = (r) => {
     audio.playbackRate = r;
-    const wpm = Math.round((BASE_WPM * r) / 5) * 5;
-    // 1 → "1.0×", 1.25 → "1.25×", 1.5 → "1.5×", 0.85 → "0.85×".
-    speedBtn.textContent = (Number.isInteger(r) ? r.toFixed(1) : String(r)) + '× · ' + wpm + ' wpm';
+    speedBtn.textContent = label(r) + ' · ' + wpmAt(r) + ' wpm';
     speedBtn.setAttribute('aria-label', 'Reading speed: ' + r + '×. Change speed');
-  });
+    for (const b of speedMenu.children) b.setAttribute('aria-checked', String(Number(b.dataset.rate) === r));
+  };
+  for (const r of RATES) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('role', 'menuitemradio');
+    b.dataset.rate = String(r);
+    b.innerHTML = '<b>' + label(r) + '</b><span>' + wpmAt(r) + ' wpm</span>';
+    b.addEventListener('click', () => { setRate(r); speedMenu.hidden = true; });
+    speedMenu.append(b);
+  }
+  speedBtn.closest('.bar').append(speedMenu);
+  speedBtn.setAttribute('aria-haspopup', 'menu');
+  speedBtn.addEventListener('click', (e) => { e.stopPropagation(); speedMenu.hidden = !speedMenu.hidden; });
+  document.addEventListener('click', (e) => { if (!speedMenu.contains(e.target)) speedMenu.hidden = true; });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') speedMenu.hidden = true; });
+  setRate(1);
   for (const b of document.querySelectorAll('[data-hear]')) {
     b.addEventListener('click', () => {
       document.getElementById('demo').scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
@@ -110,24 +128,27 @@
     });
   }
 
-  // ---- Two languages, two voices: the story as Aloud read it, Italian by Sara, English by Heart.
+  // ---- Pages in two languages: a tab per demo, the page, the board, and the voices switching.
   {
+    const demos = window.ALOUD_DEMOS;
+    const NAMES = window.ALOUD_LANG_NAMES;
+    const tabsEl = document.getElementById('demo-tabs');
+    const pageEl = document.getElementById('lang-page');
+    const board = document.getElementById('lang-board');
     const btn = document.getElementById('lang-play');
     const label = btn.querySelector('span');
     const glyph = btn.querySelector('svg');
     const showPlaying = (on) => { glyph.innerHTML = on ? PAUSE : PLAY; label.textContent = on ? 'Pause' : 'Hear it switch voices'; };
-    const board = document.getElementById('lang-board');
-    const spans = [...document.querySelectorAll('#lang-page .s')];
-    const rows = [...board.querySelectorAll('.row')];
-    const paras = [...document.querySelectorAll('#lang-page .lp')];
     const story = new Audio();
     story.preload = 'none';
+    let demo = null;
     let timing = null;
+    let spans = [];
     let raf = 0;
     const clear = () => {
       for (const s of spans) s.classList.remove('on');
-      for (const p of paras) p.classList.remove('on');
-      for (const r of rows) r.classList.remove('on');
+      for (const p of pageEl.querySelectorAll('.lp')) p.classList.remove('on');
+      for (const r of board.querySelectorAll('.row')) r.classList.remove('on');
       board.classList.remove('live');
     };
     const stop = () => { cancelAnimationFrame(raf); clear(); showPlaying(false); };
@@ -137,21 +158,94 @@
       const i = timing.sentences.findIndex((x) => t >= x.start && t < x.end + 0.25);
       spans.forEach((s, n) => s.classList.toggle('on', n === i));
       const para = i >= 0 ? spans[i].closest('.lp') : null;
-      paras.forEach((p) => p.classList.toggle('on', p === para));
+      for (const p of pageEl.querySelectorAll('.lp')) p.classList.toggle('on', p === para);
       const lang = i >= 0 ? timing.sentences[i].lang : '';
       board.classList.toggle('live', !!lang);
-      rows.forEach((r) => r.classList.toggle('on', r.dataset.lang === lang));
+      for (const r of board.querySelectorAll('.row')) r.classList.toggle('on', r.dataset.lang === lang);
       if (!story.paused) raf = requestAnimationFrame(paint);
     };
+    const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+    const render = (d) => {
+      pageEl.replaceChildren();
+      spans = [];
+      // A translation reads as one (quieter, in italics); a quote inside an English report does not.
+      const translations = d.id !== 'news';
+      for (const p of d.paragraphs) {
+        const para = el('p', 'lp' + (translations && p.lang === 'en' ? ' en' : ''));
+        para.lang = p.lang;
+        para.dataset.lang = p.lang;
+        const who = el('span', 'who');
+        const img = el('img');
+        img.src = 'assets/portraits/' + p.who.portrait + '.webp';
+        img.alt = '';
+        who.append(img, el('b', null, p.lang.toUpperCase()));
+        para.append(who);
+        p.sentences.forEach((text, n) => {
+          if (n) para.append(' ');
+          const s = el('span', 's', text);
+          spans.push(s);
+          para.append(s);
+        });
+        pageEl.append(para);
+      }
+      if (d.skipped) {
+        const skip = el('p', 'skipped');
+        skip.append(el('s', null, 'Translate?'), ' a button, and a translation still folded away: not read');
+        pageEl.append(skip);
+      }
+      board.replaceChildren();
+      const seen = new Map();
+      for (const p of d.paragraphs) if (!seen.has(p.lang)) seen.set(p.lang, p.who);
+      for (const [lang, who] of seen) {
+        const row = el('div', 'row');
+        row.dataset.lang = lang;
+        const name = el('span', 'lang', NAMES[lang] ?? lang);
+        name.append(el('small', null, 'auto'));
+        const wire = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        wire.setAttribute('viewBox', '0 0 64 36');
+        wire.setAttribute('aria-hidden', 'true');
+        wire.innerHTML = '<path d="M2 18 C 30 18, 34 18, 62 18"/>';
+        const w = el('span', 'who');
+        const img = el('img');
+        img.src = 'assets/portraits/' + who.portrait + '.webp';
+        img.alt = '';
+        const txt = el('span', null, who.name);
+        txt.append(el('small', null, who.meta));
+        w.append(img, txt);
+        row.append(name, wire, w);
+        board.append(row);
+      }
+    };
+    const select = (i) => {
+      if (!story.paused) story.pause();
+      stop();
+      demo = demos[i];
+      timing = null;
+      story.removeAttribute('src');
+      [...tabsEl.children].forEach((t, n) => { t.setAttribute('aria-selected', String(n === i)); t.tabIndex = n === i ? 0 : -1; });
+      const tab = tabsEl.children[i];
+      if (tab && tabsEl.scrollWidth > tabsEl.clientWidth) tabsEl.scrollLeft = tab.offsetLeft - (tabsEl.clientWidth - tab.offsetWidth) / 2;
+      render(demo);
+    };
+    demos.forEach((d, i) => {
+      const t = el('button', null, d.label);
+      t.type = 'button';
+      t.setAttribute('role', 'tab');
+      t.addEventListener('click', () => select(i));
+      tabsEl.append(t);
+    });
     story.addEventListener('ended', stop);
     btn.addEventListener('click', async () => {
       if (!story.paused) { story.pause(); stop(); return; }
       claim(story, stop);
-      timing ??= await fetch('assets/voices/bilingual.json').then((r) => r.json()).catch(() => null);
-      if (!story.src) story.src = 'assets/voices/bilingual.mp3';
+      const mine = demo;
+      timing ??= await fetch('assets/voices/' + demo.audio + '.json').then((r) => r.json()).catch(() => null);
+      if (mine !== demo) return;
+      if (!story.getAttribute('src')) story.src = 'assets/voices/' + demo.audio + '.mp3';
       showPlaying(true);
       try { await story.play(); paint(); } catch { stop(); }
     });
+    select(0);
   }
 
   // ---- Firefox WebGPU steps: a link that opens them, and buttons that copy the setting names.
@@ -250,7 +344,8 @@
     wall.replaceChildren(...all.slice(0, FIRST).map(face));
     moreRow.hidden = all.length <= FIRST;
     moreBtn.textContent = 'Show all ' + all.length + ' voices';
-    moreBtn.onclick = () => { wall.append(...all.slice(FIRST).map(face)); moreRow.hidden = true; };
+    // The whole list, drawn again from scratch: pressing twice can never add a voice twice.
+    moreBtn.onclick = () => { wall.replaceChildren(...all.map(face)); moreRow.hidden = true; };
     const tab = tabs.children[i];
     // Keep the chosen tab in view in the row that scrolls sideways on a phone, without moving the page.
     if (tab && tabs.scrollWidth > tabs.clientWidth) tabs.scrollLeft = tab.offsetLeft - (tabs.clientWidth - tab.offsetWidth) / 2;

@@ -33,12 +33,14 @@
 .tabs button:hover { color: var(--ink); background: var(--surface-2); }
 .tabs button[aria-selected="true"] { background: var(--amber-solid); border-color: transparent; color: var(--amber-on); }
 .tabs button small { font: 500 0.72rem/1 var(--mono); opacity: 0.75; }
+#demo-tabs { justify-content: flex-start; margin-left: 0; }
 @media (max-width: 640px) {
   .tabs { flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; scrollbar-width: none; margin-inline: calc(-1 * clamp(16px, 4vw, 40px)); padding: 0 clamp(16px, 4vw, 40px) 4px; }
   .tabs::-webkit-scrollbar { display: none; }
   .tabs button { flex: none; }
 }
 .show-all { display: flex; justify-content: center; margin-top: 18px; }
+.show-all[hidden] { display: none; }
 .face .initial {
   width: 100%; height: 100%; border-radius: 50%; display: grid; place-items: center;
   background: var(--surface-2); color: var(--ink-muted); font: 600 1.6rem/1 var(--display);
@@ -160,29 +162,20 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
       <div class="head measure">
         <p class="eyebrow">Every language on the page</p>
         <h2>A page in two languages? Two voices.</h2>
-        <p class="lede">Aloud hears which language each paragraph is in and hands it to a voice that speaks it. Hidden translations stay quiet.</p>
+        <p class="lede">Aloud hears which language each paragraph is in and hands it to a voice that speaks it. Pick a page and press play.</p>
       </div>
+      <div class="tabs" role="tablist" aria-label="Demos" id="demo-tabs"></div>
       <div class="lang-demo">
         <div>
-          <article class="lang-page" id="lang-page" aria-label="A bilingual story as Aloud reads it">
-            <p class="lp" lang="it" data-lang="it"><span class="who"><img src="assets/portraits/kokoro-if_sara.webp" alt=""><b>IT</b></span><span class="s">C'era una volta un pollo che si chiamava Pollo Piccolino.</span> <span class="s">Viveva in una fattoria insieme alla sua mamma e ai suoi fratelli.</span></p>
-            <p class="lp en" lang="en" data-lang="en"><span class="who"><img src="assets/portraits/kokoro-af_heart.webp" alt=""><b>EN</b></span><span class="s">Once upon a time there was a chicken called Chicken Little.</span> <span class="s">He lived on a farm with his mother and his brothers.</span></p>
-            <p class="lp" lang="it" data-lang="it"><span class="who"><img src="assets/portraits/kokoro-if_sara.webp" alt=""><b>IT</b></span><span class="s">Un giorno una ghianda gli cadde sulla testa, e il pollo corse dalla volpe.</span></p>
-            <p class="skipped"><s>Translate?</s> a button, and a translation still folded away: not read</p>
-          </article>
+          <article class="lang-page" id="lang-page" aria-live="off"></article>
           <button class="btn primary lang-play" type="button" id="lang-play"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span>Hear it switch voices</span></button>
         </div>
         <div>
-          <div class="board" id="lang-board" aria-label="Which voice reads which language">
-            <div class="row" data-lang="en"><span class="lang">English<small>auto</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/kokoro-af_heart.webp" alt=""><span>Heart<small>Kokoro · US</small></span></span></div>
-            <div class="row" data-lang="it"><span class="lang">Italian<small>chosen by you</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/kokoro-if_sara.webp" alt=""><span>Sara<small>Kokoro · IT</small></span></span></div>
-            <div class="row" data-lang="fr"><span class="lang">French<small>auto</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/supertonic-F1.webp" alt=""><span>Female 1<small>Supertonic · FR</small></span></span></div>
-            <div class="row" data-lang="es"><span class="lang">Spanish<small>chosen by you</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/supertonic-M1.webp" alt=""><span>Male 1<small>Supertonic · ES</small></span></span></div>
-            <div class="row" data-lang="de"><span class="lang">German<small>chosen by you</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/supertonic-F2.webp" alt=""><span>Female 2<small>Supertonic · DE</small></span></span></div>
-          </div>
+          <div class="board" id="lang-board" aria-label="Which voice reads which language"></div>
           <p class="board-note">Each language wired to the voice that reads it. Leave it on Auto, or click a face to choose.</p>
         </div>
       </div>
+      <p class="voice-foot">Every demo is Aloud's own output, one voice per language, switching on its own.</p>
     </div>
   </section>
 
@@ -275,6 +268,7 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
 </footer>
 
 <script src="assets/voices.js"></script>
+<script src="assets/demos.js"></script>
 <script src="assets/home.js"></script>
 </body>
 </html>
