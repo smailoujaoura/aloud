@@ -376,7 +376,11 @@ function piperGroups(manifest: ModelManifest): PiperGroup[] {
   return [...byKey.values()];
 }
 
-/** The variant a row shows: the one chosen here, else the one in use, else the highest quality. */
+/**
+ * The variant a row shows: the one chosen here, else the one in use, else the best one already
+ * downloaded, else `medium`. A `high` model is several times the work and falls behind speech on
+ * many computers; it stays a click away.
+ */
 function chosenVariant(group: PiperGroup, ctx: PanelContext): [string, PiperVoiceEntry] {
   const find = (pred: (id: string, v: PiperVoiceEntry) => boolean): [string, PiperVoiceEntry] | undefined =>
     group.variants.find(([id, v]) => pred(id, v));
@@ -384,8 +388,9 @@ function chosenVariant(group: PiperGroup, ctx: PanelContext): [string, PiperVoic
   return (
     (remembered ? find((id) => id === remembered) : undefined) ??
     (ctx.settings.engine === 'piper' ? find((id) => id === ctx.settings.piperVoice) : undefined) ??
-    // Otherwise the best recording there is: variants are sorted smallest first, so the last is
-    // `high` whenever the voice has one — offered even over a lower tier already downloaded.
+    [...group.variants].reverse().find(([, v]) => piperDownloaded(v, ctx.sizes)) ??
+    find((_, v) => v.quality === 'medium') ??
+    // No medium: the best there is (variants are sorted smallest first).
     group.variants[group.variants.length - 1]!
   );
 }

@@ -130,6 +130,14 @@ p { margin: 0; }
 .top nav a { text-decoration: none; color: var(--ink-muted); }
 .top nav a:hover { color: var(--ink); }
 .top nav .btn { padding: 8px 14px; font-size: 0.88rem; color: var(--amber-on); }
+/* Dark text on the amber button, hovered or not: the links' hover colour is near-white in the dark theme. */
+.top nav a.btn.primary, .top nav a.btn.primary:hover { color: var(--amber-on); }
+.theme-btn { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--rule-strong); background: transparent; color: var(--ink); cursor: pointer; flex: none; }
+.theme-btn:hover { background: var(--surface-2); }
+.theme-btn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.theme-btn .sun { display: none; }
+:root[data-theme="dark"] .theme-btn .sun { display: block; } :root[data-theme="dark"] .theme-btn .moon { display: none; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .theme-btn .sun { display: block; } :root:not([data-theme="light"]) .theme-btn .moon { display: none; } }
 @media (max-width: 760px) { .top nav a:not(.keep) { display: none; } }
 
 /* ---------- buttons ---------- */
@@ -550,13 +558,3 @@ footer .by b { color: var(--ink); }
 .anywhere { margin-top: clamp(36px, 5vw, 52px); }
 .anywhere h3 { font: 600 1rem/1.3 var(--sans); margin-bottom: 4px; }
 
-/* The demo's speed menu: the extension's speeds, 0.5× to 4×. */
-.bar .speed-menu {
-  position: absolute; right: 12px; bottom: calc(100% + 8px); z-index: 2;
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px; padding: 6px; width: 220px;
-  background: var(--bar-bg); border: 1px solid var(--rule); border-radius: 14px; box-shadow: var(--shadow);
-}
-.bar .speed-menu[hidden] { display: none; }
-.bar .speed-menu button { width: auto; height: auto; padding: 7px 10px; display: flex; justify-content: space-between; gap: 8px; border-radius: 8px; font: 0.82rem var(--sans); }
-.bar .speed-menu button span { color: var(--ink-faint); font: 0.75rem var(--mono); }
-.bar .speed-menu button[aria-checked="true"] { background: var(--amber-soft); }

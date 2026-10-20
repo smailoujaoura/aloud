@@ -15,8 +15,6 @@
   const speedBtn = document.getElementById('demo-speed');
   const PAUSE = '<path d="M4 2.5h3v11H4z"/><path d="M9 2.5h3v11H9z"/>';
   const PLAY = '<path d="M4 2.5v11l9-5.5z"/>';
-  const RATES = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4];
-  const BASE_WPM = 185;
   const audio = new Audio();
   // The whole file, held in memory: seeking (previous, next) then works on any host, including
   // ones that do not answer range requests. It is 130 KB.
@@ -93,33 +91,17 @@
   status.addEventListener('click', () => { if (status.classList.contains('call')) play(); });
   document.getElementById('demo-prev').addEventListener('click', () => jump(-1));
   document.getElementById('demo-next').addEventListener('click', () => jump(1));
-  // The extension's own speeds, 0.5× to 4×, in a menu over the bar.
-  const speedMenu = document.createElement('div');
-  speedMenu.className = 'speed-menu';
-  speedMenu.setAttribute('role', 'menu');
-  speedMenu.hidden = true;
+  // One button, four speeds: 1×, 2×, 4×, then 0.5×, and round again.
+  const RATES = [1, 2, 4, 0.5];
+  const BASE_WPM = 185;
+  let rateAt = 0;
   const label = (r) => (Number.isInteger(r) ? r.toFixed(1) : String(r)) + '×';
-  const wpmAt = (r) => Math.round((BASE_WPM * r) / 5) * 5;
   const setRate = (r) => {
     audio.playbackRate = r;
-    speedBtn.textContent = label(r) + ' · ' + wpmAt(r) + ' wpm';
+    speedBtn.textContent = label(r) + ' · ' + Math.round((BASE_WPM * r) / 5) * 5 + ' wpm';
     speedBtn.setAttribute('aria-label', 'Reading speed: ' + r + '×. Change speed');
-    for (const b of speedMenu.children) b.setAttribute('aria-checked', String(Number(b.dataset.rate) === r));
   };
-  for (const r of RATES) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.setAttribute('role', 'menuitemradio');
-    b.dataset.rate = String(r);
-    b.innerHTML = '<b>' + label(r) + '</b><span>' + wpmAt(r) + ' wpm</span>';
-    b.addEventListener('click', () => { setRate(r); speedMenu.hidden = true; });
-    speedMenu.append(b);
-  }
-  speedBtn.closest('.bar').append(speedMenu);
-  speedBtn.setAttribute('aria-haspopup', 'menu');
-  speedBtn.addEventListener('click', (e) => { e.stopPropagation(); speedMenu.hidden = !speedMenu.hidden; });
-  document.addEventListener('click', (e) => { if (!speedMenu.contains(e.target)) speedMenu.hidden = true; });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') speedMenu.hidden = true; });
+  speedBtn.addEventListener('click', () => { rateAt = (rateAt + 1) % RATES.length; setRate(RATES[rateAt]); });
   setRate(1);
   for (const b of document.querySelectorAll('[data-hear]')) {
     b.addEventListener('click', () => {
@@ -414,18 +396,30 @@
 })();
 
 (() => {
-  // ---- Notes: select words in the little article, pick a colour, and it's kept and listed.
+  // ---- Notes, shown working: the page plays it once it is in view, then it is yours to try.
   const demo = document.getElementById('note-demo');
   if (!demo) return;
   const page = document.getElementById('note-page');
   const bar = document.getElementById('note-toolbar');
+  const pop = document.getElementById('note-pop');
+  const field = document.getElementById('np-text');
+  const tags = document.getElementById('np-tags');
+  const tagField = document.getElementById('np-tag');
   const list = document.getElementById('note-list');
+  const pointer = document.getElementById('note-pointer');
+  const replay = document.getElementById('note-replay');
+  const original = page.innerHTML;
   let pending = null;
-  let next = 2;
+  let run = 0;
+  let next = 1;
+  const notes = new Map();
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  for (const b of bar.querySelectorAll('button[data-c]')) b.style.setProperty('--c', b.dataset.c);
 
+  // ---- the list beside the page
   const renderList = () => {
-    const marks = [...page.querySelectorAll('mark[data-note]')];
     list.replaceChildren();
+    const marks = [...page.querySelectorAll('mark[data-note]')];
     if (!marks.length) {
       const li = document.createElement('li');
       li.className = 'empty';
@@ -434,9 +428,12 @@
       return;
     }
     for (const m of marks) {
+      const info = notes.get(m.dataset.note) ?? {};
       const li = document.createElement('li');
       li.style.setProperty('--c', m.style.getPropertyValue('--c'));
-      li.textContent = m.textContent;
+      li.append(m.textContent);
+      if (info.comment) { const c = document.createElement('small'); c.textContent = info.comment; li.append(c); }
+      if (info.tags?.length) { const t = document.createElement('span'); t.className = 'tags'; for (const tag of info.tags) { const x = document.createElement('span'); x.textContent = '#' + tag; t.append(x); } li.append(t); }
       const x = document.createElement('button');
       x.type = 'button';
       x.textContent = '×';
@@ -447,123 +444,321 @@
     }
   };
 
-  const hide = () => { bar.hidden = true; pending = null; };
-  const showFor = (range) => {
-    const r = range.getBoundingClientRect();
-    const box = demo.getBoundingClientRect();
+  // ---- placing things over the page
+  const rel = (r) => { const box = demo.getBoundingClientRect(); return { left: r.left - box.left, top: r.top - box.top, right: r.right - box.left, bottom: r.bottom - box.top, width: r.width, height: r.height }; };
+  const placeBar = (range) => {
+    const r = rel(range.getBoundingClientRect());
     bar.hidden = false;
-    const left = Math.max(0, Math.min(box.width - bar.offsetWidth, r.left - box.left + r.width / 2 - bar.offsetWidth / 2));
-    bar.style.left = left + 'px';
-    bar.style.top = Math.max(0, r.top - box.top - bar.offsetHeight - 8) + 'px';
-    pending = range.cloneRange();
+    bar.style.left = Math.max(0, Math.min(demo.clientWidth - bar.offsetWidth, r.left + r.width / 2 - bar.offsetWidth / 2)) + 'px';
+    bar.style.top = Math.max(0, r.top - bar.offsetHeight - 8) + 'px';
   };
-  const check = () => {
-    const sel = getSelection();
-    if (!sel || sel.isCollapsed || !sel.rangeCount) { hide(); return; }
-    const range = sel.getRangeAt(0);
-    if (!page.contains(range.commonAncestorContainer)) { hide(); return; }
-    // One paragraph at a time, as a highlight is on the real page.
-    const para = (range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement).closest('p, h3');
-    if (!para) { hide(); return; }
-    if (!para.contains(range.endContainer)) range.setEnd(para, para.childNodes.length);
-    if (!range.toString().trim()) { hide(); return; }
-    showFor(range);
+  const placePop = (mark) => {
+    const r = rel(mark.getBoundingClientRect());
+    pop.hidden = false;
+    pop.style.left = Math.max(0, Math.min(demo.clientWidth - pop.offsetWidth, r.left)) + 'px';
+    pop.style.top = r.bottom + 8 + 'px';
   };
-  page.addEventListener('mouseup', () => setTimeout(check, 0));
-  page.addEventListener('touchend', () => setTimeout(check, 250));
-  document.addEventListener('selectionchange', () => { if (!bar.hidden && getSelection().isCollapsed) setTimeout(() => { if (getSelection().isCollapsed) hide(); }, 200); });
-  bar.addEventListener('pointerdown', (e) => e.preventDefault());
-  for (const b of bar.querySelectorAll('button[data-c]')) b.style.setProperty('--c', b.dataset.c);
-  bar.addEventListener('click', (e) => {
-    const b = e.target.closest('button');
-    if (!b || !pending) return;
+  const hideBar = () => { bar.hidden = true; pending = null; };
+  const point = async (target, dx = 0.5, dy = 0.5) => {
+    const r = rel(target.getBoundingClientRect());
+    pointer.classList.add('on');
+    pointer.style.transform = `translate(${r.left + r.width * dx}px, ${r.top + r.height * dy}px)`;
+    await wait(700);
+  };
+  const press = async (button) => { await point(button); button.classList.add('press'); await wait(220); button.classList.remove('press'); };
+
+  // ---- marking
+  const mark = (range, { color, underline }) => {
     const m = document.createElement('mark');
-    const underline = b.dataset.style === 'underline';
     m.className = (underline ? 'ul' : 'hl') + ' fresh';
-    m.style.setProperty('--c', underline ? '#2f9e44' : b.dataset.c);
+    m.style.setProperty('--c', color);
     m.dataset.note = String(next++);
-    m.append(pending.extractContents());
-    pending.insertNode(m);
-    // Marks inside the new mark (a word marked twice) give way to it.
+    m.append(range.extractContents());
+    range.insertNode(m);
     for (const inner of m.querySelectorAll('mark')) inner.replaceWith(...inner.childNodes);
     getSelection().removeAllRanges();
-    hide();
+    hideBar();
+    notes.set(m.dataset.note, {});
     renderList();
+    return m;
+  };
+
+  // ---- the performance
+  const selectWords = async (span, mine) => {
+    const text = span.firstChild;
+    const ends = [...text.data.matchAll(/\S+/g)].map((w) => w.index + w[0].length);
+    const range = document.createRange();
+    range.setStart(text, 0);
+    await point(span, 0, 0.6);
+    for (const end of ends) {
+      if (mine !== run) return null;
+      range.setEnd(text, end);
+      getSelection().removeAllRanges();
+      getSelection().addRange(range);
+      pointer.style.transform = `translate(${rel(range.getBoundingClientRect()).right}px, ${rel(range.getBoundingClientRect()).bottom - 8}px)`;
+      await wait(110);
+    }
+    await wait(250);
+    placeBar(range);
+    pending = range.cloneRange();
+    await wait(500);
+    return range;
+  };
+  const type = async (el, text, mine) => {
+    el.classList.add('typing');
+    for (const ch of text) { if (mine !== run) return; el.textContent += ch; await wait(42); }
+    el.classList.remove('typing');
+  };
+  const play = async () => {
+    const mine = ++run;
+    replay.hidden = true;
+    page.innerHTML = original;
+    notes.clear();
+    renderList();
+    pop.hidden = true;
+    hideBar();
+    const ph = (id) => page.querySelector(`[data-ph="${id}"]`);
+    // 1. A passage, highlighted yellow.
+    if (!(await selectWords(ph('a'), mine))) return;
+    await press(bar.querySelector('[aria-label="Yellow"]'));
+    if (mine !== run) return;
+    mark(pending, { color: '#ffd83a' });
+    await wait(700);
+    // 2. A passage kept with a note and a tag.
+    if (!(await selectWords(ph('b'), mine))) return;
+    await press(bar.querySelector('[data-note]'));
+    if (mine !== run) return;
+    const m = mark(pending, { color: '#8cc8ff' });
+    field.textContent = '';
+    for (const c of tags.querySelectorAll('.chip')) c.remove();
+    tagField.textContent = 'Add a tag';
+    tagField.classList.remove('live');
+    pop.querySelectorAll('.np-dots i').forEach((i, n) => i.classList.toggle('on', n === 2));
+    placePop(m);
+    await point(field, 0.2, 0.5);
+    await type(field, 'The textbook example. It turns out to be wrong.', mine);
+    await point(tagField, 0.3, 0.5);
+    tagField.textContent = '';
+    tagField.classList.add('live');
+    await type(tagField, 'economics', mine);
+    if (mine !== run) return;
+    await wait(300);
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.textContent = 'economics ×';
+    tags.insertBefore(chip, tagField);
+    tagField.textContent = '';
+    notes.set(m.dataset.note, { comment: field.textContent, tags: ['economics'] });
+    await wait(500);
+    await press(document.getElementById('np-done'));
+    pop.hidden = true;
+    renderList();
+    await wait(600);
+    // 3. A passage underlined instead.
+    if (!(await selectWords(ph('c'), mine))) return;
+    await press(bar.querySelector('[data-style="underline"]'));
+    if (mine !== run) return;
+    mark(pending, { color: '#2f9e44', underline: true });
+    pointer.classList.remove('on');
+    replay.hidden = false;
+  };
+  const stopShow = () => { run++; pointer.classList.remove('on'); replay.hidden = false; };
+
+  // ---- your turn: select words in the page
+  const check = () => {
+    const sel = getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) { hideBar(); return; }
+    const range = sel.getRangeAt(0);
+    if (!page.contains(range.commonAncestorContainer)) { hideBar(); return; }
+    const para = (range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement).closest('p, h3');
+    if (!para) { hideBar(); return; }
+    if (!para.contains(range.endContainer)) range.setEnd(para, para.childNodes.length);
+    if (!range.toString().trim()) { hideBar(); return; }
+    placeBar(range);
+    pending = range.cloneRange();
+  };
+  page.addEventListener('pointerdown', (e) => { if (e.isTrusted && pointer.classList.contains('on')) stopShow(); });
+  page.addEventListener('mouseup', () => setTimeout(check, 0));
+  page.addEventListener('touchend', () => setTimeout(check, 300));
+  bar.addEventListener('pointerdown', (e) => e.preventDefault());
+  bar.addEventListener('click', (e) => {
+    if (!e.isTrusted) return;
+    const b = e.target.closest('button');
+    if (!b || !pending) return;
+    if (b.dataset.note) { const m = mark(pending, { color: '#8cc8ff' }); notes.set(m.dataset.note, { comment: '' }); renderList(); return; }
+    mark(pending, { color: b.dataset.style === 'underline' ? '#2f9e44' : b.dataset.c, underline: b.dataset.style === 'underline' });
   });
+  document.getElementById('np-done').addEventListener('click', (e) => { if (e.isTrusted) pop.hidden = true; });
+  replay.addEventListener('click', () => { replay.hidden = true; play(); });
+
   renderList();
+  // Played the first time it comes into view; never while it can't be seen.
+  let started = false;
+  new IntersectionObserver(([entry]) => {
+    if (entry.isIntersecting && !started) { started = true; setTimeout(play, 400); }
+  }, { threshold: 0.5 }).observe(demo);
 })();
 
 (() => {
-  // ---- Video speed: a little film that plays at whatever speed you pick, as on any site.
-  const screen = document.getElementById('v-screen');
-  if (!screen) return;
-  const RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4];
-  const LENGTH = 180;
-  let rate = 1;
-  let t = 42;
-  let playing = true;
-  let last = performance.now();
-  let badgeTimer = 0;
-  let raf = 0;
-  let visible = false;
-  const el = (id) => document.getElementById(id);
-  const far = el('v-far'), near = el('v-near'), clouds = el('v-clouds'), boat = el('v-boat');
-  const fill = el('v-fill'), time = el('v-time'), rateEl = el('v-rate'), badge = el('v-badge'), playBtn = el('v-play');
+  // ---- The film: Aloud's voices telling a story at sea, at whatever speed you choose.
+  const screen = document.getElementById('film-screen');
+  if (!screen || !window.ALOUD_FILM) return;
+  const LINES = window.ALOUD_FILM;
+  const $ = (id) => document.getElementById(id);
+  const layers = new Map([...screen.querySelectorAll('.film-layer')].map((l) => [l.dataset.scene, l]));
+  const rain = screen.querySelector('.film-rain');
+  const flash = screen.querySelector('.film-flash');
+  const fog = screen.querySelector('.film-fog');
+  const caption = $('film-caption'), badge = $('film-badge'), sound = $('film-sound');
+  const fill = $('film-fill'), time = $('film-time'), rateEl = $('film-rate'), playBtn = $('film-play'), track = $('film-track');
   const PLAY = '<path d="M4 2.5v11l9-5.5z"/>';
   const PAUSE = '<path d="M4 2.5h3v11H4z"/><path d="M9 2.5h3v11H9z"/>';
+  const STEP = 0.25, MIN = 0.25, MAX = 4;
+  const audio = new Audio('assets/voices/film.mp3');
+  audio.preload = 'auto';
+  audio.muted = true;
+  audio.loop = true;
+  let cues = [];
+  let visible = false;
+  let raf = 0;
+  let badgeTimer = 0;
+  let nextBolt = 0;
+  fetch('assets/voices/film.json').then((r) => r.json()).then((j) => { cues = j.cues; draw(); }).catch(() => {});
+
+  // ---- the sea, made in the browser: noise, swelling like waves, louder in the storm
+  let ac = null, sea = null, swell = null;
+  const startSea = () => {
+    if (ac) return;
+    ac = new AudioContext();
+    const len = ac.sampleRate * 2;
+    const buf = ac.createBuffer(1, len, ac.sampleRate);
+    const d = buf.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < len; i++) { last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02; d[i] = last * 3.5; }
+    const src = ac.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    const lp = ac.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 700;
+    sea = ac.createGain();
+    sea.gain.value = 0;
+    swell = ac.createGain();
+    swell.gain.value = 0.5;
+    const lfo = ac.createOscillator();
+    lfo.frequency.value = 0.18;
+    const depth = ac.createGain();
+    depth.gain.value = 0.35;
+    lfo.connect(depth).connect(swell.gain);
+    src.connect(lp).connect(swell).connect(sea).connect(ac.destination);
+    src.start();
+    lfo.start();
+    sea.lfo = lfo;
+  };
+  const thunder = () => {
+    if (!ac || audio.muted) return;
+    const len = ac.sampleRate * 1.6;
+    const buf = ac.createBuffer(1, len, ac.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.5);
+    const src = ac.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = Math.min(2, audio.playbackRate);
+    const lp = ac.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 220;
+    const g = ac.createGain();
+    g.gain.value = 0.9;
+    src.connect(lp).connect(g).connect(ac.destination);
+    src.start();
+  };
+
+  const sceneAt = (t) => {
+    let i = 0;
+    cues.forEach((c, n) => { if (t >= c.start - 1) i = n; });
+    return { line: cues.findIndex((c) => t >= c.start && t <= c.end + 0.3), scene: LINES[i]?.scene ?? 'calm' };
+  };
   const clock = (s) => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
-  const fmt = (r) => (Number.isInteger(r) ? r : r) + '×';
-  const flash = (text) => {
+  const fmt = (r) => r + '×';
+  const draw = () => {
+    const t = audio.currentTime;
+    const dur = audio.duration || 31.6;
+    const { line, scene } = sceneAt(t);
+    for (const [name, layer] of layers) {
+      const on = name === scene;
+      layer.classList.toggle('on', on);
+      // A slow camera move that follows the film's own clock, so it speeds up with it.
+      if (on) {
+        const sway = scene === 'storm' ? Math.sin(t * 2.4) * 1.4 : Math.sin(t * 0.5) * 0.6;
+        layer.style.transform = `scale(${1.02 + (t % 30) * 0.003}) translate(${Math.sin(t * 0.13) * 1.5}%, ${sway}%) rotate(${scene === 'storm' ? Math.sin(t * 1.7) * 0.8 : 0}deg)`;
+      }
+    }
+    rain.classList.toggle('on', scene === 'storm');
+    rain.style.backgroundPosition = `${-t * 90}px ${t * 520}px`;
+    fog.classList.toggle('on', scene === 'fog');
+    fog.style.transform = `translateX(${Math.sin(t * 0.2) * 8}%)`;
+    if (scene === 'storm' && !audio.paused && t > nextBolt) {
+      nextBolt = t + 2.5 + Math.random() * 2;
+      flash.animate([{ opacity: 0.85 }, { opacity: 0 }, { opacity: 0.5 }, { opacity: 0 }], { duration: 650 / Math.max(1, audio.playbackRate) });
+      setTimeout(thunder, 250);
+    }
+    if (scene !== 'storm') nextBolt = 0;
+    const l = LINES[line];
+    caption.innerHTML = '';
+    if (l) { const who = document.createElement('i'); who.textContent = l.who.name; caption.append(who, l.text); }
+    fill.style.width = (t / dur) * 100 + '%';
+    time.textContent = clock(t) + ' / ' + clock(dur);
+    rateEl.textContent = fmt(audio.playbackRate);
+    if (sea && ac) {
+      const level = audio.paused || audio.muted ? 0 : scene === 'storm' ? 0.55 : scene === 'calm' || scene === 'dawn' ? 0.22 : 0.12;
+      sea.gain.setTargetAtTime(level, ac.currentTime, 0.4);
+      sea.lfo.frequency.setTargetAtTime((scene === 'storm' ? 0.45 : 0.16) * audio.playbackRate, ac.currentTime, 0.3);
+    }
+  };
+  const frame = () => { draw(); raf = visible ? requestAnimationFrame(frame) : 0; };
+  const showBadge = (text) => {
     badge.textContent = text;
     badge.hidden = false;
     clearTimeout(badgeTimer);
     badgeTimer = setTimeout(() => (badge.hidden = true), 900);
   };
-  const draw = () => {
-    far.setAttribute('transform', `translate(${-((t * 14) % 100)} 0)`);
-    near.setAttribute('transform', `translate(${-((t * 30) % 120)} 0)`);
-    clouds.setAttribute('transform', `translate(${-((t * 4) % 380)} 0)`);
-    const bob = Math.sin(t * 2.2) * 3;
-    boat.setAttribute('transform', `translate(${120 + Math.sin(t * 0.4) * 30} ${158 + bob}) rotate(${Math.sin(t * 2.2 + 1) * 4})`);
-    fill.style.width = (t / LENGTH) * 100 + '%';
-    time.textContent = clock(t) + ' / ' + clock(LENGTH);
-    rateEl.textContent = fmt(rate);
+  const setRate = (r) => { audio.playbackRate = Math.round(Math.min(MAX, Math.max(MIN, r)) * 100) / 100; showBadge(fmt(audio.playbackRate)); draw(); };
+  const setPlaying = (on) => {
+    if (on) audio.play().catch(() => {}); else audio.pause();
+    playBtn.querySelector('svg').innerHTML = on ? PAUSE : PLAY;
+    playBtn.setAttribute('aria-label', on ? 'Pause' : 'Play');
   };
-  const frame = (now) => {
-    const dt = Math.min(0.1, (now - last) / 1000);
-    last = now;
-    if (playing) t = (t + dt * rate) % LENGTH;
-    draw();
-    raf = visible ? requestAnimationFrame(frame) : 0;
-  };
-  const setRate = (r) => { rate = r; flash(fmt(r)); draw(); };
   const act = (key) => {
-    const i = RATES.indexOf(rate);
-    if (key === 'd') setRate(RATES[Math.min(RATES.length - 1, i + 1)]);
-    else if (key === 's') setRate(RATES[Math.max(0, i - 1)]);
+    if (key === 'd') setRate(audio.playbackRate + STEP);
+    else if (key === 's') setRate(audio.playbackRate - STEP);
     else if (key === 'r') setRate(1);
-    else if (key === 'z') { t = Math.max(0, t - 10); flash('−10 s'); }
-    else if (key === 'x') { t = Math.min(LENGTH - 1, t + 10); flash('+10 s'); }
+    else if (key === 'z') { audio.currentTime = Math.max(0, audio.currentTime - 5); showBadge('−5 s'); }
+    else if (key === 'x') { audio.currentTime = Math.min((audio.duration || 31) - 0.5, audio.currentTime + 5); showBadge('+5 s'); }
+    else if (key === ' ') setPlaying(audio.paused);
     else return false;
     return true;
   };
-  screen.addEventListener('keydown', (e) => {
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
-    if (e.key === ' ') { e.preventDefault(); togglePlay(); return; }
+  const withSound = () => {
+    startSea();
+    ac.resume();
+    audio.muted = false;
+    sound.hidden = true;
+    if (audio.paused) setPlaying(true);
+  };
+  sound.addEventListener('click', (e) => { e.stopPropagation(); withSound(); });
+  screen.addEventListener('click', () => { if (audio.muted) withSound(); else setPlaying(audio.paused); screen.focus(); });
+  playBtn.addEventListener('click', () => setPlaying(audio.paused));
+  track.addEventListener('click', (e) => { const r = track.getBoundingClientRect(); audio.currentTime = ((e.clientX - r.left) / r.width) * (audio.duration || 31.6); draw(); });
+  for (const b of document.querySelectorAll('#film .vkeys button')) b.addEventListener('click', () => act(b.dataset.key));
+  // The keys work while the film is on screen, as Aloud's do while a video is playing.
+  document.addEventListener('keydown', (e) => {
+    if (!visible || e.ctrlKey || e.metaKey || e.altKey || e.target.closest?.('input, textarea, select, [contenteditable]')) return;
     if (act(e.key.toLowerCase())) e.preventDefault();
   });
-  screen.addEventListener('click', () => screen.focus());
-  const togglePlay = () => {
-    playing = !playing;
-    playBtn.querySelector('svg').innerHTML = playing ? PAUSE : PLAY;
-    playBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
-  };
-  playBtn.addEventListener('click', togglePlay);
-  for (const b of document.querySelectorAll('.vkeys button')) b.addEventListener('click', () => { act(b.dataset.key); screen.focus(); });
-  // Only moves while it can be seen: no animation running off screen.
+  // Plays (silently, until you ask for sound) only while it can be seen.
   new IntersectionObserver(([entry]) => {
     visible = entry.isIntersecting;
-    if (visible && !raf) { last = performance.now(); raf = requestAnimationFrame(frame); }
-  }).observe(screen);
+    if (visible) { if (!raf) raf = requestAnimationFrame(frame); setPlaying(true); } else { setPlaying(false); }
+  }, { threshold: 0.4 }).observe(screen);
   draw();
 })();

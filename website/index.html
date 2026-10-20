@@ -17,11 +17,12 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#101014" media="(prefers-color-scheme: dark)">
+<script src="assets/theme.js?v=4eaa486f"></script>
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400..800;1,7..72,400..600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="assets/site.css?v=8ecc8afc">
+<link rel="stylesheet" href="assets/site.css?v=dc2458f8">
 <style>
 /* ---------- the home page: voices by language, the best features at a glance ---------- */
 .tabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 0 auto 28px; }
@@ -140,6 +141,61 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
 .pdf-fig { height: 70px; margin: 6px 0; border: 1px solid #ddd; display: flex; align-items: end; padding: 6px; background: linear-gradient(to top, #c8d8e8 0 30%, transparent 30%) 10% 100% / 12% 100% no-repeat, linear-gradient(to top, #c8d8e8 0 55%, transparent 55%) 30% 100% / 12% 100% no-repeat, linear-gradient(to top, #c8d8e8 0 70%, transparent 70%) 50% 100% / 12% 100% no-repeat, linear-gradient(to top, #c8d8e8 0 85%, transparent 85%) 70% 100% / 12% 100% no-repeat; }
 .pdf-fig span { font-size: 0.65rem; color: #666; background: #fff; }
 @media (max-width: 520px) { .pdf-cols { grid-template-columns: 1fr; } }
+
+/* The notes demo as the extension draws it: toolbar, popover, a pointer that does the clicking. */
+.note-toolbar button.text { width: auto; padding: 0 9px; font: 600 0.82rem var(--sans); }
+.note-toolbar button.text::before { display: none; }
+.note-toolbar button.press, .note-pop button.press { background: var(--amber-soft); transform: scale(0.94); }
+.note-pop { position: absolute; z-index: 5; width: min(300px, calc(100% - 8px)); padding: 10px; display: grid; gap: 8px; border-radius: 14px; background: var(--surface); border: 1px solid var(--rule-strong); box-shadow: var(--shadow-lg); font: 0.82rem var(--sans); animation: pop 160ms ease-out; }
+.note-pop[hidden] { display: none; }
+.np-row { display: flex; justify-content: space-between; align-items: center; }
+.np-dots { display: flex; gap: 6px; }
+.np-dots i { width: 14px; height: 14px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px rgba(0,0,0,.2); }
+.np-dots i.on { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--ink-faint); }
+.np-acts { color: var(--ink-muted); display: flex; gap: 10px; } .np-acts b { color: var(--no); font-weight: 600; }
+.np-seg { display: inline-flex; justify-self: start; gap: 2px; padding: 2px; border-radius: 8px; background: var(--surface-2); }
+.np-seg span { padding: 3px 9px; border-radius: 6px; font-size: 0.75rem; } .np-seg .on { background: var(--surface); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.15); }
+.np-field { min-height: 3.2em; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--rule-strong); background: var(--surface-2); color: var(--ink); line-height: 1.4; }
+.np-field:empty::before { content: attr(data-ph); color: var(--ink-faint); }
+.np-field.typing::after, .np-tag-field.typing::after { content: "|"; margin-left: 1px; animation: blink 0.9s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.np-tags { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; padding: 5px 7px; border-radius: 8px; border: 1px solid var(--rule-strong); background: var(--surface-2); min-height: 32px; }
+.np-tags .chip { padding: 2px 8px; border-radius: 999px; background: var(--surface); font-size: 0.75rem; }
+.np-tag-field { color: var(--ink-faint); } .np-tag-field.live { color: var(--ink); }
+.np-foot { display: flex; justify-content: space-between; align-items: center; color: var(--ink-faint); font-size: 0.72rem; }
+.np-foot button { border: 0; background: none; font: 700 0.82rem var(--sans); color: var(--ink); padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+.pointer { position: absolute; z-index: 6; width: 22px; height: 22px; left: 0; top: 0; pointer-events: none; fill: #111; stroke: #fff; stroke-width: 1.5; filter: drop-shadow(0 2px 3px rgba(0,0,0,.35)); transition: transform 650ms cubic-bezier(.4,.1,.2,1), opacity 300ms; opacity: 0; }
+.pointer.on { opacity: 1; }
+.mini-notes li small { display: block; margin-top: 3px; color: var(--ink-muted); font-style: italic; }
+.mini-notes li .tags { display: flex; gap: 4px; margin-top: 4px; } .mini-notes li .tags span { font-size: 0.7rem; padding: 1px 6px; border-radius: 999px; background: var(--surface); color: var(--ink-muted); }
+.mini-notes .replay { justify-self: start; padding: 7px 12px; font-size: 0.82rem; }
+.mini-notes .replay[hidden] { display: none; }
+
+/* The film: four painted scenes, weather over them, Aloud's voices telling it. */
+.film { display: grid; gap: 10px; }
+.film-screen { position: relative; aspect-ratio: 16 / 9; border-radius: var(--radius); overflow: hidden; background: #0b1520; box-shadow: var(--shadow-lg); outline-offset: 4px; }
+.film-layer { position: absolute; inset: -6%; background: center / cover no-repeat; opacity: 0; transition: opacity 1.2s ease; will-change: transform, opacity; }
+.film-layer.on { opacity: 1; }
+.film-layer[data-scene="calm"] { background-image: url(assets/film/calm.webp); }
+.film-layer[data-scene="storm"] { background-image: url(assets/film/storm.webp); }
+.film-layer[data-scene="fog"] { background-image: url(assets/film/fog.webp); }
+.film-layer[data-scene="dawn"] { background-image: url(assets/film/dawn.webp); }
+.film-rain { position: absolute; inset: 0; opacity: 0; transition: opacity 0.8s; pointer-events: none;
+  background-image: repeating-linear-gradient(105deg, rgba(220,235,255,.0) 0 14px, rgba(220,235,255,.35) 14px 15px, rgba(220,235,255,0) 15px 31px);
+  background-size: 200px 200px; }
+.film-rain.on { opacity: 0.7; }
+.film-flash { position: absolute; inset: 0; background: #eef4ff; opacity: 0; pointer-events: none; mix-blend-mode: screen; }
+.film-fog { position: absolute; inset: -10% -30%; opacity: 0; transition: opacity 1.5s; pointer-events: none;
+  background: radial-gradient(ellipse 40% 30% at 30% 60%, rgba(235,240,245,.75), transparent 70%), radial-gradient(ellipse 45% 25% at 75% 45%, rgba(235,240,245,.6), transparent 70%); }
+.film-fog.on { opacity: 1; }
+.film-caption { position: absolute; left: 50%; bottom: 7%; transform: translateX(-50%); width: max-content; max-width: 88%; margin: 0;
+  padding: 6px 12px; border-radius: 8px; background: rgba(0,0,0,.62); color: #fff; font: 600 clamp(0.78rem, 1.6vw, 1rem)/1.4 var(--sans); text-align: center; }
+.film-caption:empty { display: none; }
+.film-caption i { font-style: normal; color: #ffd60a; margin-right: 6px; }
+.film-sound { position: absolute; top: 12px; right: 12px; padding: 8px 14px; border-radius: 999px; border: 0; cursor: pointer; background: var(--amber-solid); color: var(--amber-on); font: 700 0.85rem var(--sans); box-shadow: 0 4px 14px rgba(0,0,0,.35); }
+.film-sound { display: inline-flex; align-items: center; gap: 6px; } .film-sound svg { width: 15px; height: 15px; fill: currentColor; }
+.film-sound[hidden] { display: none; }
+.vtrack { cursor: pointer; }
 </style>
 </head>
 <!-- Before the store listings are live: data-stores="soon". Once they are: "live", and check the
@@ -155,6 +211,7 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
       <a href="#notes">Notes</a>
       <a href="#video">Video speed</a>
       <a href="tour.html">The tour</a>
+      <button type="button" class="theme-btn" id="theme-btn" aria-label="Switch theme"><svg class="moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></svg><svg class="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
       <a class="keep btn primary" href="#install"><span class="when-live">Install</span><span class="when-soon">Get Aloud</span></a>
     </nav>
   </div>
@@ -236,16 +293,16 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
         <p class="eyebrow">Highlights and notes</p>
         <h2>Keep what matters, on any website.</h2>
         <p class="lede">Select a passage and pick a colour. It stays highlighted on the page, and it's there again whenever you come back.</p>
-        <p class="try">Try it: select a few words in the article.</p>
+        <p class="try">Watch, then try it: select a few words in the article.</p>
         <a class="more" href="tour.html#keep">More about notes →</a>
       </div>
       <div class="note-demo" id="note-demo">
         <article class="mini-page" id="note-page">
           <p class="mini-kicker">Essay · 7 min read</p>
           <h3>The quiet economics of lighthouses</h3>
-          <p>For most of the nineteenth century, a lighthouse was the most expensive thing a coastal town would ever build. The stone came by sea, and the lens came from Paris.</p>
-          <p>Economists later used the lighthouse as their favourite example of something no market would provide. <mark class="hl" style="--c:#ffd83a" data-note="1">A ship could not be charged for seeing a light</mark>, so nobody would ever pay to build one.</p>
-          <p>In England, private owners did build lights, and collected dues from ships at the nearest port. It worked for two hundred years.</p>
+          <p>For most of the nineteenth century, a lighthouse was <span data-ph="a">the most expensive thing a coastal town would ever build</span>. The stone came by sea, and the lens came from Paris.</p>
+          <p>Economists later used the lighthouse as their favourite example of something no market would provide. <span data-ph="b">A ship could not be charged for seeing a light</span>, so nobody would ever pay to build one.</p>
+          <p>In England, private owners did build lights, and <span data-ph="c">collected dues from ships at the nearest port</span>. It worked for two hundred years.</p>
         </article>
         <div class="note-toolbar" id="note-toolbar" role="toolbar" aria-label="Highlight the selection" hidden>
           <button type="button" data-c="#ffd83a" aria-label="Yellow"></button>
@@ -253,61 +310,29 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
           <button type="button" data-c="#8cc8ff" aria-label="Blue"></button>
           <button type="button" data-c="#ff9fd0" aria-label="Pink"></button>
           <button type="button" data-c="#c3a6ff" aria-label="Purple"></button>
-          <button type="button" class="u" data-style="underline" aria-label="Underline instead">U</button>
+          <button type="button" class="text u" data-style="underline" aria-label="Underline instead">U</button>
+          <button type="button" class="text" data-note="1">Add note</button>
         </div>
+        <div class="note-pop" id="note-pop" role="dialog" aria-label="Highlight" hidden>
+          <div class="np-row"><span class="np-dots"><i style="--c:#ffd83a"></i><i style="--c:#7fe08a"></i><i style="--c:#8cc8ff"></i><i style="--c:#ff9fd0"></i><i style="--c:#c3a6ff"></i></span><span class="np-acts">Copy <b>Delete</b></span></div>
+          <div class="np-seg"><span class="on">Highlight</span><span>Underline</span></div>
+          <div class="np-field" id="np-text" data-ph="Your note…"></div>
+          <div class="np-tags" id="np-tags"><span class="np-tag-field" id="np-tag">Add a tag</span></div>
+          <div class="np-foot"><span>Esc closes · Delete removes it</span><button type="button" id="np-done">Done</button></div>
+        </div>
+        <svg class="pointer" id="note-pointer" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 2l15 10-7 1.5L8.5 21z"/></svg>
         <aside class="mini-notes" aria-label="Notes on this page">
           <b>Notes on this page</b>
           <ol id="note-list"></ol>
+          <button type="button" class="btn replay" id="note-replay" hidden>↺ Watch again</button>
         </aside>
       </div>
     </div>
   </section>
 
-  <section id="video" class="show">
-    <div class="wrap show-grid flip">
-      <div class="show-copy">
-        <p class="eyebrow">Video speed</p>
-        <h2>Every video, at your speed.</h2>
-        <p class="lede">The same keys on YouTube, a lecture, a podcast player or any video on the web. Aloud remembers the speed you like on each site.</p>
-        <p class="try">Try it: click the video, then press <kbd>D</kbd> or <kbd>S</kbd>.</p>
-        <a class="more" href="tour.html#later">More about video speed →</a>
-      </div>
-      <div class="video-demo">
-        <div class="screen" id="v-screen" tabindex="0" role="application" aria-label="A video: press D for faster, S for slower, R for normal speed, Z and X to go back or forward ten seconds">
-          <svg class="scene" viewBox="0 0 400 225" aria-hidden="true" preserveAspectRatio="xMidYMid slice">
-            <defs>
-              <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffb36b"/><stop offset="0.6" stop-color="#ffd9a0"/><stop offset="1" stop-color="#fff0d1"/></linearGradient>
-            </defs>
-            <rect width="400" height="225" fill="url(#sky)"/>
-            <circle id="v-sun" cx="300" cy="120" r="34" fill="#fff6d8"/>
-            <g id="v-clouds" fill="#fff" opacity="0.85"><ellipse cx="80" cy="50" rx="38" ry="11"/><ellipse cx="250" cy="34" rx="30" ry="9"/><ellipse cx="460" cy="58" rx="42" ry="12"/><ellipse cx="630" cy="40" rx="30" ry="9"/></g>
-            <g id="v-far"><path d="M0 140 Q 25 132 50 140 T 100 140 T 150 140 T 200 140 T 250 140 T 300 140 T 350 140 T 400 140 T 450 140 T 500 140 T 550 140 T 600 140 T 650 140 T 700 140 T 750 140 T 800 140 V 225 H 0 Z" fill="#3f86b8"/></g>
-            <g id="v-boat"><path d="M-22 0 H 22 L 14 10 H -14 Z" fill="#20374f"/><path d="M0 -2 V -40 L 22 -6 Z" fill="#fff"/><path d="M-2 -2 V -34 L -18 -6 Z" fill="#f4e6c8"/></g>
-            <g id="v-near"><path d="M0 170 Q 30 160 60 170 T 120 170 T 180 170 T 240 170 T 300 170 T 360 170 T 420 170 T 480 170 T 540 170 T 600 170 T 660 170 T 720 170 T 780 170 T 840 170 V 225 H 0 Z" fill="#2a6a99"/></g>
-          </svg>
-          <span class="v-badge" id="v-badge" hidden>1×</span>
-          <span class="v-hint" id="v-hint">Click, then press D or S</span>
-        </div>
-        <div class="vbar">
-          <button type="button" class="vplay" id="v-play" aria-label="Pause"><svg viewBox="0 0 16 16"><path d="M4 2.5h3v11H4z"/><path d="M9 2.5h3v11H9z"/></svg></button>
-          <div class="vtrack"><div class="vfill" id="v-fill"></div></div>
-          <span class="vtime" id="v-time">0:00 / 3:00</span>
-          <span class="vrate" id="v-rate">1×</span>
-        </div>
-        <div class="vkeys">
-          <button type="button" data-key="s"><kbd>S</kbd> slower</button>
-          <button type="button" data-key="d"><kbd>D</kbd> faster</button>
-          <button type="button" data-key="r"><kbd>R</kbd> 1×</button>
-          <button type="button" data-key="z"><kbd>Z</kbd> −10 s</button>
-          <button type="button" data-key="x"><kbd>X</kbd> +10 s</button>
-        </div>
-        <p class="vsites">Remembered: <span>youtube.com 1.75×</span> <span>ted.com 1.5×</span> <span>bbc.co.uk 1.25×</span></p>
-      </div>
-    </div>
-  </section>
 
   <section id="clutter" class="show">
-    <div class="wrap show-grid">
+    <div class="wrap show-grid flip">
       <div class="show-copy">
         <p class="eyebrow">Just the article</p>
         <h2>It reads the story, not the clutter.</h2>
@@ -330,7 +355,7 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
   </section>
 
   <section id="pdf" class="show">
-    <div class="wrap show-grid flip">
+    <div class="wrap show-grid">
       <div class="show-copy">
         <p class="eyebrow">PDFs</p>
         <h2>PDFs, as real pages.</h2>
@@ -354,6 +379,45 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
               <p>The entries are short and regular, which makes them easy to count and hard to misread.</p>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="video" class="show">
+    <div class="wrap show-grid">
+      <div class="show-copy">
+        <p class="eyebrow">Video speed</p>
+        <h2>Every video, at your speed.</h2>
+        <p class="lede">The same keys on YouTube, a lecture, a podcast or any video on the web. Aloud remembers the speed you like on each site.</p>
+        <p class="try">While it plays, press <kbd>D</kbd> faster, <kbd>S</kbd> slower, <kbd>R</kbd> back to 1×, <kbd>Z</kbd> and <kbd>X</kbd> to jump.</p>
+        <a class="more" href="tour.html#later">More about video speed →</a>
+      </div>
+      <div class="film" id="film">
+        <div class="film-screen" id="film-screen" tabindex="0" aria-label="A short film with sound. D faster, S slower, R normal speed, Z back, X forward, Space to pause">
+          <div class="film-layer" data-scene="calm"></div>
+          <div class="film-layer" data-scene="storm"></div>
+          <div class="film-layer" data-scene="fog"></div>
+          <div class="film-layer" data-scene="dawn"></div>
+          <div class="film-rain"></div>
+          <div class="film-flash"></div>
+          <div class="film-fog"></div>
+          <p class="film-caption" id="film-caption"></p>
+          <span class="v-badge" id="film-badge" hidden></span>
+          <button type="button" class="film-sound" id="film-sound"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6h3l4-3v10L5 10H2z"/><path d="M11 5.5a3.5 3.5 0 0 1 0 5M12.8 3.5a6 6 0 0 1 0 9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>Play with sound</button>
+        </div>
+        <div class="vbar">
+          <button type="button" class="vplay" id="film-play" aria-label="Pause"><svg viewBox="0 0 16 16"><path d="M4 2.5h3v11H4z"/><path d="M9 2.5h3v11H9z"/></svg></button>
+          <div class="vtrack" id="film-track"><div class="vfill" id="film-fill"></div></div>
+          <span class="vtime" id="film-time">0:00 / 0:32</span>
+          <span class="vrate" id="film-rate">1×</span>
+        </div>
+        <div class="vkeys">
+          <button type="button" data-key="s"><kbd>S</kbd> slower</button>
+          <button type="button" data-key="d"><kbd>D</kbd> faster</button>
+          <button type="button" data-key="r"><kbd>R</kbd> 1×</button>
+          <button type="button" data-key="z"><kbd>Z</kbd> back</button>
+          <button type="button" data-key="x"><kbd>X</kbd> forward</button>
         </div>
       </div>
     </div>
@@ -415,6 +479,7 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
 
 <script src="assets/voices.js?v=fd71ee86"></script>
 <script src="assets/demos.js?v=b015c39e"></script>
-<script src="assets/home.js?v=e912d160"></script>
+<script src="assets/film.js?v=49ed2dde"></script>
+<script src="assets/home.js?v=bc7151d6"></script>
 </body>
 </html>

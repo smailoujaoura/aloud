@@ -17,11 +17,12 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#101014" media="(prefers-color-scheme: dark)">
+<script src="assets/theme.js?v=4eaa486f"></script>
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400..800;1,7..72,400..600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="assets/site.css?v=8ecc8afc">
+<link rel="stylesheet" href="assets/site.css?v=dc2458f8">
 <style>footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }</style>
 </head>
 <!-- Before the store listings are live: data-stores="soon". Once they are: "live", and check the
@@ -38,6 +39,7 @@
       <a href="#keep">Notes</a>
       <a href="#privacy">Privacy</a>
       <a href="built.html">How it's built</a>
+      <button type="button" class="theme-btn" id="theme-btn" aria-label="Switch theme"><svg class="moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></svg><svg class="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
       <a class="keep btn primary" href="index.html#install"><span class="when-live">Install</span><span class="when-soon">Get Aloud</span></a>
     </nav>
   </div>
@@ -521,8 +523,6 @@
   const speedBtn = document.getElementById('demo-speed');
   const PAUSE = '<path d="M4 2.5h3v11H4z"/><path d="M9 2.5h3v11H9z"/>';
   const PLAY = '<path d="M4 2.5v11l9-5.5z"/>';
-  const RATES = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4];
-  const BASE_WPM = 185;
   const audio = new Audio();
   // The whole file, held in memory: seeking (previous, next) then works on any host, including
   // ones that do not answer range requests. It is 130 KB.
@@ -599,33 +599,17 @@
   status.addEventListener('click', () => { if (status.classList.contains('call')) play(); });
   document.getElementById('demo-prev').addEventListener('click', () => jump(-1));
   document.getElementById('demo-next').addEventListener('click', () => jump(1));
-  // The extension's own speeds, 0.5× to 4×, in a menu over the bar.
-  const speedMenu = document.createElement('div');
-  speedMenu.className = 'speed-menu';
-  speedMenu.setAttribute('role', 'menu');
-  speedMenu.hidden = true;
+  // One button, four speeds: 1×, 2×, 4×, then 0.5×, and round again.
+  const RATES = [1, 2, 4, 0.5];
+  const BASE_WPM = 185;
+  let rateAt = 0;
   const label = (r) => (Number.isInteger(r) ? r.toFixed(1) : String(r)) + '×';
-  const wpmAt = (r) => Math.round((BASE_WPM * r) / 5) * 5;
   const setRate = (r) => {
     audio.playbackRate = r;
-    speedBtn.textContent = label(r) + ' · ' + wpmAt(r) + ' wpm';
+    speedBtn.textContent = label(r) + ' · ' + Math.round((BASE_WPM * r) / 5) * 5 + ' wpm';
     speedBtn.setAttribute('aria-label', 'Reading speed: ' + r + '×. Change speed');
-    for (const b of speedMenu.children) b.setAttribute('aria-checked', String(Number(b.dataset.rate) === r));
   };
-  for (const r of RATES) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.setAttribute('role', 'menuitemradio');
-    b.dataset.rate = String(r);
-    b.innerHTML = '<b>' + label(r) + '</b><span>' + wpmAt(r) + ' wpm</span>';
-    b.addEventListener('click', () => { setRate(r); speedMenu.hidden = true; });
-    speedMenu.append(b);
-  }
-  speedBtn.closest('.bar').append(speedMenu);
-  speedBtn.setAttribute('aria-haspopup', 'menu');
-  speedBtn.addEventListener('click', (e) => { e.stopPropagation(); speedMenu.hidden = !speedMenu.hidden; });
-  document.addEventListener('click', (e) => { if (!speedMenu.contains(e.target)) speedMenu.hidden = true; });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') speedMenu.hidden = true; });
+  speedBtn.addEventListener('click', () => { rateAt = (rateAt + 1) % RATES.length; setRate(RATES[rateAt]); });
   setRate(1);
   for (const b of document.querySelectorAll('[data-hear]')) {
     b.addEventListener('click', () => {
