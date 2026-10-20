@@ -8,6 +8,7 @@
  * storage, so the page can never show state that disagrees with what was saved.
  */
 import { browser } from 'wxt/browser';
+import { feedbackLink } from '@/shared/links';
 
 import { el } from '@/shared/dom';
 import { humanBytes, log } from '@/shared/log';
@@ -832,4 +833,8 @@ onViewChange((view) => {
 });
 // The rail says what the view in front of you is for (rail.ts).
 initNav();
+// Send feedback: the page starts a bug report with this version and browser already filled in.
+for (const a of document.querySelectorAll<HTMLAnchorElement>('a.feedback-link')) {
+  a.href = feedbackLink(browser.runtime.getManifest().version, import.meta.env.BROWSER);
+}
 void initLibrary({ show: (view) => showView(view, { push: true }), setCount: setNavCount });

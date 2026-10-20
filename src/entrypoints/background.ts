@@ -22,6 +22,7 @@ import { defineBackground } from 'wxt/utils/define-background';
 import { PORT_NAME, type ActivateMode, type LibraryTab, type ToBackgroundMessage } from '@/shared/messages';
 import { NOTES_FULL_MESSAGE, addNote } from '@/shared/notes';
 import { siteOf } from '@/shared/doc-source';
+import { feedbackLink } from '@/shared/links';
 import { documentKey, type SavedPosition } from '@/shared/position-match';
 import { putPdf, sweepPdfHandoffs } from '@/pdf/handoff';
 import { readCacheSizes, readingOnGpu, usableVoices } from '@/engine/installed-voices';
@@ -131,6 +132,12 @@ export default defineBackground({
     browser.runtime.onInstalled.addListener((details) => {
       if (details.reason !== 'install') return;
       void openWalkthrough();
+    });
+
+    // Removing Aloud opens the feedback page to ask why. The address carries the version and the
+    // browser, nothing else (the privacy policy says so).
+    optional('setUninstallURL', () => {
+      void Promise.resolve(browser.runtime.setUninstallURL(feedbackLink(browser.runtime.getManifest().version, import.meta.env.BROWSER, true))).catch(() => {});
     });
 
     browser.action.onClicked.addListener((tab) => {

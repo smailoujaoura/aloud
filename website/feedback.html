@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Feedback on Aloud</title>
+<meta name="description" content="Aloud reads any article or PDF aloud in a natural neural voice that runs entirely on your device, highlighting every word as it goes. Free, offline, no account. For Firefox, Firefox for Android and Chrome.">
+<meta property="og:title" content="Aloud: read the web aloud, privately">
+<meta property="og:description" content="222 natural voices that run inside your browser. Works offline, sends nothing anywhere, costs nothing.">
+<meta property="og:type" content="website">
+<!-- Link previews need full addresses. The site is served from aloud.souj.dev. -->
+<meta property="og:url" content="https://aloud.souj.dev/feedback.html">
+<meta property="og:image" content="https://aloud.souj.dev/assets/cover.webp">
+<meta property="og:image:width" content="1504">
+<meta property="og:image:height" content="900">
+<link rel="canonical" href="https://aloud.souj.dev/feedback.html">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101014" media="(prefers-color-scheme: dark)">
+<script src="assets/theme.js?v=4eaa486f"></script>
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400..800;1,7..72,400..600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="assets/site.css?v=dc2458f8">
+<style>
+footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
+.fb { padding: 72px 0 96px; }
+.fb .measure { max-width: 720px; margin: 0 auto; }
+.fb h1 { font: 700 clamp(2rem, 5vw, 2.8rem)/1.1 var(--display); margin: 8px 0 14px; letter-spacing: -0.01em; }
+.fb .lede { margin: 0 0 32px; }
+.fb section { padding: 0; border: 0; }
+.fb .bye { margin-bottom: 56px; }
+.fb-cards { display: grid; gap: 16px; }
+.fb-card { padding: 22px 24px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--surface); }
+.fb-card h2 { font: 700 1.25rem/1.3 var(--display); margin: 0 0 6px; }
+.fb-card p { margin: 0 0 14px; color: var(--ink-muted); }
+.fb-card .small { margin: 10px 0 0; font-size: 0.85rem; color: var(--ink-faint); }
+.fb-card .btn { display: inline-flex; }
+.reasons { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 6px; padding: 0; list-style: none; }
+.reasons a { display: inline-block; padding: 9px 14px; border-radius: 999px; border: 1px solid var(--rule-strong); color: var(--ink); text-decoration: none; font-size: 0.95rem; }
+.reasons a:hover { background: var(--surface-2); }
+.bye[hidden], .thanks[hidden] { display: none; }
+.thanks { padding: 18px 22px; border-radius: var(--radius); background: var(--amber-soft); margin-bottom: 16px; }
+.thanks p { margin: 0; }
+</style>
+</head>
+<!-- Before the store listings are live: data-stores="soon". Once they are: "live", and check the
+     three store URLs below against the real listings. -->
+<body data-stores="soon">
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="index.html"><img src="assets/icon.svg" alt="">Aloud</a>
+    <nav aria-label="Sections">
+      <a href="index.html">Home</a>
+      <a href="tour.html">The tour</a>
+      <a href="gpu.html">Graphics card</a>
+      <a href="privacy.html">Privacy</a>
+      <button type="button" class="theme-btn" id="theme-btn" aria-label="Switch theme"><svg class="moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></svg><svg class="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+      <a class="keep btn primary" href="index.html#install">Get Aloud</a>
+    </nav>
+  </div>
+</header>
+<main class="fb">
+  <div class="wrap measure">
+    <section class="bye" id="bye" hidden>
+      <p class="eyebrow">Aloud was removed</p>
+      <h1>Sorry to see you go.</h1>
+      <p class="lede">What made you remove it? One click is enough, and it helps make Aloud better for the next person.</p>
+      <div class="fb-card">
+        <ul class="reasons" id="reasons">
+          <li><a href="?bye=done&amp;r=voices">The voices didn't sound right</a></li>
+          <li><a href="?bye=done&amp;r=slow">Too slow on my computer</a></li>
+          <li><a href="?bye=done&amp;r=download">The voice download was too big</a></li>
+          <li><a href="?bye=done&amp;r=wrong-text">It read the wrong part of the page</a></li>
+          <li><a href="?bye=done&amp;r=broken">Something didn't work</a></li>
+          <li><a href="?bye=done&amp;r=language">My language is missing</a></li>
+          <li><a href="?bye=done&amp;r=not-needed">I was only trying it</a></li>
+          <li><a href="?bye=done&amp;r=other">Something else</a></li>
+        </ul>
+        <p class="small">Your click sends only the reason you picked, the way visiting a page does. Nothing about you or what you read.</p>
+      </div>
+    </section>
+
+    <section class="thanks" id="thanks" hidden>
+      <p><b>Thank you.</b> If you have a minute, a few words below would help even more.</p>
+    </section>
+
+    <section id="feedback">
+      <div class="head" id="fb-head">
+        <p class="eyebrow">Feedback</p>
+        <h1>Found a bug? Have an idea?</h1>
+        <p class="lede">Aloud is made by one person, and every report gets read. Tell me what went wrong, what you'd love it to do, or just how you use it.</p>
+      </div>
+      <div class="fb-cards">
+        <div class="fb-card">
+          <h2>Report a bug</h2>
+          <p>Say what you were reading, what you expected, and what happened instead. The page address and a screenshot help a lot.</p>
+          <a class="btn primary" id="bug-link" href="https://github.com/smailoujaoura/aloud/issues/new">Open a bug report</a>
+          <p class="small">On GitHub, with your browser and Aloud's version already filled in. You need a free GitHub account.</p>
+        </div>
+        <div class="fb-card">
+          <h2>Ideas, questions, anything else</h2>
+          <p>A voice you'd like, a site Aloud reads badly, a feature you miss, or a thank-you. All welcome.</p>
+          <a class="btn" href="https://github.com/smailoujaoura/aloud/discussions">Start a discussion</a>
+          <p class="small">Rather not use GitHub? <a href="https://souj.dev">Get in touch on souj.dev</a>.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+<footer>
+  <div class="wrap">
+    <div>
+      <p><b>Aloud</b> is free software under GPL-3.0-or-later. Voices come from Piper, Supertonic 3 and Kokoro-82M, each under <a href="https://github.com/smailoujaoura/aloud/blob/main/PIPER_VOICE_LICENCES.md">its own licence</a>, and are downloaded when you choose them, never bundled.</p>
+      <nav aria-label="More about Aloud">
+        <a href="tour.html">The tour</a>
+        <a href="built.html">How it's built</a>
+        <a href="gpu.html">Using your graphics card</a>
+        <a href="privacy.html">Privacy policy</a>
+        <a href="feedback.html">Feedback and bugs</a>
+        <a class="source-link" href="https://github.com/smailoujaoura/aloud">Source code</a>
+      </nav>
+    </div>
+    <p class="by">Made by <a href="https://souj.dev"><b>Smail Oujaoura</b></a><br>with <a href="https://claude.com/product/claude-code">Claude Code</a></p>
+  </div>
+</footer>
+<script>
+  // ?bye: opened by the browser when Aloud is removed. ?v= and ?b=: Aloud's version and browser,
+  // passed by the extension so a bug report starts with them.
+  (() => {
+    const q = new URLSearchParams(location.search);
+    const bye = q.get('bye');
+    const v = q.get('v') || '';
+    const b = q.get('b') || '';
+    if (bye !== null && bye !== 'done') document.getElementById('bye').hidden = false;
+    if (bye === 'done') {
+      document.getElementById('thanks').hidden = false;
+      document.getElementById('fb-head').hidden = true;
+    }
+    // Keep version and browser on the reason links, so a reason can be read alongside them.
+    for (const a of document.querySelectorAll('#reasons a')) {
+      const u = new URL(a.href);
+      if (v) u.searchParams.set('v', v);
+      if (b) u.searchParams.set('b', b);
+      a.href = u.pathname + u.search;
+    }
+    const ua = navigator.userAgent;
+    const ff = /Firefox\/(\d+)/.exec(ua);
+    const cr = /Chrome\/(\d+)/.exec(ua);
+    const guess = ff ? 'Firefox ' + ff[1] + (/Android/.test(ua) ? ' for Android' : '') : cr ? 'Chrome ' + cr[1] : '';
+    const body = [
+      '**What happened?**', '', '', '**What did you expect?**', '', '', '**Page address (if you can share it):**', '', '',
+      '---', 'Aloud: ' + (v || '(version)'), 'Browser: ' + (guess || b || '(browser and version)'), 'System: ' + (navigator.platform || ''),
+    ].join('\n');
+    const bug = document.getElementById('bug-link');
+    bug.href = 'https://github.com/smailoujaoura/aloud/issues/new?' + new URLSearchParams({ labels: 'bug', body });
+  })();
+</script>
+</body>
+</html>
