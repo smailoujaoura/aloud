@@ -47,6 +47,21 @@
 }
 #faces { grid-template-columns: repeat(auto-fit, minmax(96px, 112px)); justify-content: center; }
 @media (max-width: 520px) { #faces { grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); } }
+#faces { position: relative; }
+.bubble {
+  position: absolute; z-index: 3; width: min(340px, calc(100% - 16px)); padding: 14px 16px 12px;
+  border-radius: 16px; background: var(--surface); border: 1px solid var(--rule-strong); box-shadow: var(--shadow-lg);
+  font: italic 500 1.02rem/1.45 var(--display); color: var(--ink); text-wrap: pretty;
+  animation: pop 160ms ease-out; pointer-events: none;
+}
+.bubble::after {
+  content: ""; position: absolute; left: var(--tail, 50%); bottom: -8px; width: 14px; height: 14px; margin-left: -7px;
+  background: var(--surface); border-right: 1px solid var(--rule-strong); border-bottom: 1px solid var(--rule-strong); transform: rotate(45deg);
+}
+.bubble .tr { display: block; margin-top: 6px; font: 0.86rem/1.4 var(--sans); font-style: normal; color: var(--ink-muted); }
+.bubble .who { display: block; margin-top: 8px; font: 500 0.7rem var(--mono); font-style: normal; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); }
+@keyframes pop { from { opacity: 0; transform: translateY(6px) scale(0.97); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .bubble { animation: none; } }
 .voice-foot { margin-top: 18px; text-align: center; font-size: 0.92rem; color: var(--ink-muted); }
 .voice-foot a { font-weight: 600; color: var(--ink); }
 
@@ -64,7 +79,8 @@
 .best h3 { font: 600 1.02rem/1.3 var(--sans); }
 .best p { color: var(--ink-muted); font-size: 0.93rem; }
 .best .more { font: 600 0.85rem var(--sans); color: var(--amber); }
-.tour-cta { margin-top: 28px; display: flex; justify-content: center; }
+.tour-cta { margin: 40px auto 56px; display: flex; justify-content: center; }
+.tour-cta .btn { white-space: nowrap; }
 
 .private { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 @media (max-width: 760px) { .private { grid-template-columns: minmax(0, 1fr); } }
@@ -99,16 +115,13 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
   <div class="wrap hero">
     <div class="hero-grid">
       <div class="hero-copy">
-        <p class="eyebrow">Free browser extension · Firefox, Android, Chrome</p>
         <h1>Your reading, <em>read aloud.</em></h1>
         <p class="lede">Open an article or a PDF, press play, and a natural voice reads it to you while every word lights up on the page. It all happens in your browser: offline, private, free.</p>
         <div class="ctas">
           <a class="btn primary when-live" id="hero-install" href="#install">Get Aloud, it's free</a>
           <button class="btn primary when-soon" type="button" data-hear><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg>Hear it read</button>
           <button class="btn when-live" type="button" data-hear><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg>Hear it read</button>
-          <a class="btn" href="tour.html">Take the tour</a>
         </div>
-        <p class="browsers" id="hero-browsers">Firefox · Firefox for Android · Chrome, Brave, Edge, Opera, Vivaldi<span class="when-soon"> · coming soon to the add-on stores</span></p>
       </div>
 
       <div class="demo" id="demo" aria-label="Aloud reading an article, with real audio">
@@ -133,14 +146,6 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
     </div>
   </div>
 
-  <div class="proof" aria-label="Aloud in numbers">
-    <div class="wrap">
-      <div><b>222</b><span>natural voices, from three neural engines</span></div>
-      <div><b>52</b><span>languages, from Arabic to Welsh</span></div>
-      <div><b>0</b><span>words of what you read sent to a server</span></div>
-      <div><b>Free</b><span>every voice, every feature, no account</span></div>
-    </div>
-  </div>
 
   <section id="voices">
     <div class="wrap">
@@ -152,8 +157,6 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
       <div class="tabs" role="tablist" aria-label="Languages" id="voice-tabs"></div>
       <div class="faces" id="faces" role="tabpanel" aria-labelledby="voice-tabs"></div>
       <p class="show-all" id="show-all" hidden><button class="btn" type="button"></button></p>
-      <p class="quote idle" id="quote" aria-live="polite">Click a face to hear that voice.</p>
-      <p class="voice-foot">The Kokoro and Supertonic clips are Aloud's own output; the Piper ones are the Piper project's samples. 222 voices in 52 languages, and you download only the ones you want. <a href="tour.html#voices">Which voices suit my browser →</a></p>
     </div>
   </section>
 
@@ -175,7 +178,6 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
           <p class="board-note">Each language wired to the voice that reads it. Leave it on Auto, or click a face to choose.</p>
         </div>
       </div>
-      <p class="voice-foot">Every demo is Aloud's own output, one voice per language, switching on its own.</p>
     </div>
   </section>
 
@@ -195,7 +197,6 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
         <a href="tour.html#later"><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 20h14"/></svg></span><h3>Save as MP3</h3><p>Take an article with you on a walk.</p><span class="more">See how →</span></a>
         <a href="tour.html#later"><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5v5l4-2.5z" fill="currentColor"/></svg></span><h3>Videos too</h3><p>The same speed keys for every video on the web.</p><span class="more">See how →</span></a>
       </div>
-      <p class="tour-cta"><a class="btn" href="tour.html">Take the full tour →</a></p>
     </div>
   </section>
 
@@ -246,9 +247,18 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
           <span class="store-where">Chrome Web Store</span>
         </a>
       </div>
-      <p class="after">No account, and nothing collected. Installing opens a short welcome tour; then open any article and press play.</p>
+      <p class="after">No account, nothing collected. Install it, open any article, press play.</p>
     </div>
   </section>
+  <div class="proof" aria-label="Aloud in numbers">
+    <div class="wrap">
+      <div><b>222</b><span>natural voices, from three neural engines</span></div>
+      <div><b>52</b><span>languages, from Arabic to Welsh</span></div>
+      <div><b>0</b><span>words of what you read sent to a server</span></div>
+      <div><b>Free</b><span>every voice, every feature, no account</span></div>
+    </div>
+  </div>
+  <p class="tour-cta wrap"><a class="btn" href="tour.html">How to use Aloud: the full tour →</a></p>
 </main>
 
 <footer>

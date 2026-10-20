@@ -271,16 +271,37 @@
   // ---- Voices by language: a tab per language, every face plays its own clip.
   const tabs = document.getElementById('voice-tabs');
   const wall = document.getElementById('faces');
-  const quote = document.getElementById('quote');
   const voice = new Audio();
   let playing = null;
   let turn = 0;
-  const IDLE = 'Click a face to hear that voice.';
+  // What the voice is saying, in a speech bubble over its face.
+  let bubble = null;
   const idle = () => {
     playing?.classList.remove('playing');
     playing = null;
-    quote.classList.add('idle');
-    quote.textContent = IDLE;
+    bubble?.remove();
+    bubble = null;
+  };
+  const speak = (b, v) => {
+    bubble?.remove();
+    bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    bubble.setAttribute('role', 'status');
+    const [line, english] = (v.line ?? '').split(' / ');
+    bubble.append(line ? '“' + line + '”' : "Piper's own sample of this voice");
+    if (english) { const tr = document.createElement('span'); tr.className = 'tr'; tr.textContent = english; bubble.append(tr); }
+    const who = document.createElement('span');
+    who.className = 'who';
+    who.textContent = v.name + ' · ' + v.meta;
+    bubble.append(who);
+    wall.append(bubble);
+    // Above the face, kept inside the grid, with its tail pointing at the face.
+    const w = bubble.offsetWidth;
+    const center = b.offsetLeft + b.offsetWidth / 2;
+    const left = Math.max(0, Math.min(wall.clientWidth - w, center - w / 2));
+    bubble.style.left = left + 'px';
+    bubble.style.top = b.offsetTop - bubble.offsetHeight - 10 + 'px';
+    bubble.style.setProperty('--tail', Math.max(18, Math.min(w - 18, center - left)) + 'px');
   };
   voice.addEventListener('ended', idle);
   const PLAY_SVG = '<svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg>';
@@ -320,13 +341,7 @@
       playing?.classList.remove('playing');
       playing = b;
       b.classList.add('playing');
-      quote.classList.remove('idle');
-      quote.innerHTML = '';
-      quote.append(v.line ? '“' + v.line + '”' : "Piper's own sample of this voice");
-      const tag = document.createElement('span');
-      tag.className = 'who';
-      tag.textContent = v.name + ' · ' + v.meta;
-      quote.append(tag);
+      speak(b, v);
       voice.src = 'assets/voices/' + v.file + '.mp3';
       // Only the latest click may reset the wall: switching voices quickly rejects the earlier
       // play(), and its catch used to clear the face that is playing now.
@@ -396,5 +411,4 @@
   const hero = document.getElementById('hero-install');
   hero.href = card.href;
   hero.textContent = label + ', free';
-  document.getElementById('hero-browsers').innerHTML = 'Also on <a href="#install">other browsers</a>';
 })();
