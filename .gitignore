@@ -9,3 +9,10 @@ stats.html
 # vendored/generated — reproduced by `pnpm build` (see BUILD.md)
 public/vendor/
 public/tts-worker.js
+
+# The package manager's download cache, never source.
+.pnpm-store/
+# Internal QA reports and working notes: they stay on this machine, not in the public repo.
+docs/RELEASE_*.md
+docs/STORE_POLICY_AUDIT_*.md
+docs/CLAUDE_*.md
