@@ -1,0 +1,108 @@
+/* The voices on the home page, a tab per language. `file` is the clip in assets/voices/, `portrait`
+   the face in assets/portraits/ (none: an initial), `line` what the clip says (none: Piper's own
+   sample text). Kokoro's lines in other languages carry their English after a slash. */
+(() => {
+  const k = (id, name, meta, line) => ({ file: 'kokoro-' + id, portrait: 'kokoro-' + id, name, meta: 'Kokoro · ' + meta, line });
+  const p = (id, name, meta, portrait = null, line = null) => ({ file: 'piper-' + id, portrait, name, meta: 'Piper · ' + meta, line });
+  const s = (style, lang, name, meta, line) => ({ file: 'supertonic-' + style + '-' + lang, portrait: 'supertonic-' + style, name, meta: 'Supertonic · ' + meta, line });
+
+  window.ALOUD_VOICES = [
+    { code: 'en', label: 'English', voices: [
+      k('af_heart', 'Heart', 'US', "Hi, I'm Heart. Open any article, press Alt R, and I'll read it to you."),
+      k('af_bella', 'Bella', 'US', "I'm Bella. I highlight each sentence as I read it, right where it sits on the page."),
+      k('bm_george', 'George', 'GB', "I'm George. Every word I say is made right here, on your own computer."),
+      k('bf_emma', 'Emma', 'GB', "I'm Emma. Going for a walk? Save any article as an MP3 and take me with you."),
+      k('am_michael', 'Michael', 'US', "I'm Michael. Drifted off for a moment? One key takes you back ten seconds."),
+      k('af_nicole', 'Nicole', 'US', "I'm Nicole. Close the tab whenever you like. I'll remember the sentence you stopped at."),
+      k('bm_fable', 'Fable', 'GB', "I'm Fable. No account, no subscription, and nothing you read is sent anywhere."),
+      k('af_sarah', 'Sarah', 'US', "I'm Sarah. Slow me down, or speed me up. I'll tell you how many words a minute that is."),
+      k('am_puck', 'Puck', 'US', "I'm Puck. Queue up a few articles, and I'll read them one after another."),
+      k('af_kore', 'Kore', 'US', "I'm Kore. I run on your graphics card when your browser allows it, and on your processor when it doesn't."),
+      k('af_aoede', 'Aoede', 'US', "I'm Aoede. Reading a dark website? I keep the highlight easy on the eyes."),
+      k('am_fenrir', 'Fenrir', 'US', "I'm Fenrir. I can even stop videos from playing by themselves."),
+      k('af_alloy', 'Alloy', 'US', "I'm Alloy. Open a long article, press play, and let your eyes rest."),
+      k('af_jessica', 'Jessica', 'US', "I'm Jessica. I read PDFs too, page by page."),
+      k('af_nova', 'Nova', 'US', "I'm Nova. Every word lights up on the page as I say it."),
+      k('af_river', 'River', 'US', "I'm River. I skip the menus and the ads, and read just the article."),
+      k('af_sky', 'Sky', 'US', "I'm Sky. On Wikipedia, I leave out all the little numbers in brackets."),
+      k('am_adam', 'Adam', 'US', "I'm Adam. Every button on my bar has a key of its own."),
+      k('am_echo', 'Echo', 'US', "I'm Echo. Select a single word, and I'll tell you how it sounds."),
+      k('am_eric', 'Eric', 'US', "I'm Eric. Highlight a passage, add a note, and find it again next week."),
+      k('am_liam', 'Liam', 'US', "I'm Liam. I keep reading on a train, even with no signal at all."),
+      k('am_onyx', 'Onyx', 'US', "I'm Onyx. Nothing you read ever leaves your computer."),
+      k('am_santa', 'Santa', 'US', "Ho, ho, ho! I'm Santa. I'll read you a bedtime story, with a sleep timer."),
+      k('bf_alice', 'Alice', 'GB', "I'm Alice. Hide my bar when you need the room, and I'm still here."),
+      k('bf_isabella', 'Isabella', 'GB', "I'm Isabella. I tell you how long an article will take, before you start."),
+      k('bf_lily', 'Lily', 'GB', "I'm Lily. Click any sentence, and I'll read from there."),
+      k('bm_daniel', 'Daniel', 'GB', "I'm Daniel. A page in two languages? I'll hand the other one to a friend."),
+      k('bm_lewis', 'Lewis', 'GB', "I'm Lewis. Your highlights stay just as you left them while I read."),
+      p('alba', 'Alba', 'GB', 'piper-alba', "I'm Alba. I work offline, so I'll keep reading on a train or a plane."),
+      p('ryan', 'Ryan', 'US', 'piper-ryan', "I'm Ryan. I read PDFs too, and highlight the sentence on the real page."),
+      p('cori', 'Cori', 'GB', 'piper-cori', "I'm Cori. Select a passage and press K, and it's kept in your notes."),
+      p('northern_english_male', 'Northern English', 'GB', 'piper-northern_english_male', 'Now then. Piper has a hundred and seventy-one voices, in forty-nine languages.'),
+      p('en_US-ljspeech-high', 'LJ Speech', 'US', 'piper-ljspeech'),
+      p('en_US-joe-medium', 'Joe', 'US'),
+      p('en_US-kristin-medium', 'Kristin', 'US'),
+      p('en_US-john-medium', 'John', 'US'),
+    ] },
+    { code: 'es', label: 'Español', voices: [
+      s('M1', 'es', 'Male 1', 'Spanish', 'Leo artículos en español sin enviar nada a ningún sitio. / I read articles in Spanish without sending anything anywhere.'),
+      k('ef_dora', 'Dora', 'ES', 'Hola, soy Dora. Leo en voz alta cualquier artículo, sin enviar nada a ningún sitio. / Hi, I\'m Dora. I read any article aloud, without sending anything anywhere.'),
+      k('em_alex', 'Alex', 'ES', 'Soy Alex. Puedo leerte un PDF mientras descansas la vista. / I\'m Alex. I can read you a PDF while you rest your eyes.'),
+      k('em_santa', 'Santa', 'ES', '¡Jo, jo, jo! Soy Santa, y también hablo español. / Ho, ho, ho! I\'m Santa, and I speak Spanish too.'),
+      p('es_ES-davefx-medium', 'Davefx', 'Spain'),
+      p('es_MX-claude-high', 'Claude', 'Mexico'),
+    ] },
+    { code: 'fr', label: 'Français', voices: [
+      k('ff_siwis', 'Siwis', 'FR', 'Bonjour, je m\'appelle Siwis. Je lis vos articles à voix haute, ici même, sur votre appareil. / Hello, I\'m Siwis. I read your articles aloud, right here on your device.'),
+      p('fr_FR-gilles-low', 'Gilles', 'France'),
+    ] },
+    { code: 'it', label: 'Italiano', voices: [
+      k('if_sara', 'Sara', 'IT', 'Ciao, sono Sara. Leggo ad alta voce qualsiasi articolo, anche senza internet. / Hi, I\'m Sara. I read any article aloud, even without the internet.'),
+      k('im_nicola', 'Nicola', 'IT', 'Sono Nicola. Seleziona una parola e ti dico come si pronuncia. / I\'m Nicola. Select a word and I\'ll tell you how it\'s said.'),
+    ] },
+    { code: 'pt', label: 'Português', voices: [
+      k('pf_dora', 'Dora', 'BR', 'Olá, eu sou a Dora. Leio qualquer artigo em voz alta, direto no seu navegador. / Hello, I\'m Dora. I read any article aloud, right in your browser.'),
+      k('pm_alex', 'Alex', 'BR', 'Eu sou o Alex. Nada do que você lê sai do seu computador. / I\'m Alex. Nothing you read leaves your computer.'),
+      k('pm_santa', 'Santa', 'BR', 'Olá! Eu sou o Papai Noel, e também falo português. / Hello! I\'m Santa, and I speak Portuguese too.'),
+      p('pt_BR-faber-medium', 'Faber', 'Brazil'),
+      p('pt_PT-tugo-medium', 'Tugão', 'Portugal'),
+    ] },
+    { code: 'hi', label: 'हिन्दी', voices: [
+      k('hf_alpha', 'Alpha', 'IN', 'नमस्ते, मैं अल्फ़ा हूँ। मैं आपके लेख ज़ोर से पढ़ सकती हूँ। / Hello, I\'m Alpha. I can read your articles aloud.'),
+      k('hf_beta', 'Beta', 'IN', 'मैं बीटा हूँ। सब कुछ आपके ही कंप्यूटर पर होता है। / I\'m Beta. Everything happens on your own computer.'),
+      k('hm_omega', 'Omega', 'IN', 'मैं ओमेगा हूँ। मैं पीडीएफ़ भी पढ़ता हूँ। / I\'m Omega. I read PDFs too.'),
+      k('hm_psi', 'Psi', 'IN', 'मैं साई हूँ। मैं इंटरनेट के बिना भी काम करता हूँ। / I\'m Psi. I work without the internet too.'),
+    ] },
+    { code: 'de', label: 'Deutsch', voices: [
+      s('F1', 'de', 'Female 1', 'German', 'Ich lese Deutsch, Russisch, Japanisch und achtundzwanzig weitere Sprachen, alles auf diesem Gerät. / I read German, Russian, Japanese and twenty-eight more languages, all on this device.'),
+      p('de_DE-thorsten-high', 'Thorsten', 'Germany'),
+      p('de_DE-kerstin-low', 'Kerstin', 'Germany'),
+    ] },
+    { code: 'ru', label: 'Русский', voices: [
+      s('M5', 'ru', 'Male 5', 'Russian', 'Я читаю по-русски, и всё это работает без интернета. / I read Russian, and all of it works without the internet.'),
+      p('ru_RU-denis-medium', 'Denis', 'Russia'),
+      p('ru_RU-dmitri-medium', 'Dmitri', 'Russia'),
+    ] },
+    { code: 'mul', label: 'More languages', voices: [
+      s('F2', 'ja', 'Female 2', 'Japanese', '日本語の記事も、この端末の中で読み上げます。 / I read Japanese articles aloud too, right on this device.'),
+      p('nl_NL-pim-medium', 'Pim', 'Dutch'),
+      p('pl_PL-gosia-medium', 'Gosia', 'Polish'),
+      p('uk_UA-tetiana-high', 'Tetiana', 'Ukrainian'),
+      p('sv_SE-nst-medium', 'NST', 'Swedish'),
+      p('el_GR-rapunzelina-medium', 'Rapunzelina', 'Greek'),
+      p('hu_HU-anna-medium', 'Anna', 'Hungarian'),
+      p('fa_IR-amir-medium', 'Amir', 'Farsi'),
+      p('fi_FI-harri-medium', 'Harri', 'Finnish'),
+      p('cs_CZ-jirka-medium', 'Jirka', 'Czech'),
+      p('da_DK-talesyntese-medium', 'Talesyntese', 'Danish'),
+      p('no_NO-talesyntese-medium', 'Talesyntese', 'Norwegian'),
+      p('ro_RO-mihai-medium', 'Mihai', 'Romanian'),
+      p('bg_BG-dimitar-medium', 'Dimitar', 'Bulgarian'),
+      p('sk_SK-lili-medium', 'Lili', 'Slovak'),
+      p('lv_LV-aivars-medium', 'Aivars', 'Latvian'),
+      p('ne_NP-chitwan-medium', 'Chitwan', 'Nepali'),
+      p('sq_AL-edon-medium', 'Edon', 'Albanian'),
+    ] },
+  ];
+})();

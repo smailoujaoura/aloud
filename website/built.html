@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>How Aloud is built</title>
+<meta name="description" content="Aloud reads any article or PDF aloud in a natural neural voice that runs entirely on your device, highlighting every word as it goes. Free, offline, no account. For Firefox, Firefox for Android and Chrome.">
+<meta property="og:title" content="Aloud: read the web aloud, privately">
+<meta property="og:description" content="222 natural voices that run inside your browser. Works offline, sends nothing anywhere, costs nothing.">
+<meta property="og:type" content="website">
+<!-- Link previews need full addresses. The site is served from aloud.souj.dev. -->
+<meta property="og:url" content="https://aloud.souj.dev/built.html">
+<meta property="og:image" content="https://aloud.souj.dev/assets/cover.webp">
+<meta property="og:image:width" content="1504">
+<meta property="og:image:height" content="900">
+<link rel="canonical" href="https://aloud.souj.dev/built.html">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101014" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400..800;1,7..72,400..600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="assets/site.css">
+<style>footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }</style>
+</head>
+<!-- Before the store listings are live: data-stores="soon". Once they are: "live", and check the
+     three store URLs below against the real listings. -->
+<body data-stores="soon">
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="index.html"><img src="assets/icon.svg" alt="">Aloud</a>
+    <nav aria-label="Sections">
+      <a href="index.html">Home</a>
+      <a href="tour.html">The tour</a>
+      <a href="gpu.html">Graphics card</a>
+      <a href="privacy.html">Privacy</a>
+      <a class="keep btn primary" href="index.html#install">Get Aloud</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <section id="built">
+    <div class="wrap">
+      <div class="head measure">
+        <p class="eyebrow">For the curious</p>
+        <h2>A speech engine, an audio scheduler and a PDF reader, inside a browser extension.</h2>
+        <p class="lede">Aloud is a TypeScript extension with no backend. From a cluttered web page to a spoken, highlighted sentence, every step runs on your machine.</p>
+      </div>
+      <ol class="pipe">
+        <li><span class="where">Content script</span><h3>Extract</h3><p>Mozilla Readability keeps the article; reading rules for each kind of site take out what's left of the clutter.</p></li>
+        <li><span class="where">Content script</span><h3>Plan</h3><p>Only what the page shows is kept. Each paragraph's language is decided, and the text is grouped into natural utterances mapped back to their exact place on the page.</p></li>
+        <li><span class="where">Worker pool</span><h3>Synthesise</h3><p>Neural voices run on ONNX Runtime Web: WebGPU where the browser allows it, parallel WebAssembly workers everywhere else, up to three voice models side by side.</p></li>
+        <li><span class="where">Web Audio</span><h3>Play and follow</h3><p>Audio is scheduled sample-accurately, back to back, while the sentence and the word are highlighted in place.</p></li>
+      </ol>
+      <div class="eng">
+        <div><h3>Three neural engines in a tab</h3><p>Supertonic 3 (flow matching), Kokoro-82M (StyleTTS 2) and Piper (VITS), each with its own text front end and model format, behind one engine interface.</p></div>
+        <div><h3>Reading rules as data</h3><p>What to pass over on Wikipedia, WordPress, Substack, docs sites and more is a list of rules, not code, so it can grow without touching the reader.</p></div>
+        <div><h3>Highlights that can't break the page</h3><p>The CSS Custom Highlight API marks text without changing the page's DOM. Notes are anchored by their words, so they find their place again after the page is edited.</p></div>
+        <div><h3>One codebase, three browsers</h3><p>Firefox, Firefox for Android and Chromium from one Manifest V3 codebase built with WXT. Differences are detected as capabilities, not guessed from the browser's name.</p></div>
+        <div><h3>Isolated from the page</h3><p>Synthesis runs in a hidden extension frame that only accepts connections carrying a one-time ticket from the extension, so a hostile page can't drive it.</p></div>
+        <div><h3>Tested by ear</h3><p>Over 600 automated tests, and every engine change is checked by transcribing its audio with speech recognition. The samples on this page were made the same way.</p></div>
+      </div>
+      <ul class="stack" aria-label="Built with">
+        <li>TypeScript</li><li>WXT</li><li>Manifest V3</li><li>ONNX Runtime Web</li><li>WebGPU</li><li>WebAssembly</li><li>Web Audio</li><li>CSS Custom Highlight API</li><li>pdf.js</li><li>Mozilla Readability</li><li>eSpeak NG</li><li>Vitest</li><li>Playwright</li>
+      </ul>
+    </div>
+  </section>
+</main>
+<footer>
+  <div class="wrap">
+    <div>
+      <p><b>Aloud</b> is free software under GPL-3.0-or-later. Voices come from Piper, Supertonic 3 and Kokoro-82M, each under <a href="https://github.com/smailoujaoura/aloud/blob/main/PIPER_VOICE_LICENCES.md">its own licence</a>, and are downloaded when you choose them, never bundled.</p>
+      <nav aria-label="More about Aloud">
+        <a href="tour.html">The tour</a>
+        <a href="built.html">How it's built</a>
+        <a href="gpu.html">Using your graphics card</a>
+        <a href="privacy.html">Privacy policy</a>
+        <a class="source-link" href="https://github.com/smailoujaoura/aloud">Source code</a>
+      </nav>
+    </div>
+    <p class="by">Made by <a href="https://souj.dev"><b>Smail Oujaoura</b></a><br>with <a href="https://claude.com/product/claude-code">Claude Code</a></p>
+  </div>
+</footer>
+</body>
+</html>

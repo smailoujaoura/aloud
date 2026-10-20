@@ -1,0 +1,770 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Aloud tour</title>
+<meta name="description" content="Aloud reads any article or PDF aloud in a natural neural voice that runs entirely on your device, highlighting every word as it goes. Free, offline, no account. For Firefox, Firefox for Android and Chrome.">
+<meta property="og:title" content="Aloud: read the web aloud, privately">
+<meta property="og:description" content="222 natural voices that run inside your browser. Works offline, sends nothing anywhere, costs nothing.">
+<meta property="og:type" content="website">
+<!-- Link previews need full addresses. The site is served from aloud.souj.dev. -->
+<meta property="og:url" content="https://aloud.souj.dev/tour.html">
+<meta property="og:image" content="https://aloud.souj.dev/assets/cover.webp">
+<meta property="og:image:width" content="1504">
+<meta property="og:image:height" content="900">
+<link rel="canonical" href="https://aloud.souj.dev/tour.html">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101014" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400..800;1,7..72,400..600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="assets/site.css">
+<style>footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }</style>
+</head>
+<!-- Before the store listings are live: data-stores="soon". Once they are: "live", and check the
+     three store URLs below against the real listings. -->
+<body data-stores="soon">
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="index.html"><img src="assets/icon.svg" alt="">Aloud</a>
+    <nav aria-label="Sections">
+      <a href="index.html">Home</a>
+      <a href="#tour">The tour</a>
+      <a href="#voices">Voices</a>
+      <a href="#keep">Notes</a>
+      <a href="#privacy">Privacy</a>
+      <a href="built.html">How it's built</a>
+      <a class="keep btn primary" href="index.html#install"><span class="when-live">Install</span><span class="when-soon">Get Aloud</span></a>
+    </nav>
+  </div>
+  <div class="progress" id="progress" aria-hidden="true"></div>
+</header>
+
+<!-- The tour's stops, beside the page on wide screens. -->
+<ol class="rail" id="rail" aria-label="Stops on the tour">
+  <li><a href="#open"><i></i><span>Open a page</span></a></li>
+  <li><a href="#play"><i></i><span>Press play</span></a></li>
+  <li><a href="#follow"><i></i><span>Follow along</span></a></li>
+  <li><a href="#voices"><i></i><span>Pick a voice</span></a></li>
+  <li><a href="#languages"><i></i><span>Any language</span></a></li>
+  <li><a href="#keep"><i></i><span>Keep what matters</span></a></li>
+  <li><a href="#later"><i></i><span>Come back later</span></a></li>
+  <li><a href="#privacy"><i></i><span>Yours alone</span></a></li>
+</ol>
+
+<main>
+  <div class="wrap hero">
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow">Free browser extension · Firefox, Android, Chrome</p>
+        <h1>Your reading, <em>read aloud.</em></h1>
+        <p class="lede">Open an article or a PDF, press play, and a natural voice reads it to you while every word lights up on the page. The voice lives in your browser, so it keeps working offline and what you read stays yours. No account, nothing to pay.</p>
+        <div class="ctas">
+          <a class="btn primary when-live" id="hero-install" href="#install">Get Aloud, it's free</a>
+          <button class="btn primary when-soon" type="button" data-hear><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg>Hear it read</button>
+          <button class="btn when-live" type="button" data-hear><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg>Hear it read</button>
+          <a class="btn" href="#tour">Take the tour</a>
+        </div>
+        <p class="browsers" id="hero-browsers">Firefox · Firefox for Android · Chrome, Brave, Edge, Opera, Vivaldi<span class="when-soon"> · coming soon to the add-on stores</span></p>
+      </div>
+
+      <div class="demo" id="demo" aria-label="Aloud reading an article, with real audio">
+        <div class="demo-chrome" aria-hidden="true"><i></i><i></i><i></i><span class="demo-url">example.org/essays/the-lighthouse-keepers-log</span></div>
+        <article class="demo-article" id="demo-text">
+          <p class="kicker">Essay · 6 min read</p>
+          <h3>The lighthouse keeper's log</h3>
+          <p><span class="s">Every evening at dusk, the keeper climbed the spiral stairs to light the lamp.</span> <span class="s">He wrote the weather in a ledger that nobody else would ever read.</span> <span class="s">Wind from the west, visibility good, two boats heading north.</span> <span class="s">The entries are short, but together they make a kind of diary of the sea.</span></p>
+        </article>
+        <div class="status call" id="demo-status" role="status">▶ Press play to hear Alba read this</div>
+        <div class="bar" role="group" aria-label="Playback controls">
+          <div class="bar-row">
+            <button type="button" id="demo-prev" aria-label="Previous sentence"><svg viewBox="0 0 16 16"><path d="M5 2.5v11H3.5v-11z"/><path d="M13 2.5v11l-7-5.5z"/></svg></button>
+            <button type="button" class="play" id="demo-play" aria-label="Play"><svg viewBox="0 0 16 16" id="demo-play-icon"><path d="M4 2.5v11l9-5.5z"/></svg></button>
+            <button type="button" id="demo-next" aria-label="Next sentence"><svg viewBox="0 0 16 16"><path d="M11 2.5v11h1.5v-11z"/><path d="M3 2.5v11l7-5.5z"/></svg></button>
+            <div class="voice"><img src="assets/portraits/piper-alba.webp" alt=""><span>Alba · EN</span></div>
+            <button type="button" class="speed" id="demo-speed" aria-label="Reading speed: 1×. Change speed">1.0× · 185 wpm</button>
+          </div>
+          <div class="track" aria-hidden="true"><div class="fill" id="demo-fill"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="proof" aria-label="Aloud in numbers">
+    <div class="wrap">
+      <div><b>222</b><span>natural voices, from three neural engines</span></div>
+      <div><b>52</b><span>languages, from Arabic to Welsh</span></div>
+      <div><b>0</b><span>words of what you read sent to a server</span></div>
+      <div><b>Free</b><span>every voice, every feature, no account</span></div>
+    </div>
+  </div>
+
+  <section id="tour" class="tour">
+    <div class="wrap">
+      <div class="head measure center">
+        <p class="eyebrow">The tour</p>
+        <h2>Your first ten minutes with Aloud.</h2>
+        <p class="lede">Eight short stops, from the first page you open to the notes you keep. Scroll along, or jump straight to the one you're curious about.</p>
+      </div>
+      <ol class="route">
+        <li><a href="#open"><span class="dot">1</span><b>Open a page</b><small>It finds the article</small></a></li>
+        <li><a href="#play"><span class="dot">2</span><b>Press play</b><small>One click, or one key</small></a></li>
+        <li><a href="#follow"><span class="dot">3</span><b>Follow along</b><small>Every word lights up</small></a></li>
+        <li><a href="#voices"><span class="dot">4</span><b>Pick a voice</b><small>222 to choose from</small></a></li>
+        <li><a href="#languages"><span class="dot">5</span><b>Any language</b><small>Each in its own voice</small></a></li>
+        <li><a href="#keep"><span class="dot">6</span><b>Keep what matters</b><small>Highlights and notes</small></a></li>
+        <li><a href="#later"><span class="dot">7</span><b>Come back later</b><small>It remembers</small></a></li>
+        <li><a href="#privacy"><span class="dot">8</span><b>Yours alone</b><small>Nothing leaves your device</small></a></li>
+        <li class="end"><a href="#install"><span class="dot">★</span><b>Your turn</b><small>Free, no account</small></a></li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="open" data-stop>
+    <div class="wrap">
+      <div class="stop-grid">
+        <div>
+          <div class="head">
+            <div class="stop-head"><span class="stop-num">1</span><p class="eyebrow">Open a page</p></div>
+            <h2>Open something worth reading.</h2>
+            <p class="lede">A long essay, the morning news, a Wikipedia rabbit hole, a PDF from work. Aloud finds the article on the page and quietly leaves out everything around it.</p>
+          </div>
+          <div class="page-mock" aria-label="A page as Aloud reads it: the article is read, the clutter around it is not">
+            <div class="strip quiet">Home · World · Science · Sign in · Subscribe</div>
+            <h3>Bell Rock Lighthouse<span class="quiet">[edit]</span></h3>
+            <div class="box quiet">Location: North Sea, off Angus<br>Built: 1807 to 1810<br>Height: 35 m</div>
+            <p><span class="read">The Bell Rock Lighthouse is the oldest surviving sea-washed lighthouse in the world.</span><sup class="quiet">[1]</sup> <span class="read">It was built between 1807 and 1810 on a reef in the North Sea, eleven miles off the coast of Scotland.</span><sup class="quiet">[2][3]</sup></p>
+            <p class="share quiet">Share this: Facebook · X · Email</p>
+            <p class="refs-h quiet">References</p>
+            <ol class="quiet"><li>Bathurst, B. (1999). The Lighthouse Stevensons.</li><li>Northern Lighthouse Board. Retrieved 2 March.</li></ol>
+          </div>
+          <div class="legend" aria-hidden="true"><span><i></i>Read aloud</span><span><i class="q"></i>Passed over</span></div>
+        </div>
+        <div class="points">
+          <div class="callout"><h3>Just the article</h3><p>Menus, ads, cookie banners, share buttons and "you might also like" stay silent.</p></div>
+          <div class="callout"><h3>No "[12]" every few seconds</h3><p>Citation markers, "edit" links, info boxes and reference lists are skipped, on Wikipedia, WordPress, Substack and many more. Want the references after all? It's one switch.</p></div>
+          <div class="callout"><h3>An honest time</h3><p>"About 12 min" counts only what will be read, and the bar shows how long is left as you go.</p></div>
+          <div class="callout"><h3>PDFs too</h3><p>They open in Aloud's own reader as real pages. Zoom stays sharp, a page counter shows where you are, and your marks are saved into the PDF.</p></div>
+        </div>
+      </div>
+      <p class="next-stop"><a href="#play"><span>Next stop</span>Press play →</a></p>
+    </div>
+  </section>
+
+  <section id="play" data-stop>
+    <div class="wrap">
+      <div class="head measure">
+        <div class="stop-head"><span class="stop-num">2</span><p class="eyebrow">Press play</p></div>
+        <h2>One click, or Alt+R. That's it.</h2>
+        <p class="lede">Click the Aloud button in your toolbar, or press the shortcut. The first time, Aloud downloads its voice, once. After that it starts in a moment, even on a plane.</p>
+      </div>
+      <div class="keybar" role="img" aria-label="Aloud's reading bar, with the single key for each button: P play, B back, open and close brackets for previous and next, minus and equals for slower and faster, N keep, F follow, J jump, L sleep timer, M save as MP3, V voice, O settings, A hide, Q close">
+        <span class="kb play"><span class="b"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg></span><kbd>P</kbd><small>Play</small></span>
+        <span class="kb"><span class="b"><svg viewBox="0 0 16 16"><path d="M8 2.2a5.8 5.8 0 11-5.6 7.3l1.6-.4A4.1 4.1 0 108 3.9a4 4 0 00-2.9 1.2l1.7 1.7H2.2V2.2l1.7 1.7A5.8 5.8 0 018 2.2z"/></svg></span><kbd>B</kbd><small>Back a little</small></span>
+        <span class="kb"><span class="b"><svg viewBox="0 0 16 16"><path d="M5 2.5v11H3.5v-11z"/><path d="M13 2.5v11l-7-5.5z"/></svg></span><kbd>[</kbd><small>Previous</small></span>
+        <span class="kb"><span class="b"><svg viewBox="0 0 16 16"><path d="M11 2.5v11h1.5v-11z"/><path d="M3 2.5v11l7-5.5z"/></svg></span><kbd>]</kbd><small>Next</small></span>
+        <span class="kb"><span class="b" style="font:600 0.8rem var(--mono)">1×</span><span class="pair"><kbd>-</kbd><kbd>=</kbd></span><small>Slower, faster</small></span>
+        <span class="kb"><span class="b"><svg viewBox="0 0 16 16"><path d="M4 1.5h8a1 1 0 011 1v12.3l-5-3.2-5 3.2V2.5a1 1 0 011-1zm.7 1.7v8.9L8 10l3.3 2.1V3.2z"/><path d="M7.2 4.4h1.6v1.8h1.8v1.6H8.8v1.8H7.2V7.8H5.4V6.2h1.8z"/></svg></span><kbd>N</kbd><small>Keep it</small></span>
+        <span class="kb"><span class="b"><svg viewBox="0 0 16 16"><path d="M2.2 2.4h11.6v1.5H2.2z"/><path d="M6 7.25h7.8v1.5H6z"/><path d="M2.2 12.1h11.6v1.5H2.2z"/><path d="M1.4 6.1l3.2 1.9-3.2 1.9z"/></svg></span><kbd>F</kbd><small>Follow</small></span>
+        <span class="kb"><span class="b"><svg viewBox="0 0 16 16"><path d="M8 0a1 1 0 011 1v1.06A6 6 0 0113.94 7H15a1 1 0 010 2h-1.06A6 6 0 019 13.94V15a1 1 0 01-2 0v-1.06A6 6 0 012.06 9H1a1 1 0 010-2h1.06A6 6 0 017 2.06V1a1 1 0 011-1zm0 4a4 4 0 100 8 4 4 0 000-8z"/><path d="M8 6.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3z"/></svg></span><kbd>J</kbd><small>Click to jump</small></span>
+        <span class="kb"><span class="b"><svg viewBox="0 0 16 16"><path d="M6.6 1.4a6.6 6.6 0 108 8 5.2 5.2 0 01-8-8z"/></svg></span><kbd>L</kbd><small>Sleep timer</small></span>
+        <span class="kb"><span class="b"><svg viewBox="0 0 16 16"><path d="M7 1.5h2v6l2.2-2.2 1.4 1.4L8 11.4 3.4 6.7l1.4-1.4L7 7.5z"/><path d="M3 13h10v1.8H3z"/></svg></span><kbd>M</kbd><small>Save MP3</small></span>
+        <span class="kb"><span class="b"><img src="assets/portraits/piper-alba.webp" alt="" style="width:26px;height:26px;border-radius:50%"></span><kbd>V</kbd><small>Voice</small></span>
+        <span class="kb"><span class="b"><svg viewBox="0 0 16 16"><path d="M8 5a3 3 0 100 6 3 3 0 000-6zm6 3a6 6 0 01-.1 1l1.7 1.3-1.6 2.8-2-.8a6 6 0 01-1.7 1l-.3 2.1H6.3L6 15.6a6 6 0 01-1.7-1l-2 .8L.7 12.6 2.4 11a6 6 0 010-2L.7 7.7l1.6-2.8 2 .8A6 6 0 016 2.7L6.3.6h3.4l.3 2.1a6 6 0 011.7 1l2-.8 1.6 2.8L13.9 7q.1.5.1 1z"/></svg></span><kbd>O</kbd><small>Settings</small></span>
+        <span class="kb"><span class="b"><svg viewBox="0 0 16 16"><path d="M3 4.4l1.2-1.2L8 7l3.8-3.8L13 4.4l-5 5z"/><path d="M2.5 12h11v1.7h-11z"/></svg></span><kbd>A</kbd><small>Hide the bar</small></span>
+        <span class="kb"><span class="b"><svg viewBox="0 0 16 16"><path d="M4 3l4 4 4-4 1 1-4 4 4 4-1 1-4-4-4 4-1-1 4-4-4-4z"/></svg></span><kbd>Q</kbd><small>Close</small></span>
+      </div>
+      <p class="keybar-note">On a computer, every button on the reading bar has a key of its own while Aloud reads. Change any of them in Settings.</p>
+
+      <div class="callouts">
+        <div class="callout"><h3>Lost the thread?</h3><p>Press <kbd>B</kbd> to go back a few seconds, and see where that is on the page.</p></div>
+        <div class="callout"><h3>Just one word</h3><p>Select a word, right-click and choose <b>Read selection aloud</b> to hear how it's said. Handy when you're learning a language.</p></div>
+        <div class="callout"><h3>Jump anywhere</h3><p>Click a sentence and the reading moves there. <kbd>J</kbd> turns that on or off, so selecting text never gets in the way.</p></div>
+        <div class="callout"><h3>Need the room?</h3><p>Hide the bar with <kbd>A</kbd>. Bring your pointer to the bottom of the window and it's back, or tap the little handle on a phone.</p></div>
+      </div>
+
+      <div class="anywhere">
+        <h3>Anywhere in the browser</h3>
+        <div class="keys">
+          <div class="key"><span>Read this page</span><span class="k"><kbd>Alt</kbd><kbd>R</kbd></span></div>
+          <div class="key"><span>Keep what you just heard</span><span class="k"><kbd>Alt</kbd><kbd>K</kbd></span></div>
+          <div class="key"><span>Show this page's notes</span><span class="k"><kbd>Alt</kbd><kbd>N</kbd></span></div>
+          <div class="key"><span>Back about ten seconds</span><span class="k"><kbd>Alt</kbd><kbd>,</kbd></span></div>
+        </div>
+        <p class="keys-note">On Chrome, "back ten seconds" has no shortcut until you give it one in the browser's shortcut settings; the bar's button and <kbd>B</kbd> always work.</p>
+      </div>
+      <p class="next-stop"><a href="#follow"><span>Next stop</span>Follow along →</a></p>
+    </div>
+  </section>
+
+  <section id="follow" data-stop>
+    <div class="wrap">
+      <div class="head measure">
+        <div class="stop-head"><span class="stop-num">3</span><p class="eyebrow">Follow along</p></div>
+        <h2>Watch the words light up as you listen.</h2>
+        <p class="lede">The sentence being read is shaded right where it sits, and the word inside it is marked as it's spoken. The page glides along with the voice. Scroll off to look at something and Aloud waits for you, then catches up.</p>
+      </div>
+      <figure class="shot">
+        <picture>
+          <source srcset="assets/shots/reading-dark.webp" media="(prefers-color-scheme: dark)">
+          <img src="assets/shots/reading-light.webp" width="1600" height="1100" loading="lazy" alt="An essay being read by Aloud: the current sentence is shaded and the word century is marked inside it; two passages kept earlier stay highlighted in yellow and pink, one is underlined in green, and the reading bar at the bottom shows sentence 5 of 14 and one minute left.">
+        </picture>
+      </figure>
+      <div class="callouts">
+        <div class="callout"><h3>Word by word</h3><p>A deeper mark on the word being spoken. Pick its colour and how strong it is.</p></div>
+        <div class="callout"><h3>Following, your way</h3><p>Keep the sentence in view, snap it to the middle, or never scroll at all. <kbd>F</kbd> turns following on or off.</p></div>
+        <div class="callout"><h3>Your highlights stay yours</h3><p>Passages you kept keep their colours while Aloud reads over them.</p></div>
+        <div class="callout"><h3>Easy on dark pages</h3><p>The highlight adapts to the page, so the text under it stays easy to read.</p></div>
+      </div>
+      <p class="next-stop"><a href="#voices"><span>Next stop</span>Pick a voice →</a></p>
+    </div>
+  </section>
+
+  <section id="voices" data-stop>
+    <div class="wrap">
+      <div class="head measure center">
+        <div class="stop-head"><span class="stop-num">4</span><p class="eyebrow">Pick a voice</p></div>
+        <h2>Find a voice you'd happily listen to for an hour.</h2>
+        <p class="lede">Every face below is a voice Aloud offers. Click one to hear it. These clips are Aloud's own output, made by the extension itself, not studio recordings.</p>
+      </div>
+
+      <div class="faces" id="faces">
+        <button class="face" type="button" data-src="supertonic-F1-de" data-line="Ich lese Deutsch, Russisch, Japanisch und achtundzwanzig weitere Sprachen, alles auf diesem Gerät. I read German, Russian, Japanese and twenty-eight more languages, all on this device."><span class="ring"><img src="assets/portraits/supertonic-F1.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Female 1<small>Supertonic · German</small></span></button>
+        <button class="face" type="button" data-src="supertonic-M1-es" data-line="Leo artículos en español sin enviar nada a ningún sitio. I read articles in Spanish without sending anything anywhere."><span class="ring"><img src="assets/portraits/supertonic-M1.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Male 1<small>Supertonic · Spanish</small></span></button>
+        <button class="face" type="button" data-src="supertonic-F2-ja" data-line="日本語の記事も、この端末の中で読み上げます。 I read Japanese articles aloud too, right on this device."><span class="ring"><img src="assets/portraits/supertonic-F2.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Female 2<small>Supertonic · Japanese</small></span></button>
+        <button class="face" type="button" data-src="supertonic-M5-ru" data-line="Я читаю по-русски, и всё это работает без интернета. I read Russian, and all of it works without the internet."><span class="ring"><img src="assets/portraits/supertonic-M5.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Male 5<small>Supertonic · Russian</small></span></button>
+        <button class="face" type="button" data-src="kokoro-af_heart" data-line="Hi, I'm Heart. Open any article, press Alt R, and I'll read it to you."><span class="ring"><img src="assets/portraits/kokoro-af_heart.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Heart<small>Kokoro · US</small></span></button>
+        <button class="face" type="button" data-src="kokoro-bm_george" data-line="I'm George. Every word I say is made right here, on your own computer."><span class="ring"><img src="assets/portraits/kokoro-bm_george.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">George<small>Kokoro · GB</small></span></button>
+        <button class="face" type="button" data-src="piper-alba" data-line="I'm Alba. I work offline, so I'll keep reading on a train or a plane."><span class="ring"><img src="assets/portraits/piper-alba.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Alba<small>Piper · GB</small></span></button>
+        <button class="face" type="button" data-src="kokoro-af_bella" data-line="I'm Bella. I highlight each sentence as I read it, right where it sits on the page."><span class="ring"><img src="assets/portraits/kokoro-af_bella.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Bella<small>Kokoro · US</small></span></button>
+        <button class="face" type="button" data-src="kokoro-am_michael" data-line="I'm Michael. Drifted off for a moment? One key takes you back ten seconds."><span class="ring"><img src="assets/portraits/kokoro-am_michael.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Michael<small>Kokoro · US</small></span></button>
+        <button class="face" type="button" data-src="piper-ryan" data-line="I'm Ryan. I read PDFs too, and highlight the sentence on the real page."><span class="ring"><img src="assets/portraits/piper-ryan.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Ryan<small>Piper · US</small></span></button>
+        <button class="face" type="button" data-src="kokoro-bf_emma" data-line="I'm Emma. Going for a walk? Save any article as an MP3 and take me with you."><span class="ring"><img src="assets/portraits/kokoro-bf_emma.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Emma<small>Kokoro · GB</small></span></button>
+        <button class="face" type="button" data-src="kokoro-af_nicole" data-line="I'm Nicole. Close the tab whenever you like. I'll remember the sentence you stopped at."><span class="ring"><img src="assets/portraits/kokoro-af_nicole.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Nicole<small>Kokoro · US</small></span></button>
+        <button class="face" type="button" data-src="piper-cori" data-line="I'm Cori. Select a passage and press K, and it's kept in your notes."><span class="ring"><img src="assets/portraits/piper-cori.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Cori<small>Piper · GB</small></span></button>
+        <button class="face" type="button" data-src="kokoro-bm_fable" data-line="I'm Fable. No account, no subscription, and nothing you read is sent anywhere."><span class="ring"><img src="assets/portraits/kokoro-bm_fable.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Fable<small>Kokoro · GB</small></span></button>
+        <button class="face" type="button" data-src="kokoro-af_sarah" data-line="I'm Sarah. Slow me down, or speed me up. I'll tell you how many words a minute that is."><span class="ring"><img src="assets/portraits/kokoro-af_sarah.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Sarah<small>Kokoro · US</small></span></button>
+        <button class="face" type="button" data-src="kokoro-am_puck" data-line="I'm Puck. Queue up a few articles, and I'll read them one after another."><span class="ring"><img src="assets/portraits/kokoro-am_puck.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Puck<small>Kokoro · US</small></span></button>
+        <button class="face" type="button" data-src="piper-northern_english_male" data-line="Now then. Piper has a hundred and seventy-one voices, in forty-nine languages."><span class="ring"><img src="assets/portraits/piper-northern_english_male.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Northern English<small>Piper · GB</small></span></button>
+        <button class="face" type="button" data-src="kokoro-af_kore" data-line="I'm Kore. I run on your graphics card when your browser allows it, and on your processor when it doesn't."><span class="ring"><img src="assets/portraits/kokoro-af_kore.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Kore<small>Kokoro · US</small></span></button>
+        <button class="face" type="button" data-src="kokoro-af_aoede" data-line="I'm Aoede. Reading a dark website? I keep the highlight easy on the eyes."><span class="ring"><img src="assets/portraits/kokoro-af_aoede.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Aoede<small>Kokoro · US</small></span></button>
+        <button class="face" type="button" data-src="kokoro-am_fenrir" data-line="I'm Fenrir. I can even stop videos from playing by themselves."><span class="ring"><img src="assets/portraits/kokoro-am_fenrir.webp" alt="" loading="lazy"><span class="badge"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span class="eq"><i></i><i></i><i></i></span></span></span><span class="name">Fenrir<small>Kokoro · US</small></span></button>
+      </div>
+      <p class="quote idle" id="quote" aria-live="polite">Click a face to hear that voice.</p>
+      <p class="voice-note"><a href="index.html#voices">Hear every voice, by language →</a></p>
+
+      <div class="engines">
+        <div class="engine">
+          <h3>Supertonic 3</h3>
+          <p class="meta">10 voices, each in all 31 languages · one download, about 402 MB</p>
+          <p>Natural and clear, from German and Russian to Japanese and Korean. It keeps up on an ordinary processor, so it's the voice Aloud reaches for first.</p>
+        </div>
+        <div class="engine">
+          <h3>Kokoro-82M</h3>
+          <p class="meta">41 voices · English, Spanish, French, Italian, Portuguese, Hindi · about 347 MB with a graphics card, 114 MB without</p>
+          <p>The richest-sounding voices of the three, at their best on a graphics card. <a href="gpu.html">Using your graphics card →</a></p>
+        </div>
+        <div class="engine">
+          <h3>Piper</h3>
+          <p class="meta">171 voices · 49 languages · 21 to 137 MB each</p>
+          <p>Small, quick and happy on a phone. Its "high" quality voices sound fuller and work harder; when one falls behind, Aloud runs extra copies side by side.</p>
+        </div>
+      </div>
+
+      <details class="fit">
+        <summary>Which voices suit my browser?</summary>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th scope="col">Your setup</th><th scope="col">Supertonic 3</th><th scope="col">Kokoro-82M</th><th scope="col">Piper</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Chrome or Firefox, with WebGPU</th><td>quick, in 31 languages</td><td class="best">the richest, and faster than speech</td><td>fast</td></tr>
+              <tr><th scope="row">Chrome or Firefox, processor only</th><td class="best">the best voice that keeps up</td><td>works, about 3× slower than speech</td><td>fastest</td></tr>
+              <tr><th scope="row">Firefox for Android</th><td>works, but slower than speech on older phones, so it pauses to catch up now and then</td><td>too slow</td><td class="best">the one to use</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="fit-note">Chrome and Firefox do equally well: what matters is whether the voice can reach your graphics card through WebGPU. Chrome has it on already. Firefox keeps it off for now, and it takes a minute to <a href="#firefox-webgpu" data-open="firefox-webgpu">turn on</a>. Aloud's settings test your machine and tell you which case you're in. <a class="gpu-link" href="gpu.html">Why it's safe, and how to turn it on in every browser →</a></p>
+        <details class="howto" id="firefox-webgpu">
+          <summary>Turn on WebGPU in Firefox</summary>
+          <ol>
+            <li>Open a new tab, type <code>about:config</code> into the address bar, and accept the warning.</li>
+            <li>Search for <code>dom.webgpu.enabled</code> <button class="copy" type="button" data-copy="dom.webgpu.enabled">Copy</button> and set it to <b>true</b>. This turns WebGPU on.</li>
+            <li>Search for <code>dom.webgpu.workers.enabled</code> <button class="copy" type="button" data-copy="dom.webgpu.workers.enabled">Copy</button> and set it to <b>true</b>. This is the one that matters: Aloud makes its voice in a background worker, and this lets the worker use the graphics card.</li>
+            <li>Only if hardware acceleration is off on your machine: set <code>gfx.webrender.all</code> <button class="copy" type="button" data-copy="gfx.webrender.all">Copy</button> to <b>true</b>.</li>
+            <li>Reload the page you're reading. Aloud's settings should now say the voice runs on your graphics card; if they don't, restart Firefox.</li>
+          </ol>
+          <p class="howto-note">To undo it, search for the same names and click the reset arrow next to each.</p>
+        </details>
+      </details>
+      <p class="next-stop"><a href="#languages"><span>Next stop</span>Any language →</a></p>
+    </div>
+  </section>
+
+  <section id="languages" data-stop>
+    <div class="wrap">
+      <div class="head measure">
+        <div class="stop-head"><span class="stop-num">5</span><p class="eyebrow">Any language</p></div>
+        <h2>A page in two languages? Two voices.</h2>
+        <p class="lede">Aloud works out the language of every paragraph and hands each one to a voice that speaks it. A folded-away translation or a "Translate?" button stays quiet; open one while you listen, and it's read in its turn.</p>
+      </div>
+      <div class="lang-demo">
+        <div>
+          <article class="lang-page" id="lang-page" aria-label="A bilingual story as Aloud reads it">
+            <p class="lp" lang="it" data-lang="it"><span class="who"><img src="assets/portraits/kokoro-if_sara.webp" alt=""><b>IT</b></span><span class="s">C'era una volta un pollo che si chiamava Pollo Piccolino.</span> <span class="s">Viveva in una fattoria insieme alla sua mamma e ai suoi fratelli.</span></p>
+            <p class="lp en" lang="en" data-lang="en"><span class="who"><img src="assets/portraits/kokoro-af_heart.webp" alt=""><b>EN</b></span><span class="s">Once upon a time there was a chicken called Chicken Little.</span> <span class="s">He lived on a farm with his mother and his brothers.</span></p>
+            <p class="lp" lang="it" data-lang="it"><span class="who"><img src="assets/portraits/kokoro-if_sara.webp" alt=""><b>IT</b></span><span class="s">Un giorno una ghianda gli cadde sulla testa, e il pollo corse dalla volpe.</span></p>
+            <p class="skipped"><s>Translate?</s> a button, and a translation still folded away: not read</p>
+          </article>
+          <button class="btn primary lang-play" type="button" id="lang-play"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span>Hear it switch voices</span></button>
+        </div>
+        <div>
+          <div class="board" id="lang-board" aria-label="Which voice reads which language">
+            <div class="row" data-lang="en"><span class="lang">English<small>auto</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/kokoro-af_heart.webp" alt=""><span>Heart<small>Kokoro · US</small></span></span></div>
+            <div class="row" data-lang="it"><span class="lang">Italian<small>chosen by you</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/kokoro-if_sara.webp" alt=""><span>Sara<small>Kokoro · IT</small></span></span></div>
+            <div class="row" data-lang="fr"><span class="lang">French<small>auto</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/supertonic-F1.webp" alt=""><span>Female 1<small>Supertonic · FR</small></span></span></div>
+            <div class="row" data-lang="es"><span class="lang">Spanish<small>chosen by you</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/supertonic-M1.webp" alt=""><span>Male 1<small>Supertonic · ES</small></span></span></div>
+            <div class="row" data-lang="de"><span class="lang">German<small>chosen by you</small></span><svg viewBox="0 0 64 36" aria-hidden="true"><path d="M2 18 C 30 18, 34 18, 62 18"/></svg><span class="who"><img src="assets/portraits/supertonic-F2.webp" alt=""><span>Female 2<small>Supertonic · DE</small></span></span></div>
+          </div>
+          <p class="board-note">Aloud's voice settings in miniature: each language wired to the voice that reads it. Leave a language on Auto, or click a face to choose one yourself.</p>
+        </div>
+      </div>
+      <div class="lang-points">
+        <div class="callout"><h3>A voice per language</h3><p>Italian in an Italian voice, English in an English one, on the same page, without a single click.</p></div>
+        <div class="callout"><h3>Only what you can see</h3><p>Hidden translations, closed sections and buttons dressed up as text are passed over.</p></div>
+        <div class="callout"><h3>One word at a time</h3><p>Select a single word from another language and hear it in a voice that speaks it. Not sure what a phrase is in? Aloud offers "Read as French" with one tap.</p></div>
+        <div class="callout"><h3>No voice yet? It says so</h3><p>A language you have no voice for is read in English, and named, with a link to its voices. Or have it skipped.</p></div>
+      </div>
+      <p class="audio-note muted">The audio is Aloud's own: Kokoro's Sara and Heart reading this story in Chrome, recorded from the extension.</p>
+
+      <div class="shot-pair">
+        <div class="copy">
+          <p class="eyebrow">Settings that show, not tell</p>
+          <h2>Who reads what, at a glance.</h2>
+          <p>Every language you have a voice for, wired to the face that reads it. Click another face and the wire swings over; press its ▶ to hear it first. The last row says who reads every other language, and all 222 voices are a click away.</p>
+        </div>
+        <figure class="shot">
+          <picture>
+            <source srcset="assets/shots/voice-dark.webp" media="(prefers-color-scheme: dark)">
+            <img src="assets/shots/voice-light.webp" width="1408" height="2316" loading="lazy" alt="Aloud's voice settings: a board titled Who reads what, each language with its flag wired to the face that reads it. English to Heart, French, Hindi and Portuguese to Supertonic's Female 1 on Auto, German to Female 2, Spanish to Male 1 and Italian to Sara, chosen by hand; a last row says every other language is read by Heart, and names the languages Supertonic reads in their own voice.">
+          </picture>
+        </figure>
+      </div>
+      <p class="next-stop"><a href="#keep"><span>Next stop</span>Keep what matters →</a></p>
+    </div>
+  </section>
+
+  <section id="keep" data-stop>
+    <div class="wrap">
+      <div class="head measure">
+        <div class="stop-head"><span class="stop-num">6</span><p class="eyebrow">Keep what matters</p></div>
+        <h2>Keep the passages you'll want again.</h2>
+        <p class="lede">Select some text and press <kbd>K</kbd>, or pick a colour from the little toolbar. The passage stays highlighted on the page, and it's highlighted again whenever you come back. While Aloud reads, <kbd>N</kbd> keeps the sentence you just heard.</p>
+      </div>
+      <figure class="shot">
+        <picture>
+          <source srcset="assets/shots/library-notes-dark.webp" media="(prefers-color-scheme: dark)">
+          <img src="assets/shots/library-notes-light.webp" width="1300" height="900" loading="lazy" alt="The Notes page in Aloud's Library: a search box, filters for time, site and order, tag chips such as economics, italiano and research with their counts, colour filters, and notes grouped by the page they came from, each with its comment and tags.">
+        </picture>
+      </figure>
+      <div class="callouts">
+        <div class="callout"><h3>Highlight or underline</h3><p>Five colours, in either style. Your marks look the way you left them.</p></div>
+        <div class="callout"><h3>Notes and tags</h3><p>Write a line about it and add a tag or two: type one, press Enter, and it's there.</p></div>
+        <div class="callout"><h3>Find it again</h3><p>Search everything, or filter by tag, colour, site, today or this week, or just the notes you wrote something on.</p></div>
+        <div class="callout"><h3>Take them with you</h3><p>Copy them as Markdown, links included, or export everything in one file.</p></div>
+      </div>
+      <p class="next-stop"><a href="#later"><span>Next stop</span>Come back later →</a></p>
+    </div>
+  </section>
+
+  <section id="later" data-stop>
+    <div class="wrap">
+      <div class="head measure">
+        <div class="stop-head"><span class="stop-num">7</span><p class="eyebrow">Come back later</p></div>
+        <h2>Close the tab. Aloud remembers.</h2>
+        <p class="lede">Stop in the middle of a sentence and come back tomorrow: Aloud starts at that sentence, checked against the text, so an edited page never sends you to the wrong place.</p>
+      </div>
+      <div class="feats">
+        <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z"/></svg></span><h3>Continue listening</h3><p>Everything you stopped part-way through, with how much is left. One click picks it up where you were.</p></div>
+        <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h9"/><path d="M17 16l4 2.5-4 2.5z" fill="currentColor"/></svg></span><h3>Up next</h3><p>Queue articles for later. They play one after another in the Library, even offline, or on their own page if you'd rather.</p></div>
+        <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h4"/></svg></span><h3>PDFs, in the Library</h3><p>Open a PDF from your computer or the web: real pages with figures and columns, sharp zoom, a page counter, and marks saved into the file.</p></div>
+        <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 20h14"/></svg></span><h3>Take it with you</h3><p>Save a whole article or PDF as one MP3, in your voice and speed, for a walk or a commute. And a sleep timer for reading in bed.</p></div>
+        <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span><h3>Your listening, counted</h3><p>Words heard, time listened and documents finished, by day, site and language. Only what you actually heard counts.</p></div>
+        <div class="feat"><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5v5l4-2.5z" fill="currentColor"/></svg></span><h3>Videos too</h3><p>The same speed keys for any video on the web: <kbd>D</kbd> faster, <kbd>S</kbd> slower, <kbd>Z</kbd> and <kbd>X</kbd> to rewind and skip, even on Shorts. Remembered per site. Start it with <kbd>Alt</kbd>+<kbd>M</kbd>.</p></div>
+      </div>
+      <p class="next-stop"><a href="#privacy"><span>Next stop</span>Yours alone →</a></p>
+    </div>
+  </section>
+
+  <section id="privacy" data-stop>
+    <div class="wrap">
+      <div class="head measure">
+        <div class="stop-head"><span class="stop-num">8</span><p class="eyebrow">Yours alone</p></div>
+        <h2>The voice lives on your device. So does everything you read.</h2>
+        <p class="lede">Not a promise, a design: there is no Aloud server to send anything to. Here's the complete list of what ever touches the network.</p>
+      </div>
+      <div class="ledger">
+        <div>
+          <h3>Never leaves this device</h3>
+          <ul>
+            <li>The speech itself: every sentence is made right here</li>
+            <li>Your highlights and notes, and the tags on them</li>
+            <li>Where you stopped in every article and PDF</li>
+            <li>Your reading queue, history and listening statistics</li>
+            <li>Settings, keys, colours and per-site video speeds</li>
+          </ul>
+        </div>
+        <div class="out">
+          <h3>Goes out only when you ask</h3>
+          <ul>
+            <li>Downloading a voice, once, from Hugging Face</li>
+            <li>Previewing a Piper voice you haven't downloaded: a short hosted clip</li>
+            <li>Fetching a page or PDF you told Aloud to read or queue</li>
+          </ul>
+          <p class="note">A saved article's images stay unfetched until you press <b>Load images</b>, so reopening one tells nobody you're reading it. Aloud only runs on a site when you start it there, or on sites you list yourself.</p>
+        </div>
+      </div>
+
+      <div class="compare" style="margin-top: clamp(36px, 5vw, 56px)">
+        <div class="table-scroll" style="border-top:0">
+          <table>
+            <thead><tr><th scope="col"></th><th scope="col">Aloud</th><th scope="col">A typical cloud reader</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Where the voice runs</th><td class="yes">In your browser</td><td class="no">On the provider's servers</td></tr>
+              <tr><th scope="row">What you're reading</th><td class="yes">Never leaves your device</td><td class="no">Uploaded to be spoken</td></tr>
+              <tr><th scope="row">Account</th><td class="yes">None</td><td class="no">Usually required</td></tr>
+              <tr><th scope="row">Price</th><td class="yes">Free, all 222 voices</td><td class="no">Best voices often on a subscription</td></tr>
+              <tr><th scope="row">Without a connection</th><td class="yes">Works, after one download</td><td class="no">Stops</td></tr>
+              <tr><th scope="row">Your notes and highlights</th><td class="yes">On this device, in one backup file</td><td class="no">In their cloud</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <p class="compare-note">"A typical cloud reader" describes how hosted text-to-speech services generally work; individual products differ.</p>
+      <p class="next-stop"><a href="#install"><span>Last stop</span>Your turn →</a></p>
+    </div>
+  </section>
+
+  <section id="install">
+    <div class="wrap">
+      <div class="head measure">
+        <p class="eyebrow">Your turn</p>
+        <h2 class="when-live">Ready when you are.</h2>
+        <h2 class="when-soon">Almost ready.</h2>
+        <p class="lede when-live">Install Aloud from your browser's store. It's free, and updates arrive by themselves.</p>
+        <p class="lede when-soon">Aloud is in its final checks before the Firefox and Chrome add-on stores. It will be free, with every voice and every feature.</p>
+      </div>
+      <div class="stores">
+        <a class="store" data-store="firefox" href="https://addons.mozilla.org/firefox/addon/aloud/">
+          <span class="store-name">Firefox</span>
+          <span class="store-for">Windows, macOS and Linux</span>
+          <span class="btn primary when-live">Add to Firefox</span>
+          <span class="soon when-soon">Coming soon</span>
+          <span class="store-where">Firefox Add-ons</span>
+        </a>
+        <a class="store" data-store="android" href="https://addons.mozilla.org/android/addon/aloud/">
+          <span class="store-name">Firefox for Android</span>
+          <span class="store-for">Phones and tablets, with Piper voices</span>
+          <span class="btn primary when-live">Add to Firefox for Android</span>
+          <span class="soon when-soon">Coming soon</span>
+          <span class="store-where">Firefox Add-ons</span>
+        </a>
+        <a class="store" data-store="chrome" href="https://chromewebstore.google.com/detail/aloud/">
+          <span class="store-name">Chrome, Brave, Edge, Opera, Vivaldi</span>
+          <span class="store-for">Any Chromium browser on the desktop</span>
+          <span class="btn primary when-live">Add to Chrome</span>
+          <span class="soon when-soon">Coming soon</span>
+          <span class="store-where">Chrome Web Store</span>
+        </a>
+      </div>
+      <p class="after">No account, and nothing collected: <a href="privacy.html">read the privacy policy</a>. Installing opens a short welcome tour. Then open any article, press play, and enjoy the read.</p>
+    </div>
+  </section>
+
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <p><b>Aloud</b> is free software under GPL-3.0-or-later. Voices come from Piper, Supertonic 3 and Kokoro-82M, each under <a href="https://github.com/smailoujaoura/aloud/blob/main/PIPER_VOICE_LICENCES.md">its own licence</a>, and are downloaded when you choose them, never bundled.</p>
+      <nav aria-label="More about Aloud">
+        <a href="tour.html">The tour</a>
+        <a href="built.html">How it's built</a>
+        <a href="gpu.html">Using your graphics card</a>
+        <a href="privacy.html">Privacy policy</a>
+        <a class="source-link" href="https://github.com/smailoujaoura/aloud">Source code</a>
+      </nav>
+    </div>
+    <p class="by">Made by <a href="https://souj.dev"><b>Smail Oujaoura</b></a><br>with <a href="https://claude.com/product/claude-code">Claude Code</a></p>
+  </div>
+</footer>
+
+<script>
+(() => {
+  // ---- One player for the whole page: hearing a voice stops the demo, and the other way round.
+  let current = null;
+  const claim = (audio, onStop) => {
+    if (current && current.audio !== audio) { current.audio.pause(); current.onStop(); }
+    current = { audio, onStop };
+  };
+
+  // ---- The hero demo: Alba reading the article, with Piper's own word timings.
+  const sentences = [...document.querySelectorAll('#demo-text .s')];
+  const status = document.getElementById('demo-status');
+  const fill = document.getElementById('demo-fill');
+  const playBtn = document.getElementById('demo-play');
+  const icon = document.getElementById('demo-play-icon');
+  const speedBtn = document.getElementById('demo-speed');
+  const PAUSE = '<path d="M4 2.5h3v11H4z"/><path d="M9 2.5h3v11H9z"/>';
+  const PLAY = '<path d="M4 2.5v11l9-5.5z"/>';
+  const RATES = [1, 1.25, 1.5, 0.85];
+  const BASE_WPM = 185;
+  const audio = new Audio();
+  // The whole file, held in memory: seeking (previous, next) then works on any host, including
+  // ones that do not answer range requests. It is 130 KB.
+  let loaded = null;
+  const load = () => (loaded ??= fetch('assets/voices/demo.mp3')
+    .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(r.status))))
+    .then((b) => { audio.src = URL.createObjectURL(b); })
+    .catch((e) => { loaded = null; throw e; }));
+  let timing = null;
+  let words = [];
+  let rate = 0;
+  let frame = 0;
+
+  const say = (text, call = false) => { status.textContent = text; status.classList.toggle('call', call); };
+
+  // Wrap each timed word in a span, in order, inside its sentence.
+  const timed = fetch('assets/voices/demo.json').then((r) => r.json()).then((t) => {
+    timing = t;
+    words = t.sentences.map((s, i) => {
+      const el = sentences[i];
+      const text = el.textContent;
+      el.textContent = '';
+      let at = 0;
+      const spans = [];
+      for (const w of s.words) {
+        const k = text.indexOf(w.word, at);
+        if (k < 0) continue;
+        el.append(text.slice(at, k));
+        const span = document.createElement('span');
+        span.className = 'w';
+        span.textContent = w.word;
+        el.append(span);
+        spans.push({ span, start: w.start, end: w.end });
+        at = k + w.word.length;
+      }
+      el.append(text.slice(at));
+      return spans;
+    });
+  }).catch(() => null);
+
+  function paint() {
+    if (!timing) return;
+    const t = audio.currentTime;
+    const si = Math.max(0, timing.sentences.findLastIndex((s) => t >= s.start - 0.05));
+    sentences.forEach((s, i) => s.classList.toggle('on', i === si && (t > 0 || !audio.paused)));
+    for (const ws of words) for (const w of ws) w.span.classList.toggle('on', !audio.paused && t >= w.start && t < w.end + 0.06);
+    fill.style.width = Math.min(100, (t / timing.duration) * 100) + '%';
+    if (!audio.paused) say('Alba · sentence ' + (si + 1) + ' of ' + sentences.length);
+  }
+  function loop() { paint(); if (!audio.paused) frame = requestAnimationFrame(loop); }
+  const stopped = () => { icon.innerHTML = PLAY; playBtn.setAttribute('aria-label', 'Play'); cancelAnimationFrame(frame); paint(); };
+
+  async function play() {
+    say('Loading Alba…');
+    try { await Promise.all([timed, load()]); } catch { say('Could not load the audio. Try again', true); return; }
+    claim(audio, stopped);
+    if (audio.ended || (timing && audio.currentTime >= timing.duration - 0.05)) audio.currentTime = 0;
+    try { await audio.play(); } catch { say('Press play to hear Alba read this', true); return; }
+    icon.innerHTML = PAUSE; playBtn.setAttribute('aria-label', 'Pause');
+    loop();
+  }
+  function pause() { audio.pause(); say('Paused'); stopped(); }
+  function jump(d) {
+    if (!timing || !audio.src) return;
+    const t = audio.currentTime;
+    const si = Math.max(0, timing.sentences.findLastIndex((s) => t >= s.start - 0.05));
+    const to = Math.min(timing.sentences.length - 1, Math.max(0, si + d));
+    audio.currentTime = timing.sentences[to].start;
+    paint();
+    if (audio.paused) say('Sentence ' + (to + 1) + ' of ' + sentences.length);
+  }
+
+  audio.addEventListener('ended', () => { stopped(); say('Finished. Press play to hear it again'); });
+  playBtn.addEventListener('click', () => (audio.paused ? play() : pause()));
+  status.addEventListener('click', () => { if (status.classList.contains('call')) play(); });
+  document.getElementById('demo-prev').addEventListener('click', () => jump(-1));
+  document.getElementById('demo-next').addEventListener('click', () => jump(1));
+  speedBtn.addEventListener('click', () => {
+    rate = (rate + 1) % RATES.length;
+    const r = RATES[rate];
+    audio.playbackRate = r;
+    const wpm = Math.round((BASE_WPM * r) / 5) * 5;
+    // 1 → "1.0×", 1.25 → "1.25×", 1.5 → "1.5×", 0.85 → "0.85×".
+    speedBtn.textContent = (Number.isInteger(r) ? r.toFixed(1) : String(r)) + '× · ' + wpm + ' wpm';
+    speedBtn.setAttribute('aria-label', 'Reading speed: ' + r + '×. Change speed');
+  });
+  for (const b of document.querySelectorAll('[data-hear]')) {
+    b.addEventListener('click', () => {
+      document.getElementById('demo').scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+      play();
+    });
+  }
+
+  // ---- Two languages, two voices: the story as Aloud read it, Italian by Sara, English by Heart.
+  {
+    const btn = document.getElementById('lang-play');
+    const label = btn.querySelector('span');
+    const glyph = btn.querySelector('svg');
+    const showPlaying = (on) => { glyph.innerHTML = on ? PAUSE : PLAY; label.textContent = on ? 'Pause' : 'Hear it switch voices'; };
+    const board = document.getElementById('lang-board');
+    const spans = [...document.querySelectorAll('#lang-page .s')];
+    const rows = [...board.querySelectorAll('.row')];
+    const paras = [...document.querySelectorAll('#lang-page .lp')];
+    const story = new Audio();
+    story.preload = 'none';
+    let timing = null;
+    let raf = 0;
+    const clear = () => {
+      for (const s of spans) s.classList.remove('on');
+      for (const p of paras) p.classList.remove('on');
+      for (const r of rows) r.classList.remove('on');
+      board.classList.remove('live');
+    };
+    const stop = () => { cancelAnimationFrame(raf); clear(); showPlaying(false); };
+    const paint = () => {
+      if (!timing) return;
+      const t = story.currentTime;
+      const i = timing.sentences.findIndex((x) => t >= x.start && t < x.end + 0.25);
+      spans.forEach((s, n) => s.classList.toggle('on', n === i));
+      const para = i >= 0 ? spans[i].closest('.lp') : null;
+      paras.forEach((p) => p.classList.toggle('on', p === para));
+      const lang = i >= 0 ? timing.sentences[i].lang : '';
+      board.classList.toggle('live', !!lang);
+      rows.forEach((r) => r.classList.toggle('on', r.dataset.lang === lang));
+      if (!story.paused) raf = requestAnimationFrame(paint);
+    };
+    story.addEventListener('ended', stop);
+    btn.addEventListener('click', async () => {
+      if (!story.paused) { story.pause(); stop(); return; }
+      claim(story, stop);
+      timing ??= await fetch('assets/voices/bilingual.json').then((r) => r.json()).catch(() => null);
+      if (!story.src) story.src = 'assets/voices/bilingual.mp3';
+      showPlaying(true);
+      try { await story.play(); paint(); } catch { stop(); }
+    });
+  }
+
+  // ---- Firefox WebGPU steps: a link that opens them, and buttons that copy the setting names.
+  const openSteps = (id) => {
+    const steps = document.getElementById(id);
+    if (!steps) return;
+    for (let d = steps; d; d = d.parentElement?.closest('details')) d.open = true;
+    steps.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  };
+  for (const a of document.querySelectorAll('[data-open]')) {
+    a.addEventListener('click', (e) => { e.preventDefault(); openSteps(a.dataset.open); history.replaceState(null, '', '#' + a.dataset.open); });
+  }
+  if (location.hash === '#firefox-webgpu') openSteps('firefox-webgpu');
+  for (const b of document.querySelectorAll('.copy[data-copy]')) {
+    b.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = 'Copied'; }
+      catch { b.textContent = 'Select it above'; }
+      setTimeout(() => (b.textContent = 'Copy'), 1600);
+    });
+  }
+
+  // ---- The voice wall: every face plays its own line.
+  const quote = document.getElementById('quote');
+  const voice = new Audio();
+  let playing = null;
+  let turn = 0;
+  const idle = () => {
+    playing?.classList.remove('playing');
+    playing = null;
+    quote.classList.add('idle');
+    quote.textContent = 'Click a face to hear that voice.';
+  };
+  voice.addEventListener('ended', idle);
+  for (const face of document.querySelectorAll('.face')) {
+    face.setAttribute('aria-label', 'Hear ' + face.querySelector('.name').firstChild.textContent);
+    face.addEventListener('click', async () => {
+      if (playing === face) { turn++; voice.pause(); idle(); return; }
+      claim(voice, idle);
+      playing?.classList.remove('playing');
+      playing = face;
+      face.classList.add('playing');
+      quote.classList.remove('idle');
+      const who = face.querySelector('.name');
+      quote.innerHTML = '';
+      quote.append('“' + face.dataset.line + '”');
+      const tag = document.createElement('span');
+      tag.className = 'who';
+      tag.textContent = who.firstChild.textContent + ' · ' + who.querySelector('small').textContent;
+      quote.append(tag);
+      voice.src = 'assets/voices/' + face.dataset.src + '.mp3';
+      // Only the latest click may reset the wall: switching voices quickly rejects the earlier
+      // play(), and its catch used to clear the face that is playing now.
+      const mine = ++turn;
+      try { await voice.play(); } catch { if (mine === turn) idle(); }
+    });
+  }
+})();
+</script>
+<script>
+(() => {
+  // Once the stores are live: point the main button at this browser's store, and mark its card.
+  if (document.body.dataset.stores !== 'live') {
+    // Not listed yet: the cards say so, and lead nowhere.
+    for (const card of document.querySelectorAll('.store')) card.removeAttribute('href');
+    return;
+  }
+  const ua = navigator.userAgent;
+  const store = /Firefox\//.test(ua) ? (/Android/.test(ua) ? 'android' : 'firefox')
+    : /Chrome\//.test(ua) && !/Mobile/.test(ua) ? 'chrome' : null;
+  if (!store) return;
+  const card = document.querySelector('.store[data-store="' + store + '"]');
+  card.classList.add('mine');
+  let label = card.querySelector('.btn').textContent;
+  if (store === 'chrome') {
+    const name = navigator.brave ? 'Brave' : /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /Vivaldi/.test(ua) ? 'Vivaldi' : 'Chrome';
+    label = 'Add to ' + name;
+    card.querySelector('.btn').textContent = label;
+  }
+  const hero = document.getElementById('hero-install');
+  hero.href = card.href;
+  hero.textContent = label + ', free';
+  document.getElementById('hero-browsers').innerHTML = 'Also on <a href="#install">other browsers</a>';
+})();
+</script>
+<script>
+(() => {
+  // ---- The tour: how far down the page you are, and which stop you're at.
+  const progress = document.getElementById('progress');
+  const rail = document.getElementById('rail');
+  const links = [...rail.querySelectorAll('a')];
+  const stops = links.map((a) => document.getElementById(a.getAttribute('href').slice(1)));
+  const end = document.getElementById('install');
+  let frame = 0;
+  const update = () => {
+    frame = 0;
+    const max = document.documentElement.scrollHeight - innerHeight;
+    progress.style.setProperty('--p', max > 0 ? String(Math.min(1, Math.max(0, scrollY / max))) : '0');
+    const line = innerHeight * 0.4;
+    let here = -1;
+    stops.forEach((s, i) => { if (s && s.getBoundingClientRect().top <= line) here = i; });
+    rail.classList.toggle('on', here >= 0 && end.getBoundingClientRect().top > line);
+    links.forEach((a, i) => { a.classList.toggle('here', i === here); a.classList.toggle('done', i < here); });
+  };
+  addEventListener('scroll', () => { frame ||= requestAnimationFrame(update); }, { passive: true });
+  addEventListener('resize', update);
+  update();
+})();
+</script>
+</body>
+</html>
