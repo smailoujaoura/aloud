@@ -14,6 +14,9 @@
   grid-template-columns: minmax(236px, 1fr) minmax(0, 760px) minmax(0, 1fr);
   min-height: 100vh;
 }
+/* Room for the scrollbar on every view: a short view (Speed) has none, a long one (Pronunciation)
+   does, and with classic scrollbars the page jumped sideways between them. */
+html { scrollbar-gutter: stable; }
 main { grid-column: 2; width: 100%; max-width: 760px; margin: 0; padding: 32px 28px 96px; box-sizing: border-box; }
 
 .app-nav {

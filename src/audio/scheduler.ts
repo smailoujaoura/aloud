@@ -477,6 +477,8 @@ export class GaplessScheduler {
     if (this.mediaElement) {
       this.mediaElement.pause();
       this.mediaElement.srcObject = null;
+      if (this.mediaElement.src.startsWith('blob:')) URL.revokeObjectURL(this.mediaElement.src);
+      this.mediaElement.removeAttribute('src');
       this.mediaElement = null;
     }
     this.ctx = null;
@@ -549,7 +551,26 @@ export class GaplessScheduler {
    * If the browser refuses any step, audio goes directly to the destination as before — being
    * heard matters more than being controllable from a keyboard.
    */
+  /**
+   * Media keys reach a page through a playing media element, so one is always there. In Firefox
+   * the speech itself goes through it: graph → MediaStream → `<audio>`. Chromium must not do that.
+   * Its MediaStream playout keeps its buffer steady by resampling, so whenever the page is busy the
+   * voice drifts in pitch and speed: a 440 Hz tone sent that way came out anywhere from 347 to
+   * 484 Hz, and the highlighting ran ahead of the words. There the graph goes straight to the
+   * speakers, and the element plays a silent loop alongside it, for the keys.
+   */
   private connectOutput(ctx: AudioContext, gain: GainNode): void {
+    if (import.meta.env.BROWSER !== 'firefox') {
+      gain.connect(ctx.destination);
+      try {
+        const element = new Audio(URL.createObjectURL(silentWav()));
+        element.loop = true;
+        this.mediaElement = element;
+      } catch {
+        /* no media keys, and nothing lost */
+      }
+      return;
+    }
     try {
       const destination = ctx.createMediaStreamDestination();
       const element = new Audio();
@@ -568,19 +589,41 @@ export class GaplessScheduler {
       // Refused (an autoplay policy that treats elements more strictly than Web Audio). If the
       // graph itself is running, send it to the speakers directly so nothing goes silent.
       if (this.ctx?.state !== 'running' || !this.gain || this.mediaElement !== element) return;
-      try {
-        this.gain.disconnect();
-      } catch {
-        /* not connected */
+      if (element.srcObject) {
+        try {
+          this.gain.disconnect();
+        } catch {
+          /* not connected */
+        }
+        this.gain.connect(this.ctx.destination);
+        element.srcObject = null;
       }
-      this.gain.connect(this.ctx.destination);
-      element.srcObject = null;
       this.mediaElement = null;
     });
   }
 
-  /** True when audio is going through a media element, so OS media controls can reach us. */
+  /** True while a media element carries the audio (Firefox) or plays alongside it (Chromium): media keys can reach us. */
   get routesThroughMediaElement(): boolean {
     return this.mediaElement !== null;
   }
+}
+
+/** One second of silence as a WAV file: what Chromium's media element plays (see `connectOutput`). */
+function silentWav(): Blob {
+  const rate = 8000;
+  const bytes = new DataView(new ArrayBuffer(44 + rate * 2));
+  const text = (at: number, s: string) => [...s].forEach((c, i) => bytes.setUint8(at + i, c.charCodeAt(0)));
+  text(0, 'RIFF');
+  bytes.setUint32(4, 36 + rate * 2, true);
+  text(8, 'WAVEfmt ');
+  bytes.setUint32(16, 16, true);
+  bytes.setUint16(20, 1, true);
+  bytes.setUint16(22, 1, true);
+  bytes.setUint32(24, rate, true);
+  bytes.setUint32(28, rate * 2, true);
+  bytes.setUint16(32, 2, true);
+  bytes.setUint16(34, 16, true);
+  text(36, 'data');
+  bytes.setUint32(40, rate * 2, true);
+  return new Blob([bytes.buffer], { type: 'audio/wav' });
 }

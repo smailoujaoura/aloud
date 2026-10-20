@@ -818,6 +818,10 @@ export class ReaderSession {
     } else if (ctx.state === 'suspended') {
       await this.scheduler.unpause();
     }
+    // Until the sentence has audio to play, say so. After a voice change the first sentence can
+    // take several seconds to make, and a bar that says "playing" over silence looks broken.
+    // `onChunkStart` clears it the moment audio flows.
+    this.state.busy = this.scheduler.isPlaying() && !this.scheduler.started(this.currentPlayId);
     this.setStatus('playing');
     this.ensureSynth(this.currentPlayId);
     if (this.words) this.followWords();
@@ -827,6 +831,7 @@ export class ReaderSession {
     // `onChunkStart` clears this the moment audio actually starts.
     if (this.wantsPlayback && !this.scheduler.isPlaying()) {
       this.state.status = 'paused';
+      this.state.busy = false;
       this.state.hint = 'Press ▶ to start';
       this.pushState();
     }
@@ -1920,7 +1925,7 @@ export class ReaderSession {
     if (!this.outputLogged) {
       // Which path the audio took decides whether media keys and the OS overlay can reach us.
       this.outputLogged = true;
-      log.info(`audio output: ${this.scheduler.routesThroughMediaElement ? 'media element (media keys enabled)' : 'direct'}`);
+      log.info(`audio output: ${import.meta.env.BROWSER === 'firefox' ? 'through a media element' : 'direct'}, media keys ${this.scheduler.routesThroughMediaElement ? 'on' : 'off'}`);
     }
     this.currentPlayId = playId;
     this.state.currentIndex = playId;
