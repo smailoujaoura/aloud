@@ -21,7 +21,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400..800;1,7..72,400..600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="assets/site.css">
+<link rel="stylesheet" href="assets/site.css?v=8ecc8afc">
 <style>
 /* ---------- the home page: voices by language, the best features at a glance ---------- */
 .tabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 0 auto 28px; }
@@ -65,33 +65,81 @@
 .voice-foot { margin-top: 18px; text-align: center; font-size: 0.92rem; color: var(--ink-muted); }
 .voice-foot a { font-weight: 600; color: var(--ink); }
 
-.best { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
-@media (max-width: 1000px) { .best { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 520px) { .best { grid-template-columns: minmax(0, 1fr); } }
-.best a {
-  display: grid; gap: 8px; align-content: start; padding: 20px; border-radius: var(--radius);
-  background: var(--surface); border: 1px solid var(--rule); text-decoration: none; color: var(--ink);
-  transition: border-color 160ms, transform 160ms;
-}
-.best a:hover { border-color: var(--amber-solid); transform: translateY(-2px); }
-.best .ic { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--amber-soft); color: var(--amber); }
-.best .ic svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.best h3 { font: 600 1.02rem/1.3 var(--sans); }
-.best p { color: var(--ink-muted); font-size: 0.93rem; }
-.best .more { font: 600 0.85rem var(--sans); color: var(--amber); }
 .tour-cta { margin: 40px auto 56px; display: flex; justify-content: center; }
 .tour-cta .btn { white-space: nowrap; }
 
-.private { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-@media (max-width: 760px) { .private { grid-template-columns: minmax(0, 1fr); } }
-.private div { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 4px 12px; padding: 18px 20px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--rule); }
-.private div::before { content: "✓"; grid-row: span 2; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); font-weight: 700; }
-.private b { font-weight: 600; }
-.private span { color: var(--ink-muted); font-size: 0.93rem; }
-.private-more { margin-top: 16px; font-size: 0.92rem; color: var(--ink-muted); }
-.private-more a { font-weight: 600; color: var(--ink); }
-
 footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
+/* ---------- showcases: each feature shown working, the words beside it ---------- */
+.show-grid { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: clamp(28px, 5vw, 64px); align-items: center; }
+.show-grid.flip > :first-child { order: 2; }
+@media (max-width: 900px) { .show-grid { grid-template-columns: minmax(0, 1fr); } .show-grid.flip > :first-child { order: 0; } }
+.show-copy { display: grid; gap: 16px; align-content: start; }
+.show-copy .try { font-size: 0.92rem; color: var(--ink-muted); }
+.show-copy .more { font-weight: 600; text-decoration: none; color: var(--amber); }
+.show-copy .more:hover { text-decoration: underline; }
+
+/* Notes: a page to mark, a toolbar, the list of what you kept. */
+.note-demo { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 210px; gap: 14px; align-items: start; }
+@media (max-width: 640px) { .note-demo { grid-template-columns: minmax(0, 1fr); } }
+.mini-page { padding: 20px 22px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--rule); box-shadow: var(--shadow); font-family: var(--display); }
+.mini-page .mini-kicker { font: 500 0.68rem/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); }
+.mini-page h3 { font-size: 1.25rem; margin: 8px 0 10px; }
+.mini-page p { font-size: 0.98rem; line-height: 1.75; margin: 0 0 10px; }
+.mini-page p:last-child { margin: 0; }
+.mini-page mark.hl { background: color-mix(in srgb, var(--c) 55%, transparent); color: inherit; border-radius: 3px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.mini-page mark.ul { background: none; color: inherit; text-decoration: underline 3px var(--c); text-underline-offset: 3px; }
+.mini-page mark.fresh { animation: marked 600ms ease-out; }
+@keyframes marked { from { filter: brightness(1.3); } }
+.note-toolbar { position: absolute; z-index: 4; display: flex; gap: 4px; padding: 6px; border-radius: 12px; background: var(--surface); border: 1px solid var(--rule-strong); box-shadow: var(--shadow); }
+.note-toolbar[hidden] { display: none; }
+.note-toolbar button { width: 28px; height: 28px; border: 0; border-radius: 8px; cursor: pointer; display: grid; place-items: center; background: transparent; font: 700 0.9rem var(--sans); color: var(--ink); }
+.note-toolbar button::before { content: ""; width: 16px; height: 16px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px rgba(0,0,0,.2); }
+.note-toolbar button.u::before { display: none; }
+.note-toolbar button.u { text-decoration: underline 2px; text-underline-offset: 3px; }
+.note-toolbar button:hover { background: var(--surface-2); }
+.mini-notes { padding: 14px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--rule); font-size: 0.85rem; display: grid; gap: 10px; }
+.mini-notes ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.mini-notes li { position: relative; padding: 6px 26px 6px 10px; border-left: 3px solid var(--c); background: var(--surface-2); border-radius: 0 8px 8px 0; color: var(--ink); line-height: 1.4; animation: pop 160ms ease-out; }
+.mini-notes li button { position: absolute; right: 4px; top: 4px; border: 0; background: none; color: var(--ink-faint); cursor: pointer; font-size: 0.9rem; }
+.mini-notes .empty { border: 0; background: none; color: var(--ink-faint); padding: 0; }
+
+/* Video: a scene that plays at your speed. */
+.video-demo { display: grid; gap: 10px; }
+.screen { position: relative; aspect-ratio: 16 / 9; border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-lg); cursor: pointer; outline-offset: 4px; }
+.screen svg { width: 100%; height: 100%; display: block; }
+.v-badge { position: absolute; top: 14px; left: 14px; padding: 6px 12px; border-radius: 999px; background: rgba(0,0,0,.72); color: #fff; font: 700 1.1rem/1 var(--sans); }
+.v-badge[hidden] { display: none; }
+.v-hint { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); padding: 6px 12px; border-radius: 999px; background: rgba(0,0,0,.55); color: #fff; font: 600 0.82rem/1 var(--sans); white-space: nowrap; transition: opacity 300ms; }
+.screen:focus .v-hint { opacity: 0; }
+.vbar { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--rule); }
+.vplay { width: 32px; height: 32px; border-radius: 50%; border: 0; background: var(--amber-solid); color: var(--amber-on); display: grid; place-items: center; cursor: pointer; flex: none; }
+.vplay svg { width: 14px; height: 14px; fill: currentColor; }
+.vtrack { flex: 1; height: 4px; border-radius: 4px; background: var(--rule); overflow: hidden; }
+.vfill { height: 100%; width: 0; background: var(--amber-solid); }
+.vtime, .vrate { font: 500 0.8rem var(--mono); color: var(--ink-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.vrate { color: var(--ink); font-weight: 700; min-width: 3.4em; text-align: right; }
+.vkeys { display: flex; flex-wrap: wrap; gap: 8px; }
+.vkeys button { display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; border-radius: 999px; border: 1px solid var(--rule-strong); background: var(--surface); color: var(--ink); font: 600 0.84rem var(--sans); cursor: pointer; }
+.vkeys button:hover { background: var(--surface-2); }
+.vsites { font-size: 0.82rem; color: var(--ink-faint); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.vsites span { padding: 3px 9px; border-radius: 999px; background: var(--surface-2); color: var(--ink-muted); font-family: var(--mono); font-size: 0.75rem; }
+
+/* PDF: a two-column page in Aloud's reader. */
+.pdf-mock { position: relative; padding: 18px; border-radius: var(--radius); background: #4a4a52; box-shadow: var(--shadow-lg); }
+.pdf-tools { position: absolute; top: 10px; left: 10px; display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-radius: 10px; background: var(--surface); color: var(--ink); font: 500 0.78rem var(--sans); box-shadow: var(--shadow); z-index: 1; }
+.pdf-tools .sep { width: 1px; height: 14px; background: var(--rule-strong); }
+.pdf-tools .zoom { min-width: 3em; text-align: center; }
+.pdf-sheet { margin-top: 30px; padding: 26px 26px 30px; background: #fff; color: #1b1b1f; border-radius: 3px; font: 0.78rem/1.6 Georgia, serif; }
+.pdf-title { font: 700 1.15rem/1.2 Georgia, serif; text-align: center; margin: 0 0 4px; }
+.pdf-authors { text-align: center; color: #666; margin: 0 0 16px; font-size: 0.72rem; }
+.pdf-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.pdf-cols p { margin: 0 0 8px; text-align: justify; hyphens: auto; }
+.pdf-h { font-weight: 700; text-align: left !important; }
+.pdf-cols .lit { background: rgba(255, 214, 10, 0.4); border-radius: 2px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.pdf-cols .mark { background: rgba(140, 200, 255, 0.55); }
+.pdf-fig { height: 70px; margin: 6px 0; border: 1px solid #ddd; display: flex; align-items: end; padding: 6px; background: linear-gradient(to top, #c8d8e8 0 30%, transparent 30%) 10% 100% / 12% 100% no-repeat, linear-gradient(to top, #c8d8e8 0 55%, transparent 55%) 30% 100% / 12% 100% no-repeat, linear-gradient(to top, #c8d8e8 0 70%, transparent 70%) 50% 100% / 12% 100% no-repeat, linear-gradient(to top, #c8d8e8 0 85%, transparent 85%) 70% 100% / 12% 100% no-repeat; }
+.pdf-fig span { font-size: 0.65rem; color: #666; background: #fff; }
+@media (max-width: 520px) { .pdf-cols { grid-template-columns: 1fr; } }
 </style>
 </head>
 <!-- Before the store listings are live: data-stores="soon". Once they are: "live", and check the
@@ -104,7 +152,8 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
     <nav aria-label="Sections">
       <a href="#voices">Voices</a>
       <a href="#languages">Languages</a>
-      <a href="#features">Features</a>
+      <a href="#notes">Notes</a>
+      <a href="#video">Video speed</a>
       <a href="tour.html">The tour</a>
       <a class="keep btn primary" href="#install"><span class="when-live">Install</span><span class="when-soon">Get Aloud</span></a>
     </nav>
@@ -181,37 +230,132 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
     </div>
   </section>
 
-  <section id="features">
-    <div class="wrap">
-      <div class="head measure center">
-        <p class="eyebrow">Made for long reads</p>
-        <h2>Everything a good read needs.</h2>
+  <section id="notes" class="show">
+    <div class="wrap show-grid">
+      <div class="show-copy">
+        <p class="eyebrow">Highlights and notes</p>
+        <h2>Keep what matters, on any website.</h2>
+        <p class="lede">Select a passage and pick a colour. It stays highlighted on the page, and it's there again whenever you come back.</p>
+        <p class="try">Try it: select a few words in the article.</p>
+        <a class="more" href="tour.html#keep">More about notes →</a>
       </div>
-      <div class="best">
-        <a href="tour.html#follow"><span class="ic"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h13"/><rect x="13" y="10" width="7" height="4" rx="1" fill="currentColor" stroke="none" opacity=".35"/></svg></span><h3>Every word lights up</h3><p>Follow along on the page itself, word by word.</p><span class="more">See how →</span></a>
-        <a href="tour.html#open"><span class="ic"><svg viewBox="0 0 24 24"><path d="M4 5h16M4 10h16M4 15h9"/><path d="M15 15l5 5M20 15l-5 5"/></svg></span><h3>Just the article</h3><p>No menus, ads or "[12]"s read out loud.</p><span class="more">See how →</span></a>
-        <a href="tour.html#keep"><span class="ic"><svg viewBox="0 0 24 24"><path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/></svg></span><h3>Highlights and notes</h3><p>Keep a passage with one key, find it again later.</p><span class="more">See how →</span></a>
-        <a href="tour.html#later"><span class="ic"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z"/></svg></span><h3>Picks up where you stopped</h3><p>Close the tab; tomorrow it starts at that sentence.</p><span class="more">See how →</span></a>
-        <a href="tour.html#open"><span class="ic"><svg viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h4"/></svg></span><h3>PDFs, properly</h3><p>Real pages, sharp zoom, marks saved in the file.</p><span class="more">See how →</span></a>
-        <a href="tour.html#play"><span class="ic"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg></span><h3>A key for everything</h3><p>Play, skip, speed, hide the bar: one key each.</p><span class="more">See how →</span></a>
-        <a href="tour.html#later"><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 20h14"/></svg></span><h3>Save as MP3</h3><p>Take an article with you on a walk.</p><span class="more">See how →</span></a>
-        <a href="tour.html#later"><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5v5l4-2.5z" fill="currentColor"/></svg></span><h3>Videos too</h3><p>The same speed keys for every video on the web.</p><span class="more">See how →</span></a>
+      <div class="note-demo" id="note-demo">
+        <article class="mini-page" id="note-page">
+          <p class="mini-kicker">Essay · 7 min read</p>
+          <h3>The quiet economics of lighthouses</h3>
+          <p>For most of the nineteenth century, a lighthouse was the most expensive thing a coastal town would ever build. The stone came by sea, and the lens came from Paris.</p>
+          <p>Economists later used the lighthouse as their favourite example of something no market would provide. <mark class="hl" style="--c:#ffd83a" data-note="1">A ship could not be charged for seeing a light</mark>, so nobody would ever pay to build one.</p>
+          <p>In England, private owners did build lights, and collected dues from ships at the nearest port. It worked for two hundred years.</p>
+        </article>
+        <div class="note-toolbar" id="note-toolbar" role="toolbar" aria-label="Highlight the selection" hidden>
+          <button type="button" data-c="#ffd83a" aria-label="Yellow"></button>
+          <button type="button" data-c="#7fe08a" aria-label="Green"></button>
+          <button type="button" data-c="#8cc8ff" aria-label="Blue"></button>
+          <button type="button" data-c="#ff9fd0" aria-label="Pink"></button>
+          <button type="button" data-c="#c3a6ff" aria-label="Purple"></button>
+          <button type="button" class="u" data-style="underline" aria-label="Underline instead">U</button>
+        </div>
+        <aside class="mini-notes" aria-label="Notes on this page">
+          <b>Notes on this page</b>
+          <ol id="note-list"></ol>
+        </aside>
       </div>
     </div>
   </section>
 
-  <section id="privacy">
-    <div class="wrap">
-      <div class="head measure center">
-        <p class="eyebrow">Private by design</p>
-        <h2>The voice lives on your device.</h2>
+  <section id="video" class="show">
+    <div class="wrap show-grid flip">
+      <div class="show-copy">
+        <p class="eyebrow">Video speed</p>
+        <h2>Every video, at your speed.</h2>
+        <p class="lede">The same keys on YouTube, a lecture, a podcast player or any video on the web. Aloud remembers the speed you like on each site.</p>
+        <p class="try">Try it: click the video, then press <kbd>D</kbd> or <kbd>S</kbd>.</p>
+        <a class="more" href="tour.html#later">More about video speed →</a>
       </div>
-      <div class="private">
-        <div><b>Made on your device</b><span>Every sentence is spoken by a model running in your browser.</span></div>
-        <div><b>Nothing to sign up for</b><span>No account, no tracking, nothing collected.</span></div>
-        <div><b>Works offline</b><span>After one download, on a train or a plane.</span></div>
+      <div class="video-demo">
+        <div class="screen" id="v-screen" tabindex="0" role="application" aria-label="A video: press D for faster, S for slower, R for normal speed, Z and X to go back or forward ten seconds">
+          <svg class="scene" viewBox="0 0 400 225" aria-hidden="true" preserveAspectRatio="xMidYMid slice">
+            <defs>
+              <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffb36b"/><stop offset="0.6" stop-color="#ffd9a0"/><stop offset="1" stop-color="#fff0d1"/></linearGradient>
+            </defs>
+            <rect width="400" height="225" fill="url(#sky)"/>
+            <circle id="v-sun" cx="300" cy="120" r="34" fill="#fff6d8"/>
+            <g id="v-clouds" fill="#fff" opacity="0.85"><ellipse cx="80" cy="50" rx="38" ry="11"/><ellipse cx="250" cy="34" rx="30" ry="9"/><ellipse cx="460" cy="58" rx="42" ry="12"/><ellipse cx="630" cy="40" rx="30" ry="9"/></g>
+            <g id="v-far"><path d="M0 140 Q 25 132 50 140 T 100 140 T 150 140 T 200 140 T 250 140 T 300 140 T 350 140 T 400 140 T 450 140 T 500 140 T 550 140 T 600 140 T 650 140 T 700 140 T 750 140 T 800 140 V 225 H 0 Z" fill="#3f86b8"/></g>
+            <g id="v-boat"><path d="M-22 0 H 22 L 14 10 H -14 Z" fill="#20374f"/><path d="M0 -2 V -40 L 22 -6 Z" fill="#fff"/><path d="M-2 -2 V -34 L -18 -6 Z" fill="#f4e6c8"/></g>
+            <g id="v-near"><path d="M0 170 Q 30 160 60 170 T 120 170 T 180 170 T 240 170 T 300 170 T 360 170 T 420 170 T 480 170 T 540 170 T 600 170 T 660 170 T 720 170 T 780 170 T 840 170 V 225 H 0 Z" fill="#2a6a99"/></g>
+          </svg>
+          <span class="v-badge" id="v-badge" hidden>1×</span>
+          <span class="v-hint" id="v-hint">Click, then press D or S</span>
+        </div>
+        <div class="vbar">
+          <button type="button" class="vplay" id="v-play" aria-label="Pause"><svg viewBox="0 0 16 16"><path d="M4 2.5h3v11H4z"/><path d="M9 2.5h3v11H9z"/></svg></button>
+          <div class="vtrack"><div class="vfill" id="v-fill"></div></div>
+          <span class="vtime" id="v-time">0:00 / 3:00</span>
+          <span class="vrate" id="v-rate">1×</span>
+        </div>
+        <div class="vkeys">
+          <button type="button" data-key="s"><kbd>S</kbd> slower</button>
+          <button type="button" data-key="d"><kbd>D</kbd> faster</button>
+          <button type="button" data-key="r"><kbd>R</kbd> 1×</button>
+          <button type="button" data-key="z"><kbd>Z</kbd> −10 s</button>
+          <button type="button" data-key="x"><kbd>X</kbd> +10 s</button>
+        </div>
+        <p class="vsites">Remembered: <span>youtube.com 1.75×</span> <span>ted.com 1.5×</span> <span>bbc.co.uk 1.25×</span></p>
       </div>
-      <p class="private-more center" style="text-align:center">The full list of what ever touches the network is in <a href="tour.html#privacy">the tour</a> and the <a href="privacy.html">privacy policy</a>.</p>
+    </div>
+  </section>
+
+  <section id="clutter" class="show">
+    <div class="wrap show-grid">
+      <div class="show-copy">
+        <p class="eyebrow">Just the article</p>
+        <h2>It reads the story, not the clutter.</h2>
+        <p class="lede">Menus, ads, share buttons and reference lists stay silent. On Wikipedia, no "[12]" every few seconds.</p>
+        <a class="more" href="tour.html#open">More about what gets read →</a>
+      </div>
+      <div>
+        <div class="page-mock" aria-label="A page as Aloud reads it: the article is read, the clutter around it is not">
+          <div class="strip quiet">Home · World · Science · Sign in · Subscribe</div>
+          <h3>Bell Rock Lighthouse<span class="quiet">[edit]</span></h3>
+          <div class="box quiet">Location: North Sea, off Angus<br>Built: 1807 to 1810<br>Height: 35 m</div>
+          <p><span class="read">The Bell Rock Lighthouse is the oldest surviving sea-washed lighthouse in the world.</span><sup class="quiet">[1]</sup> <span class="read">It was built between 1807 and 1810 on a reef in the North Sea, eleven miles off the coast of Scotland.</span><sup class="quiet">[2][3]</sup></p>
+          <p class="share quiet">Share this: Facebook · X · Email</p>
+          <p class="refs-h quiet">References</p>
+          <ol class="quiet"><li>Bathurst, B. (1999). The Lighthouse Stevensons.</li><li>Northern Lighthouse Board. Retrieved 2 March.</li></ol>
+        </div>
+        <div class="legend" aria-hidden="true"><span><i></i>Read aloud</span><span><i class="q"></i>Passed over</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="pdf" class="show">
+    <div class="wrap show-grid flip">
+      <div class="show-copy">
+        <p class="eyebrow">PDFs</p>
+        <h2>PDFs, as real pages.</h2>
+        <p class="lede">Columns and figures stay where they are. Aloud reads them in order, lights the sentence on the page, zooms sharp, and saves your highlights into the file.</p>
+        <a class="more" href="tour.html#later">More about PDFs →</a>
+      </div>
+      <div class="pdf-mock" aria-label="A two-column PDF page in Aloud's reader, with the sentence being read lit up">
+        <div class="pdf-tools"><span class="pg"><b>3</b> / 12</span><span class="sep"></span><span>−</span><span class="zoom">125%</span><span>+</span></div>
+        <div class="pdf-sheet">
+          <p class="pdf-title">On the Keeping of Lights</p>
+          <p class="pdf-authors">M. Hartley · Department of Maritime History</p>
+          <div class="pdf-cols">
+            <div>
+              <p class="pdf-h">1 Introduction</p>
+              <p>Lighthouses were financed by dues collected at port, set by tonnage and by the number of lights a vessel passed. <span class="lit">The scheme survived for two centuries, long after its critics said it could not work.</span> This paper follows the ledgers of three stations.</p>
+              <div class="pdf-fig"><span>Figure 1. Dues collected, 1800 to 1900</span></div>
+            </div>
+            <div>
+              <p class="pdf-h">2 The ledgers</p>
+              <p>Each keeper wrote the weather, the boats that passed and the oil burned. <span class="mark">Read together, the entries are a diary of the sea.</span> We transcribed 41,000 of them.</p>
+              <p>The entries are short and regular, which makes them easy to count and hard to misread.</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -269,8 +413,8 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
   </div>
 </footer>
 
-<script src="assets/voices.js"></script>
-<script src="assets/demos.js"></script>
-<script src="assets/home.js"></script>
+<script src="assets/voices.js?v=fd71ee86"></script>
+<script src="assets/demos.js?v=b015c39e"></script>
+<script src="assets/home.js?v=e912d160"></script>
 </body>
 </html>

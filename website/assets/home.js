@@ -412,3 +412,158 @@
   hero.href = card.href;
   hero.textContent = label + ', free';
 })();
+
+(() => {
+  // ---- Notes: select words in the little article, pick a colour, and it's kept and listed.
+  const demo = document.getElementById('note-demo');
+  if (!demo) return;
+  const page = document.getElementById('note-page');
+  const bar = document.getElementById('note-toolbar');
+  const list = document.getElementById('note-list');
+  let pending = null;
+  let next = 2;
+
+  const renderList = () => {
+    const marks = [...page.querySelectorAll('mark[data-note]')];
+    list.replaceChildren();
+    if (!marks.length) {
+      const li = document.createElement('li');
+      li.className = 'empty';
+      li.textContent = 'Your highlights appear here.';
+      list.append(li);
+      return;
+    }
+    for (const m of marks) {
+      const li = document.createElement('li');
+      li.style.setProperty('--c', m.style.getPropertyValue('--c'));
+      li.textContent = m.textContent;
+      const x = document.createElement('button');
+      x.type = 'button';
+      x.textContent = '×';
+      x.setAttribute('aria-label', 'Remove this highlight');
+      x.addEventListener('click', () => { m.replaceWith(...m.childNodes); page.normalize(); renderList(); });
+      li.append(x);
+      list.append(li);
+    }
+  };
+
+  const hide = () => { bar.hidden = true; pending = null; };
+  const showFor = (range) => {
+    const r = range.getBoundingClientRect();
+    const box = demo.getBoundingClientRect();
+    bar.hidden = false;
+    const left = Math.max(0, Math.min(box.width - bar.offsetWidth, r.left - box.left + r.width / 2 - bar.offsetWidth / 2));
+    bar.style.left = left + 'px';
+    bar.style.top = Math.max(0, r.top - box.top - bar.offsetHeight - 8) + 'px';
+    pending = range.cloneRange();
+  };
+  const check = () => {
+    const sel = getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) { hide(); return; }
+    const range = sel.getRangeAt(0);
+    if (!page.contains(range.commonAncestorContainer)) { hide(); return; }
+    // One paragraph at a time, as a highlight is on the real page.
+    const para = (range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement).closest('p, h3');
+    if (!para) { hide(); return; }
+    if (!para.contains(range.endContainer)) range.setEnd(para, para.childNodes.length);
+    if (!range.toString().trim()) { hide(); return; }
+    showFor(range);
+  };
+  page.addEventListener('mouseup', () => setTimeout(check, 0));
+  page.addEventListener('touchend', () => setTimeout(check, 250));
+  document.addEventListener('selectionchange', () => { if (!bar.hidden && getSelection().isCollapsed) setTimeout(() => { if (getSelection().isCollapsed) hide(); }, 200); });
+  bar.addEventListener('pointerdown', (e) => e.preventDefault());
+  for (const b of bar.querySelectorAll('button[data-c]')) b.style.setProperty('--c', b.dataset.c);
+  bar.addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b || !pending) return;
+    const m = document.createElement('mark');
+    const underline = b.dataset.style === 'underline';
+    m.className = (underline ? 'ul' : 'hl') + ' fresh';
+    m.style.setProperty('--c', underline ? '#2f9e44' : b.dataset.c);
+    m.dataset.note = String(next++);
+    m.append(pending.extractContents());
+    pending.insertNode(m);
+    // Marks inside the new mark (a word marked twice) give way to it.
+    for (const inner of m.querySelectorAll('mark')) inner.replaceWith(...inner.childNodes);
+    getSelection().removeAllRanges();
+    hide();
+    renderList();
+  });
+  renderList();
+})();
+
+(() => {
+  // ---- Video speed: a little film that plays at whatever speed you pick, as on any site.
+  const screen = document.getElementById('v-screen');
+  if (!screen) return;
+  const RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4];
+  const LENGTH = 180;
+  let rate = 1;
+  let t = 42;
+  let playing = true;
+  let last = performance.now();
+  let badgeTimer = 0;
+  let raf = 0;
+  let visible = false;
+  const el = (id) => document.getElementById(id);
+  const far = el('v-far'), near = el('v-near'), clouds = el('v-clouds'), boat = el('v-boat');
+  const fill = el('v-fill'), time = el('v-time'), rateEl = el('v-rate'), badge = el('v-badge'), playBtn = el('v-play');
+  const PLAY = '<path d="M4 2.5v11l9-5.5z"/>';
+  const PAUSE = '<path d="M4 2.5h3v11H4z"/><path d="M9 2.5h3v11H9z"/>';
+  const clock = (s) => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+  const fmt = (r) => (Number.isInteger(r) ? r : r) + '×';
+  const flash = (text) => {
+    badge.textContent = text;
+    badge.hidden = false;
+    clearTimeout(badgeTimer);
+    badgeTimer = setTimeout(() => (badge.hidden = true), 900);
+  };
+  const draw = () => {
+    far.setAttribute('transform', `translate(${-((t * 14) % 100)} 0)`);
+    near.setAttribute('transform', `translate(${-((t * 30) % 120)} 0)`);
+    clouds.setAttribute('transform', `translate(${-((t * 4) % 380)} 0)`);
+    const bob = Math.sin(t * 2.2) * 3;
+    boat.setAttribute('transform', `translate(${120 + Math.sin(t * 0.4) * 30} ${158 + bob}) rotate(${Math.sin(t * 2.2 + 1) * 4})`);
+    fill.style.width = (t / LENGTH) * 100 + '%';
+    time.textContent = clock(t) + ' / ' + clock(LENGTH);
+    rateEl.textContent = fmt(rate);
+  };
+  const frame = (now) => {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (playing) t = (t + dt * rate) % LENGTH;
+    draw();
+    raf = visible ? requestAnimationFrame(frame) : 0;
+  };
+  const setRate = (r) => { rate = r; flash(fmt(r)); draw(); };
+  const act = (key) => {
+    const i = RATES.indexOf(rate);
+    if (key === 'd') setRate(RATES[Math.min(RATES.length - 1, i + 1)]);
+    else if (key === 's') setRate(RATES[Math.max(0, i - 1)]);
+    else if (key === 'r') setRate(1);
+    else if (key === 'z') { t = Math.max(0, t - 10); flash('−10 s'); }
+    else if (key === 'x') { t = Math.min(LENGTH - 1, t + 10); flash('+10 s'); }
+    else return false;
+    return true;
+  };
+  screen.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === ' ') { e.preventDefault(); togglePlay(); return; }
+    if (act(e.key.toLowerCase())) e.preventDefault();
+  });
+  screen.addEventListener('click', () => screen.focus());
+  const togglePlay = () => {
+    playing = !playing;
+    playBtn.querySelector('svg').innerHTML = playing ? PAUSE : PLAY;
+    playBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+  };
+  playBtn.addEventListener('click', togglePlay);
+  for (const b of document.querySelectorAll('.vkeys button')) b.addEventListener('click', () => { act(b.dataset.key); screen.focus(); });
+  // Only moves while it can be seen: no animation running off screen.
+  new IntersectionObserver(([entry]) => {
+    visible = entry.isIntersecting;
+    if (visible && !raf) { last = performance.now(); raf = requestAnimationFrame(frame); }
+  }).observe(screen);
+  draw();
+})();
