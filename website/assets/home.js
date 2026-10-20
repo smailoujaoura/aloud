@@ -514,8 +514,8 @@
     replay.hidden = true;
     page.innerHTML = original;
     notes.clear();
-    renderList();
-    pop.hidden = true;
+    editing = null;
+    closeNote();
     hideBar();
     const ph = (id) => page.querySelector(`[data-ph="${id}"]`);
     // 1. A passage, highlighted yellow.
@@ -529,30 +529,18 @@
     await press(bar.querySelector('[data-note]'));
     if (mine !== run) return;
     const m = mark(pending, { color: '#8cc8ff' });
-    field.textContent = '';
-    for (const c of tags.querySelectorAll('.chip')) c.remove();
-    tagField.textContent = 'Add a tag';
-    tagField.classList.remove('live');
-    pop.querySelectorAll('.np-dots i').forEach((i, n) => i.classList.toggle('on', n === 2));
-    placePop(m);
+    openNote(m, { typing: false });
     await point(field, 0.2, 0.5);
     await type(field, 'The textbook example. It turns out to be wrong.', mine);
     await point(tagField, 0.3, 0.5);
-    tagField.textContent = '';
-    tagField.classList.add('live');
     await type(tagField, 'economics', mine);
     if (mine !== run) return;
     await wait(300);
-    const chip = document.createElement('span');
-    chip.className = 'chip';
-    chip.textContent = 'economics ×';
-    tags.insertBefore(chip, tagField);
+    addTag('economics');
     tagField.textContent = '';
-    notes.set(m.dataset.note, { comment: field.textContent, tags: ['economics'] });
     await wait(500);
-    await press(document.getElementById('np-done'));
-    pop.hidden = true;
-    renderList();
+    await press(done);
+    closeNote();
     await wait(600);
     // 3. A passage underlined instead.
     if (!(await selectWords(ph('c'), mine))) return;
@@ -563,6 +551,70 @@
     replay.hidden = false;
   };
   const stopShow = () => { run++; pointer.classList.remove('on'); replay.hidden = false; };
+
+  // ---- the note popover, as in the extension: colour, highlight or underline, a note, tags
+  const done = document.getElementById('np-done');
+  let editing = null;
+  const addTag = (tag) => {
+    tag = tag.trim().replace(/^#/, '');
+    if (!tag || [...tags.querySelectorAll('.chip')].some((c) => c.dataset.tag === tag)) return;
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.dataset.tag = tag;
+    chip.textContent = tag + ' ×';
+    chip.title = 'Remove this tag';
+    tags.insertBefore(chip, tagField);
+  };
+  const showStyle = () => {
+    pop.querySelectorAll('.np-dots i').forEach((i) => i.classList.toggle('on', i.style.getPropertyValue('--c') === editing.style.getPropertyValue('--c')));
+    const [hl, ul] = pop.querySelectorAll('.np-seg span');
+    hl.classList.toggle('on', editing.classList.contains('hl'));
+    ul.classList.toggle('on', editing.classList.contains('ul'));
+  };
+  function openNote(m, { typing = true } = {}) {
+    editing = m;
+    const info = notes.get(m.dataset.note) ?? {};
+    field.textContent = info.comment ?? '';
+    for (const c of tags.querySelectorAll('.chip')) c.remove();
+    for (const t of info.tags ?? []) addTag(t);
+    tagField.textContent = '';
+    field.contentEditable = tagField.contentEditable = String(typing);
+    showStyle();
+    placePop(m);
+    if (typing) field.focus();
+  }
+  function closeNote() {
+    if (editing) {
+      notes.set(editing.dataset.note, { comment: field.textContent.trim(), tags: [...tags.querySelectorAll('.chip')].map((c) => c.dataset.tag) });
+      editing = null;
+      renderList();
+    }
+    field.contentEditable = tagField.contentEditable = 'false';
+    pop.hidden = true;
+  }
+  pop.addEventListener('click', (e) => {
+    if (!e.isTrusted || !editing) return;
+    const dot = e.target.closest('.np-dots i');
+    const seg = e.target.closest('.np-seg span');
+    const chip = e.target.closest('.chip');
+    if (dot) { editing.style.setProperty('--c', dot.style.getPropertyValue('--c')); showStyle(); renderList(); }
+    else if (seg) { const ul = seg === pop.querySelectorAll('.np-seg span')[1]; editing.classList.toggle('ul', ul); editing.classList.toggle('hl', !ul); showStyle(); }
+    else if (chip) chip.remove();
+    else if (e.target.closest('.np-del')) { const m = editing; editing = null; m.replaceWith(...m.childNodes); page.normalize(); closeNote(); renderList(); }
+    else if (e.target.closest('.np-tags') && !e.target.closest('.np-tag-field')) tagField.focus();
+  });
+  tagField.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(tagField.textContent); tagField.textContent = ''; }
+    else if (e.key === 'Backspace' && !tagField.textContent) tags.querySelector('.chip:last-of-type')?.remove();
+  });
+  tagField.addEventListener('blur', () => { if (editing && tagField.textContent.trim()) { addTag(tagField.textContent); tagField.textContent = ''; } });
+  field.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); closeNote(); } });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && editing) closeNote(); });
+  document.addEventListener('pointerdown', (e) => { if (e.isTrusted && editing && !pop.contains(e.target) && !editing.contains(e.target)) closeNote(); });
+  page.addEventListener('click', (e) => {
+    const m = e.target.closest('mark[data-note]');
+    if (e.isTrusted && m && getSelection().isCollapsed && !pointer.classList.contains('on')) openNote(m);
+  });
 
   // ---- your turn: select words in the page
   const check = () => {
@@ -585,10 +637,10 @@
     if (!e.isTrusted) return;
     const b = e.target.closest('button');
     if (!b || !pending) return;
-    if (b.dataset.note) { const m = mark(pending, { color: '#8cc8ff' }); notes.set(m.dataset.note, { comment: '' }); renderList(); return; }
+    if (b.dataset.note) { openNote(mark(pending, { color: '#8cc8ff' })); return; }
     mark(pending, { color: b.dataset.style === 'underline' ? '#2f9e44' : b.dataset.c, underline: b.dataset.style === 'underline' });
   });
-  document.getElementById('np-done').addEventListener('click', (e) => { if (e.isTrusted) pop.hidden = true; });
+  done.addEventListener('click', (e) => { if (e.isTrusted) closeNote(); });
   replay.addEventListener('click', () => { replay.hidden = true; play(); });
 
   renderList();

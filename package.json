@@ -22,7 +22,7 @@
     "zip:firefox": "wxt zip --browser firefox --mv3",
     "zip:chrome": "wxt zip --browser chrome --mv3",
     "prebuild:assets": "node scripts/prebuild.mjs",
-    "compile": "tsc --noEmit",
+    "compile": "node scripts/prebuild.mjs && wxt prepare && tsc --noEmit",
     "test": "vitest run",
     "test:e2e:firefox": "node scripts/e2e-firefox.mjs",
     "say": "node scripts/say.mjs",

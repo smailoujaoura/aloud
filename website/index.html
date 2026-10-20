@@ -161,7 +161,9 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
 @keyframes blink { 50% { opacity: 0; } }
 .np-tags { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; padding: 5px 7px; border-radius: 8px; border: 1px solid var(--rule-strong); background: var(--surface-2); min-height: 32px; }
 .np-tags .chip { padding: 2px 8px; border-radius: 999px; background: var(--surface); font-size: 0.75rem; }
-.np-tag-field { color: var(--ink-faint); } .np-tag-field.live { color: var(--ink); }
+.np-tag-field { flex: 1; min-width: 6em; color: var(--ink); outline: none; } .np-tag-field:empty::before { content: attr(data-ph); color: var(--ink-faint); }
+.np-tags .chip { cursor: pointer; } .np-dots i, .np-seg span, .np-del { cursor: pointer; } .np-del { color: var(--no); font-weight: 600; }
+.np-field:focus { outline: 2px solid var(--amber-solid); outline-offset: 1px; } mark[data-note] { cursor: pointer; }
 .np-foot { display: flex; justify-content: space-between; align-items: center; color: var(--ink-faint); font-size: 0.72rem; }
 .np-foot button { border: 0; background: none; font: 700 0.82rem var(--sans); color: var(--ink); padding: 4px 8px; border-radius: 6px; cursor: pointer; }
 .pointer { position: absolute; z-index: 6; width: 22px; height: 22px; left: 0; top: 0; pointer-events: none; fill: #111; stroke: #fff; stroke-width: 1.5; filter: drop-shadow(0 2px 3px rgba(0,0,0,.35)); transition: transform 650ms cubic-bezier(.4,.1,.2,1), opacity 300ms; opacity: 0; }
@@ -316,11 +318,11 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
           <button type="button" class="text" data-note="1">Add note</button>
         </div>
         <div class="note-pop" id="note-pop" role="dialog" aria-label="Highlight" hidden>
-          <div class="np-row"><span class="np-dots"><i style="--c:#ffd83a"></i><i style="--c:#7fe08a"></i><i style="--c:#8cc8ff"></i><i style="--c:#ff9fd0"></i><i style="--c:#c3a6ff"></i></span><span class="np-acts">Copy <b>Delete</b></span></div>
+          <div class="np-row"><span class="np-dots"><i style="--c:#ffd83a"></i><i style="--c:#7fe08a"></i><i style="--c:#8cc8ff"></i><i style="--c:#ff9fd0"></i><i style="--c:#c3a6ff"></i></span><span class="np-acts"><b class="np-del" role="button" tabindex="0">Delete</b></span></div>
           <div class="np-seg"><span class="on">Highlight</span><span>Underline</span></div>
-          <div class="np-field" id="np-text" data-ph="Your note…"></div>
-          <div class="np-tags" id="np-tags"><span class="np-tag-field" id="np-tag">Add a tag</span></div>
-          <div class="np-foot"><span>Esc closes · Delete removes it</span><button type="button" id="np-done">Done</button></div>
+          <div class="np-field" id="np-text" data-ph="Your note…" aria-label="Your note" role="textbox" aria-multiline="true"></div>
+          <div class="np-tags" id="np-tags"><span class="np-tag-field" id="np-tag" data-ph="Add a tag" aria-label="Add a tag"></span></div>
+          <div class="np-foot"><span>Enter or Esc saves</span><button type="button" id="np-done">Done</button></div>
         </div>
         <svg class="pointer" id="note-pointer" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 2l15 10-7 1.5L8.5 21z"/></svg>
         <aside class="mini-notes" aria-label="Notes on this page">
@@ -484,6 +486,6 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
 <script src="assets/voices.js?v=fae39c5c"></script>
 <script src="assets/demos.js?v=b015c39e"></script>
 <script src="assets/film.js?v=1a277964"></script>
-<script src="assets/home.js?v=38f1336a"></script>
+<script src="assets/home.js?v=ba256a77"></script>
 </body>
 </html>
