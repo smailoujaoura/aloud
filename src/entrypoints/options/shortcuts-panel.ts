@@ -34,6 +34,7 @@ const READER_ROWS: Array<[keyof ReaderKeys, string, string]> = [
   ['next', 'Next sentence', ''],
   ['slower', 'Slower', ''],
   ['faster', 'Faster', ''],
+  ['normal', 'Normal speed', 'Back to 1×'],
   ['note', 'Save to Notes', 'What you just heard'],
   ['follow', 'Follow the reading', 'On or off'],
   ['jump', 'Click a sentence to jump there', 'Off lets you click and select freely'],

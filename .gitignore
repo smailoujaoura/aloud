@@ -16,3 +16,5 @@ public/tts-worker.js
 docs/RELEASE_*.md
 docs/STORE_POLICY_AUDIT_*.md
 docs/CLAUDE_*.md
+# Claude Code's lock for scheduled tasks, written while a session runs.
+.claude/scheduled_tasks.lock

@@ -69,8 +69,9 @@ export const DEFAULT_SKIP: SkipSettings = { code: true, tables: true, captions: 
  */
 /**
  * Single keys for the reading bar's controls, while a page is being read: never while typing,
- * never with Ctrl, Alt or ⌘. One character each; '' for none. Chosen clear of the video speed
- * keys (D S R G Z X) and of K, which keeps a selection.
+ * never with Ctrl, Alt or ⌘. One character each; '' for none. Speed and moving about use the
+ * video speed control's letters (S D R Z X), so one set of keys works for both; while the reader
+ * is open it takes them (shared/reader-keys.ts). Clear of K, which keeps a selection.
  */
 export interface ReaderKeys {
   playPause: string;
@@ -79,6 +80,7 @@ export interface ReaderKeys {
   next: string;
   slower: string;
   faster: string;
+  normal: string;
   note: string;
   follow: string;
   jump: string;
@@ -94,11 +96,12 @@ export interface ReaderKeys {
 
 export const DEFAULT_READER_KEYS: ReaderKeys = {
   playPause: 'p',
-  back: 'b',
+  back: 'z',
   previous: '[',
-  next: ']',
-  slower: '-',
-  faster: '=',
+  next: 'x',
+  slower: 's',
+  faster: 'd',
+  normal: 'r',
   note: 'n',
   follow: 'f',
   jump: 'j',
@@ -108,7 +111,7 @@ export const DEFAULT_READER_KEYS: ReaderKeys = {
   save: 'm',
   voice: 'v',
   settings: 'o',
-  // Not D: that is the video speed's "faster".
+  // Not D: that is "faster".
   hide: 'a',
   close: 'q',
 };
@@ -383,13 +386,27 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 /** The stored settings' schema version; each step up has a migration below. */
-export const SETTINGS_VERSION = 9;
+export const SETTINGS_VERSION = 10;
 
 type Migration = (prev: Record<string, unknown>) => Record<string, unknown>;
 
 const MIGRATIONS: Record<number, Migration> = {
     // v8 -> v9: tables are skipped by default — read cell by cell, a table is rarely what anyone
     // wants to hear. Only a profile with all four skip choices still at the old defaults moves.
+    // v9 -> v10: the reader's speed and back/forward keys become the video speed control's
+    // S D R Z X. A key still on its old default moves, unless its new letter is already taken by
+    // another reader key; a key someone chose is theirs.
+    10(prev: Record<string, unknown>): Record<string, unknown> {
+      const keys = prev.readerKeys as Record<string, string> | undefined;
+      if (!keys) return prev;
+      const next = { ...keys };
+      // Hide first: it was D before D meant "faster", and a profile from then still has it.
+      const moves: Array<[string, string, string]> = [['hide', 'd', 'a'], ['slower', '-', 's'], ['faster', '=', 'd'], ['back', 'b', 'z'], ['next', ']', 'x']];
+      for (const [name, was, now] of moves) {
+        if (next[name] === was && !Object.values(next).includes(now)) next[name] = now;
+      }
+      return { ...prev, readerKeys: next };
+    },
     9(prev: Record<string, unknown>): Record<string, unknown> {
       const skip = prev.skip as Partial<SkipSettings> | undefined;
       if (!skip || skip.code !== true || skip.tables !== false || skip.captions !== false || skip.references !== true) return prev;

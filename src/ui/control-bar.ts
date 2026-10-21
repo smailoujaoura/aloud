@@ -52,7 +52,7 @@ export interface BarVoice {
 export type FollowState = 'on' | 'away' | 'off';
 
 /** What a reader key can do on the bar (settings: ReaderKeys, less the page-wide toggles). */
-export type BarAction = 'playPause' | 'back' | 'previous' | 'next' | 'slower' | 'faster' | 'note' | 'follow' | 'jump' | 'sleep' | 'save' | 'voice' | 'settings' | 'hide' | 'close';
+export type BarAction = 'playPause' | 'back' | 'previous' | 'next' | 'slower' | 'faster' | 'normal' | 'note' | 'follow' | 'jump' | 'sleep' | 'save' | 'voice' | 'settings' | 'hide' | 'close';
 
 /** The passage being read: its language, the voice reading it, and what can be changed. */
 export interface LanguageInfo {
@@ -682,30 +682,8 @@ export class ControlBar {
         return;
       case 'Enter':
         return; // focused button handles it
-      case 'ArrowLeft':
-        e.preventDefault();
-        this.cb.onPrev();
-        return;
-      case 'ArrowRight':
-        e.preventDefault();
-        this.cb.onNext();
-        return;
-      case 'ArrowUp':
-        e.preventDefault();
-        this.nudgeSpeed(1);
-        return;
-      case 'ArrowDown':
-        e.preventDefault();
-        this.nudgeSpeed(-1);
-        return;
-      case 'Home':
-        e.preventDefault();
-        this.cb.onSeekFraction(0);
-        return;
-      case 'End':
-        e.preventDefault();
-        this.cb.onSeekFraction(0.999);
-        return;
+      // Arrows, Home and End are left to scroll the page, even with a bar button focused: after a
+      // click on the bar, ↓ moved the reading speed instead of the page. The letter keys do those.
       default:
     }
   }
@@ -766,6 +744,13 @@ export class ControlBar {
   press(action: BarAction): void {
     if (action === 'slower' || action === 'faster') {
       this.nudgeSpeed(action === 'faster' ? 1 : -1);
+      return;
+    }
+    if (action === 'normal') {
+      if (this.currentSpeed === 1) return;
+      this.currentSpeed = 1;
+      this.speedEl.value = '1';
+      this.cb.onSpeed(1);
       return;
     }
     const btn = this.keyed[action];
@@ -1281,7 +1266,7 @@ export class ControlBar {
       return li;
     };
     list.append(
-      tip('Space', 'Play or pause.', 'Arrow keys step a sentence at a time.'),
+      tip('P', 'Play or pause.', 'S and D change the speed, Z goes back a little.'),
       tip(ICON_PATHS.target, 'Click any sentence', 'in the page to jump straight to it.'),
       tip(ICON_PATHS.snap, 'Lost your place?', 'This scrolls back to what is being read.'),
       tip(ICON_PATHS.gear, 'Voices, speed and theme', 'live in the settings page.'),

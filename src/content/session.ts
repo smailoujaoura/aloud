@@ -30,6 +30,7 @@ import { voicePortrait } from '@/ui/voice-portraits';
 import type { EngineConfig, WordTiming } from '@/engine/protocol';
 import type { ModelManifest } from '@/engine/engines/types';
 import { DEFAULT_SETTINGS, getSettings, setSettings, activeVoice, voiceKeyFor, type EngineId, type ReaderKeys, type Settings, type VoiceRef } from '@/shared/settings';
+import { claimReaderKeys } from '@/shared/reader-keys';
 import { ENGINE_IDS, engineInfo, supertonicStepsFor } from '@/shared/engine-catalog';
 import { languageName, primaryLanguage, voiceLanguage, type CandidateVoice } from '@/shared/language-voice';
 import { planLanguages, scriptFits, type Detection, type Detector, type PassageInput, type PassageLanguage } from './language-plan';
@@ -2386,7 +2387,11 @@ export class ReaderSession {
     if (capabilities().touchFirst || this.stopReaderKeys) return;
     const onKey = (e: KeyboardEvent): void => this.onReaderKey(e);
     window.addEventListener('keydown', onKey, true);
-    this.stopReaderKeys = () => window.removeEventListener('keydown', onKey, true);
+    claimReaderKeys(Object.values(this.settings.readerKeys).filter(Boolean));
+    this.stopReaderKeys = () => {
+      window.removeEventListener('keydown', onKey, true);
+      claimReaderKeys(null);
+    };
   }
 
   private onReaderKey(e: KeyboardEvent): void {
@@ -2436,6 +2441,7 @@ export class ReaderSession {
     const prevEngine = engineIdentity(this.engineConfig());
     this.settings = await getSettings();
     this.bar?.setKeyHints(this.settings.readerKeys);
+    if (this.stopReaderKeys) claimReaderKeys(Object.values(this.settings.readerKeys).filter(Boolean));
 
     // Which voice reads which passage: Auto, the voices chosen per language, the saved voice, and
     // the Voice page's last row — who reads every other language, whether those are skipped, and
@@ -2552,6 +2558,10 @@ export class ReaderSession {
    * the user something rather than looking inert.
    */
   private snapToCurrent(): void {
+    // Asked for: the scroll that follows is Aloud's, not the reader's. Without this, pressing F
+    // within 1.5 s of scrolling away (easy from the keyboard) read the smooth scroll back as the
+    // reader scrolling again, paused following, and the page stopped where it was.
+    this.userScrollIntent = 0;
     const range = this.currentRange();
     if (!this.highlighter?.reveal(range)) {
       this.bar?.flash('There is nothing on this page to scroll to');

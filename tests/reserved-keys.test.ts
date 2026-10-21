@@ -42,11 +42,27 @@ describe('commandShortcutFor', () => {
 });
 
 describe('default single keys', () => {
-  it('the reader, the note keys and the video keys never share one', async () => {
-    const { DEFAULT_READER_KEYS, DEFAULT_MEDIA_SPEED, DEFAULT_ANNOTATE } = await import('@/shared/settings');
-    const reader = Object.values(DEFAULT_READER_KEYS);
-    const others = [...Object.values(DEFAULT_MEDIA_SPEED.keys), DEFAULT_ANNOTATE.pageKeys.keep, DEFAULT_ANNOTATE.pageKeys.panel].filter((k) => k && k.length === 1);
+  it('the reader and the video share S D R Z X for the same jobs, and nothing else', async () => {
+    const { DEFAULT_READER_KEYS: r, DEFAULT_MEDIA_SPEED, DEFAULT_ANNOTATE } = await import('@/shared/settings');
+    const m = DEFAULT_MEDIA_SPEED.keys;
+    const reader = Object.values(r);
     expect(new Set(reader).size).toBe(reader.length);
-    expect(reader.filter((k) => others.includes(k))).toEqual([]);
+    expect([r.slower, r.faster, r.normal, r.back, r.next]).toEqual([m.slower, m.faster, m.reset, m.rewind, m.advance]);
+    const shared = new Set([m.slower, m.faster, m.reset, m.rewind, m.advance]);
+    const video = Object.values(m).filter((k) => k.length === 1 && !shared.has(k));
+    const notes = [DEFAULT_ANNOTATE.pageKeys.keep, DEFAULT_ANNOTATE.pageKeys.panel].filter(Boolean);
+    expect(reader.filter((k) => video.includes(k) || notes.includes(k))).toEqual([]);
+  });
+
+  it('moves a profile on the old reader keys to the new ones, and keeps keys someone chose', async () => {
+    const { migrateSettings } = await import('@/shared/settings');
+    const old = { version: 9, readerKeys: { slower: '-', faster: '=', back: 'b', next: ']', playPause: 'p' } };
+    expect(migrateSettings(old, 9).readerKeys).toMatchObject({ slower: 's', faster: 'd', back: 'z', next: 'x' });
+    // A profile from before Hide moved off D: Hide moves to A, then D is free for faster.
+    const older = { version: 9, readerKeys: { hide: 'd', faster: '=' } };
+    expect(migrateSettings(older, 9).readerKeys).toMatchObject({ hide: 'a', faster: 'd' });
+    const chosen = { version: 9, readerKeys: { slower: 'q', faster: '=', back: 'b', next: ']', playPause: 's' } };
+    // "slower" was chosen, so it stays; the keys still on their old defaults move.
+    expect(migrateSettings(chosen, 9).readerKeys).toMatchObject({ slower: 'q', playPause: 's', faster: 'd', back: 'z', next: 'x' });
   });
 });

@@ -26,6 +26,7 @@
 import { clampRate, formatRate, nextPreset, stepRate } from './rate';
 import { isTypingEvent, matchesBinding } from './keys';
 import type { MediaSpeedSettings } from '@/shared/settings';
+import { readerOwnsKey } from '@/shared/reader-keys';
 
 /** Aloud's own reading bar: its keys are its own (see ui/control-bar.ts). */
 const CONTROL_HOST_ID = 'aloud-control-host';
@@ -292,6 +293,8 @@ export class MediaSpeedController {
 
   private onKey(e: KeyboardEvent): void {
     if (!this.settings.enabled || e.defaultPrevented || isTypingEvent(e)) return;
+    // The reader, open on this page, answers S D R Z X itself.
+    if (readerOwnsKey(e)) return;
     // Aloud's reading bar handles its own keys.
     if (e.composedPath().some((n) => n instanceof HTMLElement && n.id === CONTROL_HOST_ID)) return;
 
