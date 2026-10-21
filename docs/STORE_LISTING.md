@@ -111,17 +111,25 @@ reading positions, history and listening statistics, and private-window activity
   > names carry no hashes, so versions can be compared file by file.
   > Vendored, unmodified third-party files (ONNX Runtime Web, pdf.js, piper-phonemize WASM) are
   > copied from node_modules by `scripts/sync-assets.mjs`; versions are listed in THIRD_PARTY.md.
-  > The `Function`-constructor lint warnings come from those libraries. The two `innerHTML`
-  > warnings in `reader-inject.js` are inside Mozilla Readability 0.6.0, working on a detached
-  > copy of the page; the `import()` warnings load files from the package itself
-  > (`vendor/ort/`, `vendor/pdfjs/`) by their `runtime.getURL` address. Nothing is loaded from a
+  > Validator warnings: the `Function`-constructor ones come from those libraries, and cannot run:
+  > the extension CSP is `script-src 'self' 'wasm-unsafe-eval'`, with no `'unsafe-eval'`, and
+  > pdf.js is also given `isEvalSupported: false`. The four `innerHTML` warnings
+  > (`reader-inject.js`, `chunks/session.js`) are inside Mozilla Readability 0.6.0, bundled into
+  > both; Aloud runs it on `document.cloneNode(true)` (`src/extract/readability.ts`), an inert
+  > copy of the page. The `import()` warnings (`vendor/rt/ort-loader.js`, `chunks/pdf.js`, and
+  > inside the libraries) load files from the package itself (`vendor/ort/`, `vendor/pdfjs/`) by
+  > their `runtime.getURL` address, never a remote or user-supplied one. Nothing is loaded from a
   > CDN: ONNX Runtime's WebAssembly path is set to `vendor/ort/` before transformers.js loads
   > (`src/engine/ort-loader.ts`, `src/engine/engines/kokoro.ts`). transformers.js 3.7.5 is bundled
   > unmodified from npm (`vendor/rt/transformers.web.js`); its default
   > `wasmPaths = https://cdn.jsdelivr.net/...` (line ~2901 of `dist/transformers.web.js`) runs only
   > when no path is set, which never happens here, and the extension CSP would block it anyway.
   > What is downloaded at run time is voice data from Hugging Face (ONNX weights, JSON, `.bin`
-  > style vectors), never code.
+  > style vectors), never code. Aloud does not run in private windows (`incognito: not_allowed`).
+  > On uninstall it opens aloud.souj.dev/feedback.html?bye; the version and browser name follow a
+  > `#`, which the browser never sends, so opening it transmits nothing.
+  > To try it: open any article, press the toolbar button (or Alt+R), then play. The first voice
+  > (about 60 MB) downloads on first use.
 
 - **Android:** the listing is marked compatible with Firefox for Android (`gecko_android`).
   Piper voices are the ones to recommend on phones; Supertonic 3 works there, slower than speech on
