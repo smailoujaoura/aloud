@@ -134,8 +134,8 @@ export default defineBackground({
       void openWalkthrough();
     });
 
-    // Removing Aloud opens the feedback page to ask why. The address carries the version and the
-    // browser, nothing else (the privacy policy says so).
+    // Removing Aloud opens the feedback page to ask why. Version and browser are in the fragment,
+    // which never leaves the browser (shared/links.ts): nothing is sent by opening it.
     optional('setUninstallURL', () => {
       void Promise.resolve(browser.runtime.setUninstallURL(feedbackLink(browser.runtime.getManifest().version, import.meta.env.BROWSER, true))).catch(() => {});
     });

@@ -78,7 +78,7 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
           <li><a href="?bye=done&amp;r=not-needed">I was only trying it</a></li>
           <li><a href="?bye=done&amp;r=other">Something else</a></li>
         </ul>
-        <p class="small">Your click sends only the reason you picked, the way visiting a page does. Nothing about you or what you read.</p>
+        <p class="small">Your click sends only the reason you picked. Nothing about you, your browser or what you read.</p>
       </div>
     </section>
 
@@ -126,25 +126,21 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
   </div>
 </footer>
 <script>
-  // ?bye: opened by the browser when Aloud is removed. ?v= and ?b=: Aloud's version and browser,
-  // passed by the extension so a bug report starts with them.
+  // ?bye: opened by the browser when Aloud is removed. #v=&b=: Aloud's version and browser, in the
+  // fragment, which the browser never sends to this website; read here so a bug report starts with them.
   (() => {
     const q = new URLSearchParams(location.search);
     const bye = q.get('bye');
-    const v = q.get('v') || '';
-    const b = q.get('b') || '';
+    const info = new URLSearchParams(location.hash.slice(1));
+    const v = info.get('v') || '';
+    const b = info.get('b') || '';
     if (bye !== null && bye !== 'done') document.getElementById('bye').hidden = false;
     if (bye === 'done') {
       document.getElementById('thanks').hidden = false;
       document.getElementById('fb-head').hidden = true;
     }
-    // Keep version and browser on the reason links, so a reason can be read alongside them.
-    for (const a of document.querySelectorAll('#reasons a')) {
-      const u = new URL(a.href);
-      if (v) u.searchParams.set('v', v);
-      if (b) u.searchParams.set('b', b);
-      a.href = u.pathname + u.search;
-    }
+    // A reason sends only itself; version and browser stay in the fragment, for the bug report.
+    for (const a of document.querySelectorAll('#reasons a')) a.href = a.getAttribute('href') + location.hash;
     const ua = navigator.userAgent;
     const ff = /Firefox\/(\d+)/.exec(ua);
     const cr = /Chrome\/(\d+)/.exec(ua);

@@ -15,10 +15,12 @@ it('the graphics-card guide exists, and Settings links to the same address', () 
 
 it('the feedback page exists, and the uninstall address carries only the version and the browser', () => {
   expect(existsSync(`website${FEEDBACK_URL.slice(SITE_URL.length)}`)).toBe(true);
+  // What reaches the server is the address before '#': on uninstall, only that Aloud was removed.
   const bye = new URL(feedbackLink('1.0.0', 'firefox', true));
-  expect([...bye.searchParams.keys()]).toEqual(['bye', 'v', 'b']);
+  expect(bye.search).toBe('?bye');
+  expect(Object.fromEntries(new URLSearchParams(bye.hash.slice(1)))).toEqual({ v: '1.0.0', b: 'firefox' });
   expect(bye.href.length).toBeLessThan(1023); // runtime.setUninstallURL's limit
-  expect(new URL(feedbackLink('1.0.0', 'chrome')).searchParams.has('bye')).toBe(false);
+  expect(new URL(feedbackLink('1.0.0', 'chrome')).search).toBe('');
   // Every page of the website links to it.
   for (const page of ['index', 'tour', 'built', 'gpu', 'privacy']) {
     expect(readFileSync(`website/${page}.html`, 'utf8')).toContain('href="feedback.html"');

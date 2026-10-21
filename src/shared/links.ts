@@ -11,10 +11,12 @@ export const GPU_GUIDE_URL = `${SITE_URL}/gpu.html`;
 export const FEEDBACK_URL = `${SITE_URL}/feedback.html`;
 
 /**
- * The feedback page, carrying Aloud's version and browser so a bug report starts with them, and
- * nothing else. `uninstall` asks why Aloud was removed (website/feedback.html reads `bye`).
+ * The feedback page. Aloud's version and browser ride in the fragment (after `#`), which a browser
+ * never sends to a server: the page reads them to start a bug report with them, and the website
+ * receives nothing. So opening it, even automatically on uninstall, transmits no data. `uninstall`
+ * asks why Aloud was removed (website/feedback.html reads `bye`).
  */
 export function feedbackLink(version: string, browserName: string, uninstall = false): string {
-  const q = new URLSearchParams(uninstall ? { bye: '', v: version, b: browserName } : { v: version, b: browserName });
-  return `${FEEDBACK_URL}?${q}`;
+  const info = new URLSearchParams({ v: version, b: browserName });
+  return `${FEEDBACK_URL}${uninstall ? '?bye' : ''}#${info}`;
 }
