@@ -10,31 +10,35 @@ change, change the justifications here too: both stores compare them.
 **Summary (Chrome: 132 characters max; this is the manifest description, 129):**
 Reads any article or PDF aloud in a natural neural voice that runs on your device. Offline and private, it highlights every word.
 
-**Description:**
+**Description** (for Chrome, drop "Works on Firefox for Android too."):
 
 > Listen to the web in a natural voice that lives on your device.
 >
-> Aloud turns any article or PDF into natural speech and lights up each sentence, and with most
-> voices each word, as it is read. The
-> voice is a neural network running inside your browser, so it works offline and nothing you read
-> is ever sent anywhere. No account, no subscription.
+> Aloud reads any article or PDF aloud and lights up each sentence, and with most voices each
+> word, as it's read. The voice is a neural network running inside your browser, so it works
+> offline and nothing you read is ever sent anywhere. No account, no subscription, free and open
+> source.
 >
-> • 222 natural voices in 52 languages, from three neural engines (Piper, Supertonic 3, Kokoro-82M)
+> • 222 natural voices in 52 languages, from three neural engines: Supertonic 3, Kokoro-82M and Piper
 > • Reads the article, not the menus and ads, and highlights the sentence and the word in place
+> • A page in two languages? Each passage is read by a voice that speaks it
 > • PDFs too: real pages, highlighted where the text sits; mark them up and save the marks into the file
 > • Picks up at the sentence you stopped at; a reading queue for later; save any article as an MP3
-> • Highlights and notes kept on your device, exportable as Markdown, in one backup file
-> • Listening controls for any video or audio on the web: speed, rewind and skip, and stopping videos that play by themselves
-> • Every key can be changed. Light and dark themes.
+> • Highlights, notes and tags on any website, kept on your device and exportable as Markdown
+> • The same keys for reading and for any video or audio on the web: S slower, D faster, R normal speed, Z back, X forward. It can also stop videos that play by themselves
+> • Every key can be changed. Light and dark themes. Works on Firefox for Android too.
 >
 > Private by construction: there is no Aloud server. Voices download once from Hugging Face; after
 > that, reading needs no connection at all.
+>
+> Bugs and ideas: https://aloud.souj.dev/feedback.html
+> Source code: https://github.com/smailoujaoura/aloud
 
 **Category:** Chrome: Productivity → Tools (or Accessibility). Firefox: Language & Accessibility / Other.
 
 **Website:** https://aloud.souj.dev — **Privacy policy:** https://aloud.souj.dev/privacy.html
 
-**Support:** https://souj.dev/contact
+**Support:** https://aloud.souj.dev/feedback.html (bugs go to GitHub issues from there)
 
 ## Chrome Web Store — Privacy practices tab
 
