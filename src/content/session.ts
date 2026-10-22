@@ -1656,6 +1656,21 @@ export class ReaderSession {
     if (!this.settings.matchPageLanguage || this.manualVoice || summary.length === 0) return;
     const name = (lang: string): string => languageName(lang);
     const missing = summary.filter(([, e]) => e.route.kind === 'voice' && e.route.reason === 'missing').map(([l]) => l);
+    // Passages no downloaded voice can even pronounce (Chinese characters, with only English
+    // voices): skipped, and said first, since nothing else explains the silence.
+    const unreadable = summary.filter(([, e]) => e.route.kind === 'skip' && e.route.unreadable).map(([l]) => l);
+    if (unreadable.length) {
+      for (const lang of unreadable) this.missingTold.add(lang);
+      const names = unreadable.map(name).join(' or ');
+      this.bar?.flash(
+        summary.length === unreadable.length
+          ? `This page is in ${names}, and none of your voices can read it`
+          : `No ${names} voice downloaded, so those passages are skipped`,
+        'info',
+        { label: 'Get one', run: () => this.background()?.postMessage({ type: 'open-options', language: unreadable[0] }) },
+      );
+      return;
+    }
     if (summary.length === 1) {
       const [lang, { route }] = summary[0]!;
       if (route.kind !== 'voice') return;

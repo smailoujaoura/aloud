@@ -25,6 +25,28 @@ export function primaryLanguage(tag: string | null | undefined): string {
   return (tag ?? '').trim().toLowerCase().split(/[-_]/)[0] ?? '';
 }
 
+/**
+ * The writing system a language is normally written in, for those not written in Latin letters.
+ * A voice can only read its own: given Chinese characters, an English voice makes a burst of
+ * noise for each one. Languages written in two systems (Serbian, Kurdish) are left out, since
+ * their text may well be in Latin letters.
+ */
+const WRITING_SYSTEM: Readonly<Record<string, string>> = {
+  zh: 'Hani', ja: 'Jpan', ko: 'Hang',
+  ar: 'Arab', fa: 'Arab', ur: 'Arab', ps: 'Arab', ug: 'Arab', he: 'Hebr', yi: 'Hebr',
+  ru: 'Cyrl', uk: 'Cyrl', bg: 'Cyrl', be: 'Cyrl', mk: 'Cyrl', kk: 'Cyrl', ky: 'Cyrl', mn: 'Cyrl', tg: 'Cyrl',
+  el: 'Grek', ka: 'Geor', hy: 'Armn', am: 'Ethi', ti: 'Ethi',
+  hi: 'Deva', mr: 'Deva', ne: 'Deva', sa: 'Deva', bn: 'Beng', as: 'Beng', gu: 'Gujr', pa: 'Guru',
+  ta: 'Taml', te: 'Telu', kn: 'Knda', ml: 'Mlym', si: 'Sinh', or: 'Orya',
+  th: 'Thai', lo: 'Laoo', km: 'Khmr', my: 'Mymr',
+};
+
+/** Can a voice speaking `voiceLanguage` read text in `language`? Only in the same writing system. */
+export function readsWritingOf(voiceLanguage: string, language: string): boolean {
+  const of = (tag: string): string => WRITING_SYSTEM[primaryLanguage(tag)] ?? 'Latn';
+  return of(voiceLanguage) === of(language);
+}
+
 /** `fr-FR` → `fr-fr`, `en_GB` → `en-gb`, for comparing regions. */
 function fullTag(tag: string): string {
   return tag.trim().toLowerCase().replace('_', '-');

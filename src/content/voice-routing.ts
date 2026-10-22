@@ -11,18 +11,20 @@
  *    English — the voice English would get — and *marked missing*, so the bar can say so and
  *    offer a download, never passing it off as the right voice. English, not the saved voice:
  *    with an Italian voice saved, a French passage came out in Italian, which helps nobody; and
- *    with no English voice either, the saved voice.
+ *    with no English voice either, the saved voice. Unless that voice cannot read the passage's
+ *    writing at all (Chinese characters to an English voice: a burst of noise per character):
+ *    then it is skipped, marked `unreadable`, so the bar can say why and offer a voice.
  *
  * Pure; the session supplies what is downloaded.
  */
 import type { VoiceRef } from '@/shared/settings';
-import { pickVoiceForLanguage, primaryLanguage, type CandidateVoice } from '@/shared/language-voice';
+import { pickVoiceForLanguage, primaryLanguage, readsWritingOf, type CandidateVoice } from '@/shared/language-voice';
 
 export type RouteReason = 'manual' | 'off' | 'unknown' | 'preference' | 'saved' | 'match' | 'missing' | 'other';
 
 export type Route =
   | { kind: 'voice'; voice: CandidateVoice; reason: RouteReason; language: string }
-  | { kind: 'skip'; language: string };
+  | { kind: 'skip'; language: string; unreadable?: boolean };
 
 export interface RouteContext {
   /** Auto is on in settings. */
@@ -61,7 +63,9 @@ export function routeFor(languageTag: string, ctx: RouteContext): Route {
   // Taken off the board: read like every other language, and not reported as a missing voice.
   if (ctx.removed?.has(language)) {
     if (ctx.unvoiced === 'skip') return { kind: 'skip', language };
-    return { kind: 'voice', voice: fallbackVoice(ctx), reason: 'other', language };
+    const voice = fallbackVoice(ctx);
+    if (!readsWritingOf(voice.language, language)) return { kind: 'skip', language, unreadable: true };
+    return { kind: 'voice', voice, reason: 'other', language };
   }
   const preferred = ctx.preferences[language];
   if (preferred) {
@@ -75,7 +79,9 @@ export function routeFor(languageTag: string, ctx: RouteContext): Route {
   if (match) return { kind: 'voice', voice: match, reason: 'match', language };
   if (ctx.skip.has(language) || (ctx.unvoiced === 'skip' && language !== 'en')) return { kind: 'skip', language };
   // English itself missing: the saved voice (asking for the English fallback here would loop).
-  return { kind: 'voice', voice: language === 'en' ? ctx.saved : fallbackVoice(ctx), reason: 'missing', language };
+  const fallback = language === 'en' ? ctx.saved : fallbackVoice(ctx);
+  if (!readsWritingOf(fallback.language, language)) return { kind: 'skip', language, unreadable: true };
+  return { kind: 'voice', voice: fallback, reason: 'missing', language };
 }
 
 /** Who reads a language no downloaded voice speaks: the voice English gets, else the saved one. */

@@ -66,6 +66,21 @@ describe('routeFor', () => {
     expect(voiceOf(routeFor('en', ctx({ saved: paola, installed: [paola, sara] })))).toBe('it_IT-paola-medium:missing');
   });
 
+  it('a passage no fallback voice can pronounce is skipped, not read as noise', () => {
+    // Chinese characters to an English voice: one burst of noise per character.
+    const zh = routeFor('zh-CN', ctx());
+    expect(zh).toEqual({ kind: 'skip', language: 'zh', unreadable: true });
+    expect(routeFor('ja', ctx())).toMatchObject({ kind: 'skip', unreadable: true });
+    expect(routeFor('ru', ctx())).toMatchObject({ kind: 'skip', unreadable: true });
+    // Latin letters are still worth reading in English: Dutch by Alba is rough but understood.
+    expect(voiceOf(routeFor('nl', ctx()))).toBe('en_GB-alba-medium:missing');
+    // A voice that speaks the language still reads it.
+    const huayan: CandidateVoice = { engine: 'piper', id: 'zh_CN-huayan-medium', label: 'Huayan', language: 'zh_CN' };
+    expect(voiceOf(routeFor('zh', ctx({ installed: [alba, huayan] })))).toBe('zh_CN-huayan-medium:match');
+    // Taken off the board is the same: read by the other voice only if it can.
+    expect(routeFor('zh', ctx({ removed: new Set(['zh']) }))).toMatchObject({ kind: 'skip', unreadable: true });
+  });
+
   it('a removed language is read like every other language, by choice — not reported missing', () => {
     expect(voiceOf(routeFor('it', ctx({ removed: new Set(['it']) })))).toBe('en_GB-alba-medium:other');
     expect(routeFor('it', ctx({ removed: new Set(['it']), unvoiced: 'skip' }))).toEqual({ kind: 'skip', language: 'it' });

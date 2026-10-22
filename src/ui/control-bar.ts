@@ -928,7 +928,9 @@ export class ControlBar {
   setLanguage(info: LanguageInfo | null): void {
     this.languageInfo = info;
     this.voiceBadge.hidden = !info?.language;
+    // The standard code (ZH is Chinese, from Zhōngwén); its name on hover.
     this.voiceBadge.textContent = (info?.language ?? '').toUpperCase();
+    this.voiceBadge.title = info?.name ?? '';
     this.voiceBtn.classList.toggle('missing', !!info && info.missing && !info.manual);
     this.voiceBtn.classList.toggle('manual', !!info?.manual);
     this.refreshVoiceTitle();
