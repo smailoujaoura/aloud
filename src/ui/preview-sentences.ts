@@ -2,8 +2,8 @@
  * What a voice says when previewed, in its own language: a German voice read the English sample
  * sentence. Most are a sentence of the Wikipedia article on the rainbow in that language (CC BY-SA
  * 4.0, compatible one way with Aloud's GPL-3.0), as Piper collects them for its voice samples —
- * the first one short and whole, so a preview lasts a few seconds. Polish, Chinese, Estonian and
- * Swedish say the English sample sentence, translated.
+ * the first one short and whole, so a preview lasts a few seconds. Polish, Chinese, Estonian,
+ * Swedish, Japanese, Croatian and Lithuanian say the English sample sentence, translated.
  */
 export const PREVIEW_NATIVE: Readonly<Record<string, string>> = {
   ar: "يَظْهَرُ قَوْسُ الْمَطَرِ بَعْدَ سُقُوطِ الْمَطَرِ أَوْ خِلالَ سُقُوطِ الْمَطَرِ وَالشَّمْسُ مُشْرِقَةٌ.",
@@ -22,12 +22,15 @@ export const PREVIEW_NATIVE: Readonly<Record<string, string>> = {
   hu: "Az ív külső része vörös, míg a belső ibolya.",
   hy: "Ծիածան, անձրևից հետո երկնքում հայտնվող բազմերանգ կամարի տեսքով մթնոլորտի տեսողական երևույթ է։",
   id: "Pelangi biasanya berbentuk busur melingkar yang berwarna-warni.",
+  hr: "Ovo je kratak primjer kako ovaj glas zvuči.",
   is: "Hann er marglitur með rauðan að utanverðu og fjólubláan að innanverðu.",
+  ja: "これは、この声がどのように聞こえるかを示す短いサンプルです。",
   ka: "ცისარტყელა — ატმოსფერული ოპტიკური და მეტეოროლოგიური მოვლენა, რომელიც ხშირად წვიმის შემდეგ ჩნდება.",
   kk: "Кемпірқосақ – аспан күмбезінде түрлі түсті доға түрінде көрінетін атмосферадағы оптикалық құбылыс.",
   ko: "무지개는 하늘에서, 눈에 보이는 반원형의 호를 이루는 일곱 가지 색의 띠를 말한다.",
   ku: "Keskesor diyardeyek atmosferî-optîkî ye ku di barîna baranê de ku ji hêla rojê ve hatî ronî kirin de wekî kevanek dorhêl a ronahiya rengîn xuya dike.",
   lb: "Et freet mech, Iech kennen ze léieren.",
+  lt: "Tai trumpas pavyzdys, kaip skamba šis balsas.",
   lv: "Varavīksne ir optiska parādība atmosfērā, kuru rada Saules staru laušana un atstarošana krītošos lietus pilienos.",
   ml: "അന്തരീക്ഷത്തിലെ ജലകണികകളിൽ പതിക്കുന്ന പ്രകാശത്തിന്‌ പ്രകീർണ്ണനം സംഭവിക്കുന്നതുമൂലം കാണാൻ കഴിയുന്ന ഒരു പ്രതിഭാസമാണ്‌ മഴവില്ല്.",
   mr: "हा वर्णपट धनुष्याकृतीप्रमाणे दिसतो.",
