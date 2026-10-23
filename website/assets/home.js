@@ -373,17 +373,18 @@
 
 (() => {
   // Once the stores are live: point the main button at this browser's store, and mark its card.
-  if (document.body.dataset.stores !== 'live') {
-    // Not listed yet: the cards say so, and lead nowhere.
-    for (const card of document.querySelectorAll('.store')) card.removeAttribute('href');
-    return;
-  }
+  // A store still reviewing Aloud: its card says so, and leads nowhere.
+  const live = document.body.dataset.stores === 'live';
+  for (const card of document.querySelectorAll('.store')) if (!live || card.hasAttribute('data-soon')) card.removeAttribute('href');
+  if (!live) return;
   const ua = navigator.userAgent;
   const store = /Firefox\//.test(ua) ? (/Android/.test(ua) ? 'android' : 'firefox')
     : /Chrome\//.test(ua) && !/Mobile/.test(ua) ? 'chrome' : null;
   if (!store) return;
   const card = document.querySelector('.store[data-store="' + store + '"]');
   card.classList.add('mine');
+  // This browser's store isn't listing it yet: the main button leads to the cards, which say so.
+  if (card.hasAttribute('data-soon')) return;
   let label = card.querySelector('.btn').textContent;
   if (store === 'chrome') {
     const name = navigator.brave ? 'Brave' : /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /Vivaldi/.test(ua) ? 'Vivaldi' : 'Chrome';

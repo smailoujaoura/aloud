@@ -22,7 +22,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400..800;1,7..72,400..600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="assets/site.css?v=dc2458f8">
+<link rel="stylesheet" href="assets/site.css?v=709f0fb7">
 <style>
 /* ---------- the home page: voices by language, the best features at a glance ---------- */
 .tabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 0 auto 28px; }
@@ -202,9 +202,9 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
 .film-cast { margin: 0; color: var(--ink-faint); font-size: 0.8rem; line-height: 1.5; }
 </style>
 </head>
-<!-- Before the store listings are live: data-stores="soon". Once they are: "live", and check the
-     three store URLs below against the real listings. -->
-<body data-stores="soon">
+<!-- data-stores="live" once any store lists Aloud; "soon" before. A store card still in review
+     carries data-soon: it says "Coming soon" and leads nowhere. -->
+<body data-stores="live">
 
 <header class="top">
   <div class="wrap">
@@ -435,25 +435,25 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
         <p class="eyebrow">Get Aloud</p>
         <h2 class="when-live">Ready when you are.</h2>
         <h2 class="when-soon">Almost ready.</h2>
-        <p class="lede when-live">Install it from your browser's store. It's free, and updates arrive by themselves.</p>
+        <p class="lede when-live">Install it from your browser's store. It's free, and updates arrive by themselves.<!-- Remove once Firefox is live: --> The Firefox version is in review, and will be here soon.</p>
         <p class="lede when-soon">Aloud is in its final checks before the Firefox and Chrome add-on stores. It will be free, with every voice and every feature.</p>
       </div>
       <div class="stores">
-        <a class="store" data-store="firefox" href="https://addons.mozilla.org/firefox/addon/aloud/">
+        <a class="store" data-store="firefox" data-soon href="https://addons.mozilla.org/firefox/addon/aloud/">
           <span class="store-name">Firefox</span>
           <span class="store-for">Windows, macOS and Linux</span>
           <span class="btn primary when-live">Add to Firefox</span>
           <span class="soon when-soon">Coming soon</span>
           <span class="store-where">Firefox Add-ons</span>
         </a>
-        <a class="store" data-store="android" href="https://addons.mozilla.org/android/addon/aloud/">
+        <a class="store" data-store="android" data-soon href="https://addons.mozilla.org/android/addon/aloud/">
           <span class="store-name">Firefox for Android</span>
           <span class="store-for">Phones and tablets, with Piper voices</span>
           <span class="btn primary when-live">Add to Firefox for Android</span>
           <span class="soon when-soon">Coming soon</span>
           <span class="store-where">Firefox Add-ons</span>
         </a>
-        <a class="store" data-store="chrome" href="https://chromewebstore.google.com/detail/aloud/">
+        <a class="store" data-store="chrome" href="https://chromewebstore.google.com/detail/ilnojbdjpnnlkjbmldpgbgckkkifheeo">
           <span class="store-name">Chrome, Brave, Edge, Opera, Vivaldi</span>
           <span class="store-for">Any Chromium browser on the desktop</span>
           <span class="btn primary when-live">Add to Chrome</span>
@@ -487,6 +487,6 @@ footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
 <script src="assets/voices.js?v=fae39c5c"></script>
 <script src="assets/demos.js?v=b015c39e"></script>
 <script src="assets/film.js?v=1a277964"></script>
-<script src="assets/home.js?v=ba256a77"></script>
+<script src="assets/home.js?v=648e041a"></script>
 </body>
 </html>

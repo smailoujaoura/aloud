@@ -155,6 +155,10 @@ p { margin: 0; }
 
 /* Store links are written for both states; `data-stores` on <body> says which one is true. */
 body[data-stores="soon"] .when-live, body[data-stores="live"] .when-soon { display: none !important; }
+/* A card whose store is still reviewing Aloud keeps its "Coming soon" while the others go live. */
+body[data-stores="live"] .store[data-soon] .when-soon { display: inline-block !important; }
+body[data-stores="live"] .store[data-soon] .when-live { display: none !important; }
+.store[data-soon] { cursor: default; }
 
 /* ---------- hero ---------- */
 .hero { padding-block: clamp(44px, 7vw, 92px) clamp(36px, 5vw, 64px); position: relative; }

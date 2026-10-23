@@ -10,6 +10,8 @@ reopening one tells nobody you are reading it.
 
 Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave, Opera).
 
+**Install:** [Chrome Web Store](https://chromewebstore.google.com/detail/ilnojbdjpnnlkjbmldpgbgckkkifheeo) · Firefox Add-ons (in review) · [Website](https://aloud.souj.dev)
+
 - **Extraction** — [Mozilla Readability](https://github.com/mozilla/readability) strips nav / ads
   and grabs the article text.
 - **Voices** — [Piper](https://github.com/rhasspy/piper) (fast, ~21–137 MB per voice: `medium` around 60 MB, `high` around 110),

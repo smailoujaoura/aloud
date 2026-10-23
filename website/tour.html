@@ -22,12 +22,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400..800;1,7..72,400..600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="assets/site.css?v=dc2458f8">
+<link rel="stylesheet" href="assets/site.css?v=709f0fb7">
 <style>footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }</style>
 </head>
-<!-- Before the store listings are live: data-stores="soon". Once they are: "live", and check the
-     three store URLs below against the real listings. -->
-<body data-stores="soon">
+<!-- data-stores="live" once any store lists Aloud; "soon" before. A store card still in review
+     carries data-soon: it says "Coming soon" and leads nowhere. -->
+<body data-stores="live">
 
 <header class="top">
   <div class="wrap">
@@ -456,25 +456,25 @@
         <p class="eyebrow">Your turn</p>
         <h2 class="when-live">Ready when you are.</h2>
         <h2 class="when-soon">Almost ready.</h2>
-        <p class="lede when-live">Install Aloud from your browser's store. It's free, and updates arrive by themselves.</p>
+        <p class="lede when-live">Install Aloud from your browser's store. It's free, and updates arrive by themselves.<!-- Remove once Firefox is live: --> The Firefox version is in review, and will be here soon.</p>
         <p class="lede when-soon">Aloud is in its final checks before the Firefox and Chrome add-on stores. It will be free, with every voice and every feature.</p>
       </div>
       <div class="stores">
-        <a class="store" data-store="firefox" href="https://addons.mozilla.org/firefox/addon/aloud/">
+        <a class="store" data-store="firefox" data-soon href="https://addons.mozilla.org/firefox/addon/aloud/">
           <span class="store-name">Firefox</span>
           <span class="store-for">Windows, macOS and Linux</span>
           <span class="btn primary when-live">Add to Firefox</span>
           <span class="soon when-soon">Coming soon</span>
           <span class="store-where">Firefox Add-ons</span>
         </a>
-        <a class="store" data-store="android" href="https://addons.mozilla.org/android/addon/aloud/">
+        <a class="store" data-store="android" data-soon href="https://addons.mozilla.org/android/addon/aloud/">
           <span class="store-name">Firefox for Android</span>
           <span class="store-for">Phones and tablets, with Piper voices</span>
           <span class="btn primary when-live">Add to Firefox for Android</span>
           <span class="soon when-soon">Coming soon</span>
           <span class="store-where">Firefox Add-ons</span>
         </a>
-        <a class="store" data-store="chrome" href="https://chromewebstore.google.com/detail/aloud/">
+        <a class="store" data-store="chrome" href="https://chromewebstore.google.com/detail/ilnojbdjpnnlkjbmldpgbgckkkifheeo">
           <span class="store-name">Chrome, Brave, Edge, Opera, Vivaldi</span>
           <span class="store-for">Any Chromium browser on the desktop</span>
           <span class="btn primary when-live">Add to Chrome</span>
@@ -722,17 +722,18 @@
 <script>
 (() => {
   // Once the stores are live: point the main button at this browser's store, and mark its card.
-  if (document.body.dataset.stores !== 'live') {
-    // Not listed yet: the cards say so, and lead nowhere.
-    for (const card of document.querySelectorAll('.store')) card.removeAttribute('href');
-    return;
-  }
+  // A store still reviewing Aloud: its card says so, and leads nowhere.
+  const live = document.body.dataset.stores === 'live';
+  for (const card of document.querySelectorAll('.store')) if (!live || card.hasAttribute('data-soon')) card.removeAttribute('href');
+  if (!live) return;
   const ua = navigator.userAgent;
   const store = /Firefox\//.test(ua) ? (/Android/.test(ua) ? 'android' : 'firefox')
     : /Chrome\//.test(ua) && !/Mobile/.test(ua) ? 'chrome' : null;
   if (!store) return;
   const card = document.querySelector('.store[data-store="' + store + '"]');
   card.classList.add('mine');
+  // This browser's store isn't listing it yet: the main button leads to the cards, which say so.
+  if (card.hasAttribute('data-soon')) return;
   let label = card.querySelector('.btn').textContent;
   if (store === 'chrome') {
     const name = navigator.brave ? 'Brave' : /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /Vivaldi/.test(ua) ? 'Vivaldi' : 'Chrome';
