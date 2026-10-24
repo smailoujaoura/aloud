@@ -401,6 +401,8 @@ td.best::before { content: "● "; color: var(--amber); }
 }
 a.store:hover { border-color: var(--rule-strong); background: var(--surface-2); }
 .store.mine { border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber); }
+.store-icons { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.store-icons img { width: 28px; height: 28px; display: block; }
 .store-name { font: 650 1.2rem/1.25 var(--display); }
 .store-for { color: var(--ink-muted); font-size: 0.95rem; }
 .store .btn { margin-top: 10px; }
