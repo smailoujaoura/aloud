@@ -1,4 +1,4 @@
-Browser logos from Simple Icons 16.34.0 (https://simpleicons.org), CC0-1.0, recoloured to each
-brand's colour. The logos are trademarks of their owners, used only to say which browsers Aloud
-runs on. phone.svg is Aloud's own. Microsoft Edge has no icon here: Microsoft had its logos
-removed from Simple Icons, so Edge is named in text.
+Browser logos in their own colours, from the browser-logos project (https://github.com/alrra/browser-logos),
+as published on npm: @browser-logos/chrome 2.0.0, chromium 2.0.1, edge 2.0.7, firefox 3.0.10,
+brave 3.0.13, opera 1.1.11, vivaldi 2.1.10. Each is a trademark of its owner, used only to say
+which browsers Aloud runs on. phone.svg is Aloud's own.

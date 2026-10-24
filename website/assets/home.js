@@ -512,11 +512,13 @@
   };
   const play = async () => {
     const mine = ++run;
+    idle = false;
     replay.hidden = true;
     page.innerHTML = original;
     notes.clear();
     editing = null;
     closeNote();
+    renderList();
     hideBar();
     const ph = (id) => page.querySelector(`[data-ph="${id}"]`);
     // 1. A passage, highlighted yellow.
@@ -550,8 +552,26 @@
     mark(pending, { color: '#2f9e44', underline: true });
     pointer.classList.remove('on');
     replay.hidden = false;
+    idle = true;
+    loopLater();
   };
-  const stopShow = () => { run++; pointer.classList.remove('on'); replay.hidden = false; };
+  const stopShow = () => { run++; idle = true; pointer.classList.remove('on'); replay.hidden = false; };
+
+  // It plays on a loop while it is in view: the finished page stays a few seconds, then it starts
+  // over. Off screen it rests; once a visitor clicks into it, it stops, so it never wipes their notes.
+  let idle = true;
+  let visible = false;
+  let looping = true;
+  let nextShow = 0;
+  const loopLater = () => {
+    clearTimeout(nextShow);
+    if (looping) nextShow = setTimeout(() => { if (visible && looping && idle) play(); }, 4000);
+  };
+  demo.addEventListener('pointerdown', (e) => {
+    if (!e.isTrusted || e.target.closest('#note-replay')) return;
+    looping = false;
+    clearTimeout(nextShow);
+  }, true);
 
   // ---- the note popover, as in the extension: colour, highlight or underline, a note, tags
   const done = document.getElementById('np-done');
@@ -642,13 +662,18 @@
     mark(pending, { color: b.dataset.style === 'underline' ? '#2f9e44' : b.dataset.c, underline: b.dataset.style === 'underline' });
   });
   done.addEventListener('click', (e) => { if (e.isTrusted) closeNote(); });
-  replay.addEventListener('click', () => { replay.hidden = true; play(); });
+  replay.addEventListener('click', () => { replay.hidden = true; looping = true; play(); });
 
   renderList();
-  // Played the first time it comes into view; never while it can't be seen.
-  let started = false;
+  // Played when it comes into view, and stopped when it leaves (to start over on the way back).
   new IntersectionObserver(([entry]) => {
-    if (entry.isIntersecting && !started) { started = true; setTimeout(play, 400); }
+    visible = entry.isIntersecting;
+    if (visible) {
+      if (looping && idle) { clearTimeout(nextShow); nextShow = setTimeout(() => { if (visible && idle) play(); }, 400); }
+    } else {
+      clearTimeout(nextShow);
+      if (!idle && looping) stopShow();
+    }
   }, { threshold: 0.5 }).observe(demo);
 })();
 
