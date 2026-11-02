@@ -19,6 +19,11 @@ Website-only and documentation changes are not listed: they never reach the exte
 - Chinese, Japanese, Thai and other languages written without spaces are highlighted word by
   word, instead of the whole sentence at once. ([#7](https://github.com/smailoujaoura/aloud/issues/7))
 
+### Changed
+- Pronunciation fixes can be limited to one language, so a fix for how English is read no longer
+  changes the same word in a French passage. **Hear it** speaks the fix in the voice that will
+  actually say it, instead of always your main voice. ([#5](https://github.com/smailoujaoura/aloud/issues/5))
+
 ## 1.0.0 (2026-10-23)
 
 First release, on the [Chrome Web Store](https://chromewebstore.google.com/detail/ilnojbdjpnnlkjbmldpgbgckkkifheeo)

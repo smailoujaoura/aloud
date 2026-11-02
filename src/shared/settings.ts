@@ -568,7 +568,12 @@ export function sanitizeSettings(raw: Settings): Settings {
     matchPageLanguage: true,
     barAutoHide: raw.barAutoHide === true,
     pronunciations: Array.isArray(raw.pronunciations)
-      ? raw.pronunciations.filter((r) => !!r && typeof r.from === 'string' && typeof r.to === 'string')
+      ? raw.pronunciations
+          .filter((r) => !!r && typeof r.from === 'string' && typeof r.to === 'string')
+          .map((r) => {
+            const { language, ...rest } = r;
+            return typeof language === 'string' && /^[a-z]{2,3}$/.test(language) ? { ...rest, language } : rest;
+          })
       : [],
     annotate: {
       ...DEFAULT_ANNOTATE,

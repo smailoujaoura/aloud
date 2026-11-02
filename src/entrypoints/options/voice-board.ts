@@ -111,6 +111,20 @@ export function regionName(tag: string): string {
   }
 }
 
+/** The voice that reads `language` (a primary code), as the board shows it; null when none is downloaded. */
+export function voiceReading(ctx: PanelContext, language: string): CandidateVoice | null {
+  const route = routeFor(language, {
+    auto: true,
+    manual: null,
+    saved: savedVoice(ctx),
+    preferences: ctx.settings.languageVoices,
+    installed: downloadedVoices(ctx),
+    skip: new Set<string>(),
+    other: ctx.settings.otherVoice,
+  });
+  return route.kind === 'voice' && route.reason !== 'missing' ? route.voice : null;
+}
+
 function savedVoice(ctx: PanelContext): CandidateVoice {
   const { settings, manifest } = ctx;
   const id = activeVoice(settings);

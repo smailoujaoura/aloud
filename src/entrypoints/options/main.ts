@@ -17,8 +17,8 @@ import { probeGpu, gpuProbeIfKnown } from '@/shared/gpu-probe';
 import { loadWorkerGpu } from '@/shared/backend-memory';
 import { probeWorkerGpu, type WorkerGpuResult } from './gpu-check';
 import { listVoices } from '@/shared/voice-catalog';
-import { languageName } from '@/shared/language-voice';
-import { OTHER_LANGUAGES } from './voice-board';
+import { languageName, primaryLanguage } from '@/shared/language-voice';
+import { OTHER_LANGUAGES, downloadedVoices, shortName, voiceReading } from './voice-board';
 import { cacheClear, cacheEntries, cacheUsageBytes, deleteModels, forgetRemovedEngines } from '@/engine/model-cache';
 import {
   DEFAULT_SETTINGS,
@@ -534,8 +534,23 @@ async function renderNow(): Promise<void> {
       settings = await setSettings({ pronunciations: rules.map((r) => ({ ...r })) });
       flashSaved('Pronunciation saved');
     },
-    speak: (text, onStatus) =>
-      playSynthesized(engineConfigFor(settings, { purpose: 'preview' }), onStatus, text),
+    // Each fix is heard in the voice that will say it: the one reading its language, or, for a
+    // fix in any language, the one reading the language its words look like.
+    languages: [...new Set(downloadedVoices(ctx).map((v) => primaryLanguage(v.language)).filter(Boolean))]
+      .map((code) => ({ code, name: languageName(code) }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    speak: async (text, language, onStatus) => {
+      const code = language || (await guessLanguage(text));
+      const voice = code ? voiceReading(ctx, code) : null;
+      const config = voice
+        ? engineConfigFor(settings, { engine: voice.engine, voice: voice.id, purpose: 'preview' })
+        : engineConfigFor(settings, { purpose: 'preview' });
+      return playSynthesized(config, onStatus, text);
+    },
+    speaker: (language) => {
+      const voice = language ? voiceReading(ctx, language) : null;
+      return voice ? shortName(voice.label) : '';
+    },
     speakDisabledReason: currentVoiceInstalled(manifest, sizes)
       ? undefined
       : 'Download your current voice first to hear fixes in it',
@@ -838,3 +853,14 @@ for (const a of document.querySelectorAll<HTMLAnchorElement>('a.feedback-link'))
   a.href = feedbackLink(browser.runtime.getManifest().version, import.meta.env.BROWSER);
 }
 void initLibrary({ show: (view) => showView(view, { push: true }), setCount: setNavCount });
+
+/** The language a few words look like, or '' when the browser can't tell. */
+async function guessLanguage(text: string): Promise<string> {
+  try {
+    const result = await browser.i18n.detectLanguage(text);
+    const top = result.languages?.[0];
+    return result.isReliable && top ? primaryLanguage(top.language) : '';
+  } catch {
+    return '';
+  }
+}

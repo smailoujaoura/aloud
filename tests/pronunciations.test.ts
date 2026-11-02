@@ -49,3 +49,25 @@ describe('applyPronunciations', () => {
     expect(applyPronunciations('Costs $5 (approx.)', [{ from: '(approx.)', to: 'roughly' }])).toBe('Costs $5 roughly');
   });
 });
+
+describe('a fix for one language', () => {
+  const rules = [
+    { from: 'Nguyen', to: 'Win', language: 'en' },
+    { from: 'GPU', to: 'G P U' },
+  ];
+
+  it('applies only in passages in that language (#5)', () => {
+    expect(applyPronunciations('Nguyen has a GPU', rules, 'en-GB')).toBe('Win has a G P U');
+    expect(applyPronunciations('Nguyen a un GPU', rules, 'fr')).toBe('Nguyen a un G P U');
+  });
+
+  it('a fix for every language applies even when the passage language is unknown', () => {
+    expect(applyPronunciations('Nguyen has a GPU', rules)).toBe('Nguyen has a G P U');
+  });
+
+  it('is kept when settings are saved, and a malformed language is dropped', async () => {
+    const { sanitizeSettings, DEFAULT_SETTINGS } = await import('@/shared/settings');
+    const saved = sanitizeSettings({ ...DEFAULT_SETTINGS, pronunciations: [{ from: 'a', to: 'b', language: 'fr' }, { from: 'c', to: 'd', language: 'French!' }] } as never);
+    expect(saved.pronunciations).toEqual([{ from: 'a', to: 'b', language: 'fr' }, { from: 'c', to: 'd' }]);
+  });
+});

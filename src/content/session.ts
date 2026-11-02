@@ -602,7 +602,7 @@ export class ReaderSession {
 
   /** Page text → spoken text for a voice speaking `language`. */
   private normalizeAs(text: string, language: string): string {
-    const fixed = applyPronunciations(text, this.settings.pronunciations);
+    const fixed = applyPronunciations(text, this.settings.pronunciations, language);
     return normalizeForSpeech(fixed, {
       // Not "read URLs" as a replacement *string*: passing the sentence itself put the whole
        // sentence in place of every address it contained ("Visit Visit https://…  now. now.").

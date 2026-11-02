@@ -1,8 +1,9 @@
 /**
  * The settings page's list of pronunciation fixes.
  *
- * Each row is one rule: what is written, how to say it, whether capitalisation matters, a button
- * to hear it in your current voice, and a button to remove it. Edits save as you type (after a
+ * Each row is one rule: what is written, how to say it, whether capitalisation matters, which
+ * language it is for, a button to hear it in the voice that reads that language, and a button to
+ * remove it. Edits save as you type (after a
  * short pause), so there is no Save button to forget — and a reader that is already running picks
  * the change up from its next sentence.
  */
@@ -14,8 +15,12 @@ import { previewButton } from './preview-button';
 export interface PronunciationEditorOptions {
   rules: readonly PronunciationRule[];
   save(rules: PronunciationRule[]): Promise<void>;
-  /** Speak `text` in the current voice. */
-  speak(text: string, onStatus: (s: PreviewStatus) => void): Promise<void>;
+  /** Speak `text` in the voice that reads `language` ('' : any language, so guessed from the words). */
+  speak(text: string, language: string, onStatus: (s: PreviewStatus) => void): Promise<void>;
+  /** The languages a rule can be limited to: those of the downloaded voices. */
+  languages: ReadonlyArray<{ code: string; name: string }>;
+  /** Who says a rule for `language`, for the hear button's tooltip. */
+  speaker?(language: string): string;
   /** Set when the current voice cannot speak yet — shown on every "Hear it" button. */
   speakDisabledReason?: string;
 }
@@ -101,12 +106,30 @@ export function renderPronunciationEditor(host: HTMLElement, opts: Pronunciation
       saveNow();
     });
 
+    // Which passages it applies to, and so which voice says it.
+    const language = el(document, 'select', { class: 'pron-lang', 'aria-label': 'Language this fix is for', title: 'Only in passages in this language, or in every language' });
+    const choices = [...opts.languages];
+    if (rule.language && !choices.some((c) => c.code === rule.language)) choices.push({ code: rule.language, name: rule.language });
+    language.append(el(document, 'option', { value: '' }, 'Any language'));
+    for (const c of choices) language.append(el(document, 'option', { value: c.code }, c.name));
+    language.value = rule.language ?? '';
+
     const hear = previewButton(
-      (onStatus) => opts.speak(rule.to.trim() || rule.from.trim() || 'Nothing to say yet.', onStatus),
+      (onStatus) => opts.speak(rule.to.trim() || rule.from.trim() || 'Nothing to say yet.', rule.language ?? '', onStatus),
       { disabledReason: opts.speakDisabledReason },
     );
     hear.classList.add('btn-sm');
-    hear.title = opts.speakDisabledReason ?? 'Hear how it will be said';
+    const hearTitle = (): void => {
+      const who = opts.speaker?.(rule.language ?? '');
+      hear.title = opts.speakDisabledReason ?? (who ? `Hear how ${who} will say it` : 'Hear how it will be said');
+    };
+    hearTitle();
+    language.addEventListener('change', () => {
+      if (language.value) rule.language = language.value;
+      else delete rule.language;
+      hearTitle();
+      saveNow();
+    });
 
     const remove = el(document, 'button', { type: 'button', class: 'ghost btn-sm pron-remove', 'aria-label': `Remove ${rule.from || 'this fix'}` }, 'Remove');
     remove.addEventListener('click', () => {
@@ -115,7 +138,7 @@ export function renderPronunciationEditor(host: HTMLElement, opts: Pronunciation
       redraw();
     });
 
-    item.append(from, el(document, 'span', { class: 'pron-arrow', 'aria-hidden': 'true' }, '→'), to, caseToggle, hear, remove);
+    item.append(from, el(document, 'span', { class: 'pron-arrow', 'aria-hidden': 'true' }, '→'), to, caseToggle, language, hear, remove);
     return item;
   }
 

@@ -12,6 +12,8 @@
  * across a line in the source.
  */
 
+import { primaryLanguage } from '@/shared/language-voice';
+
 export interface PronunciationRule {
   /** As written on the page. */
   from: string;
@@ -19,6 +21,11 @@ export interface PronunciationRule {
   to: string;
   /** Match capitalisation exactly — for words that are only special in one case ("US" vs "us"). */
   matchCase?: boolean;
+  /**
+   * Only in passages in this language (a primary code, "fr"); absent: in every language. A fix
+   * for how an English voice says a word shouldn't change that word in a French passage.
+   */
+  language?: string;
 }
 
 const WORD_CHAR = /[\p{L}\p{N}_]/u;
@@ -57,10 +64,14 @@ function replaceWith(text: string, rules: PronunciationRule[], matchCase: boolea
 }
 
 /** Apply every usable rule to `text`. Case-sensitive rules run first, so they take precedence. */
-export function applyPronunciations(text: string, rules: readonly PronunciationRule[] | undefined): string {
+export function applyPronunciations(text: string, rules: readonly PronunciationRule[] | undefined, language = ''): string {
   // A rule with nothing to say is almost always one still being typed; applying it would delete
-  // the word from speech mid-edit, so it waits until it has a reading.
-  const usable = (rules ?? []).filter((r) => squash(r.from).length > 0 && r.to.trim().length > 0);
+  // the word from speech mid-edit, so it waits until it has a reading. A rule for one language
+  // applies only to passages known to be in it.
+  const lang = primaryLanguage(language);
+  const usable = (rules ?? []).filter(
+    (r) => squash(r.from).length > 0 && r.to.trim().length > 0 && (!r.language || primaryLanguage(r.language) === lang),
+  );
   if (usable.length === 0) return text;
   const exact = usable.filter((r) => r.matchCase);
   const loose = usable.filter((r) => !r.matchCase);
