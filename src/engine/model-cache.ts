@@ -102,6 +102,11 @@ export async function cacheGet(key: string): Promise<FileRecord | undefined> {
 /**
  * Store a file; resolves whether it was stored. Playback tolerates a failed write — it has the
  * bytes in memory already — but a Download button must not (see `fetchModelFile`'s `mustStore`).
+ *
+ * A write that fails changes nothing else. It used to make room by deleting the oldest file and
+ * trying again, and when that failed too, an installed voice had lost a file and no longer
+ * started offline, for a download that was not saved either. Room is made by the reader, who
+ * deletes whole voices in Settings.
  */
 export async function cachePut(key: string, buf: ArrayBuffer, contentType: string): Promise<boolean> {
   const rec: FileRecord = { key, buf, size: buf.byteLength, contentType, storedAt: Date.now() };
@@ -109,18 +114,6 @@ export async function cachePut(key: string, buf: ArrayBuffer, contentType: strin
     await tx('readwrite', (s) => s.put(rec));
     return true;
   } catch (err) {
-    // QuotaExceededError etc. — try evicting the oldest entry once, then give up quietly.
-    try {
-      const keys = await cacheEntries();
-      const oldest = keys.sort((a, b) => a.storedAt - b.storedAt)[0];
-      if (oldest && oldest.key !== key) {
-        await cacheDelete(oldest.key);
-        await tx('readwrite', (s) => s.put(rec));
-        return true;
-      }
-    } catch {
-      /* noop */
-    }
     console.warn('[aloud] model cache put failed:', err);
     return false;
   }
@@ -381,7 +374,7 @@ export async function fetchModelFile(
     opts.onProgress?.({ file: label, loaded: bytes.byteLength, total: bytes.byteLength, phase: 'cache' });
     const stored = await cachePut(url, bytes.buffer.slice(0), contentType);
     if (!stored && opts.mustStore) {
-      throw new Error('The download could not be saved on this device — its storage may be full or blocked');
+      throw new Error('The download could not be saved on this device. Its storage may be full: delete a voice you do not use in Settings, then try again');
     }
     return bytes;
   }), signal);

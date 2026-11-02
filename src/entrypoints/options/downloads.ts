@@ -266,7 +266,7 @@ export async function downloadPiperVoice(entry: PiperVoiceEntry, progress: Progr
   }
   // Both said they were stored; make sure the cache agrees before the row says "ready".
   const [config, voice] = await Promise.all([cacheHas(entry.config), cacheHas(entry.onnx)]);
-  if (!config || !voice) throw new Error('The voice downloaded but could not be saved on this device — its storage may be full or blocked');
+  if (!config || !voice) throw new Error('The voice downloaded but could not be saved on this device. Its storage may be full: delete a voice you do not use, then try again');
 }
 
 /** Which of `voices` have no file on this device yet. */
@@ -500,7 +500,7 @@ export function downloadViaWorker(
             finish(
               sharedModelInstalled(config.engine, sizes)
                 ? undefined
-                : new Error('The model downloaded but could not be saved on this device — its storage may be full or blocked'),
+                : new Error('The model downloaded but could not be saved on this device. Its storage may be full: delete a voice you do not use, then try again'),
             ),
           )
           .catch((err: unknown) => finish(err instanceof Error ? err : new Error(String(err))));
