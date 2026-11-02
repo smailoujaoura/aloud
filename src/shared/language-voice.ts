@@ -19,6 +19,8 @@ export interface CandidateVoice {
   label: string;
   /** BCP-47-ish tag: `fr-FR`, `en_GB`, `en`. */
   language: string;
+  /** Spoken with mistakes (Phonon's 31M model outside English): any other voice comes first. */
+  experimental?: boolean;
 }
 
 /** `fr-FR` → `fr`, `en_GB` → `en`, `'' ` → `''`. */
@@ -82,13 +84,14 @@ export function pickVoiceForLanguage(
   // Supertonic first, even before the current engine: asked for "Supertonic before Kokoro,
   // everywhere". The saved voice still reads its own language, and a voice chosen for a language
   // still wins (routeFor) — this only decides who reads a language neither covers.
-  // Phonon reads English first of all; its other languages are experimental, read with mistakes,
-  // so every other engine's voice for them comes before it.
+  // Phonon first: English always, and French, German, Spanish and Portuguese once its
+  // multilingual model is here. Without it those are experimental, read with mistakes, so every
+  // other engine's voice for them comes before it.
   // Its characters (a pirate, a demon) only read when chosen: they are its voices tagged `en`
   // with no region (models.json; the narrators are en-US or en-GB), and as an exact match for
   // "en" they used to outrank every narrator.
   const phonon = (v: CandidateVoice): number =>
-    v.engine !== 'phonon' ? 0 : want !== 'en' ? -5000 : !/-/.test(fullTag(v.language)) ? -3000 : 2000;
+    v.engine !== 'phonon' ? 0 : v.experimental ? -5000 : !/-/.test(fullTag(v.language)) ? -3000 : 2000;
   const score = (v: CandidateVoice): number =>
     phonon(v) +
     (v.engine === 'supertonic' ? 1000 : 0) +

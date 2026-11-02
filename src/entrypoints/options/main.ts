@@ -59,6 +59,7 @@ import { initLibrary, refitNotes } from '@/library/app';
 import { answerTabQueries } from '@/shared/own-tab';
 import { downloads } from './download-queue';
 import { announceModelsChanged, onModelsChanged } from './downloads';
+import { withPhononPack } from '@/shared/phonon-voices';
 
 // First, before anything here can fail: lets the background find this tab without the "tabs"
 // permission (shared/own-tab.ts). Registered late, an earlier error meant a new tab every time.
@@ -404,8 +405,9 @@ async function renderNow(): Promise<void> {
   settings = await getSettings();
   applyTheme(document, settings.theme);
   for (const control of themeSwitches) control.setTheme(settings.theme);
-  const manifest = withServerVoices(await loadManifest(), settings);
   const sizes = await readCacheSizes();
+  // Phonon's multilingual model here: its French, German, Spanish and Portuguese are no longer experimental.
+  const manifest = withPhononPack(withServerVoices(await loadManifest(), settings), sizes);
 
   $<HTMLInputElement>('speed').value = String(settings.speed);
   $('speedOut').textContent = speedLabel(settings.speed);

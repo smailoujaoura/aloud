@@ -27,6 +27,7 @@ import { voicePortrait } from '@/ui/voice-portraits';
 import { shortPiperLabel } from '@/shared/voice-catalog';
 import { previewFor } from './preview-button';
 import type { PanelContext } from './voice-panels';
+import { phononExperimental } from '@/shared/phonon-voices';
 
 /** The board's last row: every language without voices of its own. */
 export const OTHER_LANGUAGES = '*';
@@ -60,7 +61,10 @@ export function downloadedVoices(ctx: Pick<PanelContext, 'manifest' | 'sizes'>):
     if (piperDownloaded(entry, ctx.sizes)) out.push({ engine: 'piper', id, label: shortPiperLabel(entry.label), language: entry.language });
   }
   if (sharedModelInstalled('phonon', ctx.sizes)) {
-    for (const [id, v] of Object.entries(ctx.manifest.phonon?.voices ?? {})) out.push({ engine: 'phonon', id, label: v.label, language: v.language });
+    const experimental = ctx.manifest.phonon?.experimentalLanguages;
+    for (const [id, v] of Object.entries(ctx.manifest.phonon?.voices ?? {})) {
+      out.push({ engine: 'phonon', id, label: v.label, language: v.language, ...(phononExperimental(v.language, experimental) ? { experimental: true } : {}) });
+    }
   }
   // Supertonic before Kokoro, as everywhere engines are listed.
   if (sharedModelInstalled('supertonic', ctx.sizes)) {
@@ -75,11 +79,11 @@ export function downloadedVoices(ctx: Pick<PanelContext, 'manifest' | 'sizes'>):
 
 /**
  * Does this voice give its language a row on the board? Not Supertonic's (each reads 31
- * languages) nor Phonon's experimental ones (installed with Phonon on every computer).
+ * languages) nor Phonon's experimental ones (installed with Phonon on every computer; once its
+ * multilingual model is downloaded, on purpose, they are no longer experimental and do).
  */
 function ownsRow(v: CandidateVoice): boolean {
-  if (v.engine === 'supertonic') return false;
-  return !(v.engine === 'phonon' && primaryLanguage(v.language) !== 'en');
+  return v.engine !== 'supertonic' && !v.experimental;
 }
 
 /** The flags bundled in `public/flags/` (flag-icons, MIT): the countries Aloud's voices name. */

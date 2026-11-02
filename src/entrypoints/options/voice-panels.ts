@@ -21,7 +21,7 @@ import { el } from '@/shared/dom';
 import { humanBytes } from '@/shared/log';
 import { capabilities } from '@/shared/browser-env';
 import { downloadSize, engineInfo, kokoroVoiceUrl, phononVoiceUrl, supertonicStyleUrl, listEngines, type EngineInfo } from '@/shared/engine-catalog';
-import { phononExperimental } from '@/shared/phonon-voices';
+import { phononExperimental, phononPackInstalled, phononPackUrls } from '@/shared/phonon-voices';
 import { isEnglish, listVoices, shortPiperLabel } from '@/shared/voice-catalog';
 import { serverAddressProblem, serverBase, serverHeaders, serverOrigin, voicesFrom, voicesUrl } from '@/shared/server-voices';
 import { getServerKey, setServerKey } from '@/shared/server-key';
@@ -32,11 +32,12 @@ import { supertonicVoices } from '@/shared/supertonic-voices';
 import { renderVoiceBoard } from './voice-board';
 import { cacheClear, cacheDelete, deleteModels } from '@/engine/model-cache';
 import { activeVoice, type EngineId, type ServerSettings, type Settings } from '@/shared/settings';
-import type { ModelManifest, PiperVoiceEntry } from '@/engine/engines/types';
+import type { ModelManifest, PhononPack, PiperVoiceEntry } from '@/engine/engines/types';
 
 import {
   RowProgress,
   announceModelsChanged,
+  downloadPhononPack,
   downloadPiperVoice,
   downloadTray,
   downloadSharedModel,
@@ -655,6 +656,9 @@ function sharedPanel(engine: SharedEngine, ctx: PanelContext, again: () => void)
   const bytes = info.cacheHint ? sharedModelBytes(ctx.sizes, info.cacheHint) : 0;
   const downloaded = sharedModelInstalled(engine, ctx.sizes);
   panel.append(engineIntro(info, readsOnGpu(ctx.settings)), modelCard(engine, { downloaded, bytes }, ctx));
+  // Phonon's own model reads English; its multilingual one reads the rest well (phonon-voices.ts).
+  const pack = engine === 'phonon' ? ctx.manifest.phonon?.multilingual : undefined;
+  if (pack && downloaded) panel.append(phononPackCard(pack, ctx));
 
   const all = sharedVoices(engine, ctx.manifest);
 
@@ -904,6 +908,59 @@ async function askForServer(base: string): Promise<boolean> {
   return browser.permissions.request({ origins });
 }
 
+/**
+ * Phonon in French, German, Spanish and Portuguese: Gradium's multilingual model, downloaded on
+ * purpose (it is under its own licence, CC BY-NC 4.0, said here before the download).
+ */
+function phononPackCard(pack: PhononPack, ctx: PanelContext): HTMLElement {
+  const installed = phononPackInstalled(ctx.manifest, ctx.sizes);
+  const size = humanBytes(pack.sizeBytes);
+  const card = el(document, 'div', { class: `model-card${installed ? ' is-installed' : ''}` });
+  const text = el(document, 'div', { class: 'mc-text' });
+  text.append(
+    el(document, 'b', {}, installed ? 'French, German, Spanish and Portuguese are on this device' : 'Phonon in French, German, Spanish and Portuguese'),
+    el(document, 'span', { class: 'vi-meta' }, `${size} · ${pack.license}`),
+  );
+  if (!installed) {
+    text.append(
+      el(document, 'span', { class: 'vi-meta' }, 'Phonon’s own model was made for English and reads these four with mistakes. Gradium’s multilingual model reads them well.'),
+    );
+  }
+  const progress = new RowProgress();
+  const btn = el(document, 'button', { type: 'button', class: installed ? 'mc-delete' : 'primary' }, installed ? 'Delete from this device' : `Download ${size}`);
+  const key = 'model:phonon-languages';
+  const idle = btn.textContent ?? '';
+  btn.addEventListener('click', () => {
+    if (!installed) {
+      downloads.enqueue(key, 'Phonon languages', (p, signal) => downloadPhononPack(pack, p, signal)).then(
+        async () => {
+          announceModelsChanged();
+          ctx.flashSaved('Phonon now reads French, German, Spanish and Portuguese');
+          await ctx.refresh();
+        },
+        (err: unknown) => {
+          if (err instanceof DownloadCancelled) ctx.flashSaved('Phonon languages: download cancelled');
+        },
+      );
+      return;
+    }
+    void runModelAction(btn, async () => {
+      try {
+        await deleteModels(() => Promise.all(Object.values(phononPackUrls(pack)).map((url) => cacheDelete(url))).then(() => undefined));
+        announceModelsChanged();
+        ctx.flashSaved('Phonon languages deleted');
+        await ctx.refresh();
+      } catch (err) {
+        ctx.flashError(err instanceof Error ? err.message : String(err));
+        btn.disabled = false;
+      }
+    });
+  });
+  if (!installed) followDownload(key, progress, btn, idle);
+  card.append(text, btn, progress.wrap, progress.msg);
+  return card;
+}
+
 /** Models whose download this page has finished (or tried to): once per page, never in a loop. */
 const finishedOnce = new Set<string>();
 
@@ -984,7 +1041,12 @@ function modelCard(
     }
     void runModelAction(btn, async () => {
       try {
-        await deleteModels(() => cacheClear(info.cacheHint));
+        await deleteModels(async () => {
+          await cacheClear(info.cacheHint);
+          // Phonon's multilingual model goes with it: it reads with Phonon's voices.
+          const pack = engine === 'phonon' ? ctx.manifest.phonon?.multilingual : undefined;
+          if (pack) await Promise.all(Object.values(phononPackUrls(pack)).map((url) => cacheDelete(url)));
+        });
         announceModelsChanged();
         ctx.flashSaved(`${info.name} deleted`);
         await ctx.refresh();

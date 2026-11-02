@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import manifest from '../public/models.json';
-import { phononExperimental, phononLanguage } from '@/shared/phonon-voices';
+import { phononExperimental, phononLanguage, phononPackInstalled, phononPackUrls, withPhononPack } from '@/shared/phonon-voices';
 import { pickVoiceForLanguage } from '@/shared/language-voice';
 import { voiceKeyFor } from '@/shared/settings';
 import { listVoices } from '@/shared/voice-catalog';
@@ -43,7 +43,8 @@ describe('Phonon voices', () => {
 
 describe('who reads a language, with Phonon installed', () => {
   const zoey = { engine: 'phonon' as const, id: 'NbpkqMVS3CJeq2j8', label: 'Zoey', language: 'en-US' };
-  const noemie = { engine: 'phonon' as const, id: 'FXxJ9mANRq6BCTX5', label: 'Noémie', language: 'fr-FR' };
+  // Without the multilingual model: experimental, as the catalogue marks her (withPhononPack).
+  const noemie = { engine: 'phonon' as const, id: 'FXxJ9mANRq6BCTX5', label: 'Noémie', language: 'fr-FR', experimental: true };
   const kokoroEn = { engine: 'kokoro' as const, id: 'af_heart', label: 'Heart', language: 'en-us' };
   const supertonicFr = { engine: 'supertonic' as const, id: 'F1@fr', label: 'Female 1', language: 'fr' };
   const piperFr = { engine: 'piper' as const, id: 'fr_FR-siwis-medium', label: 'Siwis', language: 'fr_FR' };
@@ -84,5 +85,41 @@ describe('Phonon in the voice menus', () => {
     const list = listVoices('phonon', m);
     expect(list.find((v) => v.id === 'FXxJ9mANRq6BCTX5')?.label).toBe('Noémie · female · experimental');
     expect(list.find((v) => v.id === 'NbpkqMVS3CJeq2j8')?.label).toBe('Zoey · female');
+  });
+});
+
+describe("Phonon's multilingual model", () => {
+  const pack = {
+    modelId: 'gradium/phonon-40m-multilingual',
+    license: 'CC BY-NC 4.0: non-commercial use only',
+    base: 'https://huggingface.co/someone/phonon-40m-multilingual/resolve/abc',
+    files: { weights: 'model.q8.gguf', tokenizer: 'tokenizer.json', config: 'config.json' },
+    sha256: { weights: 'w', tokenizer: 't', config: 'c' },
+    sizeBytes: 74835991,
+    languages: ['fr', 'de', 'es', 'pt'],
+  };
+  const withPack = { ...m, phonon: { ...m.phonon!, multilingual: pack } } as ModelManifest;
+  const here = new Map(Object.values(phononPackUrls(pack)).map((url) => [url, 1000]));
+
+  it('is installed only with all three files', () => {
+    expect(phononPackInstalled(withPack, here)).toBe(true);
+    expect(phononPackInstalled(withPack, new Map([[phononPackUrls(pack).weights, 1000]]))).toBe(false);
+    expect(phononPackInstalled(m, here)).toBe(false);
+  });
+
+  it('here, its languages are no longer experimental, in every list', () => {
+    const read = withPhononPack(withPack, here);
+    expect(read.phonon!.experimentalLanguages).toEqual([]);
+    expect(listVoices('phonon', read).find((v) => v.id === 'FXxJ9mANRq6BCTX5')?.label).toBe('Noémie · female');
+    // Not here: as before.
+    expect(withPhononPack(withPack, new Map())).toBe(withPack);
+    expect(listVoices('phonon', withPack).find((v) => v.id === 'FXxJ9mANRq6BCTX5')?.experimental).toBe(true);
+  });
+
+  it('here, Phonon reads French first, as it does English', () => {
+    const noemieGood = { engine: 'phonon' as const, id: 'FXxJ9mANRq6BCTX5', label: 'Noémie', language: 'fr-FR' };
+    const piperFr = { engine: 'piper' as const, id: 'fr_FR-siwis-medium', label: 'Siwis', language: 'fr_FR' };
+    const supertonicFr = { engine: 'supertonic' as const, id: 'F1@fr', label: 'Female 1', language: 'fr' };
+    expect(pickVoiceForLanguage('fr', null, [piperFr, supertonicFr, noemieGood])?.id).toBe('FXxJ9mANRq6BCTX5');
   });
 });

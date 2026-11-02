@@ -17,14 +17,17 @@
  * estimates them, as for Supertonic.
  *
  * The model was trained on English. Its French, Spanish, German and Portuguese voices speak those
- * languages understandably but with mistakes, so the lists mark them experimental. The runtime
- * fixes its text normalisation (numbers, dates) when it loads, so each language is its own
- * loaded copy; the two most recent stay loaded, for pages that switch back and forth.
+ * languages understandably but with mistakes, so the lists mark them experimental, unless the
+ * reader downloaded Gradium's 40m multilingual model (models.json `phonon.multilingual`): those
+ * languages are then read with it. Only once it is here, from Settings: it is never fetched by
+ * reading, being an opt-in under its own licence (CC BY-NC 4.0). The runtime fixes its text
+ * normalisation (numbers, dates) when it loads, so each language is its own loaded copy; the two
+ * most recent stay loaded, for pages that switch back and forth.
  */
-import { fetchModelFile } from '@/engine/model-cache';
+import { cacheHas, fetchModelFile } from '@/engine/model-cache';
 import { assetUrl } from '@/engine/runtime-env';
 import { phononVoiceUrl } from '@/shared/engine-catalog';
-import { phononLanguage, type PhononLanguage } from '@/shared/phonon-voices';
+import { phononLanguage, phononPackUrls, type PhononLanguage } from '@/shared/phonon-voices';
 import type { InitContext, ModelManifest, PhononManifest, SynthEngine, SynthResult } from './types';
 
 /** The runtime's surface that this engine uses (vendor/phonon/index.d.ts). */
@@ -155,7 +158,10 @@ export class PhononEngine implements SynthEngine {
   sampleRate = 24000;
 
   private module: PhononModule | null = null;
+  /** The 31M model's files. */
   private files: ModelFiles | null = null;
+  /** The multilingual model's, once a language it reads is: loaded from the cache, never fetched. */
+  private packFiles: Promise<ModelFiles | null> | null = null;
   /** Loaded copies of the model, by language, least recently used first. */
   private readonly loaded = new Map<PhononLanguage, Promise<PhononRuntime>>();
   /** Voices each loaded copy has been given. */
@@ -208,6 +214,35 @@ export class PhononEngine implements SynthEngine {
     this.voicesOf.clear();
     this.files?.dispose();
     this.files = null;
+    void this.packFiles?.then((f) => f?.dispose());
+    this.packFiles = null;
+  }
+
+  /**
+   * The files of the model that reads `lang`: the multilingual one where it reads `lang` and is on
+   * this device, else the 31M one. Downloaded in Settings only: here a file missing from the cache
+   * means "not downloaded", and the 31M model reads instead.
+   */
+  private async filesFor(lang: PhononLanguage): Promise<ModelFiles> {
+    const pack = this.m.multilingual;
+    if (pack?.languages.includes(lang)) {
+      this.packFiles ??= (async () => {
+        const urls = phononPackUrls(pack);
+        if (!(await cacheHas(urls.weights)) || !(await cacheHas(urls.tokenizer)) || !(await cacheHas(urls.config))) return null;
+        const [weights, tokenizer, config] = await Promise.all([
+          fetchModelFile(urls.weights, { sha256: pack.sha256.weights, label: 'Phonon languages model' }),
+          fetchModelFile(urls.tokenizer, { sha256: pack.sha256.tokenizer, label: 'tokenizer' }),
+          fetchModelFile(urls.config, { sha256: pack.sha256.config, label: 'config' }),
+        ]);
+        return ModelFiles.from({ weights, tokenizer, config });
+      })().catch(() => null);
+      const files = await this.packFiles;
+      // Not here (or unreadable): asked again next time, when it may have been downloaded.
+      if (!files) this.packFiles = null;
+      else return files;
+    }
+    if (!this.files) throw new Error('Phonon engine not initialised');
+    return this.files;
   }
 
   private languageOf(voice: string): string {
@@ -225,14 +260,13 @@ export class PhononEngine implements SynthEngine {
     }
     const module = this.module;
     if (!module || !this.files) throw new Error('Phonon engine not initialised');
-    const cached = this.files.cached;
-    const loading = this.files.use((files) => module.PhononTTS.load({
+    const loading = this.filesFor(lang).then((checkpoint) => checkpoint.use((files) => module.PhononTTS.load({
       lang,
       quant: 'q8',
       model: { weights: { q8: files.weights }, tokenizer: files.tokenizer, config: files.config, voices: {} },
       // Its Cache Storage only where the files were put there (ModelFiles): reading them, it finds
       // every one and stores nothing. With `blob:` addresses it would copy each back into it.
-      cache: cached,
+      cache: checkpoint.cached,
       // Threads need a cross-origin-isolated page, which an extension worker is not.
       threads: 1,
       // The measured path (see the top of this file); more speed comes from more workers.
@@ -240,7 +274,7 @@ export class PhononEngine implements SynthEngine {
       workerUrl: assetUrl('vendor/phonon/worker.js'),
       wasmUrl: assetUrl('vendor/phonon/wasm/phonon_tts_bg.wasm'),
       simdWasmUrl: assetUrl('vendor/phonon/wasm/phonon_tts_simd_bg.wasm'),
-    }));
+    })));
     this.loaded.set(lang, loading);
     loading.catch(() => this.loaded.delete(lang));
     while (this.loaded.size > LOADED_LANGUAGES) {

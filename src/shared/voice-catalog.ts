@@ -21,6 +21,8 @@ export interface VoiceOption {
   label: string;
   /** Heading to group under — the language for Piper and Kokoro, which are multilingual. */
   group: string;
+  /** Spoken with mistakes: Phonon's 31M model in a language other than English (phonon-voices.ts). */
+  experimental?: boolean;
 }
 
 /** Every voice the engine defines, whether or not its files are downloaded yet. */
@@ -41,11 +43,10 @@ export function listVoices(engine: EngineId, manifest: ModelManifest): VoiceOpti
       }));
     case 'phonon':
       // Its French, Spanish, German and Portuguese are spoken with mistakes: said wherever it is picked.
-      return Object.entries(manifest.phonon?.voices ?? {}).map(([id, v]) => ({
-        id,
-        label: `${v.label} · ${v.gender}${phononExperimental(v.language, manifest.phonon?.experimentalLanguages) ? ' · experimental' : ''}`,
-        group: v.language,
-      }));
+      return Object.entries(manifest.phonon?.voices ?? {}).map(([id, v]) => {
+        const experimental = phononExperimental(v.language, manifest.phonon?.experimentalLanguages);
+        return { id, label: `${v.label} · ${v.gender}${experimental ? ' · experimental' : ''}`, group: v.language, ...(experimental ? { experimental } : {}) };
+      });
     case 'server':
       // As the server names them; Kokoro's names say their language (shared/server-voices.ts).
       return (manifest.server?.voices ?? []).map((id) => ({ id, label: id, group: serverVoiceLanguage(id) }));

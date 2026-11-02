@@ -1456,7 +1456,7 @@ export class ReaderSession {
       await Promise.all(
         ENGINE_IDS.map(async (engine) =>
           (await this.installedVoices(engine)).map(
-            (v): CandidateVoice => ({ engine, id: v.id, label: v.label, language: voiceLanguage(engine, v.id, manifest) }),
+            (v): CandidateVoice => ({ engine, id: v.id, label: v.label, language: voiceLanguage(engine, v.id, manifest), ...(v.experimental ? { experimental: true } : {}) }),
           ),
         ),
       )
