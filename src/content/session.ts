@@ -29,6 +29,7 @@ import { CONTROL_HOST_ID, ControlBar, type BarVoice, type ExportState, type Lang
 import { voicePortrait } from '@/ui/voice-portraits';
 import type { EngineConfig, WordTiming } from '@/engine/protocol';
 import type { ModelManifest } from '@/engine/engines/types';
+import { adoptFormerKey } from '@/shared/former-key';
 import { DEFAULT_SETTINGS, getSettings, setSettings, activeVoice, voiceKeyFor, type EngineId, type ReaderKeys, type Settings, type VoiceRef } from '@/shared/settings';
 import { claimReaderKeys } from '@/shared/reader-keys';
 import { ENGINE_IDS, engineInfo, supertonicStepsFor } from '@/shared/engine-catalog';
@@ -136,6 +137,8 @@ export interface KnownArticle {
    * reader supplies its own.
    */
   key?: string;
+  /** What `key` used to be for this document: what was saved under it moves over (shared/former-key.ts). */
+  formerKey?: string;
   /**
    * A web page saved for later (the reading queue), not a PDF: what its site's rules would not
    * read was marked when it was saved (content/skip-rules.ts: markUnread), and is skipped here
@@ -379,6 +382,9 @@ export class ReaderSession {
     }
 
     this.docKey = this.knownArticle?.key ?? documentKey(location.href);
+    const former = this.knownArticle?.formerKey;
+    if (former) await adoptFormerKey(former, this.docKey, this.playlist.map((p) => p.spokenText), this.docSource().title);
+    if (superseded()) return;
     await this.maybeResume();
     if (superseded()) return;
     await this.matchVoiceToPage();

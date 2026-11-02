@@ -42,6 +42,10 @@ Website-only and documentation changes are not listed: they never reach the exte
   leaves work running in the background of the tab.
 - PDFs whose pages are turned sideways in the file and turned back for display are read,
   instead of being reported as scans with no text.
+- Two different PDFs with the same file name and number of pages no longer share one place in
+  History and one reading position. A PDF is now recognised by its text, so a renamed copy, or
+  the same file saved with your highlights, still picks up where you left off. What was saved
+  before moves over the first time you open each PDF again.
 - Short bits of text in another language, like a site's English "Learn more" under a Spanish
   paragraph, are read in their own language instead of the language around them, when their
   words belong to only one language. ([#2](https://github.com/smailoujaoura/aloud/issues/2))

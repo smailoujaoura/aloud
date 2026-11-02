@@ -26,6 +26,7 @@ import { MarkEditor, type EditorPage } from '@/pdf/annotations/editor';
 import { importAnnotations, type Mark } from '@/pdf/annotations/model';
 import { withoutMarks, writeMarks } from '@/pdf/annotations/pdf-writer';
 import { hashBytes, loadMarks } from '@/pdf/annotations/store';
+import { pdfTextKey } from '@/shared/former-key';
 import { MarkSync, unsettledSyncs } from '@/pdf/annotations/sync';
 import { canOpenWithHandle, pickPdfWithHandle, saveFile, saveMode } from '@/pdf/annotations/save-file';
 import { takePdf } from '@/pdf/handoff';
@@ -567,6 +568,8 @@ async function present(
   );
 
   // From here on it is an ordinary article, and the ordinary reader handles it.
+  const article = await knownArticle(doc, name);
+  if (stale()) return;
   await session?.dispose();
   if (stale()) return;
   session = new ReaderSession();
@@ -574,7 +577,7 @@ async function present(
   // A title lifted from the first page of a PDF with no real title can be a whole paragraph;
   // in the Library the file name says more.
   const libraryTitle = doc.title.length > 90 ? name.replace(/\.pdf$/i, '') : doc.title;
-  await session.begin('article', { knownArticle: knownArticle(doc, name), source: { title: libraryTitle, site: name, reopen } }).catch((err) =>
+  await session.begin('article', { knownArticle: article, source: { title: libraryTitle, site: name, reopen } }).catch((err) =>
     log.error('[pdf] reader failed to start:', err),
   );
 }
@@ -717,17 +720,21 @@ async function closeEditor(): Promise<void> {
  * from that. Readability looking at the result could only disagree — and in the page view it
  * would be looking at absolutely-positioned transparent lines, which is not what it is for.
  */
-function knownArticle(doc: LoadedPdf, name: string): KnownArticle {
+async function knownArticle(doc: LoadedPdf, name: string): Promise<KnownArticle> {
   const root = $('article');
+  // Must match what is on the page, or alignment hunts for a title that was never rendered.
+  const text = [...(titleIsInBody(doc.title, doc.blocks) ? [] : [doc.title]), ...doc.blocks.map((b) => b.text)].join('\n');
   return {
     root,
     title: doc.title,
-    // Must match what is on the page, or alignment hunts for a title that was never rendered.
-    text: [...(titleIsInBody(doc.title, doc.blocks) ? [] : [doc.title]), ...doc.blocks.map((b) => b.text)].join('\n'),
+    text,
     lang: document.documentElement.lang || 'en',
-    // This page's own URL carries a one-off job id, so it cannot identify the document. The file
-    // name plus page count does, well enough to resume the same report opened again tomorrow.
-    key: `pdf:${name}:${doc.pageCount}`,
+    // This page's own URL carries a one-off job id, so it cannot identify the document. Its text
+    // does: the same report opened again tomorrow, renamed, or saved with highlights in it (they
+    // are not part of the text) resumes; two different files called report.pdf do not share a
+    // place. They used to: the key was the file name and page count, now the former key.
+    key: await pdfTextKey(text),
+    formerKey: `pdf:${name}:${doc.pageCount}`,
   };
 }
 

@@ -135,6 +135,21 @@ export async function removeFromHistory(key: string): Promise<void> {
   });
 }
 
+/**
+ * Give the entry kept under `from` the key `to`, when `accept` says it is this document and
+ * nothing is under `to` yet: a document whose identity changed (a PDF, once known by its file
+ * name) keeps its time heard and its place in the Library.
+ */
+export async function renameHistoryEntry(from: string, to: string, accept: (entry: HistoryEntry) => boolean): Promise<void> {
+  await withStorageLock('history', async () => {
+    const history = await loadHistory();
+    const entry = history[from];
+    if (!entry || history[to] || !accept(entry)) return;
+    const { [from]: _moved, ...rest } = history;
+    await item.setValue({ ...rest, [to]: { ...entry, source: { ...entry.source, key: to } } });
+  });
+}
+
 export async function clearHistory(): Promise<void> {
   await withStorageLock('history', () => item.setValue({}));
 }
