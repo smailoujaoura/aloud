@@ -324,17 +324,44 @@ async function fetchSupertonicStyles(styles: readonly string[], onBytes: (bytes:
   }
 }
 
-/** Fetch Phonon voices into the model cache, checked against their SHA-256, one after another. */
-async function fetchPhononVoices(
+/**
+ * Fetch Phonon voices into the model cache, checked against their SHA-256, four at a time (102
+ * small files: one at a time, the wait between requests was most of the download). As for
+ * Kokoro's (fetchKokoroVoices), the first failure stops the rest, and it settles once all four
+ * have stopped, so nothing is still writing when the row says it failed.
+ */
+export async function fetchPhononVoices(
   voices: readonly string[],
   sha256: Readonly<Record<string, string>>,
   onBytes: (bytes: number) => void,
   cancel: AbortSignal,
 ): Promise<void> {
-  for (const voice of voices) {
+  const stop = new AbortController();
+  const stopAll = (): void => stop.abort();
+  cancel.addEventListener('abort', stopAll, { once: true });
+  if (cancel.aborted) stopAll();
+  let next = 0;
+  const fetchNext = async (): Promise<void> => {
+    try {
+      while (next < voices.length && !stop.signal.aborted) {
+        const voice = voices[next++]!;
+        const bytes = await fetchModelFile(phononVoiceUrl(voice), { sha256: sha256[voice], label: `${voice} voice`, signal: stop.signal, mustStore: true });
+        onBytes(bytes.byteLength);
+      }
+    } catch (err) {
+      stop.abort();
+      throw err;
+    }
+  };
+  try {
+    const results = await Promise.allSettled(Array.from({ length: Math.min(4, voices.length) }, fetchNext));
+    const failures = results.flatMap((r) => (r.status === 'rejected' ? [r.reason as unknown] : []));
+    // The cause, not the cancellations it led to.
+    const cause = failures.find((e) => !(e instanceof DOMException && e.name === 'AbortError')) ?? failures[0];
+    if (cause !== undefined) throw cause instanceof Error ? cause : new Error(String(cause));
     cancel.throwIfAborted();
-    const bytes = await fetchModelFile(phononVoiceUrl(voice), { sha256: sha256[voice], label: `${voice} voice`, signal: cancel, mustStore: true });
-    onBytes(bytes.byteLength);
+  } finally {
+    cancel.removeEventListener('abort', stopAll);
   }
 }
 
