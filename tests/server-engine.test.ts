@@ -140,3 +140,45 @@ describe('a server address from storage or a backup file', () => {
     expect(restored({ url: 42 }).url).toBe('');
   });
 });
+
+describe("a server that reads at one speed only (Gradium's Phonon server)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  /** What ptts-openai-server 0.6.0 answers (src/api.rs): a 400 naming `speed`, and a WAV streamed without its length. */
+  const phononServer = () => {
+    const asked: number[] = [];
+    vi.stubGlobal('fetch', async (_url: string, init?: RequestInit) => {
+      const { speed } = JSON.parse(String(init?.body)) as { speed: number };
+      asked.push(speed);
+      if (speed !== 1) {
+        const message = `speed ${speed} is not supported: this model has no rate control yet; omit speed, send 1.0, or start the server with --ignore-speed to speak at the normal rate`;
+        return new Response(JSON.stringify({ error: { message, type: 'invalid_request_error', param: 'speed', code: null } }), { status: 400 });
+      }
+      const audio = wav(Array.from({ length: 24000 }, (_, i) => 0.3 * Math.sin(i / 10)));
+      new DataView(audio).setUint32(4, 0xffffffff, true); // streamed: no length, in either header
+      new DataView(audio).setUint32(40, 0xffffffff, true);
+      return new Response(audio);
+    });
+    return asked;
+  };
+
+  it('asks again at 1×, speeds this sentence up itself, and reads at 1× from then on', async () => {
+    const asked = phononServer();
+    const engine = new ServerEngine('https://tts.example.com/v1', '', 'k');
+    expect(engine.fixedSpeed).toBe(false);
+    const first = await engine.synthesize('Hello there.', 1.25, 'default');
+    expect(asked).toEqual([1.25, 1]);
+    expect(first.pcm.length).toBe(Math.round(24000 / 1.25));
+    expect(engine.fixedSpeed).toBe(true);
+    // The worker now asks for 1× and stretches (splitSpeed with fixedSpeed): one request each.
+    await engine.synthesize('And again.', 1, 'default');
+    expect(asked).toEqual([1.25, 1, 1]);
+  });
+
+  it('other refusals are still errors, said as the server said them', async () => {
+    vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ error: { message: 'voice alloy is not a voice of this server', param: 'voice' } }), { status: 400 }));
+    const engine = new ServerEngine('https://tts.example.com/v1', '', 'k');
+    await expect(engine.synthesize('Hi.', 1.25, 'alloy')).rejects.toThrow(/400: .*voice alloy/);
+    expect(engine.fixedSpeed).toBe(false);
+  });
+});
