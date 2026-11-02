@@ -3,7 +3,7 @@
 //                phonemize (PIPER_UNSUPPORTED),
 //                each with its onnx + config URLs, download size and a hosted preview clip.
 //   - `kokoro` : the voice list from the onnx-community Kokoro repo, with derived language/gender.
-//   - `supertonic` and everything else: passed through verbatim from scripts/models.base.json.
+//   - `supertonic` and `phonon`: passed through verbatim from scripts/models.base.json.
 //
 // Network fetches are cached under .gen/voices/ so offline rebuilds keep working. The merged
 // file is written to public/models.json AND committed, so `npm test` / partial builds don't
@@ -143,6 +143,7 @@ async function main() {
     piper: buildPiper(piperVoices),
     kokoro: { ...base.kokoro, voices: buildKokoro(kokoroInfo) },
     supertonic: base.supertonic,
+    phonon: base.phonon,
   };
 
   const dest = join(root, 'public/models.json');
@@ -150,7 +151,8 @@ async function main() {
   console.log(
     `[gen-voices] models.json: ${Object.keys(merged.piper).length} Piper, ` +
       `${Object.keys(merged.kokoro.voices).length} Kokoro, ` +
-      `${Object.keys(merged.supertonic.voices).length} Supertonic`,
+      `${Object.keys(merged.supertonic.voices).length} Supertonic, ` +
+      `${Object.keys(merged.phonon.voices).length} Phonon`,
   );
 }
 

@@ -8,6 +8,11 @@
 //    library is imported by URL at run time so its 1.3 MB worker is never inlined into a page
 //    bundle, and pdf.js can resolve its own worker from the extension origin under our CSP.
 //
+//  - public/vendor/phonon/ phonon-tts, Gradium's runtime for the Phonon voices (src/engine/engines/
+//    phonon.ts). Imported by URL from the synthesis worker; it starts its own worker from
+//    worker.js beside it and loads wasm/. The threaded build (wasm-threads/) is not copied: it
+//    runs only in cross-origin-isolated pages, which extension workers are not.
+//
 //  - public/vendor/piper/  piper_phonemize (eSpeak-NG with every language's data) for Piper voices.
 //    Loaded by URL from the synthesis worker; see src/engine/g2p/piper-phonemize.ts. (Kokoro still
 //    uses the English-only `phonemizer` package that kokoro-js bundles, which is all it needs.)
@@ -47,6 +52,13 @@ const PDFJS_FILES = ['pdf.min.mjs', 'pdf.worker.min.mjs'];
 
 const PIPER_PHONEMIZE_FILES = ['piper_phonemize.wasm', 'piper_phonemize.data'];
 
+/** phonon-tts, copied as published (with its licences). */
+const PHONON_FILES = [
+  'index.js', 'worker.js', 'fetch.js', 'hub.js', 'wav.js', 'threads.js', 'device.js', 'simd.js',
+  'wasm/phonon_tts.js', 'wasm/phonon_tts_bg.wasm', 'wasm/phonon_tts_simd_bg.wasm',
+  'LICENSE-MIT', 'LICENSE-APACHE', 'THIRD_PARTY_LICENSES.md',
+];
+
 /**
  * Whole directories pdf.js loads by URL at run time when it *renders* a page.
  *
@@ -59,6 +71,20 @@ const PIPER_PHONEMIZE_FILES = ['piper_phonemize.wasm', 'piper_phonemize.data'];
 const PDFJS_DIRS = ['standard_fonts', 'cmaps'];
 
 export function syncAssets() {
+  const phononSrc = join(root, 'node_modules/phonon-tts');
+  const phononDest = join(root, 'public/vendor/phonon');
+  let phononCopied = 0;
+  for (const f of PHONON_FILES) {
+    const s = join(phononSrc, f);
+    const d = join(phononDest, f);
+    if (!existsSync(s)) throw new Error(`missing ${s} — reinstall phonon-tts`);
+    mkdirSync(dirname(d), { recursive: true });
+    if (isCurrent(s, d)) continue;
+    copyFileSync(s, d);
+    phononCopied++;
+  }
+  console.log(`[sync-assets] ${phononCopied} phonon-tts file(s) refreshed into public/vendor/phonon/`);
+
   const piperSrc = join(root, 'node_modules/@diffusionstudio/piper-wasm/build');
   const piperDest = join(root, 'public/vendor/piper');
   mkdirSync(piperDest, { recursive: true });

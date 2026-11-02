@@ -82,7 +82,11 @@ export function pickVoiceForLanguage(
   // Supertonic first, even before the current engine: asked for "Supertonic before Kokoro,
   // everywhere". The saved voice still reads its own language, and a voice chosen for a language
   // still wins (routeFor) — this only decides who reads a language neither covers.
+  // Phonon reads English first of all; its other languages are experimental, read with mistakes,
+  // so every other engine's voice for them comes before it.
+  const phonon = (v: CandidateVoice): number => (v.engine !== 'phonon' ? 0 : want === 'en' ? 2000 : -5000);
   const score = (v: CandidateVoice): number =>
+    phonon(v) +
     (v.engine === 'supertonic' ? 1000 : 0) +
     (current && v.engine === current.engine ? 100 : 0) +
     (ENGINE_QUALITY[v.engine] ?? 0) * 10 +
@@ -95,6 +99,7 @@ export function voiceLanguage(engine: EngineId, id: string, manifest: ModelManif
   if (engine === 'piper') return manifest.piper[id]?.language ?? '';
   if (engine === 'kokoro') return manifest.kokoro.voices[id]?.language ?? 'en';
   if (engine === 'server') return serverVoiceLanguage(id);
+  if (engine === 'phonon') return manifest.phonon?.voices[id]?.language ?? 'en';
   return parseSupertonicVoice(id).language; // `F1@de`: a Supertonic style reading German
 }
 

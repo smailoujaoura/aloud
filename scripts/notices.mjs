@@ -21,7 +21,8 @@ function productionPackages() {
   );
 }
 
-const LICENSE_FILE = /^(licen[cs]e|copying|notice)(\.(md|txt|markdown))?$/i;
+// Also LICENSE-MIT / LICENSE-APACHE (dual-licensed packages such as phonon-tts) and THIRD_PARTY_LICENSES.md.
+const LICENSE_FILE = /^(licen[cs]e|copying|notice|third[-_]party[-_]licen[cs]es)([-_][a-z0-9.-]+)?(\.(md|txt|markdown))?$/i;
 
 export function writeNotices() {
   const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));

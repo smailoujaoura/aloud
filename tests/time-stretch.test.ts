@@ -35,6 +35,16 @@ describe('faster speech at the same pitch', () => {
     expect(pitch(out)).toBeLessThan(210);
   });
 
+  it('slows down too, at the same pitch, for a model with one speed only (Phonon)', () => {
+    expect(splitSpeed(0.5, true)).toEqual({ model: 1, stretch: 0.5 });
+    expect(splitSpeed(3, true)).toEqual({ model: 1, stretch: 3 });
+    const input = tone(200, 1);
+    const slow = timeStretch(input, sr, 0.5);
+    expect(slow.length).toBe(input.length * 2);
+    expect(pitch(slow)).toBeGreaterThan(190);
+    expect(pitch(slow)).toBeLessThan(210);
+  });
+
   it('leaves audio alone at 1×, and copes with a clip shorter than a window', () => {
     const input = tone(200, 1);
     expect(timeStretch(input, sr, 1)).toBe(input);

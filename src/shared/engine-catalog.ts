@@ -16,6 +16,9 @@ import { parseSupertonicVoice } from '@/shared/supertonic-voices';
 
 /** Kokoro-82M at a fixed commit of onnx-community/Kokoro-82M-v1.0-ONNX (engines/kokoro.ts). */
 export const KOKORO_REVISION = '1939ad2a8e416c0acfeecc08a694d14ef25f2231';
+/** Phonon S (31M) at a fixed commit of gradium/phonon-31m-en, and its voice catalogue (models.json `phonon`). */
+export const PHONON_REVISION = '92741c5b07d085ff840e26fea8ce43110b87852f';
+export const PHONON_VOICES_REVISION = '0ee17205f254b5abc43b266c8a0f215565c352f7';
 /** Supertonic 3 at a fixed commit of Supertone/supertonic-3 (models.json `base`). */
 export const SUPERTONIC_REVISION = '3cadd1ee6394adea1bd021217a0e650ede09a323';
 
@@ -128,6 +131,26 @@ const ENGINES: Record<EngineId, EngineInfo> = {
     needsGpuForSpeed: true,
     heavyForMobile: true,
   },
+  phonon: {
+    id: 'phonon',
+    name: 'Phonon',
+    tag: 'Natural, and fast on any computer',
+    blurb:
+      'Natural, expressive voices from Gradium that read about twice as fast as real time on an ' +
+      'ordinary processor, no graphics card needed. 37 English voices, American, British and a ' +
+      'cast of characters, plus French, Spanish, German and Portuguese voices to try (experimental). ' +
+      'One download, all 102 voices included.',
+    // 64.8 MB of model and 102 voices of 256 KB (decimal MB, as everywhere).
+    approxSize: '~91 MB',
+    // Both of Gradium's repositories: the model (gradium/phonon-31m-en) and the voices (gradium/phonon-voices).
+    cacheHint: 'gradium/phonon-',
+    revision: PHONON_REVISION,
+    voiceRevision: PHONON_VOICES_REVISION,
+    requiredFiles: ['/model.q8.gguf', '/tokenizer.json', '/config.json'],
+    voiceFile: (voice) => `/voices/${voice}.safetensors`,
+    needsGpuForSpeed: false,
+    heavyForMobile: false,
+  },
   server: {
     id: 'server',
     name: 'Your own server',
@@ -143,8 +166,8 @@ const ENGINES: Record<EngineId, EngineInfo> = {
 };
 
 // Supertonic before Kokoro wherever engines are listed: the tabs, the walkthrough, the board.
-// Your own server last: it is for people who already run one.
-export const ENGINE_IDS: readonly EngineId[] = ['piper', 'supertonic', 'kokoro', 'server'];
+// Phonon first: natural and fast on any computer. Your own server last: it is for people who already run one.
+export const ENGINE_IDS: readonly EngineId[] = ['phonon', 'piper', 'supertonic', 'kokoro', 'server'];
 
 /**
  * Supertonic's detail (flow-matching steps) for this device. A phone gets 3 unless its reader
@@ -194,6 +217,11 @@ export const KOKORO_VOICE_BYTES = 522_240;
 /** Where a Supertonic voice style (F1…) is kept: the pinned commit, as models.json `base` says. */
 export const supertonicStyleUrl = (style: string): string =>
   `https://huggingface.co/Supertone/supertonic-3/resolve/${SUPERTONIC_REVISION}/voice_styles/${style}.json`;
+
+/** A Phonon voice's own file (256,136 bytes each), at the pinned commit of gradium/phonon-voices. */
+export const PHONON_VOICE_BYTES = 256_136;
+export const phononVoiceUrl = (voice: string): string =>
+  `https://huggingface.co/gradium/phonon-voices/resolve/${PHONON_VOICES_REVISION}/voices/${voice}.safetensors`;
 
 export const kokoroVoiceUrl = (voice: string): string =>
   `https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/voices/${voice}.bin`;

@@ -20,7 +20,8 @@ import { voicePortrait } from '@/ui/voice-portraits';
 import { el } from '@/shared/dom';
 import { humanBytes } from '@/shared/log';
 import { capabilities } from '@/shared/browser-env';
-import { downloadSize, engineInfo, kokoroVoiceUrl, supertonicStyleUrl, listEngines, type EngineInfo } from '@/shared/engine-catalog';
+import { downloadSize, engineInfo, kokoroVoiceUrl, phononVoiceUrl, supertonicStyleUrl, listEngines, type EngineInfo } from '@/shared/engine-catalog';
+import { phononExperimental } from '@/shared/phonon-voices';
 import { isEnglish, listVoices, shortPiperLabel } from '@/shared/voice-catalog';
 import { serverBase, serverOrigin, voicesFrom, voicesUrl } from '@/shared/server-voices';
 import { browser } from 'wxt/browser';
@@ -118,10 +119,9 @@ function accentName(tag: string): string {
 
 let openTab: EngineId | null = null;
 let openLanguage: string | null = null;
-/** The language open in the Kokoro list — its own, so switching tabs does not cross them. */
-let kokoroLanguage: string | null = null;
-/** The same for the Supertonic list. */
-let supertonicLanguage: string | null = null;
+type SharedEngine = 'kokoro' | 'supertonic' | 'phonon';
+/** The language open in each shared-model engine's list — its own, so switching tabs does not cross them. */
+const sharedLanguage = new Map<SharedEngine, string>();
 /** Which quality of a multi-quality Piper voice each row is showing, by voice label. */
 const variantChoice = new Map<string, string>();
 
@@ -174,14 +174,20 @@ function openAskedLanguage(manifest: ModelManifest): void {
   if (!code) return;
   const piper = Object.values(manifest.piper).find((v) => primaryLanguage(v.language) === code);
   const kokoro = sharedVoices('kokoro', manifest).find((v) => primaryLanguage(manifest.kokoro.voices[v.id]?.language) === code);
-  if (kokoro) kokoroLanguage = kokoro.group;
+  if (kokoro) sharedLanguage.set('kokoro', kokoro.group);
   if (engine === 'kokoro' && kokoro) {
     openTab = 'kokoro';
     return;
   }
   if (engine === 'supertonic' && manifest.supertonic?.languages?.includes(code)) {
     openTab = 'supertonic';
-    supertonicLanguage = languageName(code);
+    sharedLanguage.set('supertonic', languageName(code));
+    return;
+  }
+  const phonon = sharedVoices('phonon', manifest).find((v) => primaryLanguage(manifest.phonon?.voices[v.id]?.language) === code);
+  if (engine === 'phonon' && phonon) {
+    openTab = 'phonon';
+    sharedLanguage.set('phonon', phonon.group);
     return;
   }
   if (piper) {
@@ -588,7 +594,7 @@ function piperItem(group: PiperGroup, ctx: PanelContext): HTMLElement {
   return item;
 }
 
-// ---- shared-model engines (Kokoro / Supertonic) ----------------------------
+// ---- shared-model engines (Phonon / Kokoro / Supertonic) -------------------
 
 interface SharedVoice {
   id: string;
@@ -597,9 +603,27 @@ interface SharedVoice {
   rank: number;
   /** The language it is listed under: "English" for both accents, "Italian", … */
   group: string;
+  /** What the voice sounds like, in its makers' words (Phonon's catalogue has one per voice). */
+  description?: string;
 }
 
-function sharedVoices(engine: 'kokoro' | 'supertonic', manifest: ModelManifest): SharedVoice[] {
+function sharedVoices(engine: SharedEngine, manifest: ModelManifest): SharedVoice[] {
+  if (engine === 'phonon') {
+    const m = manifest.phonon;
+    if (!m) return [];
+    // In the catalogue's order: American, British and the characters, then each experimental language.
+    return Object.entries(m.voices).map(([id, v]) => {
+      const experimental = phononExperimental(v.language, m.experimentalLanguages);
+      return {
+        id,
+        name: v.label,
+        meta: [v.character ? 'Character' : accentName(v.language), v.gender, experimental ? 'experimental' : ''].filter(Boolean).join(' · '),
+        rank: 0,
+        group: v.language.startsWith('en') ? 'English' : languageName(primaryLanguage(v.language)),
+        description: v.description,
+      };
+    });
+  }
   if (engine === 'kokoro') {
     // Every Kokoro voice is a good one: no grades and no "best" heading, just by name.
     return Object.entries(manifest.kokoro.voices)
@@ -622,7 +646,7 @@ function sharedVoices(engine: 'kokoro' | 'supertonic', manifest: ModelManifest):
   }));
 }
 
-function sharedPanel(engine: 'kokoro' | 'supertonic', ctx: PanelContext, again: () => void): HTMLElement {
+function sharedPanel(engine: SharedEngine, ctx: PanelContext, again: () => void): HTMLElement {
   const panel = el(document, 'div', { class: 'panel-body' });
   const info = engineInfo(engine);
   const bytes = info.cacheHint ? sharedModelBytes(ctx.sizes, info.cacheHint) : 0;
@@ -635,14 +659,13 @@ function sharedPanel(engine: 'kokoro' | 'supertonic', ctx: PanelContext, again: 
   const counts = new Map<string, number>();
   for (const v of all) counts.set(v.group, (counts.get(v.group) ?? 0) + 1);
   const languages = [...counts.keys()].sort((a, b) => (a === 'English' ? -1 : b === 'English' ? 1 : a.localeCompare(b)));
-  const saved = engine === 'kokoro' ? ctx.settings.kokoroVoice : ctx.settings.supertonicVoice;
+  const saved = engine === 'kokoro' ? ctx.settings.kokoroVoice : engine === 'phonon' ? ctx.settings.phononVoice : ctx.settings.supertonicVoice;
   const current = all.find((v) => v.id === saved)?.group ?? 'English';
-  const remembered = engine === 'kokoro' ? kokoroLanguage : supertonicLanguage;
+  const remembered = sharedLanguage.get(engine) ?? null;
   const language =
     (remembered !== null && languages.includes(remembered) ? remembered : null) ??
     (languages.includes(current) ? current : (languages[0] ?? 'English'));
-  if (engine === 'kokoro') kokoroLanguage = language;
-  else supertonicLanguage = language;
+  sharedLanguage.set(engine, language);
   // A search means "find this name wherever it is", so it looks across every language.
   const picking = languages.length > 1 && !ctx.filter;
   if (picking) {
@@ -657,8 +680,7 @@ function sharedPanel(engine: 'kokoro' | 'supertonic', ctx: PanelContext, again: 
       }),
     );
     select.addEventListener('change', () => {
-      if (engine === 'kokoro') kokoroLanguage = select.value;
-      else supertonicLanguage = select.value;
+      sharedLanguage.set(engine, select.value);
       again();
     });
     picker.append(el(document, 'span', { class: 'muted small' }, 'Language'), select);
@@ -667,7 +689,7 @@ function sharedPanel(engine: 'kokoro' | 'supertonic', ctx: PanelContext, again: 
   }
 
   const inView = all.filter(
-    (v) => (picking ? v.group === language : true) && (!ctx.filter || `${v.id} ${v.name} ${v.meta}`.toLowerCase().includes(ctx.filter)),
+    (v) => (picking ? v.group === language : true) && (!ctx.filter || `${v.id} ${v.name} ${v.meta} ${v.description ?? ''}`.toLowerCase().includes(ctx.filter)),
   );
   const voices = inView;
   const list = el(document, 'div', { class: `voice-list${downloaded ? '' : ' is-locked'}` });
@@ -687,6 +709,8 @@ function sharedPanel(engine: 'kokoro' | 'supertonic', ctx: PanelContext, again: 
     const row = el(document, 'div', { class: 'voice-item' });
     const main = el(document, 'div', { class: 'vi-main' });
     main.append(el(document, 'b', { class: 'vi-name' }, v.name), el(document, 'span', { class: 'vi-meta' }, v.meta));
+    // What the voice sounds like (Phonon's catalogue describes each one): one line, all of it on hover.
+    if (v.description) main.append(el(document, 'span', { class: 'vi-desc', title: v.description }, v.description));
     const actions = el(document, 'div', { class: 'vi-actions' });
     actions.append(
       previewFor(engine, v.id, ctx),
@@ -825,12 +849,13 @@ async function askForServer(base: string): Promise<boolean> {
 const finishedOnce = new Set<string>();
 
 function modelCard(
-  engine: 'kokoro' | 'supertonic',
+  engine: SharedEngine,
   state: { downloaded: boolean; bytes: number },
   ctx: PanelContext,
 ): HTMLElement {
   const info = engineInfo(engine);
-  const licence = engine === 'kokoro' ? ctx.manifest.kokoro.license : (ctx.manifest.supertonic?.license ?? '');
+  const licence =
+    engine === 'kokoro' ? ctx.manifest.kokoro.license : engine === 'phonon' ? (ctx.manifest.phonon?.license ?? '') : (ctx.manifest.supertonic?.license ?? '');
   const card = el(document, 'div', { class: `model-card${state.downloaded ? ' is-installed' : ''}` });
 
   // A machine with a GPU reads with Kokoro's full-precision build — the quantised one returns
@@ -842,8 +867,10 @@ function modelCard(
   const gpuMissing = onGpu && state.downloaded && !sharedModelInstalled(engine, ctx.sizes, { gpu: true });
   // The voices' own files come with the model (Kokoro's voice files, Supertonic's styles); one
   // downloaded before they did is missing some of them.
-  const voices = engine === 'kokoro' ? Object.keys(ctx.manifest.kokoro.voices) : Object.keys(ctx.manifest.supertonic?.voices ?? {});
-  const voiceUrl = engine === 'kokoro' ? kokoroVoiceUrl : supertonicStyleUrl;
+  const voiceList = engine === 'kokoro' ? ctx.manifest.kokoro.voices : engine === 'phonon' ? (ctx.manifest.phonon?.voices ?? {}) : (ctx.manifest.supertonic?.voices ?? {});
+  const voices = Object.keys(voiceList);
+  const voiceUrl = engine === 'kokoro' ? kokoroVoiceUrl : engine === 'phonon' ? phononVoiceUrl : supertonicStyleUrl;
+  const checksums = engine === 'phonon' ? Object.fromEntries(Object.entries(ctx.manifest.phonon?.voices ?? {}).map(([id, v]) => [id, v.sha256])) : {};
   const voicesMissing = state.downloaded ? voices.filter((v) => !ctx.sizes.has(voiceUrl(v))).length : 0;
 
   const text = el(document, 'div', { class: 'mc-text' });
@@ -870,7 +897,7 @@ function modelCard(
   const startDownload = (): void => {
     // Queued behind any download already running; the card says so (followDownload).
     downloads.enqueue(key, `${info.name} model`, (p, signal) =>
-      downloadSharedModel(engineConfigFor(ctx.settings, { engine, purpose: 'download' }), voices, p, signal),
+      downloadSharedModel(engineConfigFor(ctx.settings, { engine, purpose: 'download' }), voices, p, signal, checksums),
     ).then(
       async () => {
         announceModelsChanged();

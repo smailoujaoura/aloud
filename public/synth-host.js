@@ -228,6 +228,7 @@
 		if (env.touchFirst) return 1;
 		const cores = Math.max(1, env.cores);
 		if (engine === "supertonic") return clamp(cores - 2, 1, 2);
+		if (engine === "phonon") return clamp(cores - 2, 1, 2);
 		return clamp(cores - 2, 2, 4);
 	}
 	/**

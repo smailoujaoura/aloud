@@ -1,10 +1,11 @@
 /**
- * Faster speech at the same pitch, for speeds the voice models cannot reach themselves.
+ * Faster (or slower) speech at the same pitch, for speeds the voice models cannot reach themselves.
  *
  * A model reads faster by giving each sound fewer audio frames, but never fewer than one, and its
  * pauses shrink less than its words: asked for 2× Piper read 1.6× as fast, and asked for 4× only
  * 2.1× (Kokoro 1.8× and 2.2×). So 4× sounded hardly faster than 2×. Past MODEL_MAX_SPEED the
- * model reads at that speed and the audio is sped up by the rest, here.
+ * model reads at that speed and the audio is sped up by the rest, here. A model with no speed of
+ * its own (Phonon) reads at 1× and every speed is made here, slower ones too.
  *
  * WSOLA (waveform-similarity overlap-add): the speech is cut into overlapping windows, taken
  * further apart than they are laid down, and each is taken where it best continues the one before —
@@ -15,15 +16,19 @@
 /** The fastest the models are asked to read; past it the audio is sped up instead. */
 export const MODEL_MAX_SPEED = 1.5;
 
-/** How to reach `speed`: what the model is asked for, and by how much its audio is sped up then. */
-export function splitSpeed(speed: number): { model: number; stretch: number } {
+/**
+ * How to reach `speed`: what the model is asked for, and by how much its audio is sped up then.
+ * `fixedSpeed`: the model reads at one speed only, so all of it is the audio's.
+ */
+export function splitSpeed(speed: number, fixedSpeed = false): { model: number; stretch: number } {
+  if (fixedSpeed) return { model: 1, stretch: speed };
   if (!(speed > MODEL_MAX_SPEED)) return { model: speed, stretch: 1 };
   return { model: MODEL_MAX_SPEED, stretch: speed / MODEL_MAX_SPEED };
 }
 
-/** `pcm` played `rate` times as fast (rate > 1), at the same pitch. */
+/** `pcm` played `rate` times as fast (below 1: slower), at the same pitch. */
 export function timeStretch(pcm: Float32Array, sampleRate: number, rate: number): Float32Array {
-  if (!(rate > 1.001) || pcm.length === 0) return pcm;
+  if (!(rate > 0) || Math.abs(rate - 1) < 0.001 || pcm.length === 0) return pcm;
   const half = Math.max(16, Math.round(0.015 * sampleRate));
   const n = half * 2; // window
   const hs = half; // synthesis hop: windows laid down half overlapping
@@ -78,7 +83,7 @@ function bestMatch(pcm: Float32Array, natural: number, nominal: number, toleranc
   return best;
 }
 
-/** A clip too short to window: shortened by dropping samples evenly (a few milliseconds of audio). */
+/** A clip too short to window: its length changed by dropping or repeating samples evenly (milliseconds of audio). */
 function resampleShort(pcm: Float32Array, length: number): Float32Array {
   const out = new Float32Array(length);
   for (let i = 0; i < length; i++) out[i] = pcm[Math.min(pcm.length - 1, Math.floor((i * pcm.length) / length))]!;

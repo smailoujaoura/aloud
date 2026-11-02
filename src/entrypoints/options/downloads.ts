@@ -17,7 +17,7 @@ import { KOKORO_VOICE_STORE, storeKokoroVoice } from '@/engine/kokoro-voice-file
 import { readCacheSizes, sharedModelInstalled } from '@/engine/installed-voices';
 import { el } from '@/shared/dom';
 import { humanBytes } from '@/shared/log';
-import { KOKORO_VOICE_BYTES, kokoroVoiceUrl, supertonicStyleUrl } from '@/shared/engine-catalog';
+import { KOKORO_VOICE_BYTES, PHONON_VOICE_BYTES, kokoroVoiceUrl, phononVoiceUrl, supertonicStyleUrl } from '@/shared/engine-catalog';
 import type { EngineConfig, WorkerResponse } from '@/engine/protocol';
 import type { PiperVoiceEntry } from '@/engine/engines/types';
 import { downloads, type ProgressSink } from './download-queue';
@@ -324,19 +324,46 @@ async function fetchSupertonicStyles(styles: readonly string[], onBytes: (bytes:
   }
 }
 
+/** Fetch Phonon voices into the model cache, checked against their SHA-256, one after another. */
+async function fetchPhononVoices(
+  voices: readonly string[],
+  sha256: Readonly<Record<string, string>>,
+  onBytes: (bytes: number) => void,
+  cancel: AbortSignal,
+): Promise<void> {
+  for (const voice of voices) {
+    cancel.throwIfAborted();
+    const bytes = await fetchModelFile(phononVoiceUrl(voice), { sha256: sha256[voice], label: `${voice} voice`, signal: cancel, mustStore: true });
+    onBytes(bytes.byteLength);
+  }
+}
+
 /**
  * Download a shared model — with every voice's own file alongside it, under one count: Kokoro's
- * voice files, or Supertonic's voice styles. Each used to be fetched the first time that voice
+ * voice files, Phonon's voices, or Supertonic's voice styles. Each used to be fetched the first time that voice
  * spoke: every voice tried was another request after the "download" was done.
  *
- * `voices` are the engine's voices to make ready: Kokoro voice ids, or Supertonic styles (F1…).
+ * `voices` are the engine's voices to make ready: Kokoro voice ids, Phonon voice ids (with their
+ * checksums in `sha256`), or Supertonic styles (F1…).
  */
 export async function downloadSharedModel(
   config: EngineConfig,
   voices: readonly string[],
   progress: ProgressSink,
   cancel?: AbortSignal,
+  sha256: Readonly<Record<string, string>> = {},
 ): Promise<void> {
+  if (config.engine === 'phonon') {
+    const missing: string[] = [];
+    for (const voice of voices) if (!(await cacheHas(phononVoiceUrl(voice)))) missing.push(voice);
+    if (!missing.length) return downloadViaWorker(config, progress, undefined, cancel);
+    return downloadViaWorker(
+      config,
+      progress,
+      { total: missing.length * PHONON_VOICE_BYTES, start: (onBytes, stop) => fetchPhononVoices(missing, sha256, onBytes, stop) },
+      cancel,
+    );
+  }
   if (config.engine === 'supertonic') {
     const missing: string[] = [];
     for (const style of voices) if (!(await cacheHas(supertonicStyleUrl(style)))) missing.push(style);

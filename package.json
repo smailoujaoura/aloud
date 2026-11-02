@@ -39,7 +39,8 @@
     "onnxruntime-web": "1.22.0",
     "pdf-lib": "1.17.1",
     "pdfjs-dist": "^6.3.289",
-    "phonemizer": "1.2.1"
+    "phonemizer": "1.2.1",
+    "phonon-tts": "0.4.2"
   },
   "devDependencies": {
     "happy-dom": "^20.14.5",

@@ -22,9 +22,11 @@ export interface InitContext {
 }
 
 export interface SynthEngine {
-  readonly id: 'piper' | 'kokoro' | 'supertonic' | 'server';
+  readonly id: 'piper' | 'kokoro' | 'supertonic' | 'phonon' | 'server';
   readonly sampleRate: number;
   readonly executionProvider: string;
+  /** The model reads at one speed only: every speed is made by stretching its audio (audio/time-stretch.ts). */
+  readonly fixedSpeed?: boolean;
   init(ctx: InitContext): Promise<void>;
   /**
    * `speed` is a multiplier: 2 => twice as fast, pitch preserved.
@@ -72,6 +74,25 @@ export interface SupertonicManifest {
 }
 
 /** Entry in assets/models.json. */
+/** Phonon S (31M), from gradium/phonon-31m-en, and its voices from gradium/phonon-voices (engines/phonon.ts). */
+export interface PhononManifest {
+  modelId: string;
+  license: string;
+  /** The model repository at its pinned revision: `.../resolve/<revision>`. */
+  base: string;
+  files: { weights: string; tokenizer: string; config: string };
+  sha256: { weights: string; tokenizer: string; config: string };
+  sizeBytes: number;
+  voicesRepo: string;
+  /** The voice catalogue at its pinned revision; a voice is `voices/<id>.safetensors` there. */
+  voicesBase: string;
+  voicesLicense: string;
+  sampleRate: number;
+  /** Languages the 31M model speaks with mistakes: offered, marked experimental. */
+  experimentalLanguages: string[];
+  voices: Record<string, { label: string; language: string; gender: string; description: string; sha256: string; character?: boolean }>;
+}
+
 export interface ModelManifest {
   piper: Record<string, PiperVoiceEntry>;
   kokoro: {
@@ -80,6 +101,7 @@ export interface ModelManifest {
     license: string;
   };
   supertonic?: SupertonicManifest;
+  phonon?: PhononManifest;
   /** The reader's own server's voices: filled in from settings at run time (withServerVoices), never in models.json. */
   server?: { voices: string[] };
 }

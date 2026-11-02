@@ -48,6 +48,8 @@ export function autoPoolSize(engine: EngineId, gpu: boolean, env: PoolEnvironmen
   // Supertonic 3 runs at about 1.2× real time per worker at its default 5 steps (the bench), so two
   // keep ahead of the listener — and each copy holds about 1.1 GB, so never more than two.
   if (engine === 'supertonic') return clamp(cores - 2, 1, 2);
+  // Phonon reads about twice as fast as real time on one thread: two keep ahead even at 2×.
+  if (engine === 'phonon') return clamp(cores - 2, 1, 2);
   // Kokoro is the heaviest (~3× real-time) but small (q8 ≈ 86 MB).
   return clamp(cores - 2, 2, 4);
 }

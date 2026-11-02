@@ -59,6 +59,9 @@ export function downloadedVoices(ctx: Pick<PanelContext, 'manifest' | 'sizes'>):
   for (const [id, entry] of Object.entries(ctx.manifest.piper)) {
     if (piperDownloaded(entry, ctx.sizes)) out.push({ engine: 'piper', id, label: shortPiperLabel(entry.label), language: entry.language });
   }
+  if (sharedModelInstalled('phonon', ctx.sizes)) {
+    for (const [id, v] of Object.entries(ctx.manifest.phonon?.voices ?? {})) out.push({ engine: 'phonon', id, label: v.label, language: v.language });
+  }
   // Supertonic before Kokoro, as everywhere engines are listed.
   if (sharedModelInstalled('supertonic', ctx.sizes)) {
     // Every style in every language it reads, so each language's row offers all ten.

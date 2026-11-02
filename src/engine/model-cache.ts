@@ -164,13 +164,15 @@ export async function cacheEntries(): Promise<Array<{ key: string; size: number;
  * 'kokoro-voices')`, bypassing `env.customCache` entirely, and `@huggingface/transformers` falls
  * back to `transformers-cache` if the custom cache is ever not in force. Both are invisible to
  * the IndexedDB store, so unless they are cleared alongside it "Delete" leaves files on disk and
- * the reported usage is wrong.
+ * the reported usage is wrong. `phonon-tts-v1` holds the Phonon model only while a copy of it
+ * starts in Firefox (engines/phonon.ts); anything left there after a crash goes with it.
  */
-const EXTERNAL_CACHE_STORES = ['kokoro-voices', 'transformers-cache'] as const;
+const EXTERNAL_CACHE_STORES = ['kokoro-voices', 'transformers-cache', 'phonon-tts-v1'] as const;
 
 /** Cache API stores that hold files for a given engine, keyed by the engine's cache hint. */
 const EXTERNAL_STORES_BY_MODEL: Record<string, readonly string[]> = {
   'Kokoro-82M': ['kokoro-voices', 'transformers-cache'],
+  'gradium/phonon-': ['phonon-tts-v1'],
 };
 
 async function deleteCacheStores(names: readonly string[]): Promise<void> {

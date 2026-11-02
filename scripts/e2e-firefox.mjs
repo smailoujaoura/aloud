@@ -18,6 +18,8 @@
 //  - Playwright drives the web page and the reading bar (by position: its shadow root is closed).
 //
 // E2E_STORY_ONLY=1 runs the bilingual-story checks alone (no voice download needed).
+// E2E_ENGINE=phonon (with E2E_VOICE=<id>, optional) reads with that engine instead of the default
+// Piper voice; the first run then downloads that engine's model.
 // Needs Playwright's Firefox (`npx playwright install firefox`) and an audio output: Firefox never
 // starts an AudioContext without one. On a headless Linux box run a PulseAudio null sink and set
 // PULSE_SERVER. Extra library folders (GTK, libpulse) can be supplied with E2E_LD_LIBRARY_PATH.
@@ -225,6 +227,20 @@ try {
      const policy = WebExtensionPolicy.getByID(${JSON.stringify(ADDON_ID)});
      await ExtensionPermissions.add(${JSON.stringify(ADDON_ID)}, { permissions: [], origins: ['*://*/*'] }, policy.extension);`,
   );
+
+  if (process.env.E2E_ENGINE) {
+    const engine = process.env.E2E_ENGINE;
+    const voice = process.env.E2E_VOICE;
+    await evaluate(
+      rdp,
+      consoles.background,
+      `const { settings = {} } = await browser.storage.local.get('settings');
+       const next = { ...settings, engine: ${JSON.stringify(engine)} };
+       if (${JSON.stringify(voice ?? '')}) next[${JSON.stringify(`${engine}Voice`)}] = ${JSON.stringify(voice ?? '')};
+       await browser.storage.local.set({ settings: next });`,
+    );
+    step(`reading with ${engine}${voice ? ` (${voice})` : ''}`);
+  }
 
   page = await context.newPage();
   const logs = [];

@@ -13,6 +13,7 @@ package that kokoro-js uses for Kokoro's English voices.
 | [eSpeak-NG, rhasspy fork](https://github.com/rhasspy/espeak-ng) in [`piper-phonemize`](https://github.com/rhasspy/piper-phonemize), compiled to WASM | as shipped in [`@diffusionstudio/piper-wasm`](https://github.com/diffusion-studio/piper-wasm) 1.0.0 | **GPL-3.0-or-later** (eSpeak-NG); MIT (piper-phonemize, build wrapper) | Text → IPA phonemes for Piper, in every language eSpeak supports — the phonemiser Piper voices were trained with — and for Kokoro's non-English voices | `vendor/piper/piper_phonemize.{wasm,data}` (loaded at runtime), glue in `vendor/rt/piper-*.js` |
 | [eSpeak-NG](https://github.com/espeak-ng/espeak-ng) (compiled to WASM, inlined in `phonemizer`) | as shipped in `phonemizer` 1.2.1 | **GPL-3.0-or-later** | Text → IPA phonemes for Kokoro's English voices (English data only) | `vendor/rt/kokoro-*.js` (base64-inlined WASM + data) |
 | [`phonemizer`](https://github.com/xenova/phonemizer.js) | 1.2.1 | Apache-2.0 (wrapper) | eSpeak-NG JS wrapper used by kokoro-js | `vendor/rt/kokoro-*.js` |
+| [`phonon-tts`](https://www.npmjs.com/package/phonon-tts) (Gradium's Phonon runtime, Rust compiled to WASM) | 0.4.2 | MIT OR Apache-2.0; the Rust crates inside it are listed in its `THIRD_PARTY_LICENSES.md` (Apache-2.0, MIT, Unicode-3.0, zlib) | Runs the Phonon voices: text normalisation, tokenisation and the model, on the CPU (optionally WebGPU) | `vendor/phonon/*` (loaded at runtime, starts its own worker) |
 | [ONNX Runtime Web](https://github.com/microsoft/onnxruntime) | 1.22.0 | MIT | Neural network inference (WASM, optionally WebGPU) | `vendor/ort/*` (loaded at runtime) |
 | [`kokoro-js`](https://github.com/hexgrad/kokoro) | 1.2.1 | Apache-2.0 | Kokoro engine wrapper | `tts-worker.js` |
 | [`@huggingface/transformers`](https://github.com/huggingface/transformers.js) | 3.7.5 (`transformers.web.js`) | Apache-2.0 | Model loading / tokenisation for Kokoro | `tts-worker.js` |
@@ -49,6 +50,14 @@ only "See URL" or nothing; the dataset's own page is then the authority.
 Aloud never bundles a voice: it is downloaded from Hugging Face when you choose it, for you to
 use. Anyone redistributing a voice, or using it in a product, should check its model card.
 
+### Phonon S (31M) — [`gradium/phonon-31m-en`](https://huggingface.co/gradium/phonon-31m-en) @ `92741c5`, voices from [`gradium/phonon-voices`](https://huggingface.co/gradium/phonon-voices) @ `0ee1720`
+
+Model weights (the `q8` GGUF build), tokenizer, config and all 102 voices: **Apache-2.0**. One
+download holds the model and every voice, each from its pinned commit and checked against its
+SHA-256 (`public/models.json`, `phonon`) before it is kept in the extension's IndexedDB store. The
+model was trained on English; its French, Spanish, German and Portuguese voices are offered marked
+experimental. Gradium's larger Phonon models are under a non-commercial licence and are not used.
+
 ### Supertonic 3 — [`Supertone/supertonic-3`](https://huggingface.co/Supertone/supertonic-3) @ `3cadd1e`
 
 Model weights and the ten voice styles: **BigScience OpenRAIL-M**, a *use-restricted* licence — its
@@ -72,7 +81,7 @@ reads them.
 
 This repository is the complete corresponding source. `npm ci && npm run build` reproduces
 `.output/chrome-mv3/` and `.output/firefox-mv3/` (see `BUILD.md`). The third-party runtime files
-under `public/vendor/` (ONNX Runtime Web, pdf.js, piper_phonemize) are not kept in the
+under `public/vendor/` (ONNX Runtime Web, pdf.js, piper_phonemize, phonon-tts) are not kept in the
 repository: `scripts/sync-assets.mjs` copies them, unmodified, from the npm packages above at
 build time. The binary files in the tree are the Inter fonts (`public/fonts/`, OFL-1.1, from
 `@fontsource-variable/inter`), Aloud's icons (`public/icon/`, drawn for Aloud, with their SVG

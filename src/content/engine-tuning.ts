@@ -47,6 +47,8 @@ const CPU_TUNING: Record<EngineId, PipelineTuning> = {
   piper: { lookahead: 6, primeSeconds: 1.5, maxChars: 240 },
   kokoro: { lookahead: 24, primeSeconds: 3.5, maxChars: 160 },
   supertonic: { lookahead: 20, primeSeconds: 3.5, maxChars: 160 },
+  // About twice real time on one thread: a short queue keeps ahead, like Piper's.
+  phonon: { lookahead: 6, primeSeconds: 1.5, maxChars: 240 },
   // The reader's own server is fast: the wait is the network, so a few sentences ahead suffice.
   server: { lookahead: 4, primeSeconds: 1, maxChars: 300 },
 };
@@ -60,6 +62,7 @@ const GPU_TUNING: Record<EngineId, PipelineTuning> = {
   piper: { lookahead: 4, primeSeconds: 1.5, maxChars: 240 },
   kokoro: { lookahead: 6, primeSeconds: 1.5, maxChars: 240 },
   supertonic: { lookahead: 6, primeSeconds: 1.5, maxChars: 240 },
+  phonon: { lookahead: 6, primeSeconds: 1.5, maxChars: 240 },
   server: { lookahead: 4, primeSeconds: 1, maxChars: 300 },
 };
 
@@ -68,6 +71,8 @@ const MOBILE_TUNING: Record<EngineId, PipelineTuning> = {
   piper: { lookahead: 4, primeSeconds: 2, maxChars: 200 },
   kokoro: { lookahead: 8, primeSeconds: 5, maxChars: 120 },
   supertonic: { lookahead: 8, primeSeconds: 5, maxChars: 120 },
+  // Phones are slower than the laptop it was measured on: more head start.
+  phonon: { lookahead: 6, primeSeconds: 3, maxChars: 200 },
   // A phone does no synthesis here: the server's speed is the server's.
   server: { lookahead: 4, primeSeconds: 1.5, maxChars: 300 },
 };

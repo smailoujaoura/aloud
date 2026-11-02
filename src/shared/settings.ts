@@ -8,7 +8,7 @@ import { storage } from 'wxt/utils/storage';
 import type { PronunciationRule } from '@/segment/pronunciations';
 import { withStorageLock } from './storage-lock';
 
-export type EngineId = 'piper' | 'kokoro' | 'supertonic' | 'server';
+export type EngineId = 'piper' | 'kokoro' | 'supertonic' | 'phonon' | 'server';
 
 export interface ServerSettings {
   /** The API's base address, e.g. `http://localhost:8880/v1`. Empty: not set up. */
@@ -268,6 +268,8 @@ export interface Settings {
   kokoroVoice: string;
   /** Supertonic voice: a style in a language, e.g. `F1@en` (shared/supertonic-voices.ts). */
   supertonicVoice: string;
+  /** Phonon voice, by its catalogue id (`NbpkqMVS3CJeq2j8` is Zoey). */
+  phononVoice: string;
   /** A voice of the reader's own speech server, as it names it (`af_heart` on Kokoro-FastAPI). */
   serverVoice: string;
   /**
@@ -378,6 +380,8 @@ export const DEFAULT_SETTINGS: Settings = {
   piperVoice: 'en_GB-alba-medium',
   kokoroVoice: 'af_heart',
   supertonicVoice: 'F1@en',
+  // Zoey: the catalogue's first English voice, and the one Gradium's own examples use.
+  phononVoice: 'NbpkqMVS3CJeq2j8',
   serverVoice: '',
   server: { url: '', model: '', voices: [] },
   supertonicSteps: 5,
@@ -566,7 +570,8 @@ export function sanitizeSettings(raw: Settings): Settings {
     : [];
   return {
     ...raw,
-    engine: oneOf(raw.engine, ['piper', 'kokoro', 'supertonic', 'server'] as const, DEFAULT_SETTINGS.engine),
+    engine: oneOf(raw.engine, ['piper', 'kokoro', 'supertonic', 'phonon', 'server'] as const, DEFAULT_SETTINGS.engine),
+    phononVoice: typeof raw.phononVoice === 'string' && raw.phononVoice ? raw.phononVoice : DEFAULT_SETTINGS.phononVoice,
     serverVoice: typeof raw.serverVoice === 'string' ? raw.serverVoice : '',
     server: serverSettings(raw.server),
     piperVoice: typeof raw.piperVoice === 'string' && raw.piperVoice ? raw.piperVoice : DEFAULT_SETTINGS.piperVoice,
@@ -637,11 +642,11 @@ function languageVoices(value: unknown): Record<string, VoiceRef> {
   for (const [language, ref] of Object.entries(value as Record<string, unknown>)) {
     const r = ref as Partial<VoiceRef> | null;
     if (!/^[a-z]{2,3}$/.test(language) || !r || typeof r !== 'object') continue;
-    if (r.engine !== 'piper' && r.engine !== 'kokoro' && r.engine !== 'supertonic') continue;
+    if (!(['piper', 'kokoro', 'supertonic', 'phonon', 'server'] as unknown[]).includes(r.engine)) continue;
     if (typeof r.voice !== 'string' || !r.voice || r.voice.length > 80) continue;
     // A Supertonic 2 voice was a bare style, read in English: the same voice in Supertonic 3.
     const voice = r.engine === 'supertonic' && !r.voice.includes('@') ? `${r.voice}@en` : r.voice;
-    out[language] = { engine: r.engine, voice };
+    out[language] = { engine: r.engine as EngineId, voice };
   }
   return out;
 }
@@ -705,6 +710,8 @@ export function activeVoice(s: Settings): string {
       return s.kokoroVoice;
     case 'supertonic':
       return s.supertonicVoice;
+    case 'phonon':
+      return s.phononVoice;
     case 'server':
       return s.serverVoice;
     default:
@@ -713,12 +720,16 @@ export function activeVoice(s: Settings): string {
 }
 
 /** The settings key that holds the voice for the given engine. */
-export function voiceKeyFor(engine: EngineId): 'piperVoice' | 'kokoroVoice' | 'supertonicVoice' {
+export function voiceKeyFor(engine: EngineId): 'piperVoice' | 'kokoroVoice' | 'supertonicVoice' | 'phononVoice' | 'serverVoice' {
   switch (engine) {
     case 'kokoro':
       return 'kokoroVoice';
     case 'supertonic':
       return 'supertonicVoice';
+    case 'phonon':
+      return 'phononVoice';
+    case 'server':
+      return 'serverVoice';
     default:
       return 'piperVoice';
   }

@@ -22,6 +22,7 @@ export function engineConfigFor(
     piper: settings.piperVoice,
     kokoro: settings.kokoroVoice,
     supertonic: settings.supertonicVoice,
+    phonon: settings.phononVoice,
     server: settings.serverVoice,
   };
 

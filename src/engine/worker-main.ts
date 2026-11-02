@@ -104,6 +104,10 @@ async function createEngine(config: EngineConfig, m: ModelManifest): Promise<Syn
     const { ServerEngine } = await import('./engines/server');
     return new ServerEngine(config.server?.url ?? '', config.server?.model ?? '');
   }
+  if (which === 'phonon') {
+    const { PhononEngine } = await import('./engines/phonon');
+    return new PhononEngine(m);
+  }
   if (which === 'kokoro') {
     const { KokoroEngine } = await import('./engines/kokoro');
     return new KokoroEngine();
@@ -230,9 +234,9 @@ async function synthesizeOrFallBack(job: Job): ReturnType<SynthEngine['synthesiz
  * read hardly faster than 2×. Word timings move with the audio.
  */
 async function atSpeed(speed: number, synthesize: (speed: number) => ReturnType<SynthEngine['synthesize']>): ReturnType<SynthEngine['synthesize']> {
-  const { model, stretch } = splitSpeed(speed);
+  const { model, stretch } = splitSpeed(speed, engine?.fixedSpeed === true);
   const result = await synthesize(model);
-  if (stretch <= 1) return result;
+  if (Math.abs(stretch - 1) < 0.001) return result;
   return {
     ...result,
     pcm: timeStretch(result.pcm, result.sampleRate, stretch),

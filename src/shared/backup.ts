@@ -27,6 +27,8 @@ export interface BackupModels {
   piper: string[];
   kokoro: boolean;
   supertonic: boolean;
+  /** Absent in backups from before Phonon. */
+  phonon?: boolean;
 }
 
 export interface Backup {
@@ -129,6 +131,7 @@ export function parseBackup(text: string): Backup {
       piper: Array.isArray(b.models?.piper) ? b.models.piper.filter((v): v is string => typeof v === 'string') : [],
       kokoro: b.models?.kokoro === true,
       supertonic: b.models?.supertonic === true,
+      phonon: b.models?.phonon === true,
     },
     shortcuts: Object.fromEntries(Object.entries(obj(b.shortcuts)).filter(([, v]) => typeof v === 'string')) as Record<string, string>,
     stats: b.stats && typeof b.stats === 'object' ? normalizeStats(b.stats) : null,

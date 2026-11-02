@@ -102,6 +102,7 @@ async function installedModels(manifest: ModelManifest): Promise<BackupModels> {
       .map(([id]) => id),
     kokoro: sharedModelInstalled('kokoro', sizes),
     supertonic: sharedModelInstalled('supertonic', sizes),
+    phonon: sharedModelInstalled('phonon', sizes),
   };
 }
 
@@ -174,7 +175,7 @@ async function followUps(host: HTMLElement, backup: Backup, parts: ReadonlySet<B
   if (parts.has('settings')) {
     const sizes = await readCacheSizes();
     const piper = backup.models.piper.filter((id) => opts.manifest.piper[id] && !piperDownloaded(opts.manifest.piper[id]!, sizes));
-    const shared = (['supertonic', 'kokoro'] as const).filter((e) => backup.models[e] && !sharedModelInstalled(e, sizes));
+    const shared = (['phonon', 'supertonic', 'kokoro'] as const).filter((e) => backup.models[e] && !sharedModelInstalled(e, sizes));
     const count = piper.length + shared.length;
     if (count) host.append(downloadStep(piper, shared, settings, opts));
   }
@@ -207,10 +208,12 @@ function step(title: string, text: string, action: HTMLElement): HTMLElement {
   return box;
 }
 
-function downloadStep(piper: string[], shared: Array<'kokoro' | 'supertonic'>, settings: Settings, opts: BackupPanelOptions): HTMLElement {
+const SHARED_NAMES = { kokoro: ['Kokoro', 'Kokoro-82M'], supertonic: ['Supertonic', 'Supertonic 3'], phonon: ['Phonon', 'Phonon'] } as const;
+
+function downloadStep(piper: string[], shared: Array<'kokoro' | 'supertonic' | 'phonon'>, settings: Settings, opts: BackupPanelOptions): HTMLElement {
   const names = [
     ...piper.map((id) => opts.manifest.piper[id]?.label ?? id),
-    ...shared.map((e) => (e === 'kokoro' ? 'Kokoro' : 'Supertonic')),
+    ...shared.map((e) => SHARED_NAMES[e][0]),
   ];
   const btn = el(document, 'button', { type: 'button', class: 'primary btn-sm' }, `Download ${names.length} voice model${names.length === 1 ? '' : 's'}`);
   const progress = new RowProgress();
@@ -229,14 +232,13 @@ function downloadStep(piper: string[], shared: Array<'kokoro' | 'supertonic'>, s
       ]),
       ...shared.map((engine): Job => [
         `model:${engine}`,
-        `${engine === 'kokoro' ? 'Kokoro-82M' : 'Supertonic 3'} model`,
-        (p, signal) =>
-          downloadSharedModel(
-            engineConfigFor(settings, { engine, purpose: 'download' }),
-            Object.keys(engine === 'kokoro' ? opts.manifest.kokoro.voices : (opts.manifest.supertonic?.voices ?? {})),
-            p,
-            signal,
-          ),
+        `${SHARED_NAMES[engine][1]} model`,
+        (p, signal) => {
+          const voices =
+            engine === 'kokoro' ? opts.manifest.kokoro.voices : engine === 'phonon' ? (opts.manifest.phonon?.voices ?? {}) : (opts.manifest.supertonic?.voices ?? {});
+          const sha256 = Object.fromEntries(Object.entries(opts.manifest.phonon?.voices ?? {}).map(([id, v]) => [id, v.sha256]));
+          return downloadSharedModel(engineConfigFor(settings, { engine, purpose: 'download' }), Object.keys(voices), p, signal, sha256);
+        },
       ]),
     ];
     const show = (): void => {

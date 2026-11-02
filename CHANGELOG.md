@@ -7,6 +7,11 @@ Website-only and documentation changes are not listed: they never reach the exte
 ## Unreleased
 
 ### Added
+- **Phonon voices.** A new engine, Phonon by Gradium: natural, expressive voices that read about
+  twice as fast as real time on an ordinary processor, no graphics card needed. 37 English voices
+  (American, British and a cast of characters, from a pirate captain to a fairy godmother), plus
+  French, Spanish, German and Portuguese voices to try, marked experimental. One 91 MB download,
+  every voice included. Each voice says what it sounds like, and search finds it ("pirate").
 - **Your own speech server.** In Settings → Voice → Your own server, point Aloud at a speech
   server you run, such as Kokoro-FastAPI on a PC at home or over Tailscale, and read with its
   voices from any device: the server does the speaking, Aloud does everything else. Works with any
@@ -28,6 +33,8 @@ Website-only and documentation changes are not listed: they never reach the exte
 - **Read from here** starts at the sentence you right-clicked. In Chrome the browser doesn't say
   where you clicked, so the very first time on a page it starts at the top of the screen, and now
   says so; from then on it starts at the right sentence. ([#4](https://github.com/smailoujaoura/aloud/issues/4))
+- A voice chosen from your own server is kept as your server voice, instead of replacing your
+  Piper voice.
 - Short bits of text in another language, like a site's English "Learn more" under a Spanish
   paragraph, are read in their own language instead of the language around them, when their
   words belong to only one language. ([#2](https://github.com/smailoujaoura/aloud/issues/2))
