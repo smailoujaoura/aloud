@@ -125,7 +125,9 @@ reading positions, history and listening statistics, and private-window activity
   > names carry no hashes, so versions can be compared file by file.
   > Vendored, unmodified third-party files (ONNX Runtime Web, pdf.js, piper-phonemize WASM, and
   > phonon-tts 0.4.2, Gradium's runtime for the Phonon voices: `vendor/phonon/`, MIT OR Apache-2.0,
-  > its WASM built from Rust, the crates listed in its `THIRD_PARTY_LICENSES.md`) are copied from
+  > its WASM built from the Rust in https://github.com/gradium-ai/xn-ptts (`ptts-wasm/`), the
+  > crates listed in its `THIRD_PARTY_LICENSES.md`; the files are the npm package's, byte for byte,
+  > pinned by the lockfile's integrity hash) are copied from
   > node_modules by `scripts/sync-assets.mjs`; versions are listed in THIRD_PARTY.md. phonon-tts
   > starts its own worker from `vendor/phonon/worker.js`; Aloud gives it the model as local `blob:`
   > addresses of files it downloaded and checked itself, so the runtime's own Hugging Face lookup
