@@ -121,8 +121,8 @@ export function buildTextLayer(
 }
 
 function addLine(parent: HTMLElement, view: PdfPageView, line: PdfLineBox): PendingLine {
-  const [x, baseline] = view.toViewport(line.x0, line.y);
-  const [right] = view.toViewport(line.x1, line.y);
+  const [x, baseline] = view.fromLayout(line.x0, line.y);
+  const [right] = view.fromLayout(line.x1, line.y);
   const fontSize = Math.max(1, line.size * pageScale(view, line));
 
   const el = document.createElement('span');
@@ -146,8 +146,8 @@ function addLine(parent: HTMLElement, view: PdfPageView, line: PdfLineBox): Pend
 
 /** Recover the render scale from the page view, which knows its own size in both spaces. */
 function pageScale(view: PdfPageView, line: PdfLineBox): number {
-  const [x0] = view.toViewport(line.x0, line.y);
-  const [x1] = view.toViewport(line.x0 + 100, line.y);
+  const [x0] = view.fromLayout(line.x0, line.y);
+  const [x1] = view.fromLayout(line.x0 + 100, line.y);
   const s = Math.abs(x1 - x0) / 100;
   return s > 0 ? s : 1;
 }

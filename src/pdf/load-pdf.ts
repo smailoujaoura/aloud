@@ -60,6 +60,12 @@ export interface PdfPageView {
   toViewport(x: number, y: number): [number, number];
   /** CSS pixels within this page -> PDF user space. */
   toPdf(x: number, y: number): [number, number];
+  /**
+   * Text-layout space -> CSS pixels within this page. The text (`readPdf`'s items) is laid out
+   * on the page as it is shown, upright, y up; on a page with no rotation and its origin at the
+   * corner, the same as PDF user space.
+   */
+  fromLayout(x: number, y: number): [number, number];
   /** Draw the page into `canvas`, sizing it for `devicePixelRatio`. */
   render(canvas: HTMLCanvasElement): Promise<void>;
   /** Abort an in-flight render (the page scrolled away, or the scale changed). */
@@ -166,7 +172,7 @@ export async function readPdf(source: PdfSource, opts: ReadPdfOptions = {}): Pro
         pageNumber: n,
         width: viewport.width,
         height: viewport.height,
-        items: content.items.map(toItem).filter((it): it is PdfTextItem => it !== null),
+        items: content.items.map((raw) => toItem(raw, viewport)).filter((it): it is PdfTextItem => it !== null),
       });
       if (keepOpen) {
         const found = await page.getAnnotations().catch(() => [] as PdfJsAnnotation[]);
@@ -248,6 +254,7 @@ function makeRenderer(doc: PdfDocumentLike, task: PdfLoadingTaskLike): PdfRender
         height: viewport.height,
         toViewport: (x, y) => viewport.convertToViewportPoint(x, y),
         toPdf: (x, y) => viewport.convertToPdfPoint(x, y),
+        fromLayout: (x, y) => [x * scale, viewport.height - y * scale],
         cancel() {
           try {
             task?.cancel();
@@ -291,25 +298,39 @@ function makeRenderer(doc: PdfDocumentLike, task: PdfLoadingTaskLike): PdfRender
   };
 }
 
-/** pdf.js text item -> the minimal shape `text-layout` works with. Marked-content items have no `str`. */
-function toItem(raw: Record<string, unknown>): PdfTextItem | null {
+/**
+ * pdf.js text item -> the minimal shape `text-layout` works with, on the page as it is shown
+ * (`page` at scale 1: its rotation included). Marked-content items have no `str`.
+ *
+ * Its position is in layout space: upright, y up, origin at the shown page's lower-left corner.
+ * For an unrotated page that is PDF user space. A page can be rotated (`/Rotate`) with its body
+ * text written turned the other way, so that it reads upright: judged in PDF space, all of that
+ * text looked sideways, was dropped, and the file was reported as a scan.
+ */
+export function toItem(raw: Record<string, unknown>, page: Pick<PdfViewportLike, 'height' | 'convertToViewportPoint'>): PdfTextItem | null {
   if (typeof raw.str !== 'string') return null;
   const transform = raw.transform as number[] | undefined;
   if (!transform || transform.length < 6) return null;
-  // Rotated runs are page furniture — the arXiv stamp down the left margin, "DRAFT" watermarks,
-  // sideways table headers. Laid out by baseline they interleave with the body text and produce
-  // sentences like "arXiv:1706.03762v7 [cs.CL]best models from the literature". Skip them: a
-  // text matrix that shears more than a little is not part of the reading flow. (Italics shear
-  // only slightly, and stay.)
-  const [a, b, c, d] = transform as [number, number, number, number];
-  const shear = Math.max(Math.abs(b) / (Math.abs(a) || 1), Math.abs(c) / (Math.abs(d) || 1));
-  if (shear > 0.4) return null;
+  const [a, b, c, d, e, f] = transform as [number, number, number, number, number, number];
+  // The run's origin, and which way its text and its glyphs' tops point, as shown (y down).
+  const [ox, oy] = page.convertToViewportPoint(e, f);
+  const [rx, ry] = page.convertToViewportPoint(e + a, f + b);
+  const [ux, uy] = page.convertToViewportPoint(e + c, f + d);
+  const along = { x: rx - ox, y: ry - oy };
+  const up = { x: ux - ox, y: uy - oy };
+  // Text not upright as shown is page furniture — the arXiv stamp down the left margin, "DRAFT"
+  // watermarks, sideways table headers. Laid out by baseline they interleave with the body text
+  // and produce sentences like "arXiv:1706.03762v7 [cs.CL]best models from the literature". Skip
+  // it: a run that leaves the line by more than a little, or reads right to left or upside down
+  // on the page, is not part of the reading flow. (Italics lean only slightly, and stay.)
+  if (!(along.x > 0) || Math.abs(along.y) / along.x > 0.4) return null;
+  if (!(up.y < 0) || Math.abs(up.x) / -up.y > 0.4) return null;
   return {
     str: raw.str,
-    x: transform[4]!,
-    y: transform[5]!,
+    x: ox,
+    y: page.height - oy,
     width: typeof raw.width === 'number' ? raw.width : 0,
-    height: typeof raw.height === 'number' && raw.height > 0 ? raw.height : Math.abs(transform[3]!) || 10,
+    height: typeof raw.height === 'number' && raw.height > 0 ? raw.height : Math.hypot(up.x, up.y) || 10,
     fontName: typeof raw.fontName === 'string' ? raw.fontName : undefined,
     hasEOL: raw.hasEOL === true,
   };

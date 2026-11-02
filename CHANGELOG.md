@@ -40,6 +40,8 @@ Website-only and documentation changes are not listed: they never reach the exte
 - PDFs: choosing or dropping a second file while the first is still opening shows the second,
   instead of the first replacing it when it finishes. A file that cannot be opened no longer
   leaves work running in the background of the tab.
+- PDFs whose pages are turned sideways in the file and turned back for display are read,
+  instead of being reported as scans with no text.
 - Short bits of text in another language, like a site's English "Learn more" under a Spanish
   paragraph, are read in their own language instead of the language around them, when their
   words belong to only one language. ([#2](https://github.com/smailoujaoura/aloud/issues/2))
