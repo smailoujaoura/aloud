@@ -120,7 +120,7 @@ reading positions, history and listening statistics, and private-window activity
   > `npm ci`: the voice catalogue (`public/models.json`) is committed, and refreshing it is a
   > separate maintainer step. Output is `.output/firefox-mv3/`, byte-identical to the uploaded
   > package — checked by unpacking this archive into another folder, installing from the same
-  > lockfile, building and comparing all 347 files' SHA-256. The code is not minified and file
+  > lockfile, building and comparing all 364 files' SHA-256. The code is not minified and file
   > names carry no hashes, so versions can be compared file by file.
   > Vendored, unmodified third-party files (ONNX Runtime Web, pdf.js, piper-phonemize WASM, and
   > phonon-tts 0.4.2, Gradium's runtime for the Phonon voices: `vendor/phonon/`, MIT OR Apache-2.0,
