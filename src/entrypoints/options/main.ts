@@ -44,7 +44,7 @@ import { applyTheme, watchSystemTheme, THEME_LABEL } from '@/ui/theme';
 import { createThemeSwitch, type ThemeSwitch } from '@/ui/theme-switch';
 import type { ModelManifest } from '@/engine/engines/types';
 
-import { engineDownloaded, piperDownloaded, readCacheSizes, sharedModelBytes, sharedModelInstalled, type CacheSizes } from '@/engine/installed-voices';
+import { engineDownloaded, piperDownloaded, readCacheSizes, sharedModelBytes, type CacheSizes } from '@/engine/installed-voices';
 import { ENGINE_IDS, engineInfo } from '@/shared/engine-catalog';
 import { engineConfigFor } from './engine-config';
 import { renderMediaSpeedPanel } from './media-speed-panel';
@@ -630,7 +630,8 @@ function currentVoiceInstalled(manifest: ModelManifest, sizes: CacheSizes): bool
     const entry = manifest.piper[settings.piperVoice];
     return entry ? piperDownloaded(entry, sizes) : false;
   }
-  return sharedModelInstalled(settings.engine, sizes);
+  // The reader's own server too: ready once it lists voices (it said "download" before).
+  return engineDownloaded(settings.engine, manifest, sizes);
 }
 
 function wire(): void {
