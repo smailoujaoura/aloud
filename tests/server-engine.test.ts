@@ -130,3 +130,13 @@ describe('a server on the internet, and its key', () => {
     expect(fetched).not.toHaveBeenCalled();
   });
 });
+
+describe('a server address from storage or a backup file', () => {
+  it('is kept as Connect would save it, or dropped', async () => {
+    const { sanitizeSettings, withDefaults } = await import('@/shared/settings');
+    const restored = (server: unknown) => sanitizeSettings(withDefaults({ server } as never)).server;
+    expect(restored({ url: 'http://localhost:8880/v1/audio/speech', model: 'kokoro', voices: ['af_heart'] })).toEqual({ url: 'http://localhost:8880/v1', model: 'kokoro', voices: ['af_heart'] });
+    expect(restored({ url: 'javascript:alert(1)', model: 'x', voices: ['a'] })).toEqual({ url: '', model: '', voices: [] });
+    expect(restored({ url: 42 }).url).toBe('');
+  });
+});

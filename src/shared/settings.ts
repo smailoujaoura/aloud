@@ -7,6 +7,7 @@
 import { storage } from 'wxt/utils/storage';
 import type { PronunciationRule } from '@/segment/pronunciations';
 import { withStorageLock } from './storage-lock';
+import { serverBase } from './server-voices';
 
 export type EngineId = 'piper' | 'kokoro' | 'supertonic' | 'phonon' | 'server';
 
@@ -22,10 +23,13 @@ export interface ServerSettings {
 /** The server settings as stored, or empty ones. */
 function serverSettings(raw: unknown): ServerSettings {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<ServerSettings>;
+  // As Connect would have saved it: an http(s) address or nothing. A hand-edited backup with
+  // anything else left a server that Settings could neither use nor remove.
+  const url = typeof r.url === 'string' ? serverBase(r.url) : '';
   return {
-    url: typeof r.url === 'string' ? r.url.trim() : '',
-    model: typeof r.model === 'string' ? r.model.trim() : '',
-    voices: Array.isArray(r.voices) ? r.voices.filter((v): v is string => typeof v === 'string').slice(0, 500) : [],
+    url,
+    model: url && typeof r.model === 'string' ? r.model.trim().slice(0, 100) : '',
+    voices: url && Array.isArray(r.voices) ? r.voices.filter((v): v is string => typeof v === 'string' && v.length > 0 && v.length < 100).slice(0, 500) : [],
   };
 }
 

@@ -2,8 +2,8 @@
 //
 //   npm run build:firefox && npm run test:e2e:firefox
 //
-// What it proves, in order: the add-on installs; the reader starts on an article; the Piper voice
-// loads and returns real audio; playback starts; the word highlight steps through the spoken
+// What it proves, in order: the add-on installs; the reader starts on an article; the voice a new
+// install reads with (Phonon on a computer) loads and returns real audio; playback starts; the word highlight steps through the spoken
 // words in order; "Save as MP3" produces a downloadable MP3; a highlight made on the page is kept in
 // Notes and drawn again after a reload; on a bilingual story (tests/fixtures/bilingual-story.html),
 // only the visible Italian is read, a translation revealed before or during reading is read in
@@ -18,12 +18,13 @@
 //  - Playwright drives the web page and the reading bar (by position: its shadow root is closed).
 //
 // E2E_STORY_ONLY=1 runs the bilingual-story checks alone (no voice download needed).
-// E2E_ENGINE=phonon (with E2E_VOICE=<id>, optional) reads with that engine instead of the default
-// Piper voice; the first run then downloads that engine's model.
+// E2E_ENGINE=piper (with E2E_VOICE=<id>, optional) reads with that engine instead of the default
+// (Phonon); the first run then downloads that engine's model. Speed is not judged here: this
+// Firefox runs WebAssembly many times slower than an ordinary one.
 // Needs Playwright's Firefox (`npx playwright install firefox`) and an audio output: Firefox never
 // starts an AudioContext without one. On a headless Linux box run a PulseAudio null sink and set
 // PULSE_SERVER. Extra library folders (GTK, libpulse) can be supplied with E2E_LD_LIBRARY_PATH.
-// The first run downloads the default Piper voice (~60 MB).
+// A fresh profile each run, so each downloads its voice: Phonon's model about 65 MB, Piper's 60.
 
 import { createServer } from 'node:http';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
