@@ -55,6 +55,23 @@ export function indexNearElement(playlist: PlaylistItem[], el: Element): number 
 }
 
 /**
+ * The sentence holding a text position: where "Read from here" starts once the spot of the
+ * right-click is known. Between sentences, the next one in document order.
+ */
+export function indexAtPosition(playlist: PlaylistItem[], node: Node, offset: number): number | null {
+  if (!node.isConnected) return null;
+  for (const item of playlist) {
+    try {
+      if (item.range?.isPointInRange(node, offset)) return item.playId;
+    } catch {
+      /* a range in another tree */
+    }
+  }
+  const el = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
+  return el ? indexNearElement(playlist, el) : null;
+}
+
+/**
  * The sentence under a viewport point, for click-to-jump. Returns null when the point resolves
  * to no text node at all (e.g. a click on the page background).
  */
@@ -124,7 +141,7 @@ function onGlyph(doc: Document, caret: { node: Node; offset: number }, x: number
  * `caretPositionFromPoint` is the standard; `caretRangeFromPoint` is the older WebKit/Blink name
  * still needed for Chromium before 128. Try both.
  */
-function caretAt(doc: Document, x: number, y: number): { node: Node; offset: number } | null {
+export function caretAt(doc: Document, x: number, y: number): { node: Node; offset: number } | null {
   const d = doc as Document & {
     caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
     caretRangeFromPoint?: (x: number, y: number) => Range | null;

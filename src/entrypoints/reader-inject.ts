@@ -7,6 +7,7 @@
 import { browser } from 'wxt/browser';
 import { defineUnlistedScript } from 'wxt/utils/define-unlisted-script';
 import { ReaderSession } from '@/content/session';
+import { caretAt } from '@/content/playlist-navigation';
 import type { ActivateMode } from '@/shared/messages';
 import { log } from '@/shared/log';
 import { extractArticle } from '@/extract/readability';
@@ -51,11 +52,32 @@ export default defineUnlistedScript(() => {
     if (session) void session.dispose();
     const next = new ReaderSession();
     w.__aloudSession = next;
-    void next.begin(mode, { targetElement: targetElement ?? null, resumeAt }).catch((err) =>
+    const startPoint = mode === 'from-cursor' ? rightClickFor(targetElement ?? null) : null;
+    void next.begin(mode, { targetElement: targetElement ?? null, startPoint, resumeAt }).catch((err) =>
       log.error('session failed to start:', err),
     );
   };
   w.__aloudActivate = activate;
+
+  // Where the last right-click landed, as a spot in the text, for "Read from here": the menu
+  // itself says nothing (Chrome) or only which element (Firefox). Seen from the second time on,
+  // once this script is in the page. A text position, so scrolling before choosing doesn't move it.
+  let lastRightClick: { node: Node; offset: number; target: EventTarget | null; at: number } | null = null;
+  window.addEventListener(
+    'contextmenu',
+    (e) => {
+      const caret = caretAt(document, e.clientX, e.clientY);
+      lastRightClick = caret ? { ...caret, target: e.target, at: Date.now() } : null;
+    },
+    { capture: true, passive: true },
+  );
+  const rightClickFor = (target: Element | null): { node: Node; offset: number } | null => {
+    const c = lastRightClick;
+    if (!c || Date.now() - c.at > 60_000) return null;
+    // Firefox named the element: the recorded spot must be the same click.
+    if (target && !(c.target instanceof Node && (target === c.target || target.contains(c.target)))) return null;
+    return { node: c.node, offset: c.offset };
+  };
 
   browser.runtime.onMessage.addListener((msg: unknown, _sender, sendResponse: (reply: unknown) => void) => {
     const m = msg as { type?: string; mode?: ActivateMode; targetElementId?: number; fresh?: boolean; resumeAt?: unknown };

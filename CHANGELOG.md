@@ -18,6 +18,9 @@ Website-only and documentation changes are not listed: they never reach the exte
   room for its widest value from the start. ([#6](https://github.com/smailoujaoura/aloud/issues/6))
 - Chinese, Japanese, Thai and other languages written without spaces are highlighted word by
   word, instead of the whole sentence at once. ([#7](https://github.com/smailoujaoura/aloud/issues/7))
+- **Read from here** starts at the sentence you right-clicked. In Chrome the browser doesn't say
+  where you clicked, so the very first time on a page it starts at the top of the screen, and now
+  says so; from then on it starts at the right sentence. ([#4](https://github.com/smailoujaoura/aloud/issues/4))
 
 ### Changed
 - Pronunciation fixes can be limited to one language, so a fix for how English is read no longer

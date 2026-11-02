@@ -69,7 +69,7 @@ import {
   leadSilenceSec,
   type PlaylistItem,
 } from './playlist';
-import { firstSentenceInViewport, indexAtPoint, indexNearElement } from './playlist-navigation';
+import { firstSentenceInViewport, indexAtPoint, indexNearElement, indexAtPosition } from './playlist-navigation';
 import { TapToSeek } from './tap-to-seek';
 import { MediaControls } from './media-session';
 import { SleepTimer, type SleepChoice } from './sleep-timer';
@@ -80,6 +80,8 @@ import { READING_ATTR } from '@/annotate/palette';
 interface BeginOptions {
   /** For "Read from here": the element that was right-clicked, when the browser can tell us. */
   targetElement?: Element | null;
+  /** For "Read from here": the exact spot right-clicked, when this page's script saw it. */
+  startPoint?: { node: Node; offset: number } | null;
   /**
    * A document whose structure the caller already knows, supplied instead of guessing at it.
    *
@@ -195,6 +197,7 @@ export class ReaderSession {
   private playlist: PlaylistItem[] = [];
   private mode: ActivateMode = 'article';
   private startTarget: Element | null = null;
+  private startPoint: { node: Node; offset: number } | null = null;
   private selection: SelectionSnapshot = { text: '', range: null };
 
   // ---- where we are --------------------------------------------------------
@@ -333,6 +336,7 @@ export class ReaderSession {
   async begin(mode: ActivateMode = 'article', opts: BeginOptions = {}): Promise<void> {
     this.mode = mode;
     this.startTarget = opts.targetElement ?? null;
+    this.startPoint = opts.startPoint ?? null;
     this.knownArticle = opts.knownArticle ?? null;
     this.tipsAllowed = opts.showTips ?? true;
     this.finishedHook = opts.onFinished ?? null;
@@ -716,9 +720,11 @@ export class ReaderSession {
 
   /** "Read from here": start at the clicked element, or at the first sentence on screen. */
   private startFromCursor(): void {
-    const startAt = this.startTarget
-      ? indexNearElement(this.playlist, this.startTarget)
-      : firstSentenceInViewport(this.playlist);
+    // The spot right-clicked when it is known (this page's script saw the click), else the
+    // element (Firefox says which), else the first sentence on screen (Chrome, the first time).
+    const atPoint = this.startPoint ? indexAtPosition(this.playlist, this.startPoint.node, this.startPoint.offset) : null;
+    const startAt = atPoint ?? (this.startTarget ? indexNearElement(this.playlist, this.startTarget) : firstSentenceInViewport(this.playlist));
+    if (atPoint == null && !this.startTarget) this.bar?.flash('Reading from the top of the screen', 'info');
     if (startAt <= 0) return;
     this.currentPlayId = startAt;
     this.state.currentIndex = startAt;
