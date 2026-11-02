@@ -14,6 +14,8 @@
  * which is why the alignment compares folded vowel classes rather than exact symbols.
  */
 
+import { wordPieces } from '@/shared/word-pieces';
+
 export interface TextWord {
   /** Where the word is highlighted: the token without surrounding punctuation. */
   from: number;
@@ -32,9 +34,8 @@ export interface TimedSound {
 /** Whitespace-separated tokens, each with the span to highlight. */
 export function splitWords(text: string): TextWord[] {
   const words: TextWord[] = [];
-  for (const m of text.matchAll(/\S+/g)) {
-    const token = m[0];
-    const at = m.index ?? 0;
+  // Split at spaces, and within Chinese, Japanese, Thai… by the browser's segmenter.
+  for (const { at, token } of wordPieces(text)) {
     const lead = token.search(/[\p{L}\p{N}]/u);
     if (lead < 0) {
       // "—", "…", "&": nothing to highlight on its own, but "&" is still said, so keep it and let

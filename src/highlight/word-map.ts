@@ -12,6 +12,8 @@
  * the previous word simply stays lit.
  */
 
+import { wordPieces } from '@/shared/word-pieces';
+
 interface Token {
   from: number;
   to: number;
@@ -20,9 +22,8 @@ interface Token {
 
 function tokens(text: string): Token[] {
   const out: Token[] = [];
-  for (const m of text.matchAll(/\S+/g)) {
-    const at = m.index ?? 0;
-    const raw = m[0];
+  // The same words as word timing uses (shared/word-pieces.ts): Chinese split into words too.
+  for (const { at, token: raw } of wordPieces(text)) {
     const lead = raw.search(/[\p{L}\p{N}]/u);
     let tail = raw.length;
     // Marks end words too — Hindi vowel signs, Arabic vowel marks (see engine/g2p/word-timing.ts).

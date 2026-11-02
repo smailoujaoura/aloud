@@ -12,10 +12,12 @@ Website-only and documentation changes are not listed: they never reach the exte
   a **Get one** button, instead of being read by an English voice as noise. Languages written in
   Latin letters are still read in English, as before.
 - Supertonic voices previewed in Japanese, Croatian and Lithuanian now speak their own language,
-  not the English sample sentence. ([#3](https://github.com/smailoujaoura/aloud/issues/3))
+  not the English sample sentence. ([#3](https://github.com/smailoujaoura/aloud/issues/3), [#8](https://github.com/smailoujaoura/aloud/issues/8))
 - The language badge on the bar (ZH, FR, ...) shows the language's name when you hover over it.
 - The bar no longer jumps to two rows when the sentence counter reaches 10 (or 100): it keeps
   room for its widest value from the start. ([#6](https://github.com/smailoujaoura/aloud/issues/6))
+- Chinese, Japanese, Thai and other languages written without spaces are highlighted word by
+  word, instead of the whole sentence at once. ([#7](https://github.com/smailoujaoura/aloud/issues/7))
 
 ## 1.0.0 (2026-10-23)
 
