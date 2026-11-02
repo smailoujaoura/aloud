@@ -12,6 +12,8 @@ import { comboFromEvent, formatBinding } from '@/media-speed/keys';
 import { clearSiteSpeeds, loadSiteSpeeds } from '@/media-speed/site-speeds';
 import { DEFAULT_MEDIA_SPEED, type MediaSpeedSettings } from '@/shared/settings';
 import { renderSiteList } from './site-list';
+import { capabilities } from '@/shared/browser-env';
+import { browser } from 'wxt/browser';
 
 export interface MediaSpeedPanelOptions {
   settings: MediaSpeedSettings;
@@ -33,8 +35,11 @@ const KEY_ROWS: Array<{ key: keyof MediaSpeedSettings['keys']; label: string; hi
 export function renderMediaSpeedPanel(host: HTMLElement, opts: MediaSpeedPanelOptions): void {
   const s = opts.settings;
   const rows: HTMLElement[] = [];
+  // A phone has no keys: the control is the button on the video (media-speed/touch-button.ts).
+  const phone = capabilities().touchFirst;
 
   // ---- where it runs ----
+  if (phone) rows.push(everyVideoRow(s, opts));
   const sites = el(document, 'div', { class: 'speed-sites' });
   renderSiteList(sites, {
     heading: 'Starts by itself on',
@@ -48,7 +53,7 @@ export function renderMediaSpeedPanel(host: HTMLElement, opts: MediaSpeedPanelOp
 
   // ---- how it behaves ----
   rows.push(
-    labelledRow('Step', 'How much one press of faster or slower moves the speed', select(
+    labelledRow('Step', phone ? 'How much one tap of − or + moves the speed' : 'How much one press of faster or slower moves the speed', select(
       [0.05, 0.1, 0.25, 0.5].map((v) => ({ value: String(v), label: `${v}×` })),
       String(s.step),
       (value) => void opts.save({ step: Number(value) }),
@@ -88,7 +93,12 @@ export function renderMediaSpeedPanel(host: HTMLElement, opts: MediaSpeedPanelOp
   forgetRow.append(forget);
   rows.push(forgetRow);
 
-  // ---- the keys ----
+  // ---- the keys ---- (none on a phone)
+  if (phone) {
+    host.replaceChildren(...rows);
+    host.classList.toggle('is-off', !s.enabled);
+    return;
+  }
   rows.push(el(document, 'p', { class: 'sub-label' }, 'Keys, while a page has a video or audio'));
   const keys = el(document, 'div', { class: 'speed-keys' });
   for (const row of KEY_ROWS) keys.append(keyRow(row, s, opts));
@@ -179,6 +189,40 @@ function labelledRow(label: string, hint: string, control: HTMLElement): HTMLEle
   const text = el(document, 'span', { class: 'row-label' });
   text.append(el(document, 'span', {}, label), el(document, 'span', { class: 'muted small' }, hint));
   row.append(text, control);
+  return row;
+}
+
+/**
+ * On a phone: the speed button on every video, from one switch. A phone has no shortcut to start
+ * the control on a page, so without this it only ran on sites listed one by one. It needs
+ * access to every site, asked for here, from the tap itself (permissions.request must be).
+ */
+function everyVideoRow(s: MediaSpeedSettings, opts: MediaSpeedPanelOptions): HTMLElement {
+  const row = el(document, 'label', { class: 'row check' });
+  const box = el(document, 'input', { type: 'checkbox' }) as HTMLInputElement;
+  box.checked = s.alwaysOn.includes('*');
+  const text = el(document, 'span', {}, 'Show the speed button on every video');
+  text.append(el(document, 'span', { class: 'muted small check-hint' }, 'Tap it to go slower or faster. Your browser asks once to let Aloud work on every site.'));
+  box.addEventListener('click', () => {
+    const others = s.alwaysOn.filter((site) => site !== '*');
+    if (!box.checked) {
+      void opts.save({ alwaysOn: others });
+      return;
+    }
+    void browser.permissions
+      .request({ origins: ['*://*/*'] })
+      .catch(() => false)
+      .then(async (granted) => {
+        if (!granted) {
+          box.checked = false;
+          opts.toast('Without that permission the button shows only on the sites listed below');
+          return;
+        }
+        await opts.save({ alwaysOn: [...others, '*'] });
+        opts.toast('The speed button now shows on every video');
+      });
+  });
+  row.append(box, text);
   return row;
 }
 

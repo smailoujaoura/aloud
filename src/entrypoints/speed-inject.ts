@@ -12,6 +12,7 @@ import { loadSiteSpeeds, rememberSiteSpeed, type SiteSpeeds } from '@/media-spee
 import { formatRate } from '@/media-speed/rate';
 import { getSettings, watchSettings } from '@/shared/settings';
 import { log } from '@/shared/log';
+import { capabilities } from '@/shared/browser-env';
 
 interface SpeedGlobal {
   __aloudSpeed?: MediaSpeedController;
@@ -68,6 +69,8 @@ export default defineUnlistedScript(() => {
       settings: settings.mediaSpeed,
       onMedia: (media) => guard.track(media),
       initialRate: remembered ?? startAt,
+      // A phone has no keys: a speed button on the video instead.
+      touchButton: capabilities().touchFirst,
       // Only the top frame remembers: an embedded player would otherwise store its own host.
       onRate: (rate) => {
         if (settingsNow.rememberPerSite && window.top === window) void rememberSiteSpeed(host, rate);

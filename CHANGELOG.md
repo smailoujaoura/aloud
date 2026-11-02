@@ -20,6 +20,10 @@ Website-only and documentation changes are not listed: they never reach the exte
   A server that asks for a key gets one (kept on this device only, never in backups), and a
   server on the internet is only reached over https.
   ([#9](https://github.com/smailoujaoura/aloud/issues/9))
+- **Video speed on phones.** A phone has no keys, so the video speed control was out of reach
+  there. Now a small speed button sits on the video, appearing when it starts or when you tap
+  it: tap it for − and +, tap the number for normal speed. Settings → Video speed has one switch
+  to show it on every video. It shows in full screen too.
 
 ### Fixed
 - Text in a writing system none of your voices can read (Chinese, Japanese, Russian, Arabic and

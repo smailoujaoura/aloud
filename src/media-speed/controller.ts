@@ -27,6 +27,8 @@ import { clampRate, formatRate, nextPreset, stepRate } from './rate';
 import { isTypingEvent, matchesBinding } from './keys';
 import type { MediaSpeedSettings } from '@/shared/settings';
 import { readerOwnsKey } from '@/shared/reader-keys';
+import { TOP_LAYER_HOST_STYLE, lower, raise, topLayerHost } from './top-layer';
+import { TouchSpeedButton } from './touch-button';
 
 /** Aloud's own reading bar: its keys are its own (see ui/control-bar.ts). */
 const CONTROL_HOST_ID = 'aloud-control-host';
@@ -47,6 +49,8 @@ export interface ControllerHost {
   onRate(rate: number): void;
   /** Called for each media element as it is found (the autoplay guard); returns its unhook. */
   onMedia?(media: HTMLMediaElement): () => void;
+  /** A touch device, with no keys: put a speed button on the video (touch-button.ts). */
+  touchButton?: boolean;
 }
 
 type Media = HTMLMediaElement;
@@ -72,6 +76,7 @@ export class MediaSpeedController {
   private readonly listeners = new Map<Media, () => void>();
   private observer: MutationObserver | null = null;
   private badge: { host: HTMLElement; text: HTMLElement; timer: number } | null = null;
+  private touch: TouchSpeedButton | null = null;
   private readonly cleanups: Array<() => void> = [];
   private settings: MediaSpeedSettings;
 
@@ -99,6 +104,25 @@ export class MediaSpeedController {
     // `click` and `pointerup` too: a site's speed menu acts on the click, not the press.
     for (const type of ['pointerdown', 'pointerup', 'click', 'keydown', 'touchstart', 'touchend']) {
       this.listen(window, type, () => void (this.lastInput = Date.now()), true);
+    }
+    if (this.host.touchButton) {
+      const touch = new TouchSpeedButton({
+        rate: () => this.rate ?? currentRateOf(this.known) ?? 1,
+        setRate: (rate) => {
+          if (this.known.size) this.setRate(rate, false);
+        },
+        stepFrom: (rate, direction) => stepRate(rate, this.settings.step, direction),
+        player: () => {
+          this.prune();
+          return activeMedia(this.known);
+        },
+      });
+      touch.start();
+      this.touch = touch;
+      this.cleanups.push(() => {
+        touch.stop();
+        this.touch = null;
+      });
     }
   }
 
@@ -147,6 +171,7 @@ export class MediaSpeedController {
     this.overrides = new WeakMap();
     for (const media of this.known) this.apply(media);
     if (show) this.showBadge(formatRate(this.rate));
+    this.touch?.refresh();
     this.host.onRate(this.rate);
   }
 
@@ -199,6 +224,10 @@ export class MediaSpeedController {
       if (this.chosen) this.apply(media);
     };
     const off: Array<() => void> = [];
+    // On a phone, a video starting shows its speed button for a moment.
+    const wake = (): void => this.touch?.wake();
+    media.addEventListener('play', wake);
+    off.push(() => media.removeEventListener('play', wake));
     for (const event of ['loadstart', 'loadeddata', 'canplay', 'play', 'playing', 'durationchange']) {
       media.addEventListener(event, reapply);
       off.push(() => media.removeEventListener(event, reapply));
@@ -257,6 +286,7 @@ export class MediaSpeedController {
         }
         // Follow it on screen, but never remember it: a click must not rewrite the site's speed.
         this.rate = clampRate(media.playbackRate);
+        this.touch?.refresh();
         // And it is the rate on this player now. Left at our earlier write, a later choice of
         // that same rate looked like our own echo and was ignored — then "faster" stepped from
         // the stale 1× and turned 1.75× into 1.1×.
@@ -267,6 +297,7 @@ export class MediaSpeedController {
       // The viewer changed it through the site's own speed menu: follow, and match the rest.
       this.chosen = true;
       this.rate = clampRate(media.playbackRate);
+      this.touch?.refresh();
       this.applied.set(media, this.rate); // ours now too: the player restoring it later is no news
       for (const other of this.known) if (other !== media) this.apply(other);
       this.host.onRate(this.rate);
@@ -396,12 +427,9 @@ export class MediaSpeedController {
     if (!parent) return null;
     const host = document.createElement('div');
     host.id = BADGE_HOST_ID;
-    // A popover where the browser has them: shown in the top layer, above a video in full screen
-    // (see raise). The rest undoes the browser's own popover look: inset 0, a border, a background.
-    if (POPOVERS) host.setAttribute('popover', 'manual');
-    host.style.cssText =
-      'position:fixed;z-index:2147483646;pointer-events:none;display:none;' +
-      'inset:auto;margin:0;padding:0;border:0;background:transparent;overflow:visible;width:auto;height:auto;';
+    // A popover where the browser has them: shown above a video in full screen (top-layer.ts).
+    topLayerHost(host);
+    host.style.cssText = `${TOP_LAYER_HOST_STYLE}pointer-events:none;`;
     const root = host.attachShadow({ mode: 'closed' });
     const style = document.createElement('style');
     style.textContent = `
@@ -453,41 +481,6 @@ function mediaWithin(root: Element | ShadowRoot | Document): Media[] {
 function currentRateOf(media: Iterable<Media>): number | null {
   for (const el of media) return el.playbackRate;
   return null;
-}
-
-/** Can elements be shown in the top layer here (the Popover API: Chrome 114, Firefox 125)? */
-const POPOVERS = typeof HTMLElement !== 'undefined' && 'showPopover' in HTMLElement.prototype;
-
-/**
- * Show the badge above everything, a video in full screen included. In full screen the browser
- * draws only the full-screen element and what is inside it, so a badge anywhere else in the page
- * was hidden however high its z-index (a Loom video on Skool, YouTube, any site). A popover is
- * drawn in the top layer, where the full-screen element is, and above it when opened after it:
- * so it is closed and opened again each time, to come out on top. Without popovers, the badge
- * moves into the full-screen element when it can hold one (a player's box, not a <video>).
- */
-function raise(host: HTMLElement): void {
-  if (POPOVERS && host.isConnected) {
-    try {
-      if (host.matches(':popover-open')) host.hidePopover();
-      host.showPopover();
-      return;
-    } catch {
-      /* not shown as a popover: the fallback below */
-    }
-  }
-  const full = document.fullscreenElement;
-  const into = full && !(full instanceof HTMLMediaElement) ? full : document.body ?? document.documentElement;
-  if (into && host.parentElement !== into) into.append(host);
-}
-
-function lower(host: HTMLElement): void {
-  if (!POPOVERS) return;
-  try {
-    if (host.matches(':popover-open')) host.hidePopover();
-  } catch {
-    /* already gone */
-  }
 }
 
 /** The on-screen box of the biggest visible media element, for placing the badge. */

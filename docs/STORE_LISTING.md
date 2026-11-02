@@ -25,7 +25,7 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 > • PDFs too: real pages, highlighted where the text sits; mark them up and save the marks into the file
 > • Picks up at the sentence you stopped at; a reading queue for later; save any article as an MP3
 > • Highlights, notes and tags on any website, kept on your device and exportable as Markdown
-> • The same keys for reading and for any video or audio on the web: S slower, D faster, R normal speed, Z back, X forward. It can also stop videos that play by themselves
+> • The same keys for reading and for any video or audio on the web: S slower, D faster, R normal speed, Z back, X forward (on a phone, a speed button on the video). It can also stop videos that play by themselves
 > • Every key can be changed. Light and dark themes. Works on Firefox for Android too.
 >
 > Private by construction: there is no Aloud server. Voices download once from Hugging Face; after
