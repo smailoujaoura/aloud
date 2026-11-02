@@ -34,21 +34,43 @@ const MIN_RESUME_INDEX = 2;
 /**
  * A stable key for "this document".
  *
- * The fragment is dropped (it is where on the page, not which page), and so are the query
- * parameters that only record how someone arrived — `utm_*`, `fbclid` and friends — so the same
- * article shared through two channels resumes in both.
+ * The fragment is dropped when it is where on the page (`#section-2`, a `#:~:text=` link), and
+ * kept when it is which page: an app that routes by it (`#/article/one`, `#!/post/7`) shows a
+ * different article for each. So are dropped the query parameters that only record how someone
+ * arrived — `utm_*`, `fbclid` and friends — so the same article shared through two channels
+ * resumes in both.
  */
 export function documentKey(url: string): string {
+  return canonical(url, true);
+}
+
+/**
+ * The key `documentKey` gave before routes were kept: every fragment dropped. What was saved
+ * under it for a routed page moves to the page's own key when that page is read again
+ * (shared/former-key.ts); notes find their page by the address they were made on.
+ */
+export function formerDocumentKey(url: string): string {
+  return canonical(url, false);
+}
+
+function canonical(url: string, keepRoute: boolean): string {
   try {
     const u = new URL(url);
+    const route = keepRoute ? routeOf(u.hash) : '';
     u.hash = '';
     for (const name of [...u.searchParams.keys()]) {
       if (/^(utm_[a-z]+|fbclid|gclid|mc_cid|mc_eid|ref|ref_src)$/i.test(name)) u.searchParams.delete(name);
     }
-    return u.toString();
+    return u.toString() + route;
   } catch {
     return url;
   }
+}
+
+/** `#/article/one` and `#!/post/7` are routes; `#/` alone is the app's start, and anything else is a place on the page. */
+function routeOf(hash: string): string {
+  const route = hash.split(':~:')[0] ?? '';
+  return /^#!?\/./.test(route) || /^#![^/]/.test(route) ? route : '';
 }
 
 export function excerptOf(text: string): string {

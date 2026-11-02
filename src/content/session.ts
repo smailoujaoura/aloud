@@ -41,6 +41,7 @@ import { listVoices, parseVoiceValue, voiceValue, withServerVoices, type EngineV
 import {
   clearPosition,
   documentKey,
+  formerDocumentKey,
   excerptOf,
   loadPosition,
   resumeIndex,
@@ -382,7 +383,7 @@ export class ReaderSession {
     }
 
     this.docKey = this.knownArticle?.key ?? documentKey(location.href);
-    const former = this.knownArticle?.formerKey;
+    const former = this.knownArticle ? this.knownArticle.formerKey : formerDocumentKey(location.href);
     if (former) await adoptFormerKey(former, this.docKey, this.playlist.map((p) => p.spokenText), this.docSource().title);
     if (superseded()) return;
     await this.maybeResume();

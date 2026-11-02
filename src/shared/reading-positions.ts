@@ -14,7 +14,7 @@ import { withPosition, type PositionMap, type SavedPosition } from './position-m
 import { withStorageLock } from './storage-lock';
 import { normalizePosition, recordsOf } from './record-shapes';
 
-export { documentKey, excerptOf, resumeIndex, type SavedPosition } from './position-match';
+export { documentKey, excerptOf, formerDocumentKey, resumeIndex, type SavedPosition } from './position-match';
 
 const item = storage.defineItem<PositionMap>('local:readingPositions', { fallback: {} });
 

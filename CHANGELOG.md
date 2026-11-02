@@ -46,6 +46,9 @@ Website-only and documentation changes are not listed: they never reach the exte
   History and one reading position. A PDF is now recognised by its text, so a renamed copy, or
   the same file saved with your highlights, still picks up where you left off. What was saved
   before moves over the first time you open each PDF again.
+- Sites that show each article at its own `#/...` address (single-page apps) keep a separate
+  place, queue entry and notes for each article, instead of treating them all as one page. Notes
+  you already made there stay with the article they were made on.
 - Short bits of text in another language, like a site's English "Learn more" under a Spanish
   paragraph, are read in their own language instead of the language around them, when their
   words belong to only one language. ([#2](https://github.com/smailoujaoura/aloud/issues/2))

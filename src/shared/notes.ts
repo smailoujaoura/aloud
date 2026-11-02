@@ -11,6 +11,7 @@ import { normalizeSource, sourceUrl } from './doc-source';
 import type { TextAnchor } from '@/annotate/anchor';
 import type { NoteStyle } from './settings';
 import { withStorageLock } from './storage-lock';
+import { documentKey } from './position-match';
 
 export interface NotePosition {
   /** Playlist index of the sentence, and the playlist length then (see `position-match.ts`). */
@@ -166,7 +167,9 @@ export function parseTags(input: string): string[] {
 
 /** Notes on the page with document key `key`. */
 export function notesForPage(notes: readonly Note[], key: string): Note[] {
-  return notes.filter((n) => n.source.key === key);
+  // Or made on this page under an older key: a routed page's notes were kept under its address
+  // without the route (shared/position-match.ts), and the address they were made on says which.
+  return notes.filter((n) => n.source.key === key || (n.source.reopen?.kind === 'web' && documentKey(n.source.reopen.url) === key));
 }
 
 export const NOTES_FILE_FORMAT = 'aloud-notes';
