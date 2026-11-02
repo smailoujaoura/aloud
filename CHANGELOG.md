@@ -21,6 +21,9 @@ Website-only and documentation changes are not listed: they never reach the exte
 - **Read from here** starts at the sentence you right-clicked. In Chrome the browser doesn't say
   where you clicked, so the very first time on a page it starts at the top of the screen, and now
   says so; from then on it starts at the right sentence. ([#4](https://github.com/smailoujaoura/aloud/issues/4))
+- Short bits of text in another language, like a site's English "Learn more" under a Spanish
+  paragraph, are read in their own language instead of the language around them, when their
+  words belong to only one language. ([#2](https://github.com/smailoujaoura/aloud/issues/2))
 
 ### Changed
 - Pronunciation fixes can be limited to one language, so a fix for how English is read no longer

@@ -1743,6 +1743,7 @@ export class ReaderSession {
       markup: 'marked by the page',
       detected: 'detected',
       script: 'from its script',
+      words: 'from its words',
       context: 'from the passages around it',
       page: 'the page’s language',
     };

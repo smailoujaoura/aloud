@@ -29,6 +29,7 @@
  * one language. Pure apart from the detector it is given, so the rules are testable.
  */
 import { primaryLanguage } from '@/shared/language-voice';
+import { commonWordsLanguage } from './common-words';
 
 export interface Detection {
   language: string;
@@ -44,7 +45,7 @@ export interface PassageInput {
   markup: string;
 }
 
-export type LanguageSource = 'markup' | 'detected' | 'script' | 'context' | 'page';
+export type LanguageSource = 'markup' | 'detected' | 'script' | 'words' | 'context' | 'page';
 
 export interface PassageLanguage {
   /** Primary language (`it`, `en`), or '' when nothing could tell. */
@@ -233,6 +234,12 @@ export async function planLanguages(
       const script = scriptLanguage(passage.text);
       if (script) decided = { language: script, source: 'script' };
     }
+    // Too short for the detector, or not reliably judged: words only one language uses ("Learn
+    // more" on a Spanish page, "Merci" in an English story). See content/common-words.ts.
+    if (!decided) {
+      const words = commonWordsLanguage(passage.text);
+      if (words) decided = { language: words, source: 'words' };
+    }
     out.push(decided);
   }
 
@@ -247,7 +254,9 @@ export async function planLanguages(
   };
   for (let i = 0; i < out.length; i++) {
     const d = out[i];
-    if (!d || d.source === 'markup' || !short[i]) continue;
+    // Words only one language uses are that language even between two others: a site's "Learn
+    // more" between Spanish paragraphs is still English.
+    if (!d || d.source === 'markup' || d.source === 'words' || !short[i]) continue;
     const before = neighbour(i, -1);
     const after = neighbour(i, 1);
     if (before && after && before.language === after.language && before.language !== d.language) {

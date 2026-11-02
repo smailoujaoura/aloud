@@ -177,3 +177,39 @@ describe('a short selection', () => {
     expect(plan[0]!.language).toBe('en');
   });
 });
+
+describe('short passages in words only one language uses (#2)', () => {
+  /** Spanish and English by a few words; nothing short is ever reliable, as with CLD. */
+  const es: Detector = async (text) => {
+    const t = text.toLowerCase();
+    const reliable = t.split(/\s+/).length >= 4;
+    if (/\b(este|dominio|para|sin|uso)\b/.test(t)) return { language: 'es', reliable };
+    if (/\b(the|this|for|use)\b/.test(t)) return { language: 'en', reliable };
+    return { language: 'und', reliable: false };
+  };
+
+  it('a site\'s "Learn more" after a Spanish paragraph is English, not Spanish', async () => {
+    const plan = await planLanguages(
+      [p('Este dominio está destinado al uso en ejemplos de documentación sin necesidad de permiso.'), p('Learn more')],
+      es,
+      'en',
+    );
+    expect(plan.map((l) => l.language)).toEqual(['es', 'en']);
+    expect(plan[1]!.source).toBe('words');
+  });
+
+  it('stays English even between two Spanish paragraphs', async () => {
+    const spanish = p('Este dominio está destinado al uso en ejemplos de documentación sin necesidad de permiso.');
+    const plan = await planLanguages([spanish, p('Learn more'), spanish], es, 'en');
+    expect(plan.map((l) => l.language)).toEqual(['es', 'en', 'es']);
+  });
+
+  it('a word two languages share still follows the conversation', async () => {
+    const plan = await planLanguages(
+      [p('La volpe chiese che cosa fosse successo, e il pollo rispose:'), p('No!'), p('Il pollo corse via dalla volpe e dalla sua tana.')],
+      detector,
+      'en',
+    );
+    expect(plan.map((l) => l.language)).toEqual(['it', 'it', 'it']);
+  });
+});
