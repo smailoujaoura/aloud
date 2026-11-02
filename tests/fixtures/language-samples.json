@@ -1,0 +1,78 @@
+{
+  "$comment": "Labelled passages for measuring language detection (tests/language-accuracy.test.ts). Three lengths per language: short (1-3 words, the kind of line a page's interface has), medium (4-8 words) and long (a full sentence). detector.json holds what Chromium's detector (chrome.i18n.detectLanguage) answered for each, recorded once.",
+  "en": {
+    "short": ["Read more", "Sign in", "Thank you"],
+    "medium": ["The train leaves at noon.", "She opened the window slowly.", "We should talk about this tomorrow."],
+    "long": ["The keeper climbed the stairs every evening at dusk and lit the great lamp before the ships came in.", "Most of the town was still asleep when the baker opened his shop and set the first loaves out to cool."]
+  },
+  "fr": {
+    "short": ["Lire la suite", "Merci beaucoup", "Se connecter"],
+    "medium": ["Le train part à midi.", "Elle a ouvert la fenêtre doucement.", "Nous en parlerons demain matin."],
+    "long": ["Le gardien montait l'escalier chaque soir à la tombée de la nuit et allumait la grande lampe avant le retour des bateaux.", "La plupart des habitants dormaient encore quand le boulanger ouvrit sa boutique et sortit les premiers pains."]
+  },
+  "es": {
+    "short": ["Leer más", "Muchas gracias", "Iniciar sesión"],
+    "medium": ["El tren sale a mediodía.", "Ella abrió la ventana despacio.", "Hablaremos de esto mañana por la mañana."],
+    "long": ["El guardián subía la escalera cada tarde al anochecer y encendía la gran lámpara antes de que volvieran los barcos.", "Casi todo el pueblo dormía todavía cuando el panadero abrió la tienda y sacó los primeros panes."]
+  },
+  "de": {
+    "short": ["Weiterlesen", "Vielen Dank", "Anmelden"],
+    "medium": ["Der Zug fährt um zwölf Uhr.", "Sie öffnete langsam das Fenster.", "Wir sprechen morgen früh darüber."],
+    "long": ["Der Wärter stieg jeden Abend bei Einbruch der Dunkelheit die Treppe hinauf und zündete die große Lampe an, bevor die Schiffe kamen.", "Fast die ganze Stadt schlief noch, als der Bäcker seinen Laden öffnete und die ersten Brote hinausstellte."]
+  },
+  "it": {
+    "short": ["Leggi di più", "Grazie mille", "Accedi"],
+    "medium": ["Il treno parte a mezzogiorno.", "Lei aprì lentamente la finestra.", "Ne parliamo domani mattina."],
+    "long": ["Il guardiano saliva le scale ogni sera al tramonto e accendeva la grande lampada prima che tornassero le navi.", "Quasi tutta la città dormiva ancora quando il fornaio aprì il negozio e mise fuori i primi pani."]
+  },
+  "pt": {
+    "short": ["Leia mais", "Muito obrigado", "Entrar"],
+    "medium": ["O comboio parte ao meio-dia.", "Ela abriu a janela devagar.", "Falamos sobre isso amanhã de manhã."],
+    "long": ["O guardião subia a escada todas as noites ao anoitecer e acendia a grande lâmpada antes de os barcos voltarem.", "Quase toda a cidade ainda dormia quando o padeiro abriu a loja e pôs os primeiros pães a arrefecer."]
+  },
+  "nl": {
+    "short": ["Lees meer", "Dank je wel", "Inloggen"],
+    "medium": ["De trein vertrekt om twaalf uur.", "Ze opende langzaam het raam.", "We praten er morgen verder over."],
+    "long": ["De wachter beklom elke avond bij het vallen van de nacht de trap en stak de grote lamp aan voordat de schepen terugkwamen.", "Bijna de hele stad sliep nog toen de bakker zijn winkel opende en de eerste broden buiten zette."]
+  },
+  "pl": {
+    "short": ["Czytaj dalej", "Dziękuję bardzo", "Zaloguj się"],
+    "medium": ["Pociąg odjeżdża w południe.", "Powoli otworzyła okno.", "Porozmawiamy o tym jutro rano."],
+    "long": ["Latarnik co wieczór o zmierzchu wchodził po schodach i zapalał wielką lampę, zanim statki wróciły do portu.", "Prawie całe miasto jeszcze spało, kiedy piekarz otworzył sklep i wystawił pierwsze bochenki chleba."]
+  },
+  "ru": {
+    "short": ["Читать далее", "Большое спасибо", "Войти"],
+    "medium": ["Поезд отправляется в полдень.", "Она медленно открыла окно.", "Поговорим об этом завтра утром."],
+    "long": ["Смотритель каждый вечер на закате поднимался по лестнице и зажигал большую лампу, пока корабли не вернулись в порт.", "Почти весь город ещё спал, когда пекарь открыл лавку и выставил первые буханки хлеба."]
+  },
+  "tr": {
+    "short": ["Devamını oku", "Çok teşekkürler", "Giriş yap"],
+    "medium": ["Tren öğlen kalkıyor.", "Pencereyi yavaşça açtı.", "Bunu yarın sabah konuşalım."],
+    "long": ["Fener bekçisi her akşam hava kararınca merdivenleri çıkar ve gemiler dönmeden önce büyük lambayı yakardı.", "Fırıncı dükkânını açıp ilk ekmekleri dışarı koyduğunda kasabanın neredeyse tamamı hâlâ uyuyordu."]
+  },
+  "sv": {
+    "short": ["Läs mer", "Tack så mycket", "Logga in"],
+    "medium": ["Tåget går klockan tolv.", "Hon öppnade fönstret långsamt.", "Vi pratar om det i morgon bitti."],
+    "long": ["Fyrvaktaren gick uppför trappan varje kväll i skymningen och tände den stora lampan innan fartygen kom tillbaka.", "Nästan hela staden sov fortfarande när bagaren öppnade sin butik och ställde ut de första bröden."]
+  },
+  "ja": {
+    "short": ["続きを読む", "ありがとう", "ログイン"],
+    "medium": ["電車は正午に出ます。", "彼女はゆっくり窓を開けた。", "明日の朝、話しましょう。"],
+    "long": ["灯台守は毎晩、日が沈むと階段を上り、船が戻る前に大きなランプに火をつけました。", "パン屋が店を開けて最初のパンを外に並べたとき、町のほとんどの人はまだ眠っていました。"]
+  },
+  "zh": {
+    "short": ["阅读更多", "非常感谢", "登录"],
+    "medium": ["火车中午出发。", "她慢慢地打开了窗户。", "我们明天早上再谈。"],
+    "long": ["灯塔看守人每天晚上太阳落山时都会爬上楼梯，在船只回来之前点亮那盏大灯。", "面包师打开店门，把第一批面包摆出来的时候，镇上的大多数人还在睡觉。"]
+  },
+  "ko": {
+    "short": ["더 보기", "감사합니다", "로그인"],
+    "medium": ["기차는 정오에 출발합니다.", "그녀는 천천히 창문을 열었다.", "내일 아침에 이야기합시다."],
+    "long": ["등대지기는 매일 저녁 해가 지면 계단을 올라가 배들이 돌아오기 전에 큰 등불을 켰습니다.", "빵집 주인이 가게 문을 열고 첫 빵을 내놓았을 때 마을 사람들은 대부분 아직 자고 있었습니다."]
+  },
+  "ar": {
+    "short": ["اقرأ المزيد", "شكرا جزيلا", "تسجيل الدخول"],
+    "medium": ["يغادر القطار عند الظهر.", "فتحت النافذة ببطء.", "سنتحدث عن هذا صباح الغد."],
+    "long": ["كان حارس المنارة يصعد الدرج كل مساء عند الغروب ويشعل المصباح الكبير قبل عودة السفن.", "كانت معظم المدينة لا تزال نائمة عندما فتح الخباز متجره ووضع أول أرغفة الخبز في الخارج."]
+  }
+}

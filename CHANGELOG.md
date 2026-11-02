@@ -54,8 +54,9 @@ Website-only and documentation changes are not listed: they never reach the exte
   place, queue entry and notes for each article, instead of treating them all as one page. Notes
   you already made there stay with the article they were made on.
 - Short bits of text in another language, like a site's English "Learn more" under a Spanish
-  paragraph, are read in their own language instead of the language around them, when their
-  words belong to only one language. ([#2](https://github.com/smailoujaoura/aloud/issues/2))
+  paragraph or a French phrase quoted in an English article, are read in their own language far
+  more often: on lines of one to eight words, Chrome went from about half right to over 80%, and
+  Firefox from about two thirds to three quarters. ([#2](https://github.com/smailoujaoura/aloud/issues/2))
 
 ### Changed
 - Pronunciation fixes can be limited to one language, so a fix for how English is read no longer

@@ -54,7 +54,7 @@ export interface PassageLanguage {
 }
 
 /** Fewer letters than this, and the detector is not asked: it is a guess at that length. */
-const MIN_LETTERS_TO_DETECT = 12;
+const MIN_LETTERS_TO_DETECT = 6;
 /**
  * A passage this short (in words) whose neighbours agree takes their language: an exclamation,
  * a name. Words, not letters — "Let me tell you a story about a chicken." is short in letters but
@@ -87,6 +87,30 @@ function wordsOf(text: string): string[] {
 function substantial(text: string): boolean {
   const words = wordsOf(text);
   return letterCount(text) >= 25 && words.length >= 5 && new Set(words).size >= 4;
+}
+
+/**
+ * Languages the browser's detector names correctly for a line of a few words far more often than
+ * not, though it calls almost no short line "reliable" (Chromium 151, measured on the labelled
+ * lines in tests/fixtures/language-samples.json: tests/language-accuracy.test.ts). On a few words
+ * it also names languages it confuses with these, and those are not trusted that short:
+ * Galician for Portuguese, Afrikaans for Dutch, Luxembourgish for German, Serbian, Zulu,
+ * Sundanese, Tajik for anything at all.
+ */
+const TRUSTED_SHORT = new Set(['en', 'fr', 'es', 'de', 'it', 'pt', 'nl', 'pl', 'ru', 'uk', 'tr', 'sv', 'cs', 'hu', 'ro', 'fi', 'el', 'he', 'ar', 'fa', 'hi', 'th', 'vi', 'id', 'ja', 'zh', 'ko']);
+
+/**
+ * Is an answer the detector did not call reliable good enough for this short line? When it names
+ * a language it gets right on a few words, in that language's own writing, and the line is not one
+ * word in the Latin alphabet (where it is most often wrong: Anmelden → Norwegian) nor a few words
+ * said over again ("No! No! Go away!" → Portuguese).
+ */
+function trustedShort(language: string, text: string): boolean {
+  if (!TRUSTED_SHORT.has(primaryLanguage(language)) || !scriptFits(language, text)) return false;
+  const words = wordsOf(text);
+  const latin = (text.match(/\p{Script=Latin}/gu)?.length ?? 0) >= letterCount(text) * 0.5;
+  if (latin && words.length < 2) return false;
+  return new Set(words).size >= Math.ceil(words.length * 0.75);
 }
 
 function isShortPassage(text: string): boolean {
@@ -225,7 +249,8 @@ export async function planLanguages(
       // Where it is wrong is a few repeated words: "No! No! Go away!" → pt, "Vattene!" → de.
       // So an unreliable answer counts for a real sentence and nothing shorter.
       const known = !!found && !!familiar?.has(primaryLanguage(found.language)) && scriptFits(found.language, passage.text);
-      const usable = found && (found.reliable || substantial(passage.text) || known);
+      // A selection goes by the languages its reader reads; a page by those the detector gets right short.
+      const usable = found && (found.reliable || substantial(passage.text) || (familiar ? known : trustedShort(found.language, passage.text)));
       if (usable && primaryLanguage(found.language) && found.language !== 'und') {
         decided = { language: primaryLanguage(found.language), source: 'detected' };
       }

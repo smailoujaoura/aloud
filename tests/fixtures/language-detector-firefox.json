@@ -1,0 +1,950 @@
+{
+ "$comment": "browser.i18n.detectLanguage answers for language-samples.json, recorded in Firefox/153.0 (headless).",
+ "answers": {
+  "Read more": {
+   "reliable": false,
+   "languages": []
+  },
+  "Sign in": {
+   "reliable": false,
+   "languages": []
+  },
+  "Thank you": {
+   "reliable": true,
+   "languages": [
+    [
+     "en",
+     90
+    ]
+   ]
+  },
+  "The train leaves at noon.": {
+   "reliable": true,
+   "languages": [
+    [
+     "en",
+     96
+    ]
+   ]
+  },
+  "She opened the window slowly.": {
+   "reliable": true,
+   "languages": [
+    [
+     "en",
+     96
+    ]
+   ]
+  },
+  "We should talk about this tomorrow.": {
+   "reliable": true,
+   "languages": [
+    [
+     "en",
+     97
+    ]
+   ]
+  },
+  "The keeper climbed the stairs every evening at dusk and lit the great lamp before the ships came in.": {
+   "reliable": true,
+   "languages": [
+    [
+     "en",
+     99
+    ]
+   ]
+  },
+  "Most of the town was still asleep when the baker opened his shop and set the first loaves out to cool.": {
+   "reliable": true,
+   "languages": [
+    [
+     "en",
+     99
+    ]
+   ]
+  },
+  "Lire la suite": {
+   "reliable": false,
+   "languages": []
+  },
+  "Merci beaucoup": {
+   "reliable": true,
+   "languages": [
+    [
+     "fr",
+     93
+    ]
+   ]
+  },
+  "Se connecter": {
+   "reliable": false,
+   "languages": []
+  },
+  "Le train part à midi.": {
+   "reliable": true,
+   "languages": [
+    [
+     "fr",
+     95
+    ]
+   ]
+  },
+  "Elle a ouvert la fenêtre doucement.": {
+   "reliable": true,
+   "languages": [
+    [
+     "fr",
+     97
+    ]
+   ]
+  },
+  "Nous en parlerons demain matin.": {
+   "reliable": true,
+   "languages": [
+    [
+     "fr",
+     96
+    ]
+   ]
+  },
+  "Le gardien montait l'escalier chaque soir à la tombée de la nuit et allumait la grande lampe avant le retour des bateaux.": {
+   "reliable": true,
+   "languages": [
+    [
+     "fr",
+     99
+    ]
+   ]
+  },
+  "La plupart des habitants dormaient encore quand le boulanger ouvrit sa boutique et sortit les premiers pains.": {
+   "reliable": true,
+   "languages": [
+    [
+     "fr",
+     99
+    ]
+   ]
+  },
+  "Leer más": {
+   "reliable": false,
+   "languages": []
+  },
+  "Muchas gracias": {
+   "reliable": true,
+   "languages": [
+    [
+     "es",
+     93
+    ]
+   ]
+  },
+  "Iniciar sesión": {
+   "reliable": true,
+   "languages": [
+    [
+     "es",
+     94
+    ]
+   ]
+  },
+  "El tren sale a mediodía.": {
+   "reliable": true,
+   "languages": [
+    [
+     "es",
+     96
+    ]
+   ]
+  },
+  "Ella abrió la ventana despacio.": {
+   "reliable": true,
+   "languages": [
+    [
+     "es",
+     96
+    ]
+   ]
+  },
+  "Hablaremos de esto mañana por la mañana.": {
+   "reliable": true,
+   "languages": [
+    [
+     "es",
+     97
+    ]
+   ]
+  },
+  "El guardián subía la escalera cada tarde al anochecer y encendía la gran lámpara antes de que volvieran los barcos.": {
+   "reliable": true,
+   "languages": [
+    [
+     "es",
+     99
+    ]
+   ]
+  },
+  "Casi todo el pueblo dormía todavía cuando el panadero abrió la tienda y sacó los primeros panes.": {
+   "reliable": true,
+   "languages": [
+    [
+     "es",
+     99
+    ]
+   ]
+  },
+  "Weiterlesen": {
+   "reliable": false,
+   "languages": []
+  },
+  "Vielen Dank": {
+   "reliable": false,
+   "languages": []
+  },
+  "Anmelden": {
+   "reliable": false,
+   "languages": []
+  },
+  "Der Zug fährt um zwölf Uhr.": {
+   "reliable": true,
+   "languages": [
+    [
+     "de",
+     96
+    ]
+   ]
+  },
+  "Sie öffnete langsam das Fenster.": {
+   "reliable": true,
+   "languages": [
+    [
+     "de",
+     97
+    ]
+   ]
+  },
+  "Wir sprechen morgen früh darüber.": {
+   "reliable": true,
+   "languages": [
+    [
+     "de",
+     97
+    ]
+   ]
+  },
+  "Der Wärter stieg jeden Abend bei Einbruch der Dunkelheit die Treppe hinauf und zündete die große Lampe an, bevor die Schiffe kamen.": {
+   "reliable": true,
+   "languages": [
+    [
+     "de",
+     99
+    ]
+   ]
+  },
+  "Fast die ganze Stadt schlief noch, als der Bäcker seinen Laden öffnete und die ersten Brote hinausstellte.": {
+   "reliable": true,
+   "languages": [
+    [
+     "de",
+     99
+    ]
+   ]
+  },
+  "Leggi di più": {
+   "reliable": true,
+   "languages": [
+    [
+     "it",
+     93
+    ]
+   ]
+  },
+  "Grazie mille": {
+   "reliable": true,
+   "languages": [
+    [
+     "et",
+     92
+    ]
+   ]
+  },
+  "Accedi": {
+   "reliable": false,
+   "languages": []
+  },
+  "Il treno parte a mezzogiorno.": {
+   "reliable": true,
+   "languages": [
+    [
+     "it",
+     96
+    ]
+   ]
+  },
+  "Lei aprì lentamente la finestra.": {
+   "reliable": true,
+   "languages": [
+    [
+     "ca",
+     97
+    ]
+   ]
+  },
+  "Ne parliamo domani mattina.": {
+   "reliable": false,
+   "languages": []
+  },
+  "Il guardiano saliva le scale ogni sera al tramonto e accendeva la grande lampada prima che tornassero le navi.": {
+   "reliable": true,
+   "languages": [
+    [
+     "it",
+     99
+    ]
+   ]
+  },
+  "Quasi tutta la città dormiva ancora quando il fornaio aprì il negozio e mise fuori i primi pani.": {
+   "reliable": true,
+   "languages": [
+    [
+     "it",
+     98
+    ]
+   ]
+  },
+  "Leia mais": {
+   "reliable": false,
+   "languages": []
+  },
+  "Muito obrigado": {
+   "reliable": true,
+   "languages": [
+    [
+     "pt",
+     93
+    ]
+   ]
+  },
+  "Entrar": {
+   "reliable": false,
+   "languages": []
+  },
+  "O comboio parte ao meio-dia.": {
+   "reliable": true,
+   "languages": [
+    [
+     "pt",
+     96
+    ]
+   ]
+  },
+  "Ela abriu a janela devagar.": {
+   "reliable": true,
+   "languages": [
+    [
+     "pt",
+     96
+    ]
+   ]
+  },
+  "Falamos sobre isso amanhã de manhã.": {
+   "reliable": true,
+   "languages": [
+    [
+     "pt",
+     97
+    ]
+   ]
+  },
+  "O guardião subia a escada todas as noites ao anoitecer e acendia a grande lâmpada antes de os barcos voltarem.": {
+   "reliable": true,
+   "languages": [
+    [
+     "pt",
+     99
+    ]
+   ]
+  },
+  "Quase toda a cidade ainda dormia quando o padeiro abriu a loja e pôs os primeiros pães a arrefecer.": {
+   "reliable": true,
+   "languages": [
+    [
+     "pt",
+     99
+    ]
+   ]
+  },
+  "Lees meer": {
+   "reliable": false,
+   "languages": []
+  },
+  "Dank je wel": {
+   "reliable": false,
+   "languages": []
+  },
+  "Inloggen": {
+   "reliable": true,
+   "languages": [
+    [
+     "nl",
+     90
+    ]
+   ]
+  },
+  "De trein vertrekt om twaalf uur.": {
+   "reliable": true,
+   "languages": [
+    [
+     "af",
+     96
+    ]
+   ]
+  },
+  "Ze opende langzaam het raam.": {
+   "reliable": true,
+   "languages": [
+    [
+     "nl",
+     96
+    ]
+   ]
+  },
+  "We praten er morgen verder over.": {
+   "reliable": true,
+   "languages": [
+    [
+     "en",
+     96
+    ]
+   ]
+  },
+  "De wachter beklom elke avond bij het vallen van de nacht de trap en stak de grote lamp aan voordat de schepen terugkwamen.": {
+   "reliable": true,
+   "languages": [
+    [
+     "nl",
+     99
+    ]
+   ]
+  },
+  "Bijna de hele stad sliep nog toen de bakker zijn winkel opende en de eerste broden buiten zette.": {
+   "reliable": true,
+   "languages": [
+    [
+     "nl",
+     98
+    ]
+   ]
+  },
+  "Czytaj dalej": {
+   "reliable": true,
+   "languages": [
+    [
+     "pl",
+     92
+    ]
+   ]
+  },
+  "Dziękuję bardzo": {
+   "reliable": true,
+   "languages": [
+    [
+     "pl",
+     94
+    ]
+   ]
+  },
+  "Zaloguj się": {
+   "reliable": true,
+   "languages": [
+    [
+     "pl",
+     92
+    ]
+   ]
+  },
+  "Pociąg odjeżdża w południe.": {
+   "reliable": false,
+   "languages": []
+  },
+  "Powoli otworzyła okno.": {
+   "reliable": false,
+   "languages": []
+  },
+  "Porozmawiamy o tym jutro rano.": {
+   "reliable": false,
+   "languages": []
+  },
+  "Latarnik co wieczór o zmierzchu wchodził po schodach i zapalał wielką lampę, zanim statki wróciły do portu.": {
+   "reliable": true,
+   "languages": [
+    [
+     "pl",
+     99
+    ]
+   ]
+  },
+  "Prawie całe miasto jeszcze spało, kiedy piekarz otworzył sklep i wystawił pierwsze bochenki chleba.": {
+   "reliable": true,
+   "languages": [
+    [
+     "pl",
+     99
+    ]
+   ]
+  },
+  "Читать далее": {
+   "reliable": true,
+   "languages": [
+    [
+     "ru",
+     96
+    ]
+   ]
+  },
+  "Большое спасибо": {
+   "reliable": true,
+   "languages": [
+    [
+     "ru",
+     96
+    ]
+   ]
+  },
+  "Войти": {
+   "reliable": false,
+   "languages": []
+  },
+  "Поезд отправляется в полдень.": {
+   "reliable": true,
+   "languages": [
+    [
+     "ru",
+     98
+    ]
+   ]
+  },
+  "Она медленно открыла окно.": {
+   "reliable": true,
+   "languages": [
+    [
+     "ru",
+     97
+    ]
+   ]
+  },
+  "Поговорим об этом завтра утром.": {
+   "reliable": true,
+   "languages": [
+    [
+     "ru",
+     98
+    ]
+   ]
+  },
+  "Смотритель каждый вечер на закате поднимался по лестнице и зажигал большую лампу, пока корабли не вернулись в порт.": {
+   "reliable": true,
+   "languages": [
+    [
+     "ru",
+     99
+    ]
+   ]
+  },
+  "Почти весь город ещё спал, когда пекарь открыл лавку и выставил первые буханки хлеба.": {
+   "reliable": true,
+   "languages": [
+    [
+     "ru",
+     99
+    ]
+   ]
+  },
+  "Devamını oku": {
+   "reliable": true,
+   "languages": [
+    [
+     "tr",
+     93
+    ]
+   ]
+  },
+  "Çok teşekkürler": {
+   "reliable": true,
+   "languages": [
+    [
+     "tr",
+     95
+    ]
+   ]
+  },
+  "Giriş yap": {
+   "reliable": true,
+   "languages": [
+    [
+     "tr",
+     91
+    ]
+   ]
+  },
+  "Tren öğlen kalkıyor.": {
+   "reliable": false,
+   "languages": []
+  },
+  "Pencereyi yavaşça açtı.": {
+   "reliable": false,
+   "languages": []
+  },
+  "Bunu yarın sabah konuşalım.": {
+   "reliable": true,
+   "languages": [
+    [
+     "tr",
+     96
+    ]
+   ]
+  },
+  "Fener bekçisi her akşam hava kararınca merdivenleri çıkar ve gemiler dönmeden önce büyük lambayı yakardı.": {
+   "reliable": true,
+   "languages": [
+    [
+     "tr",
+     99
+    ]
+   ]
+  },
+  "Fırıncı dükkânını açıp ilk ekmekleri dışarı koyduğunda kasabanın neredeyse tamamı hâlâ uyuyordu.": {
+   "reliable": true,
+   "languages": [
+    [
+     "tr",
+     99
+    ]
+   ]
+  },
+  "Läs mer": {
+   "reliable": false,
+   "languages": []
+  },
+  "Tack så mycket": {
+   "reliable": true,
+   "languages": [
+    [
+     "sv",
+     94
+    ]
+   ]
+  },
+  "Logga in": {
+   "reliable": true,
+   "languages": [
+    [
+     "sv",
+     90
+    ]
+   ]
+  },
+  "Tåget går klockan tolv.": {
+   "reliable": true,
+   "languages": [
+    [
+     "sv",
+     96
+    ]
+   ]
+  },
+  "Hon öppnade fönstret långsamt.": {
+   "reliable": true,
+   "languages": [
+    [
+     "sv",
+     97
+    ]
+   ]
+  },
+  "Vi pratar om det i morgon bitti.": {
+   "reliable": true,
+   "languages": [
+    [
+     "sv",
+     96
+    ]
+   ]
+  },
+  "Fyrvaktaren gick uppför trappan varje kväll i skymningen och tände den stora lampan innan fartygen kom tillbaka.": {
+   "reliable": true,
+   "languages": [
+    [
+     "sv",
+     99
+    ]
+   ]
+  },
+  "Nästan hela staden sov fortfarande när bagaren öppnade sin butik och ställde ut de första bröden.": {
+   "reliable": true,
+   "languages": [
+    [
+     "sv",
+     99
+    ]
+   ]
+  },
+  "続きを読む": {
+   "reliable": true,
+   "languages": [
+    [
+     "ja",
+     94
+    ]
+   ]
+  },
+  "ありがとう": {
+   "reliable": true,
+   "languages": [
+    [
+     "ja",
+     94
+    ]
+   ]
+  },
+  "ログイン": {
+   "reliable": true,
+   "languages": [
+    [
+     "ja",
+     92
+    ]
+   ]
+  },
+  "電車は正午に出ます。": {
+   "reliable": true,
+   "languages": [
+    [
+     "ja",
+     96
+    ]
+   ]
+  },
+  "彼女はゆっくり窓を開けた。": {
+   "reliable": true,
+   "languages": [
+    [
+     "ja",
+     97
+    ]
+   ]
+  },
+  "明日の朝、話しましょう。": {
+   "reliable": true,
+   "languages": [
+    [
+     "ja",
+     96
+    ]
+   ]
+  },
+  "灯台守は毎晩、日が沈むと階段を上り、船が戻る前に大きなランプに火をつけました。": {
+   "reliable": true,
+   "languages": [
+    [
+     "ja",
+     99
+    ]
+   ]
+  },
+  "パン屋が店を開けて最初のパンを外に並べたとき、町のほとんどの人はまだ眠っていました。": {
+   "reliable": true,
+   "languages": [
+    [
+     "ja",
+     99
+    ]
+   ]
+  },
+  "阅读更多": {
+   "reliable": true,
+   "languages": [
+    [
+     "zh",
+     92
+    ]
+   ]
+  },
+  "非常感谢": {
+   "reliable": false,
+   "languages": []
+  },
+  "登录": {
+   "reliable": false,
+   "languages": []
+  },
+  "火车中午出发。": {
+   "reliable": true,
+   "languages": [
+    [
+     "zh",
+     95
+    ]
+   ]
+  },
+  "她慢慢地打开了窗户。": {
+   "reliable": true,
+   "languages": [
+    [
+     "zh",
+     96
+    ]
+   ]
+  },
+  "我们明天早上再谈。": {
+   "reliable": true,
+   "languages": [
+    [
+     "zh",
+     96
+    ]
+   ]
+  },
+  "灯塔看守人每天晚上太阳落山时都会爬上楼梯，在船只回来之前点亮那盏大灯。": {
+   "reliable": true,
+   "languages": [
+    [
+     "zh",
+     99
+    ]
+   ]
+  },
+  "面包师打开店门，把第一批面包摆出来的时候，镇上的大多数人还在睡觉。": {
+   "reliable": true,
+   "languages": [
+    [
+     "zh",
+     98
+    ]
+   ]
+  },
+  "더 보기": {
+   "reliable": true,
+   "languages": [
+    [
+     "ko",
+     91
+    ]
+   ]
+  },
+  "감사합니다": {
+   "reliable": true,
+   "languages": [
+    [
+     "ko",
+     94
+    ]
+   ]
+  },
+  "로그인": {
+   "reliable": true,
+   "languages": [
+    [
+     "ko",
+     90
+    ]
+   ]
+  },
+  "기차는 정오에 출발합니다.": {
+   "reliable": true,
+   "languages": [
+    [
+     "ko",
+     97
+    ]
+   ]
+  },
+  "그녀는 천천히 창문을 열었다.": {
+   "reliable": true,
+   "languages": [
+    [
+     "ko",
+     97
+    ]
+   ]
+  },
+  "내일 아침에 이야기합시다.": {
+   "reliable": true,
+   "languages": [
+    [
+     "ko",
+     97
+    ]
+   ]
+  },
+  "등대지기는 매일 저녁 해가 지면 계단을 올라가 배들이 돌아오기 전에 큰 등불을 켰습니다.": {
+   "reliable": true,
+   "languages": [
+    [
+     "ko",
+     99
+    ]
+   ]
+  },
+  "빵집 주인이 가게 문을 열고 첫 빵을 내놓았을 때 마을 사람들은 대부분 아직 자고 있었습니다.": {
+   "reliable": true,
+   "languages": [
+    [
+     "ko",
+     99
+    ]
+   ]
+  },
+  "اقرأ المزيد": {
+   "reliable": false,
+   "languages": []
+  },
+  "شكرا جزيلا": {
+   "reliable": false,
+   "languages": []
+  },
+  "تسجيل الدخول": {
+   "reliable": true,
+   "languages": [
+    [
+     "ar",
+     96
+    ]
+   ]
+  },
+  "يغادر القطار عند الظهر.": {
+   "reliable": false,
+   "languages": []
+  },
+  "فتحت النافذة ببطء.": {
+   "reliable": false,
+   "languages": []
+  },
+  "سنتحدث عن هذا صباح الغد.": {
+   "reliable": true,
+   "languages": [
+    [
+     "ar",
+     97
+    ]
+   ]
+  },
+  "كان حارس المنارة يصعد الدرج كل مساء عند الغروب ويشعل المصباح الكبير قبل عودة السفن.": {
+   "reliable": true,
+   "languages": [
+    [
+     "ar",
+     99
+    ]
+   ]
+  },
+  "كانت معظم المدينة لا تزال نائمة عندما فتح الخباز متجره ووضع أول أرغفة الخبز في الخارج.": {
+   "reliable": true,
+   "languages": [
+    [
+     "ar",
+     99
+    ]
+   ]
+  }
+ }
+}

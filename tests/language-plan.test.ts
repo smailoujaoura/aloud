@@ -172,9 +172,16 @@ describe('a short selection', () => {
     expect(plan[0]!.language).toBe('en');
   });
 
-  it('a page (no familiar languages given) is unchanged', async () => {
+  it('on a page, a few words in a language the detector gets right short are that language (#2)', async () => {
     const plan = await planLanguages([p('bordereau de change')], short, 'en', new Map(), 'en');
-    expect(plan[0]!.language).toBe('en');
+    expect(plan[0]).toEqual({ language: 'fr', source: 'detected' });
+  });
+
+  it('…but not a language it names wrongly on a few words, nor one word, nor words said over again', async () => {
+    expect((await planLanguages([p('merci beaucoup')], short, 'en', new Map(), 'en'))[0]!.language).toBe('en');
+    const loud: Detector = async (text) => ({ language: text === 'Zorblatten' ? 'de' : 'pt', reliable: false });
+    expect((await planLanguages([p('Zorblatten')], loud, 'en', new Map(), 'en'))[0]!.language).toBe('en');
+    expect((await planLanguages([p('No! No! No! Go!')], loud, 'en', new Map(), 'en'))[0]!.language).toBe('en');
   });
 });
 
