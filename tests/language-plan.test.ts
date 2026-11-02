@@ -213,3 +213,28 @@ describe('short passages in words only one language uses (#2)', () => {
     expect(plan.map((l) => l.language)).toEqual(['it', 'it', 'it']);
   });
 });
+
+describe('kanji alone: Japanese or Chinese', () => {
+  // The browser's detector calls kanji-only text Chinese, as it is in isolation.
+  const cjk: Detector = async (text) =>
+    /[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(text) ? { language: 'ja', reliable: true } : /\p{Script=Han}/u.test(text) ? { language: 'zh', reliable: false } : { language: 'und', reliable: false };
+  const japanesePage = [p('灯台守'), p('灯台守は毎晩、日が沈むと階段を上りました。'), p('大きなランプに火をつけて、何時間も海を眺めていました。')];
+
+  it('a kanji-only heading on a page declared Japanese is Japanese', async () => {
+    const plan = await planLanguages(japanesePage, cjk, 'ja', new Map(), 'ja');
+    expect(plan.map((x) => x.language)).toEqual(['ja', 'ja', 'ja']);
+  });
+
+  it('…and on an undeclared page whose other text has kana', async () => {
+    const plan = await planLanguages(japanesePage, cjk, '', new Map(), '');
+    expect(plan[0]?.language).toBe('ja');
+  });
+
+  it('a Chinese page stays Chinese, and text marked Chinese stays Chinese on a Japanese page', async () => {
+    const chinesePage = [p('灯塔看守人'), p('灯塔看守人每天晚上太阳落山时都会爬上楼梯。'), p('他点亮大灯，然后看海好几个小时。')];
+    expect((await planLanguages(chinesePage, cjk, 'zh', new Map(), 'zh')).map((x) => x.language)).toEqual(['zh', 'zh', 'zh']);
+    expect((await planLanguages(chinesePage, cjk, '', new Map(), '')).map((x) => x.language)).toEqual(['zh', 'zh', 'zh']);
+    const quoted = await planLanguages([...japanesePage, p('他点亮大灯，然后看海好几个小时。', 'zh')], cjk, 'ja', new Map(), 'ja');
+    expect(quoted[3]?.language).toBe('zh');
+  });
+});

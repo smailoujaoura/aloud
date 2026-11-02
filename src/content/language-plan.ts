@@ -243,6 +243,20 @@ export async function planLanguages(
     out.push(decided);
   }
 
+  // Han alone is written by Chinese and Japanese alike. A heading or a name in kanji only, with no
+  // kana, was taken for Chinese on a Japanese page, and then skipped there for having no Chinese
+  // voice. It is Japanese where the page says it is Japanese, or where the page's other text in
+  // these characters is (kana is Japanese only). Marked as Chinese in the page, it stays Chinese.
+  const kana = /[\p{Script=Hiragana}\p{Script=Katakana}]/u;
+  const japanese = out.filter((d) => d?.language === 'ja').length;
+  const chinese = out.filter((d) => d?.language === 'zh').length;
+  const declared = home || primaryLanguage(pageLanguage);
+  if (declared === 'ja' || (declared !== 'zh' && japanese > 0 && japanese >= chinese)) {
+    out.forEach((d, i) => {
+      if (d?.language === 'zh' && d.source !== 'markup' && !kana.test(passages[i]!.text)) out[i] = { ...d, language: 'ja' };
+    });
+  }
+
   // A short passage between two that agree on another language is in theirs.
   const short = passages.map((p) => isShortPassage(p.text));
   const neighbour = (from: number, step: 1 | -1): PassageLanguage | null => {
