@@ -13,6 +13,7 @@ import type { EngineId } from '@/shared/settings';
 import { ENGINE_IDS } from './engine-catalog';
 import { serverVoiceLanguage } from './server-voices';
 import type { Settings } from './settings';
+import { phononExperimental } from './phonon-voices';
 
 export interface VoiceOption {
   /** Voice key as stored in settings, e.g. `en_US-hfc_female-medium` or `af_heart`. */
@@ -39,9 +40,10 @@ export function listVoices(engine: EngineId, manifest: ModelManifest): VoiceOpti
         group: v.language,
       }));
     case 'phonon':
+      // Its French, Spanish, German and Portuguese are spoken with mistakes: said wherever it is picked.
       return Object.entries(manifest.phonon?.voices ?? {}).map(([id, v]) => ({
         id,
-        label: `${v.label} · ${v.gender}`,
+        label: `${v.label} · ${v.gender}${phononExperimental(v.language, manifest.phonon?.experimentalLanguages) ? ' · experimental' : ''}`,
         group: v.language,
       }));
     case 'server':

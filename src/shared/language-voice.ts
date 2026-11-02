@@ -84,7 +84,11 @@ export function pickVoiceForLanguage(
   // still wins (routeFor) — this only decides who reads a language neither covers.
   // Phonon reads English first of all; its other languages are experimental, read with mistakes,
   // so every other engine's voice for them comes before it.
-  const phonon = (v: CandidateVoice): number => (v.engine !== 'phonon' ? 0 : want === 'en' ? 2000 : -5000);
+  // Its characters (a pirate, a demon) only read when chosen: they are its voices tagged `en`
+  // with no region (models.json; the narrators are en-US or en-GB), and as an exact match for
+  // "en" they used to outrank every narrator.
+  const phonon = (v: CandidateVoice): number =>
+    v.engine !== 'phonon' ? 0 : want !== 'en' ? -5000 : !/-/.test(fullTag(v.language)) ? -3000 : 2000;
   const score = (v: CandidateVoice): number =>
     phonon(v) +
     (v.engine === 'supertonic' ? 1000 : 0) +

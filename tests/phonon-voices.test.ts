@@ -17,6 +17,10 @@ describe('Phonon voices', () => {
     expect(listVoices('phonon', m)).toHaveLength(102);
   });
 
+  it('its characters, and only they, have no region in their language (routing relies on it)', () => {
+    for (const v of Object.values(m.phonon!.voices)) expect(v.language.includes('-'), v.label).toBe(!v.character);
+  });
+
   it('loads with the text rules of its language; English for characters', () => {
     expect(phononLanguage('fr-FR')).toBe('fr');
     expect(phononLanguage('pt-BR')).toBe('pt');
@@ -53,6 +57,14 @@ describe('who reads a language, with Phonon installed', () => {
     expect(pickVoiceForLanguage('fr', zoey, [noemie, supertonicFr])?.engine).toBe('supertonic');
   });
 
+  it('never picks one of its characters by itself: a narrator reads, then any other English voice', () => {
+    const captain = { engine: 'phonon' as const, id: 'captain', label: 'Captain Silas Blackwater', language: 'en' };
+    const piperEn = { engine: 'piper' as const, id: 'en_US-lessac-medium', label: 'Lessac', language: 'en_US' };
+    expect(pickVoiceForLanguage('en', noemie, [captain, zoey])?.id).toBe('NbpkqMVS3CJeq2j8');
+    expect(pickVoiceForLanguage('en', noemie, [captain, piperEn])?.id).toBe('en_US-lessac-medium');
+    expect(pickVoiceForLanguage('en', noemie, [captain])?.id).toBe('captain');
+  });
+
   it('…and to Phonon when it is the only French voice there is', () => {
     expect(pickVoiceForLanguage('fr', zoey, [zoey, noemie])?.id).toBe('FXxJ9mANRq6BCTX5');
   });
@@ -64,5 +76,13 @@ describe('Phonon runtime', () => {
     const fetchJs = readFileSync('node_modules/phonon-tts/fetch.js', 'utf8');
     const { PHONON_CACHE } = await import('@/engine/engines/phonon');
     expect(fetchJs).toContain(`export const CACHE_NAME = '${PHONON_CACHE}';`);
+  });
+});
+
+describe('Phonon in the voice menus', () => {
+  it('its experimental languages say so', () => {
+    const list = listVoices('phonon', m);
+    expect(list.find((v) => v.id === 'FXxJ9mANRq6BCTX5')?.label).toBe('Noémie · female · experimental');
+    expect(list.find((v) => v.id === 'NbpkqMVS3CJeq2j8')?.label).toBe('Zoey · female');
   });
 });

@@ -73,6 +73,15 @@ export function downloadedVoices(ctx: Pick<PanelContext, 'manifest' | 'sizes'>):
   return out;
 }
 
+/**
+ * Does this voice give its language a row on the board? Not Supertonic's (each reads 31
+ * languages) nor Phonon's experimental ones (installed with Phonon on every computer).
+ */
+function ownsRow(v: CandidateVoice): boolean {
+  if (v.engine === 'supertonic') return false;
+  return !(v.engine === 'phonon' && primaryLanguage(v.language) !== 'en');
+}
+
 /** The flags bundled in `public/flags/` (flag-icons, MIT): the countries Aloud's voices name. */
 const FLAGS = new Set('al am ar bd be bg br cd cn cz de dk ee es fi fr gb ge gr hu id in ir is it jo kr kz lu lv mx nl no np pk pl pt ro rs ru se si sk tr ua us vn'.split(' '));
 /** For a language whose voices name no country (Kokoro's "it", "hi", "es"). */
@@ -184,8 +193,10 @@ export function renderVoiceBoard(
   // one per language Supertonic speaks: every Supertonic voice speaks all 31, and 31 rows at once
   // buried the board. Its voices join the rows there are; a language only it speaks is read by it
   // on Auto all the same, and the last row says which those are (it once implied "Skip" covered
-  // them). One gets a row of its own from the catalogue (Use → For …).
-  const own = installed.filter((v) => v.engine !== 'supertonic');
+  // them). One gets a row of its own from the catalogue (Use → For …). Phonon's French, Spanish,
+  // German and Portuguese voices are the same: they come with Phonon, the default on every
+  // computer, and are experimental, so they join rows and Auto, and make none of their own.
+  const own = installed.filter(ownsRow);
   const codes = new Set<string>([...own.map((v) => primaryLanguage(v.language)), ...Object.keys(settings.languageVoices)]);
   codes.delete('');
   for (const code of removed) codes.delete(code);
@@ -282,10 +293,17 @@ export function renderVoiceBoard(
     chips.append(auto, skip);
     // Languages without a row that Supertonic reads all the same, each in its own voice: the
     // reader gives them to it before anything this row says, so the row names them.
-    const bySupertonic = [...new Set(installed.filter((v) => v.engine === 'supertonic').map((v) => primaryLanguage(v.language)))]
-      .filter((code) => code && !codes.has(code) && !removed.has(code))
-      .map(languageName)
-      .sort((a, b) => a.localeCompare(b));
+    const readers = new Map<string, Set<string>>();
+    for (const v of installed) {
+      const code = primaryLanguage(v.language);
+      if (ownsRow(v) || !code || codes.has(code) || removed.has(code)) continue;
+      if (!readers.has(code)) readers.set(code, new Set());
+      readers.get(code)!.add(v.engine === 'phonon' ? 'Phonon, experimental' : 'Supertonic');
+    }
+    const bySupertonic = [...readers.keys()].map(languageName).sort((a, b) => a.localeCompare(b));
+    const byWhom = [...readers].map(([code, who]) => `${languageName(code)} (${[...who].join(', ')})`).sort((a, b) => a.localeCompare(b));
+    const engines = new Set([...readers.values()].flatMap((who) => [...who]));
+    const reader = engines.size === 1 ? ([...engines][0] === 'Supertonic' ? 'Supertonic reads' : 'Phonon reads') : 'Supertonic and Phonon read';
     lang.append(
       el(document, 'b', {}, 'Every other language'),
       el(document, 'span', {}, skipping ? (bySupertonic.length ? 'The rest not read' : 'Not read') : `Read by ${shortName(others.label)}`),
@@ -297,8 +315,8 @@ export function renderVoiceBoard(
         el(
           document,
           'span',
-          { class: 'vb-also', title: `Read by Supertonic, each in its own language: ${bySupertonic.join(', ')}` },
-          `Supertonic reads ${shown}${more} in their own language.`,
+          { class: 'vb-also', title: `Each read in its own language: ${byWhom.join('; ')}` },
+          `${reader} ${shown}${more} in their own language.`,
         ),
       );
     }
@@ -316,7 +334,7 @@ export function renderVoiceBoard(
     const isOther = (v: CandidateVoice): boolean => !skipping && others.engine === v.engine && others.id === v.id;
     // A language read by this row has no voice of its own, and is read in English: of Supertonic's
     // voices, only the English ones (each of the other 310 speaks one language, which Auto gives it).
-    const everyone = installed.filter((v) => v.engine !== 'supertonic' || primaryLanguage(v.language) === 'en').sort(
+    const everyone = installed.filter((v) => ownsRow(v) || primaryLanguage(v.language) === 'en').sort(
       (a, b) =>
         Number(isOther(b)) - Number(isOther(a)) ||
         languageName(primaryLanguage(a.language)).localeCompare(languageName(primaryLanguage(b.language))),

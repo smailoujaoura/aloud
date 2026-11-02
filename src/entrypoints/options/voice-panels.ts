@@ -621,7 +621,8 @@ function sharedVoices(engine: SharedEngine, manifest: ModelManifest): SharedVoic
         name: v.label,
         meta: [v.character ? 'Character' : accentName(v.language), v.gender, experimental ? 'experimental' : ''].filter(Boolean).join(' · '),
         rank: 0,
-        group: v.language.startsWith('en') ? 'English' : languageName(primaryLanguage(v.language)),
+        // "French (experimental)" in the language list too, not only on each voice.
+        group: v.language.startsWith('en') ? 'English' : `${languageName(primaryLanguage(v.language))}${experimental ? ' (experimental)' : ''}`,
         description: v.description,
       };
     });
