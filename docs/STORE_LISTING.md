@@ -1,6 +1,6 @@
 # Store submission: what to paste where
 
-Everything below matches Aloud 1.0.0 as built (`npm run zip`). If the manifest's permissions
+Everything below matches Aloud 1.0.1 as built (`npm run zip`). If the manifest's permissions
 change, change the justifications here too: both stores compare them.
 
 ## Shared listing text
@@ -16,10 +16,10 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 >
 > Aloud reads any article or PDF aloud and lights up each sentence, and with most voices each
 > word, as it's read. The voice is a neural network running inside your browser, so it works
-> offline and nothing you read is ever sent anywhere. No account, no subscription, free and open
-> source.
+> offline and nothing you read is sent anywhere, unless you choose to use a speech server of your
+> own. No account, no subscription, free and open source.
 >
-> • 222 natural voices in 52 languages, from three neural engines: Supertonic 3, Kokoro-82M and Piper
+> • 324 natural voices in 52 languages, from four neural engines: Phonon, Supertonic 3, Kokoro-82M and Piper
 > • Reads the article, not the menus and ads, and highlights the sentence and the word in place
 > • A page in two languages? Each passage is read by a voice that speaks it
 > • PDFs too: real pages, highlighted where the text sits; mark them up and save the marks into the file
@@ -112,8 +112,9 @@ reading positions, history and listening statistics, and private-window activity
 
 ## Firefox Add-ons (AMO)
 
-- **Data collection:** the manifest declares `data_collection_permissions: { required: ["none"] }`.
-- **Source code:** upload `.output/tts-reader-1.0.0-sources.zip` with this note for the reviewer:
+- **Data collection:** the manifest declares `data_collection_permissions: { required: ["none"], optional: ["websiteContent"] }`:
+  the optional one is asked for only when a reader sets up their own speech server (see above).
+- **Source code:** upload `.output/tts-reader-1.0.1-sources.zip` with this note for the reviewer:
 
   > Built with Node 22.23 and npm 10.9 on Linux: `npm ci && npm run build:firefox` (the archive's
   > `.npmrc` sets legacy-peer-deps, which the lockfile needs). The build needs no network after

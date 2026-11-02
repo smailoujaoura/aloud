@@ -38,8 +38,6 @@ Website-only and documentation changes are not listed: they never reach the exte
 - **Read from here** starts at the sentence you right-clicked. In Chrome the browser doesn't say
   where you clicked, so the very first time on a page it starts at the top of the screen, and now
   says so; from then on it starts at the right sentence. ([#4](https://github.com/smailoujaoura/aloud/issues/4))
-- A voice chosen from your own server is kept as your server voice, instead of replacing your
-  Piper voice.
 - A download that does not fit on the device no longer deletes part of a voice you already have
   to make room: it stops, says the storage may be full, and leaves your voices as they were.
 - PDFs: choosing or dropping a second file while the first is still opening shows the second,
