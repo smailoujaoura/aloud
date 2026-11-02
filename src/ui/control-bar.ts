@@ -1358,6 +1358,10 @@ export class ControlBar {
     const total = state.totalChunks || 0;
     const current = Math.min(state.currentIndex + 1, total);
     const count = total ? `${current}/${total}` : '–/–';
+    // As wide as it will ever get ("414/414"), from the first sentence: growing from 9/414 to
+    // 10/414 made the bar measure itself too narrow and jump to two rows mid-article.
+    const widest = `${String(total).length * 2 + 1}ch`;
+    if (this.countEl.style.minWidth !== widest) this.countEl.style.minWidth = widest;
     const eta = state.secondsLeft != null && total && state.currentIndex < total ? `${shortTime(state.secondsLeft)} left` : '';
     if (this.countEl.textContent !== count || this.etaEl.textContent !== eta) {
       this.countEl.textContent = count;

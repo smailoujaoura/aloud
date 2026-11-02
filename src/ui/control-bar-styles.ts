@@ -266,7 +266,7 @@ button[disabled]:hover { background: none; }
 
 .count {
   flex: 0 0 auto; font-variant-numeric: tabular-nums; color: var(--bar-muted);
-  white-space: nowrap; padding: 0 2px;
+  white-space: nowrap; padding: 0 2px; text-align: right; box-sizing: content-box;
 }
 
 /* Words a minute, beside the speed: what "1.5×" actually means for the ear. */
