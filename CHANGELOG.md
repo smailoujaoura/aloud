@@ -12,6 +12,7 @@ Website-only and documentation changes are not listed: they never reach the exte
   (American, British and a cast of characters, from a pirate captain to a fairy godmother), plus
   French, Spanish, German and Portuguese voices to try, marked experimental. One 91 MB download,
   every voice included. Each voice says what it sounds like, and search finds it ("pirate").
+  New installs on a computer read with Phonon from the start; phones start with Piper.
 - **Your own speech server.** In Settings → Voice → Your own server, point Aloud at a speech
   server you run, such as Kokoro-FastAPI on a PC at home or over Tailscale, and read with its
   voices from any device: the server does the speaking, Aloud does everything else. Works with any

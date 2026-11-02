@@ -147,8 +147,8 @@ reading positions, history and listening statistics, and private-window activity
   > `.bin` and `.safetensors` voice vectors), never code. Aloud does not run in private windows (`incognito: not_allowed`).
   > On uninstall it opens aloud.souj.dev/feedback.html?bye; the version and browser name follow a
   > `#`, which the browser never sends, so opening it transmits nothing.
-  > To try it: open any article, press the toolbar button (or Alt+R), then play. The first voice
-  > (about 60 MB) downloads on first use.
+  > To try it: open any article, press the toolbar button (or Alt+R), then play. The voice model
+  > (Phonon, about 65 MB; Piper, about 60 MB, on Android) downloads on first use.
 
 - **Android:** the listing is marked compatible with Firefox for Android (`gecko_android`).
   Piper voices are the ones to recommend on phones; Supertonic 3 works there, slower than speech on

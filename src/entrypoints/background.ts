@@ -30,7 +30,7 @@ import { addToQueue, type NewQueueItem } from '@/shared/reading-queue';
 import type { EngineId } from '@/shared/settings';
 import { withServerVoices, type VoiceOption } from '@/shared/voice-catalog';
 import type { ModelManifest } from '@/engine/engines/types';
-import { getSettings, watchSettings } from '@/shared/settings';
+import { getSettings, setSettings, watchSettings } from '@/shared/settings';
 import { createLockTable, useLockTable } from '@/shared/storage-lock';
 import { loadWorkerGpu } from '@/shared/backend-memory';
 import { replyLater } from '@/shared/reply';
@@ -131,7 +131,8 @@ export default defineBackground({
     // tutorial tab every time their browser updates the add-on.
     browser.runtime.onInstalled.addListener((details) => {
       if (details.reason !== 'install') return;
-      void openWalkthrough();
+      // The engine first: the walkthrough's demo reads with it.
+      void chooseFirstEngine().finally(() => void openWalkthrough());
     });
 
     // Removing Aloud opens the feedback page to ask why. Version and browser are in the fragment,
@@ -392,6 +393,24 @@ export default defineBackground({
     });
   },
 });
+
+/**
+ * A new install on a computer reads with Phonon: natural, and faster than real time on any
+ * processor. Phones keep Piper (the default in settings), until Phonon has been tried on one.
+ * Only on a fresh install, and only when nothing is saved yet: someone updating, or a profile
+ * restored or synced with its own engine, keeps what they have.
+ */
+async function chooseFirstEngine(): Promise<void> {
+  try {
+    const os = (await browser.runtime.getPlatformInfo()).os;
+    if (os === 'android') return;
+    const { settings } = (await browser.storage.local.get('settings')) as { settings?: { engine?: unknown } };
+    if (settings?.engine) return;
+    await setSettings({ engine: 'phonon' });
+  } catch {
+    /* Piper, the default, it is */
+  }
+}
 
 /**
  * Show the walkthrough, reusing its tab if it is already open.
