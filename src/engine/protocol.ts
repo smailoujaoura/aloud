@@ -12,6 +12,8 @@ export interface EngineConfig {
   voice: string;
   /** Supertonic only — flow-matching denoising steps. */
   steps?: number;
+  /** The reader's own speech server only: its base address and the model to ask for. */
+  server?: { url: string; model: string };
   preferWebGPU: boolean;
   /** Verbose console logging (settings: `debug`). Sentence text is only logged when it is on. */
   debug?: boolean;

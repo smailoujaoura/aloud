@@ -132,7 +132,8 @@ export function previewFor(
   // On a GPU, Kokoro speaks only with its full-precision build: with just the CPU build here, a
   // preview would quietly start that download. The model card offers it instead.
   const needsGpuBuild = engine === 'kokoro' && readsOnGpu(ctx.settings);
-  const ready = sharedModelInstalled(engine, ctx.sizes, needsGpuBuild ? { gpu: true } : {});
+  // The reader's own server has nothing to download: its listed voices are ready.
+  const ready = engine === 'server' ? (ctx.manifest.server?.voices.length ?? 0) > 0 : sharedModelInstalled(engine, ctx.sizes, needsGpuBuild ? { gpu: true } : {});
   return previewButton(
     (onStatus) =>
       playSynthesized(

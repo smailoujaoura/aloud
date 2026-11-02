@@ -36,7 +36,7 @@ import { languageName, primaryLanguage, voiceLanguage, type CandidateVoice } fro
 import { planLanguages, scriptFits, type Detection, type Detector, type PassageInput, type PassageLanguage } from './language-plan';
 import { routeFor, voiceKey, type Route, type RouteContext } from './voice-routing';
 import { MAX_LANES, VoiceLanes } from './voice-lanes';
-import { listVoices, parseVoiceValue, voiceValue, type EngineVoice, type VoiceOption } from '@/shared/voice-catalog';
+import { listVoices, parseVoiceValue, voiceValue, withServerVoices, type EngineVoice, type VoiceOption } from '@/shared/voice-catalog';
 import {
   clearPosition,
   documentKey,
@@ -360,7 +360,8 @@ export class ReaderSession {
     // Chunk sizes are fixed at planning time, before any engine exists, so start from what
     // synthesis did last time on this device rather than from an assumption about the browser.
     this.backend = (await loadLastBackend()) ?? 'cpu';
-    this.manifest = await this.loadManifest();
+    const manifest = await this.loadManifest();
+    this.manifest = manifest ? withServerVoices(manifest, this.settings) : null;
     if (superseded()) return;
     this.connectPort();
     this.buildSubsystems();
@@ -1136,6 +1137,8 @@ export class ReaderSession {
       debug: this.settings.debug,
       speed: this.settings.speed,
       workers: this.settings.synthWorkers,
+      // The address is part of the engine: changing it starts the engine again (engineIdentity).
+      ...(this.engine === 'server' ? { server: { url: this.settings.server.url, model: this.settings.server.model } } : {}),
     };
   }
 
@@ -2462,6 +2465,8 @@ export class ReaderSession {
   private async onSettingsChanged(prev = this.settings): Promise<void> {
     const prevEngine = engineIdentity(this.engineConfig());
     this.settings = await getSettings();
+    // A server set up, changed or removed in Settings: its voices come and go from the menus.
+    if (this.manifest) this.manifest = withServerVoices(this.manifest, this.settings);
     this.bar?.setKeyHints(this.settings.readerKeys);
     if (this.stopReaderKeys) claimReaderKeys(Object.values(this.settings.readerKeys).filter(Boolean));
 

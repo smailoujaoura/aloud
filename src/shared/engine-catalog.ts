@@ -128,10 +128,23 @@ const ENGINES: Record<EngineId, EngineInfo> = {
     needsGpuForSpeed: true,
     heavyForMobile: true,
   },
+  server: {
+    id: 'server',
+    name: 'Your own server',
+    tag: 'A voice from your own computer',
+    blurb:
+      'Use a speech server you run, such as Kokoro on a PC at home or over Tailscale. Aloud sends ' +
+      'each sentence to the address you enter, and only there, and plays the speech it sends back. ' +
+      'Nothing to download, and as fast as your server.',
+    approxSize: 'No download',
+    needsGpuForSpeed: false,
+    heavyForMobile: false,
+  },
 };
 
 // Supertonic before Kokoro wherever engines are listed: the tabs, the walkthrough, the board.
-export const ENGINE_IDS: readonly EngineId[] = ['piper', 'supertonic', 'kokoro'];
+// Your own server last: it is for people who already run one.
+export const ENGINE_IDS: readonly EngineId[] = ['piper', 'supertonic', 'kokoro', 'server'];
 
 /**
  * Supertonic's detail (flow-matching steps) for this device. A phone gets 3 unless its reader

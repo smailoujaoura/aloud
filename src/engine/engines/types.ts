@@ -22,7 +22,7 @@ export interface InitContext {
 }
 
 export interface SynthEngine {
-  readonly id: 'piper' | 'kokoro' | 'supertonic';
+  readonly id: 'piper' | 'kokoro' | 'supertonic' | 'server';
   readonly sampleRate: number;
   readonly executionProvider: string;
   init(ctx: InitContext): Promise<void>;
@@ -80,4 +80,6 @@ export interface ModelManifest {
     license: string;
   };
   supertonic?: SupertonicManifest;
+  /** The reader's own server's voices: filled in from settings at run time (withServerVoices), never in models.json. */
+  server?: { voices: string[] };
 }

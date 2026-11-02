@@ -72,6 +72,15 @@ path before it loads). In the Chrome package that unused CDN line is removed fro
 transformers.js; the Firefox package keeps the library exactly as published, as Mozilla requires.
 Voice models downloaded at runtime are ONNX data files, not code.
 
+**Your own speech server (1.0.1, issue #9):** off by default. When a reader sets one up, each
+sentence's text goes to the address they entered (their own Kokoro-FastAPI or similar), never to
+the developer. It needs no new required permission: the host is asked for from the existing
+optional `*://*/*`, one site at a time, from the reader's click; Firefox also asks for the optional
+`websiteContent` data permission (`data_collection_permissions.optional`). Chrome's data form
+already declares Website content; the privacy policy describes the server. Reviewer note line:
+"Optional: the reader can point Aloud at their own OpenAI-style speech server; page text is then
+sent only to the address they enter, after a permission prompt."
+
 **Data usage:** disclose what Aloud *handles*, even though it all stays on the device. Chrome's User
 Data FAQ (question 3): "Extensions are required to disclose how they handle user data, even when
 data is processed or stored locally" — "handle" includes using information about the websites a

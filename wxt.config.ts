@@ -187,8 +187,10 @@ export default defineConfig({
               // 142+: native CSS Custom Highlight API, and Android
               // `data_collection_permissions` support (the last web-ext lint warning).
               strict_min_version: '142.0',
-              // The extension is fully offline and transmits nothing.
-              data_collection_permissions: { required: ['none'] },
+              // Nothing is transmitted, unless the reader sets up their own speech server (Settings →
+              // Voice → Your own server): page text then goes to that address, which Firefox asks
+              // the reader to agree to at that moment (options/voice-panels.ts: askForServer).
+              data_collection_permissions: { required: ['none'], optional: ['websiteContent'] },
             },
             // Firefox for Android. `gecko_android` is what makes the listing installable there;
             // without it AMO treats the add-on as desktop-only.

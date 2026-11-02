@@ -6,6 +6,13 @@ Website-only and documentation changes are not listed: they never reach the exte
 
 ## Unreleased
 
+### Added
+- **Your own speech server.** In Settings → Voice → Your own server, point Aloud at a speech
+  server you run, such as Kokoro-FastAPI on a PC at home or over Tailscale, and read with its
+  voices from any device: the server does the speaking, Aloud does everything else. Works with any
+  OpenAI-style speech API. Text goes only to the address you enter, after you allow it.
+  ([#9](https://github.com/smailoujaoura/aloud/issues/9))
+
 ### Fixed
 - Text in a writing system none of your voices can read (Chinese, Japanese, Russian, Arabic and
   others, when no voice for that language is downloaded) is now skipped, and the bar says so with

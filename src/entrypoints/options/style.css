@@ -852,3 +852,9 @@ code {
 .form .row > #themeSwitchRow { flex: 0 0 var(--ctl); width: var(--ctl); display: flex; }
 #themeSwitchRow .theme-switch { display: flex; width: 100%; box-sizing: border-box; }
 #themeSwitchRow .theme-switch .seg { flex: 1 1 0; justify-content: center; }
+
+/* Your own server: address, model, Connect on one line; the status and voices below. */
+.server-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 150px) auto; gap: 8px; align-items: center; margin: 12px 0 6px; }
+.server-form input { width: 100%; min-width: 0; }
+.server-status { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 12px; }
+@media (max-width: 560px) { .server-form { grid-template-columns: minmax(0, 1fr) auto; } .server-form .server-url { grid-column: 1 / -1; } }

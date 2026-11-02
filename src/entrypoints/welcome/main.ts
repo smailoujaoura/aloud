@@ -154,7 +154,8 @@ function buildBarDiagram(): void {
 function buildEngineCards(): void {
   const host = $('engineCards');
   host.replaceChildren(
-    ...listEngines().map((info) => {
+    // The engines that come with Aloud; your own server is set up in Settings.
+    ...listEngines().filter((info) => info.id !== 'server').map((info) => {
       const card = el(document, 'div', { class: 'engine-card card' });
       const head = el(document, 'div', { class: 'engine-head' });
       head.append(el(document, 'b', {}, info.name), el(document, 'span', { class: 'pill' }, info.tag));

@@ -22,6 +22,7 @@ export function engineConfigFor(
     piper: settings.piperVoice,
     kokoro: settings.kokoroVoice,
     supertonic: settings.supertonicVoice,
+    server: settings.serverVoice,
   };
 
   return {
@@ -34,6 +35,7 @@ export function engineConfigFor(
     // either way, so its download stays off the GPU.
     preferWebGPU: opts.purpose === 'download' && engine !== 'kokoro' ? false : settings.preferWebGPU,
     speed: settings.speed,
+    ...(engine === 'server' ? { server: { url: settings.server.url, model: settings.server.model } } : {}),
     // Both purposes are single-shot; the reading pool is sized separately in the synth host.
     workers: 1,
   };

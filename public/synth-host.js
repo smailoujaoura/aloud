@@ -223,7 +223,7 @@
 		return clamp(Math.round(requested), 1, 6);
 	}
 	function autoPoolSize(engine, gpu, env) {
-		if (engine === "piper") return 1;
+		if (engine === "piper" || engine === "server") return 1;
 		if (gpu) return 1;
 		if (env.touchFirst) return 1;
 		const cores = Math.max(1, env.cores);

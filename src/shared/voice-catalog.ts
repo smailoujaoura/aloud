@@ -11,6 +11,8 @@ import { supertonicVoices } from '@/shared/supertonic-voices';
 import type { ModelManifest } from '@/engine/engines/types';
 import type { EngineId } from '@/shared/settings';
 import { ENGINE_IDS } from './engine-catalog';
+import { serverVoiceLanguage } from './server-voices';
+import type { Settings } from './settings';
 
 export interface VoiceOption {
   /** Voice key as stored in settings, e.g. `en_US-hfc_female-medium` or `af_heart`. */
@@ -36,6 +38,9 @@ export function listVoices(engine: EngineId, manifest: ModelManifest): VoiceOpti
         label: `${v.label} · ${v.gender}`,
         group: v.language,
       }));
+    case 'server':
+      // As the server names them; Kokoro's names say their language (shared/server-voices.ts).
+      return (manifest.server?.voices ?? []).map((id) => ({ id, label: id, group: serverVoiceLanguage(id) }));
     default:
       return Object.entries(manifest.piper).map(([id, v]) => ({
         id,
@@ -110,4 +115,9 @@ export function parseVoiceValue(value: string, current: EngineId): { engine: Eng
   const id = value.slice(at + 1);
   if (!ENGINE_IDS.includes(engine) || !id) return null;
   return { engine, id };
+}
+
+/** The catalogue with the reader's own server's voices in it, when a server is set up. */
+export function withServerVoices(manifest: ModelManifest, settings: Pick<Settings, 'server'>): ModelManifest {
+  return { ...manifest, server: { voices: settings.server.url ? settings.server.voices : [] } };
 }

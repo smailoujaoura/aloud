@@ -16,7 +16,7 @@ import { applyGpuProbe, applyWorkerGpuProbe, capabilities } from '@/shared/brows
 import { probeGpu, gpuProbeIfKnown } from '@/shared/gpu-probe';
 import { loadWorkerGpu } from '@/shared/backend-memory';
 import { probeWorkerGpu, type WorkerGpuResult } from './gpu-check';
-import { listVoices } from '@/shared/voice-catalog';
+import { listVoices, withServerVoices } from '@/shared/voice-catalog';
 import { languageName, primaryLanguage } from '@/shared/language-voice';
 import { OTHER_LANGUAGES, downloadedVoices, shortName, voiceReading } from './voice-board';
 import { cacheClear, cacheEntries, cacheUsageBytes, deleteModels, forgetRemovedEngines } from '@/engine/model-cache';
@@ -404,7 +404,7 @@ async function renderNow(): Promise<void> {
   settings = await getSettings();
   applyTheme(document, settings.theme);
   for (const control of themeSwitches) control.setTheme(settings.theme);
-  const manifest = await loadManifest();
+  const manifest = withServerVoices(await loadManifest(), settings);
   const sizes = await readCacheSizes();
 
   $<HTMLInputElement>('speed').value = String(settings.speed);
@@ -484,6 +484,13 @@ async function renderNow(): Promise<void> {
       settings = await setSettings({ matchPageLanguage: on });
       await render();
       flashSaved(on ? 'Voices switch with the language' : 'One voice for every language');
+    },
+    setServer: async (server) => {
+      // Removed while it was the main voice: back to the voice Aloud starts with, which can speak.
+      const fallback = !server.url && settings.engine === 'server' ? { engine: DEFAULT_SETTINGS.engine } : {};
+      settings = await setSettings({ server, ...fallback });
+      await render();
+      if (!server.url) flashSaved('Server removed');
     },
   };
   renderVoiceSection(

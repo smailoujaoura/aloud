@@ -75,6 +75,8 @@ export function piperVoiceBytes(entry: PiperVoiceEntry, sizes: CacheSizes): numb
 
 /** True when the engine's model is present and its voices can be selected. */
 export function engineDownloaded(engine: EngineId, manifest: ModelManifest, sizes: CacheSizes): boolean {
+  // Nothing to download: ready once a server is set up and has listed its voices.
+  if (engine === 'server') return (manifest.server?.voices.length ?? 0) > 0;
   const hint = engineInfo(engine).cacheHint;
   if (!hint) return Object.values(manifest.piper).some((v) => piperDownloaded(v, sizes));
   return sharedModelInstalled(engine, sizes);
@@ -120,6 +122,7 @@ export function usableVoices(
   sizes: CacheSizes,
   where: Availability = {},
 ): VoiceOption[] {
+  if (engine === 'server') return listVoices('server', manifest);
   if (engine === 'piper') {
     return listVoices('piper', manifest).filter((v) => {
       const entry = manifest.piper[v.id];

@@ -21,12 +21,14 @@ import { el } from '@/shared/dom';
 import { humanBytes } from '@/shared/log';
 import { capabilities } from '@/shared/browser-env';
 import { downloadSize, engineInfo, kokoroVoiceUrl, supertonicStyleUrl, listEngines, type EngineInfo } from '@/shared/engine-catalog';
-import { isEnglish, shortPiperLabel } from '@/shared/voice-catalog';
+import { isEnglish, listVoices, shortPiperLabel } from '@/shared/voice-catalog';
+import { serverBase, serverOrigin, voicesFrom, voicesUrl } from '@/shared/server-voices';
+import { browser } from 'wxt/browser';
 import { languageName, primaryLanguage, voiceLanguage } from '@/shared/language-voice';
 import { supertonicVoices } from '@/shared/supertonic-voices';
 import { renderVoiceBoard } from './voice-board';
 import { cacheClear, cacheDelete, deleteModels } from '@/engine/model-cache';
-import { activeVoice, type EngineId, type Settings } from '@/shared/settings';
+import { activeVoice, type EngineId, type ServerSettings, type Settings } from '@/shared/settings';
 import type { ModelManifest, PiperVoiceEntry } from '@/engine/engines/types';
 
 import {
@@ -74,6 +76,8 @@ export interface PanelContext {
   setLanguageVoice(language: string, voice: { engine: EngineId; voice: string } | null): Promise<void>;
   /** Switch voices with each passage's language, or not. */
   setAutoLanguage(on: boolean): Promise<void>;
+  /** Save the reader's own speech server (empty address: none), then redraw. */
+  setServer(server: ServerSettings): Promise<void>;
 }
 
 export interface VoiceHosts {
@@ -207,7 +211,10 @@ function renderBrowser(hosts: VoiceHosts, ctx: PanelContext): void {
   );
   // The download line sits above whichever engine is open: one started on the Piper tab is still
   // worth seeing from the Kokoro one.
-  hosts.panel.replaceChildren(downloadTray(), engine === 'piper' ? piperPanel(ctx, again) : sharedPanel(engine, ctx, again));
+  hosts.panel.replaceChildren(
+    downloadTray(),
+    engine === 'piper' ? piperPanel(ctx, again) : engine === 'server' ? serverPanel(ctx) : sharedPanel(engine, ctx, again),
+  );
 }
 
 // ---- reading with ----------------------------------------------------------
@@ -694,6 +701,124 @@ function sharedPanel(engine: 'kokoro' | 'supertonic', ctx: PanelContext, again: 
   // No grades and no "best" heading: every voice of a shared model, just in order.
   for (const v of voices) list.append(item(v));
   return panel;
+}
+
+// ---- your own server ------------------------------------------------------
+
+/**
+ * The reader's own speech server (issue #9): an address, Connect, and then its voices, each
+ * previewed and used like any other. Connect asks for permission to reach that one host, and on
+ * Firefox for consent to send page text there, since that is what reading through it does.
+ */
+function serverPanel(ctx: PanelContext): HTMLElement {
+  const panel = el(document, 'div', { class: 'panel-body' });
+  const info = engineInfo('server');
+  panel.append(engineIntro(info));
+  const { server } = ctx.settings;
+
+  const form = el(document, 'div', { class: 'server-form' });
+  const url = el(document, 'input', {
+    type: 'url',
+    class: 'server-url',
+    placeholder: 'http://localhost:8880/v1',
+    'aria-label': 'Server address',
+    spellcheck: 'false',
+    value: server.url,
+  });
+  const model = el(document, 'input', {
+    type: 'text',
+    class: 'server-model',
+    placeholder: 'Model (optional)',
+    'aria-label': 'Model',
+    title: 'The model name to send. Kokoro-FastAPI accepts kokoro; most servers accept tts-1, which is sent if this is empty.',
+    spellcheck: 'false',
+    value: server.model,
+  });
+  const connect = el(document, 'button', { type: 'button', class: 'primary btn-sm' }, server.url ? 'Check again' : 'Connect');
+  const status = el(document, 'p', { class: 'muted small server-status', role: 'status' });
+  form.append(url, model, connect);
+  panel.append(form, status);
+
+  connect.addEventListener('click', () => {
+    const base = serverBase(url.value);
+    if (!base) {
+      status.textContent = 'Enter the address of an OpenAI-style speech server, starting with http:// or https://.';
+      return;
+    }
+    connect.disabled = true;
+    status.textContent = 'Connecting…';
+    // Asked for first, while the click still counts as the reader's gesture.
+    void askForServer(base)
+      .then(async (granted) => {
+        if (!granted) {
+          status.textContent = 'Aloud needs your permission to reach that address. Nothing was changed.';
+          return;
+        }
+        const voices = await fetch(voicesUrl(base), { signal: AbortSignal.timeout(10_000) })
+          .then((r) => (r.ok ? r.json() : null))
+          .then(voicesFrom)
+          .catch(() => null);
+        if (voices === null) {
+          status.textContent = `Can't reach ${base}. Is the server running, and is the address right (it usually ends in /v1)?`;
+          return;
+        }
+        if (voices.length === 0) {
+          status.textContent = `Connected, but ${base} lists no voices at /audio/voices.`;
+          return;
+        }
+        await ctx.setServer({ url: base, model: model.value.trim(), voices });
+        ctx.flashSaved(`Connected: ${voices.length} voice${voices.length === 1 ? '' : 's'}`);
+      })
+      .finally(() => {
+        connect.disabled = false;
+      });
+  });
+
+  if (!server.url) {
+    panel.append(
+      el(document, 'p', { class: 'list-note' }, 'Runs on any OpenAI-style speech server: Kokoro-FastAPI, openedai-speech and others. Text goes only to the address you enter.'),
+    );
+    return panel;
+  }
+
+  const remove = el(document, 'button', { type: 'button', class: 'ghost btn-sm' }, 'Remove server');
+  remove.addEventListener('click', () => {
+    const origin = serverOrigin(server.url);
+    void browser.permissions.remove({ origins: [origin] }).catch(() => false);
+    void ctx.setServer({ url: '', model: '', voices: [] });
+  });
+  status.textContent = `${server.url} · ${server.voices.length} voice${server.voices.length === 1 ? '' : 's'}`;
+  status.append(' ', remove);
+
+  const list = el(document, 'div', { class: 'voice-list' });
+  for (const v of listVoices('server', ctx.manifest)) {
+    if (ctx.filter && !v.id.toLowerCase().includes(ctx.filter)) continue;
+    const row = el(document, 'div', { class: 'voice-item' });
+    const main = el(document, 'div', { class: 'vi-main' });
+    main.append(el(document, 'b', { class: 'vi-name' }, v.id), el(document, 'span', { class: 'vi-meta' }, languageName(v.group)));
+    const actions = el(document, 'div', { class: 'vi-actions' });
+    actions.append(previewFor('server', v.id, ctx), useControl('server', v.id, v.id, ctx));
+    row.append(avatar('server', v.id, ctx), main, actions);
+    list.append(row);
+  }
+  panel.append(list);
+  return panel;
+}
+
+/**
+ * Permission to reach the server's host, and on Firefox consent to send it page text (the
+ * optional "website content" data permission). Both from the reader's click.
+ */
+async function askForServer(base: string): Promise<boolean> {
+  const origins = [serverOrigin(base)];
+  if (import.meta.env.BROWSER === 'firefox') {
+    try {
+      return await browser.permissions.request({ origins, data_collection: ['websiteContent'] } as never);
+    } catch {
+      /* a Firefox without data-collection permissions: ask for the host alone */
+    }
+  }
+  return browser.permissions.request({ origins });
 }
 
 /** Models whose download this page has finished (or tried to): once per page, never in a loop. */

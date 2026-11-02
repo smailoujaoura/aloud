@@ -8,6 +8,7 @@
  * The choice is made per page and never saved: reading one French page must not quietly turn
  * someone's default voice French. Pure functions only, so the rules are testable.
  */
+import { serverVoiceLanguage } from './server-voices';
 import { parseSupertonicVoice } from '@/shared/supertonic-voices';
 import type { EngineId } from '@/shared/settings';
 import type { ModelManifest } from '@/engine/engines/types';
@@ -93,6 +94,7 @@ export function pickVoiceForLanguage(
 export function voiceLanguage(engine: EngineId, id: string, manifest: ModelManifest): string {
   if (engine === 'piper') return manifest.piper[id]?.language ?? '';
   if (engine === 'kokoro') return manifest.kokoro.voices[id]?.language ?? 'en';
+  if (engine === 'server') return serverVoiceLanguage(id);
   return parseSupertonicVoice(id).language; // `F1@de`: a Supertonic style reading German
 }
 

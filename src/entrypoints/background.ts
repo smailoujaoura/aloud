@@ -28,7 +28,7 @@ import { putPdf, sweepPdfHandoffs } from '@/pdf/handoff';
 import { readCacheSizes, readingOnGpu, usableVoices } from '@/engine/installed-voices';
 import { addToQueue, type NewQueueItem } from '@/shared/reading-queue';
 import type { EngineId } from '@/shared/settings';
-import type { VoiceOption } from '@/shared/voice-catalog';
+import { withServerVoices, type VoiceOption } from '@/shared/voice-catalog';
 import type { ModelManifest } from '@/engine/engines/types';
 import { getSettings, watchSettings } from '@/shared/settings';
 import { createLockTable, useLockTable } from '@/shared/storage-lock';
@@ -667,14 +667,15 @@ async function iconDataUrl(): Promise<string> {
 
 async function installedVoices(engine: EngineId): Promise<VoiceOption[]> {
   try {
-    const manifest = await loadManifest();
+    const settings = await getSettings().catch(() => null);
+    const manifest = settings ? withServerVoices(await loadManifest(), settings) : await loadManifest();
     // Online, a missing voice file or GPU build is fetched on the first read, with the bar showing
     // it (engine-config.ts: a download takes the CPU build). Offline nothing can be fetched: only
     // voices whose files are all here, with the weights for where this machine runs the model.
     const online = navigator.onLine;
     const gpu = online
       ? null
-      : readingOnGpu((await getSettings().catch(() => null))?.preferWebGPU, await loadWorkerGpu().catch(() => null));
+      : readingOnGpu(settings?.preferWebGPU, await loadWorkerGpu().catch(() => null));
     return usableVoices(engine, manifest, await readCacheSizes(), { gpu, online });
   } catch (err) {
     // An empty list means "we do not know", and the bar keeps showing the active voice alone.

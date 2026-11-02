@@ -39,7 +39,8 @@ export function clampPool(requested: number): number {
 }
 
 export function autoPoolSize(engine: EngineId, gpu: boolean, env: PoolEnvironment): number {
-  if (engine === 'piper') return 1;
+  // Piper keeps up on one; the reader's own server does the work itself.
+  if (engine === 'piper' || engine === 'server') return 1;
   if (gpu) return 1;
   if (env.touchFirst) return 1;
 

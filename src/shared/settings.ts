@@ -8,7 +8,26 @@ import { storage } from 'wxt/utils/storage';
 import type { PronunciationRule } from '@/segment/pronunciations';
 import { withStorageLock } from './storage-lock';
 
-export type EngineId = 'piper' | 'kokoro' | 'supertonic';
+export type EngineId = 'piper' | 'kokoro' | 'supertonic' | 'server';
+
+export interface ServerSettings {
+  /** The API's base address, e.g. `http://localhost:8880/v1`. Empty: not set up. */
+  url: string;
+  /** The `model` field to send (Kokoro-FastAPI takes `kokoro`); empty sends the server's default. */
+  model: string;
+  /** The voices the server listed when last checked, for the voice menu. */
+  voices: string[];
+}
+
+/** The server settings as stored, or empty ones. */
+function serverSettings(raw: unknown): ServerSettings {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<ServerSettings>;
+  return {
+    url: typeof r.url === 'string' ? r.url.trim() : '',
+    model: typeof r.model === 'string' ? r.model.trim() : '',
+    voices: Array.isArray(r.voices) ? r.voices.filter((v): v is string => typeof v === 'string').slice(0, 500) : [],
+  };
+}
 
 /** One voice of one engine. */
 export interface VoiceRef {
@@ -249,6 +268,14 @@ export interface Settings {
   kokoroVoice: string;
   /** Supertonic voice: a style in a language, e.g. `F1@en` (shared/supertonic-voices.ts). */
   supertonicVoice: string;
+  /** A voice of the reader's own speech server, as it names it (`af_heart` on Kokoro-FastAPI). */
+  serverVoice: string;
+  /**
+   * The reader's own speech server (engine `server`): an OpenAI-style API, such as Kokoro-FastAPI
+   * on a PC at home, that Aloud sends each sentence's text to and gets its audio back from. Off
+   * until the reader enters an address and grants it (engine/engines/server.ts).
+   */
+  server: ServerSettings;
   /**
    * Supertonic flow-matching denoising steps (more = better, slower). 3–8 is sensible; 5 read as
    * clearly as 8 in the bench and is a third faster (each step costs about 0.19× real time on a CPU).
@@ -351,6 +378,8 @@ export const DEFAULT_SETTINGS: Settings = {
   piperVoice: 'en_GB-alba-medium',
   kokoroVoice: 'af_heart',
   supertonicVoice: 'F1@en',
+  serverVoice: '',
+  server: { url: '', model: '', voices: [] },
   supertonicSteps: 5,
   synthWorkers: 0,
   speed: 1,
@@ -537,7 +566,9 @@ export function sanitizeSettings(raw: Settings): Settings {
     : [];
   return {
     ...raw,
-    engine: oneOf(raw.engine, ['piper', 'kokoro', 'supertonic'] as const, DEFAULT_SETTINGS.engine),
+    engine: oneOf(raw.engine, ['piper', 'kokoro', 'supertonic', 'server'] as const, DEFAULT_SETTINGS.engine),
+    serverVoice: typeof raw.serverVoice === 'string' ? raw.serverVoice : '',
+    server: serverSettings(raw.server),
     piperVoice: typeof raw.piperVoice === 'string' && raw.piperVoice ? raw.piperVoice : DEFAULT_SETTINGS.piperVoice,
     kokoroVoice: typeof raw.kokoroVoice === 'string' && raw.kokoroVoice ? raw.kokoroVoice : DEFAULT_SETTINGS.kokoroVoice,
     // Supertonic 2 saved a bare style (`F1`), which it read in English: the same voice in Supertonic 3.
@@ -674,6 +705,8 @@ export function activeVoice(s: Settings): string {
       return s.kokoroVoice;
     case 'supertonic':
       return s.supertonicVoice;
+    case 'server':
+      return s.serverVoice;
     default:
       return s.piperVoice;
   }

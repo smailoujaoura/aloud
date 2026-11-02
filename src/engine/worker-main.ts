@@ -98,7 +98,12 @@ async function loadManifest(): Promise<ModelManifest> {
   return manifest;
 }
 
-async function createEngine(which: EngineConfig['engine'], m: ModelManifest): Promise<SynthEngine> {
+async function createEngine(config: EngineConfig, m: ModelManifest): Promise<SynthEngine> {
+  const which = config.engine;
+  if (which === 'server') {
+    const { ServerEngine } = await import('./engines/server');
+    return new ServerEngine(config.server?.url ?? '', config.server?.model ?? '');
+  }
   if (which === 'kokoro') {
     const { KokoroEngine } = await import('./engines/kokoro');
     return new KokoroEngine();
@@ -167,7 +172,7 @@ async function handleInit(req: Extract<WorkerRequest, { kind: 'init' }>): Promis
     const onNotice: InitContext['onNotice'] = (message) => post({ kind: 'notice', id: req.id, message });
 
     phase = `loading ${req.config.engine} engine module`;
-    engine = await createEngine(req.config.engine, m);
+    engine = await createEngine(req.config, m);
     started = {
       config: req.config,
       manifest: m,
@@ -247,7 +252,7 @@ async function synthesizeOnce(job: Job, speed: number): ReturnType<SynthEngine['
     started.onNotice?.('The GPU could not run this voice, so it is running on the CPU instead.');
     started.onProvider?.('wasm');
     await engine?.dispose();
-    engine = await createEngine(started.config.engine, started.manifest);
+    engine = await createEngine(started.config, started.manifest);
     await engine.init({
       voice: started.config.voice,
       steps: started.config.steps,
