@@ -124,6 +124,22 @@
 		return inFlight;
 	}
 	//#endregion
+	//#region src/shared/server-key-match.ts
+	/** `https://host:port` of a server address, or '' when it is not one. */
+	function serverKeyOrigin(url) {
+		try {
+			return new URL(url).origin;
+		} catch {
+			return "";
+		}
+	}
+	/** The key stored for this server address, if `stored` is one and was given for it. */
+	function keyFor(stored, url) {
+		const s = stored;
+		const origin = serverKeyOrigin(url);
+		return s && typeof s.key === "string" && s.key && origin && s.origin === origin ? s.key : "";
+	}
+	//#endregion
 	//#region src/synth-host/job-queue.ts
 	/**
 	* Which worker gets the next sentence.
@@ -594,7 +610,7 @@
 				...given.config,
 				server: {
 					...given.config.server,
-					key: await readServerKey()
+					key: keyFor(await readServerKey(), given.config.server.url)
 				}
 			}
 		} : given;
@@ -717,21 +733,20 @@
 			port.postMessage({ __aloud: "host-ready" });
 		});
 	});
-	/** storage.local `serverKey` (shared/server-key.ts), through whichever API this browser has. */
+	/** storage.local `serverKey` as stored (shared/server-key.ts), through whichever API this browser has. */
 	async function readServerKey() {
 		const scope = globalThis;
 		try {
-			const items = scope.browser?.storage?.local ? await scope.browser.storage.local.get("serverKey") : await new Promise((resolve) => {
+			return (scope.browser?.storage?.local ? await scope.browser.storage.local.get("serverKey") : await new Promise((resolve) => {
 				const local = scope.chrome?.storage?.local;
 				if (!local) return resolve({});
 				local.get("serverKey", (got) => {
 					scope.chrome?.runtime?.lastError;
 					resolve(got ?? {});
 				});
-			});
-			return typeof items.serverKey === "string" ? items.serverKey : "";
+			})).serverKey ?? null;
 		} catch {
-			return "";
+			return null;
 		}
 	}
 	async function redeemTicket(ticket) {

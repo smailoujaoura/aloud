@@ -776,7 +776,7 @@ function serverPanel(ctx: PanelContext): HTMLElement {
   const status = el(document, 'p', { class: 'muted small server-status', role: 'status' });
   form.append(url, model, key, connect);
   panel.append(form, status);
-  void getServerKey().then((saved) => {
+  void getServerKey(server.url).then((saved) => {
     if (saved) key.placeholder = 'Key saved (type to replace)';
   });
 
@@ -801,7 +801,12 @@ function serverPanel(ctx: PanelContext): HTMLElement {
           return;
         }
         const typed = key.value.trim();
-        const useKey = typed || (await getServerKey());
+        // A saved key belongs to the server it was saved for (scheme, host and port), and is never
+        // sent to another one (shared/server-key.ts). Permissions are per host.
+        const before = server.url ? new URL(server.url).hostname : '';
+        const sameHost = before === new URL(base).hostname;
+        const sameServer = !!server.url && new URL(server.url).origin === new URL(base).origin;
+        const useKey = typed || (await getServerKey(base));
         let refused = false;
         const voices = await fetch(voicesUrl(base), { headers: serverHeaders(useKey), signal: AbortSignal.timeout(10_000) })
           .then((r) => {
@@ -822,10 +827,15 @@ function serverPanel(ctx: PanelContext): HTMLElement {
           status.textContent = `Connected, but ${base} lists no voices at /audio/voices.`;
           return;
         }
-        if (typed) {
-          await setServerKey(typed);
+        if (typed || !sameServer) {
+          // The key typed, or none: another host's key is forgotten with it.
+          await setServerKey(typed, base);
           // A warm preview worker holds the old key.
           disposePreview();
+        }
+        // Moved to another host: the old one's permission goes, unless a site list still uses it.
+        if (before && !sameHost && !hostStillNeeded(ctx.settings, before)) {
+          void browser.permissions.remove({ origins: [serverOrigin(server.url)] }).catch(() => false);
         }
         await ctx.setServer({ url: base, model: model.value.trim(), voices });
         ctx.flashSaved(`Connected: ${voices.length} voice${voices.length === 1 ? '' : 's'}`);

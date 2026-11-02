@@ -27,6 +27,7 @@
 import type { EngineConfig, WorkerRequest, WorkerResponse } from '@/engine/protocol';
 import { capabilities } from '@/shared/browser-env';
 import { probeGpu } from '@/shared/gpu-probe';
+import { keyFor } from '@/shared/server-key-match';
 import { JobQueue } from './job-queue';
 import { MAX_POOL, autoPoolSize, clampPool, piperPoolForRate, poolSizeForProvider } from './pool-size';
 
@@ -455,7 +456,7 @@ function teardown(): void {
 async function startPool(given: Extract<WorkerRequest, { kind: 'init' }>, gen: number): Promise<void> {
   // The key for the reader's own server is added here, at the extension's origin: the reader in
   // the web page never holds it (shared/server-key.ts).
-  const msg = given.config.engine === 'server' && given.config.server ? { ...given, config: { ...given.config, server: { ...given.config.server, key: await readServerKey() } } } : given;
+  const msg = given.config.engine === 'server' && given.config.server ? { ...given, config: { ...given.config, server: { ...given.config.server, key: keyFor(await readServerKey(), given.config.server.url) } } } : given;
   if (disposed || gen !== initGeneration) return;
   const engine = msg.config.engine;
   const requested = msg.config.workers ?? 0;
@@ -617,8 +618,8 @@ window.addEventListener('message', (ev: MessageEvent) => {
   });
 });
 
-/** storage.local `serverKey` (shared/server-key.ts), through whichever API this browser has. */
-async function readServerKey(): Promise<string> {
+/** storage.local `serverKey` as stored (shared/server-key.ts), through whichever API this browser has. */
+async function readServerKey(): Promise<unknown> {
   type Local = { get: (key: string, callback?: (items: Record<string, unknown>) => void) => Promise<Record<string, unknown>> | void };
   const scope = globalThis as { browser?: { storage?: { local?: Local } }; chrome?: { storage?: { local?: Local }; runtime?: { lastError?: unknown } } };
   try {
@@ -632,9 +633,9 @@ async function readServerKey(): Promise<string> {
             resolve(got ?? {});
           });
         });
-    return typeof items.serverKey === 'string' ? items.serverKey : '';
+    return items.serverKey ?? null;
   } catch {
-    return '';
+    return null;
   }
 }
 

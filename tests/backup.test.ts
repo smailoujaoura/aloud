@@ -100,7 +100,7 @@ describe('backup: listening statistics', () => {
 
 describe('the key for your own speech server', () => {
   it('is never written into a backup', () => {
-    const backup = makeBackup({ settings: {}, serverKey: 's3cret-key' }, extra);
+    const backup = makeBackup({ settings: {}, serverKey: { origin: 'https://tts.example.com', key: 's3cret-key' } }, extra);
     expect(JSON.stringify(backup)).not.toContain('s3cret-key');
   });
 });

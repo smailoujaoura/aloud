@@ -44,8 +44,8 @@ import { applyTheme, watchSystemTheme, THEME_LABEL } from '@/ui/theme';
 import { createThemeSwitch, type ThemeSwitch } from '@/ui/theme-switch';
 import type { ModelManifest } from '@/engine/engines/types';
 
-import { piperDownloaded, readCacheSizes, sharedModelBytes, sharedModelInstalled, type CacheSizes } from '@/engine/installed-voices';
-import { engineInfo } from '@/shared/engine-catalog';
+import { engineDownloaded, piperDownloaded, readCacheSizes, sharedModelBytes, sharedModelInstalled, type CacheSizes } from '@/engine/installed-voices';
+import { ENGINE_IDS, engineInfo } from '@/shared/engine-catalog';
 import { engineConfigFor } from './engine-config';
 import { renderMediaSpeedPanel } from './media-speed-panel';
 import { renderNoteStylePanel } from './note-style-panel';
@@ -486,8 +486,9 @@ async function renderNow(): Promise<void> {
       flashSaved(on ? 'Voices switch with the language' : 'One voice for every language');
     },
     setServer: async (server) => {
-      // Removed while it was the main voice: back to the voice Aloud starts with, which can speak.
-      const fallback = !server.url && settings.engine === 'server' ? { engine: DEFAULT_SETTINGS.engine } : {};
+      // Removed while it was the main voice: back to an engine on this device (Phonon first), else
+      // the one Aloud starts with here. Piper, always, made a Phonon-only computer download a voice.
+      const fallback = !server.url && settings.engine === 'server' ? { engine: engineAfterServer(manifest, sizes) } : {};
       settings = await setSettings({ server, ...fallback });
       await render();
       if (!server.url) flashSaved('Server removed');
@@ -618,6 +619,12 @@ const SKIP_SWITCHES: Array<[string, keyof Settings['skip']]> = [
 ];
 
 /** Is the voice that reads to you actually on this device? */
+/** The engine to read with once the reader's own server is gone. */
+function engineAfterServer(manifest: ModelManifest, sizes: CacheSizes): EngineId {
+  const here = ENGINE_IDS.find((e) => e !== 'server' && engineDownloaded(e, manifest, sizes));
+  return here ?? (capabilities().touchFirst ? DEFAULT_SETTINGS.engine : 'phonon');
+}
+
 function currentVoiceInstalled(manifest: ModelManifest, sizes: CacheSizes): boolean {
   if (settings.engine === 'piper') {
     const entry = manifest.piper[settings.piperVoice];
