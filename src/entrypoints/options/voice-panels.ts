@@ -844,7 +844,8 @@ function serverPanel(ctx: PanelContext): HTMLElement {
   const remove = el(document, 'button', { type: 'button', class: 'ghost btn-sm' }, 'Remove server');
   remove.addEventListener('click', () => {
     const origin = serverOrigin(server.url);
-    void browser.permissions.remove({ origins: [origin] }).catch(() => false);
+    // Not when a site list still starts something on that host: the grant is shared.
+    if (!hostStillNeeded(ctx.settings, new URL(server.url).hostname)) void browser.permissions.remove({ origins: [origin] }).catch(() => false);
     void setServerKey('').then(disposePreview);
     void ctx.setServer({ url: '', model: '', voices: [] });
   });
@@ -864,6 +865,16 @@ function serverPanel(ctx: PanelContext): HTMLElement {
   }
   panel.append(list);
   return panel;
+}
+
+/**
+ * Does a site list in Settings (highlights or the speed control starting by themselves) rely on
+ * Aloud's permission for `hostname`? Removing a server must not take that permission with it:
+ * a server on the same machine as a site those lists name shares the grant.
+ */
+export function hostStillNeeded(settings: Pick<Settings, 'annotate' | 'mediaSpeed'>, hostname: string): boolean {
+  const sites = [...settings.annotate.alwaysOn, ...settings.mediaSpeed.alwaysOn];
+  return sites.some((site) => site === '*' || hostname === site || hostname.endsWith(`.${site}`));
 }
 
 /**
