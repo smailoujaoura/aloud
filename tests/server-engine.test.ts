@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { decodeWav } from '@/audio/wav-decode';
-import { serverBase, serverOrigin, serverVoiceLanguage, speechUrl, voicesFrom } from '@/shared/server-voices';
+import { serverAddressProblem, serverBase, serverOrigin, serverVoiceLanguage, speechUrl, voicesFrom } from '@/shared/server-voices';
 import { ServerEngine } from '@/engine/engines/server';
 
 /** A WAV file of `samples`, as a speech server sends it. */
@@ -82,5 +82,51 @@ describe('ServerEngine', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('{"detail":"Voice nope not found"}', { status: 400 })));
     await expect(new ServerEngine('http://localhost:8880/v1', '').synthesize('Hi.', 1, 'nope')).rejects.toThrow(/400.*Voice nope not found/);
     await expect(new ServerEngine('', '').init({ voice: 'x', preferWebGPU: false, onProgress: () => {} })).rejects.toThrow(/No server address/);
+  });
+});
+
+describe('a server on the internet, and its key', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('plain http only on this machine or your own network', () => {
+    for (const host of ['localhost', 'pc', '127.0.0.1', '10.1.2.3', '172.20.0.5', '192.168.1.10', '169.254.3.4', '100.101.102.103', 'gpu-box.tail1234.ts.net', 'nas.local', 'pc.lan', '[::1]', '[fd12:3456::1]']) {
+      expect(serverAddressProblem(`http://${host}:8880/v1`), host).toBeNull();
+    }
+    for (const host of ['tts.example.com', '8.8.8.8', '172.32.0.1', '100.128.0.1', '[2001:db8::1]']) {
+      expect(serverAddressProblem(`http://${host}:8880/v1`), host).toMatch(/only talks to it over https/);
+    }
+    expect(serverAddressProblem('https://tts.example.com/v1')).toBeNull();
+  });
+
+  it('sends the key as a Bearer token, to both addresses it uses', async () => {
+    const seen: Array<{ url: string; auth: string | null }> = [];
+    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+      seen.push({ url, auth: new Headers(init?.headers).get('authorization') });
+      return url.endsWith('/voices') ? new Response('{"voices":["af_heart"]}') : new Response(wav([0, 0.1]));
+    });
+    const engine = new ServerEngine('https://tts.example.com/v1', 'kokoro', 's3cret');
+    await engine.init({ voice: 'af_heart' } as never);
+    await engine.synthesize('Hello.', 1, 'af_heart');
+    expect(seen).toEqual([
+      { url: 'https://tts.example.com/v1/audio/voices', auth: 'Bearer s3cret' },
+      { url: 'https://tts.example.com/v1/audio/speech', auth: 'Bearer s3cret' },
+    ]);
+  });
+
+  it('no key, no Authorization header', async () => {
+    let auth: string | null = 'unset';
+    vi.stubGlobal('fetch', async (_url: string, init?: RequestInit) => ((auth = new Headers(init?.headers).get('authorization')), new Response('{"voices":[]}')));
+    await new ServerEngine('http://localhost:8880/v1', '').init({ voice: 'x' } as never);
+    expect(auth).toBeNull();
+  });
+
+  it('says plainly when the key is refused or missing, and never reaches a plain-http internet address', async () => {
+    vi.stubGlobal('fetch', async () => new Response('', { status: 401 }));
+    await expect(new ServerEngine('https://tts.example.com/v1', '', 'wrong').init({ voice: 'x' } as never)).rejects.toThrow(/refused the key/);
+    await expect(new ServerEngine('https://tts.example.com/v1', '').init({ voice: 'x' } as never)).rejects.toThrow(/asks for a key/);
+    const fetched = vi.fn();
+    vi.stubGlobal('fetch', fetched);
+    await expect(new ServerEngine('http://tts.example.com/v1', '', 'k').init({ voice: 'x' } as never)).rejects.toThrow(/https/);
+    expect(fetched).not.toHaveBeenCalled();
   });
 });

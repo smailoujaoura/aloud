@@ -587,7 +587,18 @@
 		readyWorkers.length = 0;
 		jobs.reset();
 	}
-	async function startPool(msg, gen) {
+	async function startPool(given, gen) {
+		const msg = given.config.engine === "server" && given.config.server ? {
+			...given,
+			config: {
+				...given.config,
+				server: {
+					...given.config.server,
+					key: await readServerKey()
+				}
+			}
+		} : given;
+		if (disposed || gen !== initGeneration) return;
 		const engine = msg.config.engine;
 		const requested = msg.config.workers ?? 0;
 		poolStart = performance.now();
@@ -699,6 +710,23 @@
 			port.postMessage({ __aloud: "host-ready" });
 		});
 	});
+	/** storage.local `serverKey` (shared/server-key.ts), through whichever API this browser has. */
+	async function readServerKey() {
+		const scope = globalThis;
+		try {
+			const items = scope.browser?.storage?.local ? await scope.browser.storage.local.get("serverKey") : await new Promise((resolve) => {
+				const local = scope.chrome?.storage?.local;
+				if (!local) return resolve({});
+				local.get("serverKey", (got) => {
+					scope.chrome?.runtime?.lastError;
+					resolve(got ?? {});
+				});
+			});
+			return typeof items.serverKey === "string" ? items.serverKey : "";
+		} catch {
+			return "";
+		}
+	}
 	async function redeemTicket(ticket) {
 		const scope = globalThis;
 		const message = {

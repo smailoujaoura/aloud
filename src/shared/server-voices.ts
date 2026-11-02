@@ -21,6 +21,42 @@ export function serverBase(input: string): string {
   return url.href.replace(/\/+$/, '').replace(/\/audio\/(speech|voices)$/, '');
 }
 
+/**
+ * Is `hostname` on this machine or the reader's own network? Plain http is fine there. Anything
+ * else is the internet, where the text read and the key must not cross in the clear.
+ * Tailscale counts as one's own network: its 100.64/10 addresses and *.ts.net names travel
+ * encrypted inside it.
+ */
+export function isLocalHost(hostname: string): boolean {
+  const h = hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
+  if (!h.includes('.') && !h.includes(':')) return true; // a single-label name: `pc`, `localhost`
+  if (/(^|\.)(localhost|local|lan|internal|home\.arpa|ts\.net)$/.test(h)) return true;
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    return a === 127 || a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254) || (a === 100 && b >= 64 && b <= 127);
+  }
+  // IPv6: loopback, unique local (fc00::/7), link-local (fe80::/10).
+  return h === '::1' || /^f[cd][0-9a-f]{2}:/.test(h) || /^fe[89ab][0-9a-f]:/.test(h);
+}
+
+/** Why `base` may not be used, or null: a server on the internet must be reached over https. */
+export function serverAddressProblem(base: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(base);
+  } catch {
+    return 'That is not a web address.';
+  }
+  if (url.protocol === 'https:' || isLocalHost(url.hostname)) return null;
+  return `${url.hostname} is on the internet, so Aloud only talks to it over https:// (the text you read, and any key, would otherwise travel unencrypted). Put the server behind https, or use its address on your own network.`;
+}
+
+/** The request headers that carry the server's key, if it has one. */
+export function serverHeaders(key: string | undefined): Record<string, string> {
+  return key ? { Authorization: `Bearer ${key}` } : {};
+}
+
 export function speechUrl(base: string): string {
   return `${base}/audio/speech`;
 }

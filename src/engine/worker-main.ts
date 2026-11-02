@@ -102,7 +102,7 @@ async function createEngine(config: EngineConfig, m: ModelManifest): Promise<Syn
   const which = config.engine;
   if (which === 'server') {
     const { ServerEngine } = await import('./engines/server');
-    return new ServerEngine(config.server?.url ?? '', config.server?.model ?? '');
+    return new ServerEngine(config.server?.url ?? '', config.server?.model ?? '', config.server?.key ?? '');
   }
   if (which === 'phonon') {
     const { PhononEngine } = await import('./engines/phonon');

@@ -21,6 +21,7 @@
  * `new AudioContext()` are both available (unlike in a content script).
  */
 import { sharesModel } from '@/shared/engine-catalog';
+import { withServerKey } from '@/shared/server-key';
 import { browser } from 'wxt/browser';
 import type { EngineConfig, WorkerResponse } from '@/engine/protocol';
 import { PREVIEW_NATIVE } from './preview-sentences';
@@ -104,7 +105,7 @@ let nextId = 1;
 /** Kokoro's and Supertonic's voices share a model, so the voice is not part of their warm key. */
 function configKey(c: EngineConfig): string {
   const voice = sharesModel(c.engine) ? '*' : c.voice;
-  return [c.engine, voice, c.steps ?? '', c.preferWebGPU].join('|');
+  return [c.engine, voice, c.steps ?? '', c.preferWebGPU, c.server?.url ?? '', c.server?.model ?? ''].join('|');
 }
 
 function ensureWorker(): Worker {
@@ -255,6 +256,9 @@ export function playSynthesized(
     try {
       if (warmKey !== key) {
         onStatus({ phase: 'loading', progress: 0, loadKind: 'compile' });
+        // The reader's own server's key: added here, at the extension's origin (shared/server-key.ts).
+        const withKey = await withServerKey(config);
+        if (my !== token) return;
         const initId = nextId++;
         await new Promise<void>((res, rej) => {
           pending = {
@@ -273,7 +277,7 @@ export function playSynthesized(
               });
             },
           };
-          w.postMessage({ kind: 'init', id: initId, config });
+          w.postMessage({ kind: 'init', id: initId, config: withKey });
         });
         // Only the preview that is still current may clear the shared callbacks: an older one
         // rejecting late used to wipe the *new* preview's, leaving it loading for ever.

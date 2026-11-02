@@ -12,8 +12,12 @@ export interface EngineConfig {
   voice: string;
   /** Supertonic only — flow-matching denoising steps. */
   steps?: number;
-  /** The reader's own speech server only: its base address and the model to ask for. */
-  server?: { url: string; model: string };
+  /**
+   * The reader's own speech server only: its base address, the model to ask for, and its key when
+   * it has one. The key is added by extension pages only (shared/server-key.ts), never by the
+   * reader in a web page.
+   */
+  server?: { url: string; model: string; key?: string };
   preferWebGPU: boolean;
   /** Verbose console logging (settings: `debug`). Sentence text is only logged when it is on. */
   debug?: boolean;

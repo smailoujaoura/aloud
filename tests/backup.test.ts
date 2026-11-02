@@ -97,3 +97,10 @@ describe('backup: listening statistics', () => {
     expect(restorePlan(file, { listeningStats: { since: 1, days: {} } }, new Set(['library'])).listeningStats).toBeUndefined();
   });
 });
+
+describe('the key for your own speech server', () => {
+  it('is never written into a backup', () => {
+    const backup = makeBackup({ settings: {}, serverKey: 's3cret-key' }, extra);
+    expect(JSON.stringify(backup)).not.toContain('s3cret-key');
+  });
+});

@@ -23,7 +23,9 @@ import { capabilities } from '@/shared/browser-env';
 import { downloadSize, engineInfo, kokoroVoiceUrl, phononVoiceUrl, supertonicStyleUrl, listEngines, type EngineInfo } from '@/shared/engine-catalog';
 import { phononExperimental } from '@/shared/phonon-voices';
 import { isEnglish, listVoices, shortPiperLabel } from '@/shared/voice-catalog';
-import { serverBase, serverOrigin, voicesFrom, voicesUrl } from '@/shared/server-voices';
+import { serverAddressProblem, serverBase, serverHeaders, serverOrigin, voicesFrom, voicesUrl } from '@/shared/server-voices';
+import { getServerKey, setServerKey } from '@/shared/server-key';
+import { disposePreview } from '@/ui/voice-preview';
 import { browser } from 'wxt/browser';
 import { languageName, primaryLanguage, voiceLanguage } from '@/shared/language-voice';
 import { supertonicVoices } from '@/shared/supertonic-voices';
@@ -758,15 +760,34 @@ function serverPanel(ctx: PanelContext): HTMLElement {
     spellcheck: 'false',
     value: server.model,
   });
+  // Shown as dots, never filled in: a saved key is said to be saved, and stays where it is unless
+  // something is typed here (shared/server-key.ts).
+  const key = el(document, 'input', {
+    type: 'password',
+    class: 'server-key',
+    placeholder: 'Key (optional)',
+    'aria-label': 'Key',
+    title: 'For a server that asks for one: sent as "Authorization: Bearer <key>", only to this server. Kept on this device, never in backups.',
+    autocomplete: 'off',
+    spellcheck: 'false',
+  });
   const connect = el(document, 'button', { type: 'button', class: 'primary btn-sm' }, server.url ? 'Check again' : 'Connect');
   const status = el(document, 'p', { class: 'muted small server-status', role: 'status' });
-  form.append(url, model, connect);
+  form.append(url, model, key, connect);
   panel.append(form, status);
+  void getServerKey().then((saved) => {
+    if (saved) key.placeholder = 'Key saved (type to replace)';
+  });
 
   connect.addEventListener('click', () => {
     const base = serverBase(url.value);
     if (!base) {
       status.textContent = 'Enter the address of an OpenAI-style speech server, starting with http:// or https://.';
+      return;
+    }
+    const problem = serverAddressProblem(base);
+    if (problem) {
+      status.textContent = problem;
       return;
     }
     connect.disabled = true;
@@ -778,10 +799,20 @@ function serverPanel(ctx: PanelContext): HTMLElement {
           status.textContent = 'Aloud needs your permission to reach that address. Nothing was changed.';
           return;
         }
-        const voices = await fetch(voicesUrl(base), { signal: AbortSignal.timeout(10_000) })
-          .then((r) => (r.ok ? r.json() : null))
-          .then(voicesFrom)
+        const typed = key.value.trim();
+        const useKey = typed || (await getServerKey());
+        let refused = false;
+        const voices = await fetch(voicesUrl(base), { headers: serverHeaders(useKey), signal: AbortSignal.timeout(10_000) })
+          .then((r) => {
+            refused = r.status === 401 || r.status === 403;
+            return r.ok ? r.json() : null;
+          })
+          .then((answer) => (answer === null ? null : voicesFrom(answer)))
           .catch(() => null);
+        if (refused) {
+          status.textContent = useKey ? `${base} refused the key. Check it and connect again.` : `${base} asks for a key. Enter it and connect again.`;
+          return;
+        }
         if (voices === null) {
           status.textContent = `Can't reach ${base}. Is the server running, and is the address right (it usually ends in /v1)?`;
           return;
@@ -789,6 +820,11 @@ function serverPanel(ctx: PanelContext): HTMLElement {
         if (voices.length === 0) {
           status.textContent = `Connected, but ${base} lists no voices at /audio/voices.`;
           return;
+        }
+        if (typed) {
+          await setServerKey(typed);
+          // A warm preview worker holds the old key.
+          disposePreview();
         }
         await ctx.setServer({ url: base, model: model.value.trim(), voices });
         ctx.flashSaved(`Connected: ${voices.length} voice${voices.length === 1 ? '' : 's'}`);
@@ -809,6 +845,7 @@ function serverPanel(ctx: PanelContext): HTMLElement {
   remove.addEventListener('click', () => {
     const origin = serverOrigin(server.url);
     void browser.permissions.remove({ origins: [origin] }).catch(() => false);
+    void setServerKey('').then(disposePreview);
     void ctx.setServer({ url: '', model: '', voices: [] });
   });
   status.textContent = `${server.url} · ${server.voices.length} voice${server.voices.length === 1 ? '' : 's'}`;

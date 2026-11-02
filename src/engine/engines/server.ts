@@ -8,7 +8,7 @@
  * session estimates them from the audio, as it does for Supertonic.
  */
 import { decodeWav } from '@/audio/wav-decode';
-import { speechUrl, voicesUrl } from '@/shared/server-voices';
+import { serverAddressProblem, serverHeaders, speechUrl, voicesUrl } from '@/shared/server-voices';
 import type { InitContext, SynthEngine, SynthResult } from './types';
 
 /** What OpenAI's API calls its speech model; Kokoro-FastAPI and most others accept it too. */
@@ -25,17 +25,22 @@ export class ServerEngine implements SynthEngine {
   constructor(
     private readonly base: string,
     private readonly model: string,
+    private readonly key = '',
   ) {}
 
   async init(ctx: InitContext): Promise<void> {
     if (!this.base) throw new Error('No server address is set. Add one in Settings → Voice → Your own server.');
+    const problem = serverAddressProblem(this.base);
+    if (problem) throw new Error(problem);
     this.voice = ctx.voice;
-    // Reachable at all? A clear message now beats a failed first sentence.
+    // Reachable at all, and does it take the key? A clear message now beats a failed first sentence.
+    let res: Response;
     try {
-      await fetch(voicesUrl(this.base), { signal: AbortSignal.timeout(10_000) });
+      res = await fetch(voicesUrl(this.base), { headers: serverHeaders(this.key), signal: AbortSignal.timeout(10_000) });
     } catch (err) {
       throw new Error(`Can't reach the speech server at ${this.base} (${err instanceof Error ? err.message : String(err)}). Is it running, and is this the right address?`);
     }
+    if (res.status === 401 || res.status === 403) throw new Error(refused(this.base, this.key));
   }
 
   async synthesize(text: string, speed: number, voice?: string): Promise<SynthResult> {
@@ -43,13 +48,14 @@ export class ServerEngine implements SynthEngine {
     try {
       res = await fetch(speechUrl(this.base), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...serverHeaders(this.key) },
         body: JSON.stringify({ model: this.model || DEFAULT_MODEL, input: text, voice: voice || this.voice, speed, response_format: 'wav' }),
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
     } catch (err) {
       throw new Error(`The speech server at ${this.base} didn't answer (${err instanceof Error ? err.message : String(err)})`);
     }
+    if (res.status === 401 || res.status === 403) throw new Error(refused(this.base, this.key));
     if (!res.ok) throw new Error(`The speech server said ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`);
     const { pcm, sampleRate } = decodeWav(await res.arrayBuffer());
     this.sampleRate = sampleRate;
@@ -57,4 +63,10 @@ export class ServerEngine implements SynthEngine {
   }
 
   dispose(): void {}
+}
+
+function refused(base: string, key: string): string {
+  return key
+    ? `The speech server at ${base} refused the key. Check it in Settings → Voice → Your own server.`
+    : `The speech server at ${base} asks for a key. Add it in Settings → Voice → Your own server.`;
 }

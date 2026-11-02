@@ -452,7 +452,11 @@ function teardown(): void {
   jobs.reset();
 }
 
-async function startPool(msg: Extract<WorkerRequest, { kind: 'init' }>, gen: number): Promise<void> {
+async function startPool(given: Extract<WorkerRequest, { kind: 'init' }>, gen: number): Promise<void> {
+  // The key for the reader's own server is added here, at the extension's origin: the reader in
+  // the web page never holds it (shared/server-key.ts).
+  const msg = given.config.engine === 'server' && given.config.server ? { ...given, config: { ...given.config, server: { ...given.config.server, key: await readServerKey() } } } : given;
+  if (disposed || gen !== initGeneration) return;
   const engine = msg.config.engine;
   const requested = msg.config.workers ?? 0;
   // The log is a timeline of this pool, so its clock starts here.
@@ -604,6 +608,27 @@ window.addEventListener('message', (ev: MessageEvent) => {
     port.postMessage({ __aloud: 'host-ready' });
   });
 });
+
+/** storage.local `serverKey` (shared/server-key.ts), through whichever API this browser has. */
+async function readServerKey(): Promise<string> {
+  type Local = { get: (key: string, callback?: (items: Record<string, unknown>) => void) => Promise<Record<string, unknown>> | void };
+  const scope = globalThis as { browser?: { storage?: { local?: Local } }; chrome?: { storage?: { local?: Local }; runtime?: { lastError?: unknown } } };
+  try {
+    const items = scope.browser?.storage?.local
+      ? await (scope.browser.storage.local.get('serverKey') as Promise<Record<string, unknown>>)
+      : await new Promise<Record<string, unknown>>((resolve) => {
+          const local = scope.chrome?.storage?.local;
+          if (!local) return resolve({});
+          local.get('serverKey', (got) => {
+            void scope.chrome?.runtime?.lastError;
+            resolve(got ?? {});
+          });
+        });
+    return typeof items.serverKey === 'string' ? items.serverKey : '';
+  } catch {
+    return '';
+  }
+}
 
 async function redeemTicket(ticket: unknown): Promise<boolean> {
   type Runtime = { sendMessage?: (m: unknown, callback?: (reply: unknown) => void) => Promise<unknown> | void; lastError?: unknown };
