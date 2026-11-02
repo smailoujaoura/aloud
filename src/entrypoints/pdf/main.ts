@@ -453,6 +453,13 @@ let pageObserver: IntersectionObserver | null = null;
 let editor: MarkEditor | null = null;
 
 /**
+ * The file being opened. Choosing or dropping another while one loads starts a new load; the
+ * older one is cancelled, and whatever it still finishes is dropped. A slow first file used to
+ * finish after a newer choice and replace it: title, pages, marks and the reading.
+ */
+let loading = new AbortController();
+
+/**
  * Show and read a PDF.
  *
  * `handle` is the file itself when the browser gave us one (Chromium's file picker or a drop):
@@ -465,8 +472,15 @@ async function present(
   /** Where the file came from, when it has an address the Library can open again. */
   origin: string | null = null,
 ): Promise<void> {
+  loading.abort();
+  const mine = new AbortController();
+  loading = mine;
+  /** Another file was chosen since: this load changes nothing more. */
+  const stale = (): boolean => loading !== mine;
+
   showStatus('Reading the PDF…', 0.02);
   const view: PdfView = (await getSettings().catch(() => null))?.pdfView ?? 'pages';
+  if (stale()) return;
 
   let doc: LoadedPdf;
   try {
@@ -474,11 +488,13 @@ async function present(
     // what marks are written into when the file is saved.
     doc = await readPdf({ kind: 'data', data: data.slice(0) }, {
       keepOpen: view === 'pages',
+      signal: mine.signal,
       onProgress: ({ page, pageCount }) => {
-        showStatus(`Reading the PDF… page ${page} of ${pageCount}`, page / Math.max(1, pageCount));
+        if (!stale()) showStatus(`Reading the PDF… page ${page} of ${pageCount}`, page / Math.max(1, pageCount));
       },
     });
   } catch (err) {
+    if (stale()) return;
     const message = err instanceof Error ? err.message : String(err);
     log.error('[pdf] failed to read:', message);
     showPicker(
@@ -489,6 +505,10 @@ async function present(
     return;
   }
 
+  if (stale()) {
+    doc.renderer?.destroy();
+    return;
+  }
   if (doc.blocks.length === 0) {
     doc.renderer?.destroy();
     showPicker(
@@ -504,10 +524,16 @@ async function present(
   // one exists: left running, the old watcher wrote another tab's edits of the old PDF into the
   // marks of the new one.
   await closeEditor();
+  if (stale()) {
+    doc.renderer?.destroy();
+    return;
+  }
   renderer?.destroy();
   renderer = doc.renderer;
   const bytes = new Uint8Array(data);
   const fileMarks = renderer ? await marksFromFile(doc, bytes) : null;
+  // From here the newer load owns the page: it destroys this renderer when it takes over.
+  if (stale()) return;
 
   // Revealed *before* the pages are laid out: positioning the text layer needs real
   // measurements, and a `hidden` ancestor measures every box as zero.
@@ -521,7 +547,9 @@ async function present(
     showStatus('Drawing the pages…', 0.98);
     document.body.classList.add('pages-view');
     const pages = await renderPages(doc, renderer, await fitScale(renderer));
+    if (stale()) return;
     await startEditor(pages, bytes, name, handle, fileMarks ?? []);
+    if (stale()) return;
     pageStarts = pages.map((p) => ({ el: p.holder, page: p.pageNumber }));
   } else {
     document.body.classList.remove('pages-view');
@@ -540,6 +568,7 @@ async function present(
 
   // From here on it is an ordinary article, and the ordinary reader handles it.
   await session?.dispose();
+  if (stale()) return;
   session = new ReaderSession();
   const reopen = origin && /^(https?|file):/.test(origin) ? ({ kind: 'pdf', url: origin } as const) : ({ kind: 'file', name } as const);
   // A title lifted from the first page of a PDF with no real title can be a whole paragraph;

@@ -37,6 +37,9 @@ Website-only and documentation changes are not listed: they never reach the exte
   Piper voice.
 - A download that does not fit on the device no longer deletes part of a voice you already have
   to make room: it stops, says the storage may be full, and leaves your voices as they were.
+- PDFs: choosing or dropping a second file while the first is still opening shows the second,
+  instead of the first replacing it when it finishes. A file that cannot be opened no longer
+  leaves work running in the background of the tab.
 - Short bits of text in another language, like a site's English "Learn more" under a Spanish
   paragraph, are read in their own language instead of the language around them, when their
   words belong to only one language. ([#2](https://github.com/smailoujaoura/aloud/issues/2))

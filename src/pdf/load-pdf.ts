@@ -47,6 +47,8 @@ export interface ReadPdfOptions {
   onProgress?: (p: PdfLoadProgress) => void;
   /** Keep the document open so pages can be drawn. Costs memory until `renderer.destroy()`. */
   keepOpen?: boolean;
+  /** Abandons the load (another file was chosen): it rejects, and its worker is let go. */
+  signal?: AbortSignal;
 }
 
 /** A page prepared at one scale: its size, how to draw it, and where its text sits. */
@@ -138,17 +140,21 @@ function loadPdfJs(): Promise<PdfJsModule> {
  * frozen while it works is the thing users complain about.
  */
 export async function readPdf(source: PdfSource, opts: ReadPdfOptions = {}): Promise<LoadedPdf> {
-  const { onProgress, keepOpen = false } = opts;
+  const { onProgress, keepOpen = false, signal } = opts;
   const pdfjs = await loadPdfJs();
+  signal?.throwIfAborted();
 
   const task = pdfjs.getDocument({
     ...(source.kind === 'url' ? { url: source.url } : { data: new Uint8Array(source.data) }),
     ...documentOptions(),
   });
-  const doc = await task.promise;
 
   let ok = false;
   try {
+    // Inside the `try`: a file pdf.js cannot parse used to fail here, before the `finally`, and
+    // left its worker running; each failed attempt in the same tab added another.
+    const doc = await task.promise;
+    signal?.throwIfAborted();
     const metadata = await doc.getMetadata().catch(() => null);
     const pages: PdfPageInput[] = [];
     const annotations: LoadedPdf['annotations'] = [];
@@ -167,6 +173,8 @@ export async function readPdf(source: PdfSource, opts: ReadPdfOptions = {}): Pro
         if (found.length) annotations.push({ page: n, annotations: found });
       }
       page.cleanup();
+      // Another file chosen meanwhile: stop here, and the `finally` lets this one go.
+      signal?.throwIfAborted();
       onProgress?.({ page: n, pageCount: doc.numPages });
     }
 
