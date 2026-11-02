@@ -53,8 +53,13 @@ export interface PassageLanguage {
   source: LanguageSource;
 }
 
-/** Fewer letters than this, and the detector is not asked: it is a guess at that length. */
+/**
+ * Fewer letters than this, and the detector is not asked: it is a guess at that length. Lines
+ * from 6 letters are asked since they are judged with trustedShort ("Read more", "Accedi").
+ */
 const MIN_LETTERS_TO_DETECT = 6;
+/** Fewer letters than this is a short passage, which agreeing neighbours may outvote. */
+const SHORT_PASSAGE_LETTERS = 12;
 /**
  * A passage this short (in words) whose neighbours agree takes their language: an exclamation,
  * a name. Words, not letters — "Let me tell you a story about a chicken." is short in letters but
@@ -114,7 +119,7 @@ function trustedShort(language: string, text: string): boolean {
 }
 
 function isShortPassage(text: string): boolean {
-  return wordsOf(text).length <= SHORT_PASSAGE_WORDS || letterCount(text) < MIN_LETTERS_TO_DETECT;
+  return wordsOf(text).length <= SHORT_PASSAGE_WORDS || letterCount(text) < SHORT_PASSAGE_LETTERS;
 }
 
 export function letterCount(text: string): number {
