@@ -573,10 +573,12 @@ export class ReaderSession {
   /**
    * Kokoro or Supertonic on the processor is the one case where a setting elsewhere — the browser
    * keeping WebGPU from workers — costs real speed. Say so once, with the way to fix it; Piper is
-   * fast anywhere and gets no tip, and someone who switched acceleration off chose that.
+   * fast anywhere and gets no tip, and someone who switched acceleration off chose that. Nor
+   * Phonon (the CPU is its path, by design) or the reader's own server (the GPU there is its own):
+   * "the graphics card would be faster" was offered to every new reader on their first page.
    */
   private maybeOfferGpuGuide(executionProvider: string): void {
-    if (this.settings.gpuTipSeen || !this.settings.preferWebGPU || this.engine === 'piper') return;
+    if (this.settings.gpuTipSeen || !this.settings.preferWebGPU || (this.engine !== 'kokoro' && this.engine !== 'supertonic')) return;
     if (executionProvider.startsWith('webgpu')) return;
     void setSettings({ gpuTipSeen: true });
     this.bar?.flash(`${engineInfo(this.engine).name} is running on the processor. The graphics card would be faster`, 'info', {
