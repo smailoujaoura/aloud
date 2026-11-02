@@ -88,3 +88,13 @@ describe('piperPoolForRate', () => {
     expect(piperPoolForRate(2.7, { cores: 8, touchFirst: true })).toBe(1);
   });
 });
+
+describe('Phonon', () => {
+  it('two workers on a computer, GPU or not (it runs on the CPU); one on a phone', () => {
+    expect(autoPoolSize('phonon', true, { cores: 8, touchFirst: false })).toBe(2);
+    expect(autoPoolSize('phonon', false, { cores: 8, touchFirst: false })).toBe(2);
+    expect(autoPoolSize('phonon', false, { cores: 2, touchFirst: false })).toBe(1);
+    expect(autoPoolSize('phonon', true, { cores: 8, touchFirst: true })).toBe(1);
+    expect(poolSizeForProvider('phonon', 'wasm', { cores: 8, touchFirst: false })).toBe(2);
+  });
+});

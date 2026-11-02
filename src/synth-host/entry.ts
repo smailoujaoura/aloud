@@ -467,7 +467,8 @@ async function startPool(given: Extract<WorkerRequest, { kind: 'init' }>, gen: n
   // Ask the machine, don't assume the browser: on Chromium `navigator.gpu` exists everywhere,
   // but plenty of desktops hand back no adapter, and sizing the pool as if they had one is what
   // left Kokoro stuck at ~3× real time with a single worker there. Costs a few ms, once.
-  const probe = engine === 'piper' ? { available: false, status: 'unsupported', adapterInfo: undefined } : await probeGpu();
+  // Piper and Phonon run on the CPU whatever the machine has.
+  const probe = engine === 'piper' || engine === 'phonon' ? { available: false, status: 'unsupported', adapterInfo: undefined } : await probeGpu();
   if (disposed || gen !== initGeneration) return; // superseded by a newer init while probing
 
   poolIsFixed = requested > 0;
@@ -517,12 +518,19 @@ function resizePoolForProvider(provider: string): void {
   targetSize = wanted;
 }
 
-/** The last few sentences' work per second of speech, for a Piper voice (see piperPoolForRate). */
+/**
+ * The last few sentences' work per second of speech, as played (after any speed-up), for Piper
+ * and Phonon (see piperPoolForRate).
+ */
 const piperRates: number[] = [];
 
-/** A Piper voice slower than speech gets more workers, as Kokoro and Supertonic always do. */
+/**
+ * A Piper voice slower than speech gets more workers, as Kokoro and Supertonic always do. So does
+ * Phonon read faster than its two workers keep up with: its audio is sped up after it is made, so
+ * at 3× each second of it played took three times the work.
+ */
 function growPiperPool(rtf: number): void {
-  if (!initMsg || poolIsFixed || initMsg.config.engine !== 'piper') return;
+  if (!initMsg || poolIsFixed || (initMsg.config.engine !== 'piper' && initMsg.config.engine !== 'phonon')) return;
   piperRates.push(rtf);
   if (piperRates.length > 3) piperRates.shift();
   // Two sentences agreeing, not one: the first after loading is slow for reasons of its own.
@@ -530,7 +538,7 @@ function growPiperPool(rtf: number): void {
   const wanted = piperPoolForRate(Math.min(...piperRates.slice(-2)), poolEnv());
   if (wanted <= targetSize) return;
   // eslint-disable-next-line no-console
-  console.info(`[aloud] ${clock()} piper is slower than speech here (RTF ${piperRates.at(-1)!.toFixed(2)}×); growing pool ${targetSize} → ${wanted} worker(s)`);
+  console.info(`[aloud] ${clock()} ${initMsg.config.engine} is slower than speech here (RTF ${piperRates.at(-1)!.toFixed(2)}×); growing pool ${targetSize} → ${wanted} worker(s)`);
   targetSize = wanted;
   spawnRest();
 }

@@ -224,11 +224,11 @@
 	}
 	function autoPoolSize(engine, gpu, env) {
 		if (engine === "piper" || engine === "server") return 1;
+		if (engine === "phonon") return env.touchFirst ? 1 : clamp(Math.max(1, env.cores) - 2, 1, 2);
 		if (gpu) return 1;
 		if (env.touchFirst) return 1;
 		const cores = Math.max(1, env.cores);
 		if (engine === "supertonic") return clamp(cores - 2, 1, 2);
-		if (engine === "phonon") return clamp(cores - 2, 1, 2);
 		return clamp(cores - 2, 2, 4);
 	}
 	/**
@@ -604,7 +604,7 @@
 		poolStart = performance.now();
 		nextWorkerId = 0;
 		dispatched.clear();
-		const probe = engine === "piper" ? {
+		const probe = engine === "piper" || engine === "phonon" ? {
 			available: false,
 			status: "unsupported",
 			adapterInfo: void 0
@@ -639,17 +639,24 @@
 		console.info(`[aloud] ${clock()} engine reported "${provider}"; growing pool ${targetSize} → ${wanted} worker(s)`);
 		targetSize = wanted;
 	}
-	/** The last few sentences' work per second of speech, for a Piper voice (see piperPoolForRate). */
+	/**
+	* The last few sentences' work per second of speech, as played (after any speed-up), for Piper
+	* and Phonon (see piperPoolForRate).
+	*/
 	var piperRates = [];
-	/** A Piper voice slower than speech gets more workers, as Kokoro and Supertonic always do. */
+	/**
+	* A Piper voice slower than speech gets more workers, as Kokoro and Supertonic always do. So does
+	* Phonon read faster than its two workers keep up with: its audio is sped up after it is made, so
+	* at 3× each second of it played took three times the work.
+	*/
 	function growPiperPool(rtf) {
-		if (!initMsg || poolIsFixed || initMsg.config.engine !== "piper") return;
+		if (!initMsg || poolIsFixed || initMsg.config.engine !== "piper" && initMsg.config.engine !== "phonon") return;
 		piperRates.push(rtf);
 		if (piperRates.length > 3) piperRates.shift();
 		if (piperRates.length < 2) return;
 		const wanted = piperPoolForRate(Math.min(...piperRates.slice(-2)), poolEnv());
 		if (wanted <= targetSize) return;
-		console.info(`[aloud] ${clock()} piper is slower than speech here (RTF ${piperRates.at(-1).toFixed(2)}×); growing pool ${targetSize} → ${wanted} worker(s)`);
+		console.info(`[aloud] ${clock()} ${initMsg.config.engine} is slower than speech here (RTF ${piperRates.at(-1).toFixed(2)}×); growing pool ${targetSize} → ${wanted} worker(s)`);
 		targetSize = wanted;
 		spawnRest();
 	}

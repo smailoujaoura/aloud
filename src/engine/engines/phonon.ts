@@ -2,7 +2,9 @@
  * Phonon (Gradium's Phonon S, 31M parameters): natural voices, about twice as fast as real time on
  * a single CPU thread, through Gradium's own runtime `phonon-tts`, copied unmodified into the
  * package (vendor/phonon/, scripts/sync-assets.mjs). The runtime starts a worker of its own beside
- * this one and runs the model there in WebAssembly (or WebGPU, when the reader turned it on).
+ * this one and runs the model there in WebAssembly, on the CPU: its WebGPU path has never been
+ * measured on a real graphics card (tts-bench/PHONON.md), and the CPU is already twice as fast
+ * as speech. When reading faster than that, the pool adds workers (synth-host/entry.ts).
  *
  * The files come through Aloud's model cache like every other engine's: the model and each voice
  * downloaded once from the pinned revisions in models.json, checked against their SHA-256, kept
@@ -58,6 +60,7 @@ const STALE_MS = 10 * 60_000;
 
 type FileUrls = { weights: string; tokenizer: string; config: string };
 type FileBytes = { weights: Uint8Array; tokenizer: Uint8Array; config: Uint8Array };
+type FileBlobs = { weights: Blob; tokenizer: Blob; config: Blob };
 
 /**
  * The model's files at addresses the runtime's worker can read, for as long as one copy starts.
@@ -67,14 +70,22 @@ type FileBytes = { weights: Uint8Array; tokenizer: Uint8Array; config: Uint8Arra
  * fetched, not even by the worker that made it ("NetworkError"). There the files are put in the
  * runtime's Cache Storage under addresses of their own, for one start, and taken out after: the
  * model then lives once on disk (Aloud's store), not twice.
+ *
+ * Held as Blobs, not the downloaded bytes: the 65 MB of weights were kept twice in every
+ * synthesis worker (the bytes, and the Blob made from them), and a browser may keep a Blob that
+ * size on disk rather than in memory.
  */
 class ModelFiles {
   private blobs: FileUrls | null = null;
 
-  private constructor(private readonly bytes: FileBytes) {}
+  private constructor(private readonly files: FileBlobs) {}
 
   static async from(bytes: FileBytes): Promise<ModelFiles> {
-    const files = new ModelFiles(bytes);
+    const files = new ModelFiles({
+      weights: new Blob([bytes.weights as BlobPart], { type: 'application/octet-stream' }),
+      tokenizer: new Blob([bytes.tokenizer as BlobPart], { type: 'application/json' }),
+      config: new Blob([bytes.config as BlobPart], { type: 'application/json' }),
+    });
     const probe = URL.createObjectURL(new Blob(['']));
     const blobsWork = await fetch(probe).then(
       () => true,
@@ -82,8 +93,8 @@ class ModelFiles {
     );
     URL.revokeObjectURL(probe);
     if (blobsWork) {
-      const blob = (b: Uint8Array, type: string) => URL.createObjectURL(new Blob([b as BlobPart], { type }));
-      files.blobs = { weights: blob(bytes.weights, 'application/octet-stream'), tokenizer: blob(bytes.tokenizer, 'application/json'), config: blob(bytes.config, 'application/json') };
+      const { weights, tokenizer, config } = files.files;
+      files.blobs = { weights: URL.createObjectURL(weights), tokenizer: URL.createObjectURL(tokenizer), config: URL.createObjectURL(config) };
     } else if (typeof caches === 'undefined') {
       throw new Error('this browser lets Phonon read its model neither from memory nor from Cache Storage');
     } else {
@@ -105,8 +116,8 @@ class ModelFiles {
     const urls: FileUrls = { weights: `${at}model.q8.gguf`, tokenizer: `${at}tokenizer.json`, config: `${at}config.json` };
     try {
       for (const key of ['weights', 'tokenizer', 'config'] as const) {
-        const b = this.bytes[key];
-        await store.put(urls[key], new Response(b as BlobPart, { headers: { 'content-length': String(b.byteLength) } }));
+        const b = this.files[key];
+        await store.put(urls[key], new Response(b, { headers: { 'content-length': String(b.size) } }));
       }
       return await run(urls);
     } finally {
@@ -140,8 +151,8 @@ const LOADED_LANGUAGES = 2;
 export class PhononEngine implements SynthEngine {
   readonly id = 'phonon' as const;
   readonly fixedSpeed = true;
+  readonly executionProvider = 'wasm';
   sampleRate = 24000;
-  executionProvider = 'wasm';
 
   private module: PhononModule | null = null;
   private files: ModelFiles | null = null;
@@ -151,7 +162,6 @@ export class PhononEngine implements SynthEngine {
   private readonly voicesOf = new Map<PhononRuntime, Set<string>>();
   private readonly voiceBytes = new Map<string, Promise<Uint8Array>>();
   private voice = '';
-  private preferGpu = false;
 
   constructor(private readonly manifest: ModelManifest) {}
 
@@ -164,7 +174,6 @@ export class PhononEngine implements SynthEngine {
   async init(ctx: InitContext): Promise<void> {
     const m = this.m;
     this.voice = ctx.voice;
-    this.preferGpu = ctx.preferWebGPU;
     const progress = (label: string) => (p: { loaded?: number; total?: number }) =>
       ctx.onProgress({ file: label, loaded: p.loaded ?? 0, total: Math.max(p.total ?? 0, p.loaded ?? 0, 1), phase: 'download' });
 
@@ -183,7 +192,6 @@ export class PhononEngine implements SynthEngine {
     const runtime = await stage('starting Phonon', () => this.runtimeFor(phononLanguage(this.languageOf(ctx.voice))));
     await stage('giving Phonon its voice', () => this.withVoice(runtime, ctx.voice));
     this.sampleRate = runtime.sampleRate;
-    this.executionProvider = runtime.device === 'webgpu' ? 'webgpu' : 'wasm';
   }
 
   async synthesize(text: string, _speed: number, voice?: string): Promise<SynthResult> {
@@ -227,7 +235,8 @@ export class PhononEngine implements SynthEngine {
       cache: cached,
       // Threads need a cross-origin-isolated page, which an extension worker is not.
       threads: 1,
-      device: this.preferGpu ? 'auto' : 'cpu',
+      // The measured path (see the top of this file); more speed comes from more workers.
+      device: 'cpu',
       workerUrl: assetUrl('vendor/phonon/worker.js'),
       wasmUrl: assetUrl('vendor/phonon/wasm/phonon_tts_bg.wasm'),
       simdWasmUrl: assetUrl('vendor/phonon/wasm/phonon_tts_simd_bg.wasm'),

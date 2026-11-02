@@ -41,6 +41,10 @@ export function clampPool(requested: number): number {
 export function autoPoolSize(engine: EngineId, gpu: boolean, env: PoolEnvironment): number {
   // Piper keeps up on one; the reader's own server does the work itself.
   if (engine === 'piper' || engine === 'server') return 1;
+  // Phonon runs on the CPU whatever the machine has (engines/phonon.ts), at about twice real
+  // time a worker: two keep ahead up to 2×, and the pool grows past that when it falls behind
+  // (phononPoolForRate). Each copy holds about 300 MB.
+  if (engine === 'phonon') return env.touchFirst ? 1 : clamp(Math.max(1, env.cores) - 2, 1, 2);
   if (gpu) return 1;
   if (env.touchFirst) return 1;
 
@@ -48,8 +52,6 @@ export function autoPoolSize(engine: EngineId, gpu: boolean, env: PoolEnvironmen
   // Supertonic 3 runs at about 1.2× real time per worker at its default 5 steps (the bench), so two
   // keep ahead of the listener — and each copy holds about 1.1 GB, so never more than two.
   if (engine === 'supertonic') return clamp(cores - 2, 1, 2);
-  // Phonon reads about twice as fast as real time on one thread: two keep ahead even at 2×.
-  if (engine === 'phonon') return clamp(cores - 2, 1, 2);
   // Kokoro is the heaviest (~3× real-time) but small (q8 ≈ 86 MB).
   return clamp(cores - 2, 2, 4);
 }
