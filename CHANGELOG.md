@@ -57,6 +57,9 @@ Website-only and documentation changes are not listed: they never reach the exte
   more often: on lines of one to eight words, Chrome went from about half right to over 80%, and
   Firefox from about two thirds to three quarters. ([#2](https://github.com/smailoujaoura/aloud/issues/2))
 
+- The video speed (1.5×, 2×...) now shows over videos in full screen too, on sites like Loom,
+  YouTube and course sites. It was hidden behind the full-screen video.
+
 ### Changed
 - Pronunciation fixes can be limited to one language, so a fix for how English is read no longer
   changes the same word in a French passage. **Hear it** speaks the fix in the voice that will

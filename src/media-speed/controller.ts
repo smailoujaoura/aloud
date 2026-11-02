@@ -382,9 +382,12 @@ export class MediaSpeedController {
     badge.host.style.top = `${top}px`;
     badge.host.style.left = `${left}px`;
     badge.host.style.display = 'block';
+    raise(badge.host);
     clearTimeout(badge.timer);
     badge.timer = window.setTimeout(() => {
-      if (this.badge) this.badge.host.style.display = 'none';
+      if (!this.badge) return;
+      this.badge.host.style.display = 'none';
+      lower(this.badge.host);
     }, always ? BADGE_MS * 2 : BADGE_MS);
   }
 
@@ -393,7 +396,12 @@ export class MediaSpeedController {
     if (!parent) return null;
     const host = document.createElement('div');
     host.id = BADGE_HOST_ID;
-    host.style.cssText = 'position:fixed;z-index:2147483646;pointer-events:none;display:none;';
+    // A popover where the browser has them: shown in the top layer, above a video in full screen
+    // (see raise). The rest undoes the browser's own popover look: inset 0, a border, a background.
+    if (POPOVERS) host.setAttribute('popover', 'manual');
+    host.style.cssText =
+      'position:fixed;z-index:2147483646;pointer-events:none;display:none;' +
+      'inset:auto;margin:0;padding:0;border:0;background:transparent;overflow:visible;width:auto;height:auto;';
     const root = host.attachShadow({ mode: 'closed' });
     const style = document.createElement('style');
     style.textContent = `
@@ -445,6 +453,41 @@ function mediaWithin(root: Element | ShadowRoot | Document): Media[] {
 function currentRateOf(media: Iterable<Media>): number | null {
   for (const el of media) return el.playbackRate;
   return null;
+}
+
+/** Can elements be shown in the top layer here (the Popover API: Chrome 114, Firefox 125)? */
+const POPOVERS = typeof HTMLElement !== 'undefined' && 'showPopover' in HTMLElement.prototype;
+
+/**
+ * Show the badge above everything, a video in full screen included. In full screen the browser
+ * draws only the full-screen element and what is inside it, so a badge anywhere else in the page
+ * was hidden however high its z-index (a Loom video on Skool, YouTube, any site). A popover is
+ * drawn in the top layer, where the full-screen element is, and above it when opened after it:
+ * so it is closed and opened again each time, to come out on top. Without popovers, the badge
+ * moves into the full-screen element when it can hold one (a player's box, not a <video>).
+ */
+function raise(host: HTMLElement): void {
+  if (POPOVERS && host.isConnected) {
+    try {
+      if (host.matches(':popover-open')) host.hidePopover();
+      host.showPopover();
+      return;
+    } catch {
+      /* not shown as a popover: the fallback below */
+    }
+  }
+  const full = document.fullscreenElement;
+  const into = full && !(full instanceof HTMLMediaElement) ? full : document.body ?? document.documentElement;
+  if (into && host.parentElement !== into) into.append(host);
+}
+
+function lower(host: HTMLElement): void {
+  if (!POPOVERS) return;
+  try {
+    if (host.matches(':popover-open')) host.hidePopover();
+  } catch {
+    /* already gone */
+  }
 }
 
 /** The on-screen box of the biggest visible media element, for placing the badge. */
