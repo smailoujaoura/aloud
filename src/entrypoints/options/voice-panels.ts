@@ -48,6 +48,7 @@ import { DownloadCancelled, downloads } from './download-queue';
 import { previewFor } from './preview-button';
 import { engineConfigFor, readsOnGpu } from './engine-config';
 import {
+  engineDownloaded,
   piperDownloaded,
   piperVoiceBytes,
   sharedModelBytes,
@@ -238,23 +239,36 @@ function engineTab(info: EngineInfo, open: EngineId, ctx: PanelContext, onPick: 
     role: 'tab',
     'aria-selected': String(selected),
   });
+  // One short row: whether it is here (a mark, its words in the tooltip), the short name, and a dot
+  // on the engine reading now. "Your own server · not downloaded" and "4 on this device" made the
+  // tabs overflow a phone's width.
+  const status = installedSummary(info.id, ctx);
+  const ready = engineDownloaded(info.id, ctx.manifest, ctx.sizes);
+  const reading = info.id === ctx.settings.engine;
   const label = el(document, 'span', { class: 'voice-tab-name' });
-  label.append(el(document, 'b', {}, info.name));
+  label.append(
+    el(document, 'span', { class: `voice-tab-mark${ready ? ' is-ready' : ''}`, 'aria-hidden': 'true' }, ready ? '✓' : info.id === 'server' ? '+' : '↓'),
+    el(document, 'b', {}, info.short),
+  );
   // The engine currently reading gets a mark, so "which one am I using" survives browsing away.
-  if (info.id === ctx.settings.engine) {
-    label.append(el(document, 'span', { class: 'voice-tab-dot', title: 'The engine reading to you now' }));
-  }
-  tab.append(label, el(document, 'span', { class: 'voice-tab-status' }, installedSummary(info.id, ctx)));
+  if (reading) label.append(el(document, 'span', { class: 'voice-tab-dot', 'aria-hidden': 'true' }));
+  tab.title = `${info.name}: ${status}${reading ? ' · reading to you now' : ''}`;
+  tab.setAttribute('aria-label', tab.title);
+  tab.append(label);
   tab.addEventListener('click', onPick);
+  // On a phone the strip scrolls: the open tab is brought into it.
+  if (selected) requestAnimationFrame(() => tab.scrollIntoView({ block: 'nearest', inline: 'nearest' }));
   return tab;
 }
 
 function installedSummary(engine: EngineId, ctx: PanelContext): string {
   if (engine === 'piper') {
     const n = Object.values(ctx.manifest.piper).filter((v) => piperDownloaded(v, ctx.sizes)).length;
-    return n ? `${n} on this device` : 'none downloaded';
+    return n ? `${n} voice${n === 1 ? '' : 's'} on this device` : 'none downloaded';
   }
-  return sharedModelInstalled(engine, ctx.sizes) ? 'downloaded' : 'not downloaded';
+  // The reader's own server is never downloaded: it is set up or not (it said "not downloaded").
+  if (engine === 'server') return engineDownloaded('server', ctx.manifest, ctx.sizes) ? 'connected' : 'not set up';
+  return sharedModelInstalled(engine, ctx.sizes) ? 'on this device' : 'not downloaded';
 }
 
 /** What the engine is and what it costs, at the top of its tab. */
@@ -711,6 +725,17 @@ function sharedPanel(engine: SharedEngine, ctx: PanelContext, again: () => void)
         ? `Download the model above to use these ${voices.length} voices.`
         : `Download the model above to use these voices. One download for all ${all.length}.`));
   }
+  // Phonon's French, German, Spanish or Portuguese without its multilingual model: say so where
+  // they are heard, with the way to fix it, not only on a card further up.
+  const phononPack = engine === 'phonon' && downloaded ? ctx.manifest.phonon?.multilingual : undefined;
+  if (phononPack && voices.some((v) => / \(experimental\)$/.test(v.group))) {
+    const note = el(document, 'div', { class: 'list-note pack-note' });
+    note.append(
+      el(document, 'span', {}, 'These voices read with mistakes until Phonon’s multilingual model is downloaded. With it, they read their language properly. '),
+      packDownloadButton(phononPack, ctx),
+    );
+    list.append(note);
+  }
 
   const item = (v: SharedVoice): HTMLElement => {
     const row = el(document, 'div', { class: 'voice-item' });
@@ -928,25 +953,16 @@ function phononPackCard(pack: PhononPack, ctx: PanelContext): HTMLElement {
   }
   const progress = new RowProgress();
   const btn = el(document, 'button', { type: 'button', class: installed ? 'mc-delete' : 'primary' }, installed ? 'Delete from this device' : `Download ${size}`);
-  const key = 'model:phonon-languages';
   const idle = btn.textContent ?? '';
   btn.addEventListener('click', () => {
     if (!installed) {
-      downloads.enqueue(key, 'Phonon languages', (p, signal) => downloadPhononPack(pack, p, signal)).then(
-        async () => {
-          announceModelsChanged();
-          ctx.flashSaved('Phonon now reads French, German, Spanish and Portuguese');
-          await ctx.refresh();
-        },
-        (err: unknown) => {
-          if (err instanceof DownloadCancelled) ctx.flashSaved('Phonon languages: download cancelled');
-        },
-      );
+      startPackDownload(pack, ctx);
       return;
     }
     void runModelAction(btn, async () => {
       try {
         await deleteModels(() => Promise.all(Object.values(phononPackUrls(pack)).map((url) => cacheDelete(url))).then(() => undefined));
+        disposePreview();
         announceModelsChanged();
         ctx.flashSaved('Phonon languages deleted');
         await ctx.refresh();
@@ -956,9 +972,38 @@ function phononPackCard(pack: PhononPack, ctx: PanelContext): HTMLElement {
       }
     });
   });
-  if (!installed) followDownload(key, progress, btn, idle);
+  if (!installed) followDownload(PACK_KEY, progress, btn, idle);
   card.append(text, btn, progress.wrap, progress.msg);
   return card;
+}
+
+const PACK_KEY = 'model:phonon-languages';
+
+/** Queue the multilingual model's download (the card's button, and the note over its voices). */
+function startPackDownload(pack: PhononPack, ctx: PanelContext): void {
+  downloads.enqueue(PACK_KEY, 'Phonon languages', (p, signal) => downloadPhononPack(pack, p, signal)).then(
+    async () => {
+      // A warm preview still holds the 31M model for these languages: the next one starts afresh.
+      disposePreview();
+      announceModelsChanged();
+      ctx.flashSaved('Phonon now reads French, German, Spanish and Portuguese properly');
+      await ctx.refresh();
+    },
+    (err: unknown) => {
+      if (err instanceof DownloadCancelled) ctx.flashSaved('Phonon languages: download cancelled');
+    },
+  );
+}
+
+/** A Download button for the multilingual model, following the one download however it was started. */
+function packDownloadButton(pack: PhononPack, ctx: PanelContext): HTMLElement {
+  const wrap = el(document, 'span', { class: 'pack-download' });
+  const progress = new RowProgress();
+  const btn = el(document, 'button', { type: 'button', class: 'primary btn-sm' }, `Download ${humanBytes(pack.sizeBytes)}`);
+  btn.addEventListener('click', () => startPackDownload(pack, ctx));
+  followDownload(PACK_KEY, progress, btn, btn.textContent ?? '');
+  wrap.append(btn, progress.wrap, progress.msg);
+  return wrap;
 }
 
 /** Models whose download this page has finished (or tried to): once per page, never in a loop. */

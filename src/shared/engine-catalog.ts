@@ -25,6 +25,8 @@ export const SUPERTONIC_REVISION = '3cadd1ee6394adea1bd021217a0e650ede09a323';
 export interface EngineInfo {
   id: EngineId;
   name: string;
+  /** The engine's name where room is short: its tab ("Supertonic", not "Supertonic 3"). */
+  short: string;
   /** Short chip shown next to the name: what this engine is, in a few words. */
   tag: string;
   /** One or two sentences under the engine picker and in its panel. */
@@ -72,6 +74,7 @@ const ENGINES: Record<EngineId, EngineInfo> = {
   piper: {
     id: 'piper',
     name: 'Piper',
+    short: 'Piper',
     tag: 'Fast, small downloads',
     blurb:
       'A small, fast neural voice. Faster than real time on any machine, including phones, with ' +
@@ -83,6 +86,7 @@ const ENGINES: Record<EngineId, EngineInfo> = {
   kokoro: {
     id: 'kokoro',
     name: 'Kokoro-82M',
+    short: 'Kokoro',
     tag: 'Best quality, wants a GPU',
     blurb:
       'The most natural and expressive of the three. With GPU acceleration it is comfortably faster ' +
@@ -107,6 +111,7 @@ const ENGINES: Record<EngineId, EngineInfo> = {
   supertonic: {
     id: 'supertonic',
     name: 'Supertonic 3',
+    short: 'Supertonic',
     tag: '31 languages, large download',
     blurb:
       'Clear, natural voices in 31 languages, many that Kokoro does not speak. Quicker with a GPU. ' +
@@ -134,12 +139,13 @@ const ENGINES: Record<EngineId, EngineInfo> = {
   phonon: {
     id: 'phonon',
     name: 'Phonon',
+    short: 'Phonon',
     tag: 'Natural, and fast on any computer',
     blurb:
       'Natural, expressive voices from Gradium that read about twice as fast as real time on an ' +
       'ordinary processor, no graphics card needed. 37 English voices, American, British and a ' +
-      'cast of characters, plus French, Spanish, German and Portuguese voices to try (experimental). ' +
-      'One download, all 102 voices included.',
+      'cast of characters, plus French, Spanish, German and Portuguese voices, which read properly ' +
+      'with its multilingual model, a further download. One download, all 102 voices included.',
     // 64.8 MB of model and 102 voices of 256 KB (decimal MB, as everywhere).
     approxSize: '~91 MB',
     // Both of Gradium's repositories: the model (gradium/phonon-31m-en) and the voices (gradium/phonon-voices).
@@ -154,6 +160,7 @@ const ENGINES: Record<EngineId, EngineInfo> = {
   server: {
     id: 'server',
     name: 'Your own server',
+    short: 'Custom',
     tag: 'A voice from your own computer',
     blurb:
       'Use a speech server you run, such as Kokoro on a PC at home or over Tailscale. Aloud sends ' +

@@ -267,16 +267,21 @@ code {
   display: flex;
   gap: 3px;
   padding: 3px;
+  /* Never wider than the page: on a phone the tabs scroll sideways instead (see below). */
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
   border-radius: 12px;
   background: var(--surface-2);
   border: 1px solid var(--border);
 }
 .voice-tab {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
-  padding: 6px 13px;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 7px 12px;
   border: 0;
   border-radius: 9px;
   background: transparent;
@@ -285,10 +290,11 @@ code {
 }
 .voice-tab:hover:not(.is-active) { background: var(--surface-3); }
 .voice-tab.is-active { background: var(--surface); box-shadow: var(--shadow-1); }
-.voice-tab-name { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; }
-.voice-tab-name b { font-weight: 650; }
-.voice-tab-status { font-size: 11px; color: var(--fg-muted); }
-.voice-tab.is-active .voice-tab-status { color: var(--accent); }
+.voice-tab-name { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; min-width: 0; }
+.voice-tab-name b { font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* On this device (✓, green), or not yet: to download (↓, red) or to set up (+, red). The words are in the tooltip. */
+.voice-tab-mark { flex: none; width: 1em; text-align: center; font-size: 12px; font-weight: 700; color: var(--danger); }
+.voice-tab-mark.is-ready { color: var(--ok); font-weight: 700; }
 .voice-tab-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-solid); }
 .model-filter { flex: 1 1 200px; min-width: 150px; margin: 0; padding: 8px 11px; border-radius: 10px; }
 
@@ -498,7 +504,8 @@ code {
   .now-side { flex: 1 1 100%; flex-direction: row; align-items: center; justify-content: flex-start; }
   .voice-toolbar { margin-inline: -16px; padding-inline: 16px; }
   .voice-tabs { flex: 1 1 100%; }
-  .voice-tab { flex: 1 1 0; }
+  /* Whole names, the strip scrolling sideways: five fitted in a phone's width left "Pho…". */
+  .voice-tab { flex: none; }
   .voice-item { grid-template-columns: 34px minmax(0, 1fr); }
   .vi-actions { grid-column: 2; justify-self: start; justify-content: flex-start; }
   .lang-picker select { min-width: 0; }
@@ -859,3 +866,7 @@ code {
 .server-form input { width: 100%; min-width: 0; }
 .server-status { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 12px; }
 @media (max-width: 560px) { .server-form { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; } .server-form .server-url { grid-column: 1 / -1; } }
+/* Phonon's experimental languages: the way to the model that reads them properly, over their voices. */
+.pack-note { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pack-download { display: inline-flex; flex-direction: column; gap: 4px; min-width: 0; }
+.voice-tabs::-webkit-scrollbar { display: none; }

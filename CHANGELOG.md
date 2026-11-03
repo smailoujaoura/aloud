@@ -67,6 +67,9 @@ Website-only and documentation changes are not listed: they never reach the exte
   YouTube and course sites. It was hidden behind the full-screen video.
 
 ### Changed
+- The voice engine tabs in Settings are short and fit a phone: each engine's name (Phonon, Piper,
+  Supertonic, Kokoro, Custom) with a mark for whether it is on this device; the details are in its
+  tooltip. On a phone they scroll sideways instead of running off the screen.
 - Pronunciation fixes can be limited to one language, so a fix for how English is read no longer
   changes the same word in a French passage. **Hear it** speaks the fix in the voice that will
   actually say it, instead of always your main voice. ([#5](https://github.com/smailoujaoura/aloud/issues/5))

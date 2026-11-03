@@ -162,6 +162,10 @@ export class PhononEngine implements SynthEngine {
   private files: ModelFiles | null = null;
   /** The multilingual model's, once a language it reads is: loaded from the cache, never fetched. */
   private packFiles: Promise<ModelFiles | null> | null = null;
+  /** Which model each loaded language was loaded with. */
+  private readonly loadedWith = new Map<PhononLanguage, 'base' | 'pack'>();
+  /** When the cache was last asked whether the multilingual model has arrived (see upgrade). */
+  private packCheckedAt = 0;
   /** Loaded copies of the model, by language, least recently used first. */
   private readonly loaded = new Map<PhononLanguage, Promise<PhononRuntime>>();
   /** Voices each loaded copy has been given. */
@@ -202,7 +206,9 @@ export class PhononEngine implements SynthEngine {
 
   async synthesize(text: string, _speed: number, voice?: string): Promise<SynthResult> {
     const name = voice || this.voice;
-    const runtime = await this.runtimeFor(phononLanguage(this.languageOf(name)));
+    const lang = phononLanguage(this.languageOf(name));
+    await this.upgrade(lang);
+    const runtime = await this.runtimeFor(lang);
     await this.withVoice(runtime, name);
     const pcm = await runtime.synth(text, { voice: name });
     return { pcm, sampleRate: runtime.sampleRate };
@@ -211,11 +217,34 @@ export class PhononEngine implements SynthEngine {
   async dispose(): Promise<void> {
     for (const loading of this.loaded.values()) void loading.then((r) => r.dispose()).catch(() => undefined);
     this.loaded.clear();
+    this.loadedWith.clear();
     this.voicesOf.clear();
     this.files?.dispose();
     this.files = null;
     void this.packFiles?.then((f) => f?.dispose());
     this.packFiles = null;
+  }
+
+  /**
+   * The multilingual model downloaded while `lang` was being read with the 31M one (a tab open
+   * while Settings downloaded it, or the settings page's warm preview): the 31M copy is let go,
+   * so the next sentence loads the good one. Without this, "it still sounds the same" until the
+   * page was reloaded. The cache is asked at most every few seconds.
+   */
+  private async upgrade(lang: PhononLanguage): Promise<void> {
+    const pack = this.m.multilingual;
+    if (!pack?.languages.includes(lang) || this.loadedWith.get(lang) !== 'base') return;
+    if (Date.now() - this.packCheckedAt < 3000) return;
+    this.packCheckedAt = Date.now();
+    if (!(await cacheHas(phononPackUrls(pack).weights).catch(() => false))) return;
+    const old = this.loaded.get(lang);
+    this.loaded.delete(lang);
+    this.loadedWith.delete(lang);
+    this.packFiles = null;
+    void old?.then((r) => {
+      this.voicesOf.delete(r);
+      r.dispose();
+    }).catch(() => undefined);
   }
 
   /**
@@ -260,7 +289,9 @@ export class PhononEngine implements SynthEngine {
     }
     const module = this.module;
     if (!module || !this.files) throw new Error('Phonon engine not initialised');
-    const loading = this.filesFor(lang).then((checkpoint) => checkpoint.use((files) => module.PhononTTS.load({
+    const loading = this.filesFor(lang).then((checkpoint) => {
+      this.loadedWith.set(lang, checkpoint === this.files ? 'base' : 'pack');
+      return checkpoint.use((files) => module.PhononTTS.load({
       lang,
       quant: 'q8',
       model: { weights: { q8: files.weights }, tokenizer: files.tokenizer, config: files.config, voices: {} },
@@ -274,12 +305,14 @@ export class PhononEngine implements SynthEngine {
       workerUrl: assetUrl('vendor/phonon/worker.js'),
       wasmUrl: assetUrl('vendor/phonon/wasm/phonon_tts_bg.wasm'),
       simdWasmUrl: assetUrl('vendor/phonon/wasm/phonon_tts_simd_bg.wasm'),
-    })));
+    }));
+    });
     this.loaded.set(lang, loading);
     loading.catch(() => this.loaded.delete(lang));
     while (this.loaded.size > LOADED_LANGUAGES) {
       const [oldest, old] = this.loaded.entries().next().value!;
       this.loaded.delete(oldest);
+      this.loadedWith.delete(oldest);
       void old.then((r) => {
         this.voicesOf.delete(r);
         r.dispose();

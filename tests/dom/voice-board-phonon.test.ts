@@ -32,7 +32,7 @@ describe('Phonon on the board', () => {
     const host = document.createElement('div');
     renderVoiceBoard(host, ctx({ unvoicedLanguages: 'skip' }), vi.fn());
     expect([...host.querySelectorAll('.vb-row:not(.vb-others) .vb-lang b')].map((b) => b.textContent)).toEqual(['English']);
-    expect(host.querySelector('.vb-others .vb-lang')!.textContent).toContain('Phonon reads French, Spanish in their own language.');
+    expect(host.querySelector('.vb-others .vb-lang')!.textContent).toContain('Phonon reads, with mistakes, French, Spanish in their own language.');
   });
 
   it('a language given one of them on purpose gets its row', () => {

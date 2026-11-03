@@ -307,7 +307,7 @@ export function renderVoiceBoard(
     const bySupertonic = [...readers.keys()].map(languageName).sort((a, b) => a.localeCompare(b));
     const byWhom = [...readers].map(([code, who]) => `${languageName(code)} (${[...who].join(', ')})`).sort((a, b) => a.localeCompare(b));
     const engines = new Set([...readers.values()].flatMap((who) => [...who]));
-    const reader = engines.size === 1 ? ([...engines][0] === 'Supertonic' ? 'Supertonic reads' : 'Phonon reads') : 'Supertonic and Phonon read';
+    const reader = engines.size === 1 ? ([...engines][0] === 'Supertonic' ? 'Supertonic reads' : 'Phonon reads, with mistakes,') : 'Supertonic and Phonon read';
     lang.append(
       el(document, 'b', {}, 'Every other language'),
       el(document, 'span', {}, skipping ? (bySupertonic.length ? 'The rest not read' : 'Not read') : `Read by ${shortName(others.label)}`),
