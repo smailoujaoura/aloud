@@ -26,6 +26,14 @@ describe('voicePortrait', () => {
     expect(without).toEqual([]);
   });
 
+  it('gives every Phonon voice a face, its characters as who they play', () => {
+    const without = Object.keys(catalogue.phonon.voices).filter((id) => !voicePortrait('phonon', id));
+    expect(without).toEqual([]);
+    expect(voicePortrait('phonon', 'NbpkqMVS3CJeq2j8')).toEqual({ file: '/portraits/phonon-NbpkqMVS3CJeq2j8.webp', sounds: 'an American woman in her thirties' });
+    const captain = Object.entries(catalogue.phonon.voices).find(([, v]) => v.label === 'Captain Silas Blackwater')![0];
+    expect(voicePortrait('phonon', captain)?.sounds).toBe('an old West Country pirate captain');
+  });
+
   it('a face is not the same thing as a place at the front of the list', () => {
     // am_echo has a portrait but is graded D: it is ranked by its grade, not listed first.
     expect(voicePortrait('kokoro', 'am_echo')).not.toBeNull();

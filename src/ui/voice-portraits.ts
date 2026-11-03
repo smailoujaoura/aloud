@@ -3,8 +3,8 @@
  *
  * None of these people exist: every portrait was generated (SDXL with the SDXL-Lightning UNet,
  * both openrail++) from a description of how the voice sounds — who it sounds like, how old,
- * from where. Every Kokoro voice has one, every Supertonic voice, and the Piper speakers worth
- * coming back to; every
+ * from where. Every Phonon voice has one (from Gradium's own description of it), every Kokoro
+ * voice, every Supertonic voice, and the Piper speakers worth coming back to; every
  * other voice shows the one stand-in avatar (see voice-avatar.ts). The files live in
  * `public/portraits/`, 160 px WebP.
  *
@@ -18,6 +18,7 @@
 import type { EngineId } from '@/shared/settings';
 import { piperVoiceName } from '@/ui/voice-avatar';
 import { parseSupertonicVoice } from '@/shared/supertonic-voices';
+import { PHONON_SOUNDS } from './phonon-portraits';
 
 export interface Portrait {
   /** Path under the extension root. */
@@ -117,6 +118,10 @@ export function voicePortrait(engine: EngineId, id: string): Portrait | null {
     const sounds = SUPERTONIC[style];
     return sounds ? { file: `/portraits/supertonic-${style}.webp`, sounds } : null;
   }
+  if (engine === 'phonon') {
+    const sounds = PHONON_SOUNDS[id];
+    return sounds ? { file: `/portraits/phonon-${id}.webp`, sounds } : null;
+  }
   return null;
 }
 
@@ -142,5 +147,6 @@ export function allPortraitFiles(): string[] {
     ...Object.keys(PIPER).map((name) => `/portraits/piper-${name}.webp`),
     ...[...Object.keys(KOKORO), ...Object.keys(KOKORO_REST)].map((id) => `/portraits/kokoro-${id}.webp`),
     ...Object.keys(SUPERTONIC).map((style) => `/portraits/supertonic-${style}.webp`),
+    ...Object.keys(PHONON_SOUNDS).map((id) => `/portraits/phonon-${id}.webp`),
   ];
 }
