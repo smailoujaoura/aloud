@@ -16,8 +16,11 @@ import { parseSupertonicVoice } from '@/shared/supertonic-voices';
 
 /** Kokoro-82M at a fixed commit of onnx-community/Kokoro-82M-v1.0-ONNX (engines/kokoro.ts). */
 export const KOKORO_REVISION = '1939ad2a8e416c0acfeecc08a694d14ef25f2231';
-/** Phonon S (31M) at a fixed commit of gradium/phonon-31m-en, and its voice catalogue (models.json `phonon`). */
-export const PHONON_REVISION = '92741c5b07d085ff840e26fea8ce43110b87852f';
+/**
+ * Phonon: Gradium's 40m multilingual model, from an unmodified copy at a fixed commit (Gradium's is
+ * gated; models.json `phonon.$source`), and its voice catalogue.
+ */
+export const PHONON_REVISION = '514a70f83654b3a81844cc01bbe5438254080433';
 export const PHONON_VOICES_REVISION = '0ee17205f254b5abc43b266c8a0f215565c352f7';
 /** Supertonic 3 at a fixed commit of Supertone/supertonic-3 (models.json `base`). */
 export const SUPERTONIC_REVISION = '3cadd1ee6394adea1bd021217a0e650ede09a323';
@@ -144,12 +147,13 @@ const ENGINES: Record<EngineId, EngineInfo> = {
     blurb:
       'Natural, expressive voices from Gradium that read about twice as fast as real time on an ' +
       'ordinary processor, no graphics card needed. 37 English voices, American, British and a ' +
-      'cast of characters, plus French, Spanish, German and Portuguese voices, which read properly ' +
-      'with its multilingual model, a further download. One download, all 102 voices included.',
-    // 64.8 MB of model and 102 voices of 256 KB (decimal MB, as everywhere).
-    approxSize: '~91 MB',
-    // Both of Gradium's repositories: the model (gradium/phonon-31m-en) and the voices (gradium/phonon-voices).
-    cacheHint: 'gradium/phonon-',
+      'cast of characters, and 65 more in French, Spanish, German and Portuguese. One download, ' +
+      'every voice included. Licensed for non-commercial use only.',
+    // 74.8 MB of model and 102 voices of 256 KB (decimal MB, as everywhere).
+    approxSize: '~101 MB',
+    // Both repositories: the model (…/phonon-40m-multilingual) and the voices (gradium/phonon-voices).
+    // The 31M model Phonon used before (gradium/phonon-31m-en) matches too, so deleting clears it.
+    cacheHint: '/phonon-',
     revision: PHONON_REVISION,
     voiceRevision: PHONON_VOICES_REVISION,
     requiredFiles: ['/model.q8.gguf', '/tokenizer.json', '/config.json'],

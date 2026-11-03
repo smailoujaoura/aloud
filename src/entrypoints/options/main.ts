@@ -44,7 +44,7 @@ import { applyTheme, watchSystemTheme, THEME_LABEL } from '@/ui/theme';
 import { createThemeSwitch, type ThemeSwitch } from '@/ui/theme-switch';
 import type { ModelManifest } from '@/engine/engines/types';
 
-import { engineDownloaded, piperDownloaded, readCacheSizes, sharedModelBytes, type CacheSizes } from '@/engine/installed-voices';
+import { engineDownloaded, piperDownloaded, readCacheSizes, sharedModelBytes, sharedModelInstalled, type CacheSizes } from '@/engine/installed-voices';
 import { ENGINE_IDS, engineInfo } from '@/shared/engine-catalog';
 import { engineConfigFor } from './engine-config';
 import { renderMediaSpeedPanel } from './media-speed-panel';
@@ -59,7 +59,6 @@ import { initLibrary, refitNotes } from '@/library/app';
 import { answerTabQueries } from '@/shared/own-tab';
 import { downloads } from './download-queue';
 import { announceModelsChanged, onModelsChanged } from './downloads';
-import { withPhononPack } from '@/shared/phonon-voices';
 
 // First, before anything here can fail: lets the background find this tab without the "tabs"
 // permission (shared/own-tab.ts). Registered late, an earlier error meant a new tab every time.
@@ -405,9 +404,14 @@ async function renderNow(): Promise<void> {
   settings = await getSettings();
   applyTheme(document, settings.theme);
   for (const control of themeSwitches) control.setTheme(settings.theme);
-  const sizes = await readCacheSizes();
-  // Phonon's multilingual model here: its French, German, Spanish and Portuguese are no longer experimental.
-  const manifest = withPhononPack(withServerVoices(await loadManifest(), settings), sizes);
+  const manifest = withServerVoices(await loadManifest(), settings);
+  let sizes = await readCacheSizes();
+  // Phonon 31M, from before Phonon was the multilingual model: no longer read, and counted in
+  // Phonon's size on its card. The engine deletes it too, but only once it next reads.
+  if (sharedModelInstalled('phonon', sizes) && [...sizes.keys()].some((key) => key.includes('gradium/phonon-31m-en'))) {
+    await deleteModels(() => cacheClear('gradium/phonon-31m-en')).catch(() => undefined);
+    sizes = await readCacheSizes();
+  }
 
   $<HTMLInputElement>('speed').value = String(settings.speed);
   $('speedOut').textContent = speedLabel(settings.speed);

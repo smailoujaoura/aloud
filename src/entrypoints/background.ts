@@ -38,7 +38,6 @@ import { findOwnTab, isOwnTab } from '@/shared/own-tab';
 import { persistChanges, type MarksHandoff } from '@/pdf/annotations/sync';
 import type { Mark } from '@/pdf/annotations/model';
 import { normalizePosition, normalizeStoredMarks } from '@/shared/record-shapes';
-import { withPhononPack } from '@/shared/phonon-voices';
 
 const CONTENT_FILE = '/reader-inject.js';
 /** The media speed control (src/entrypoints/speed-inject.ts). */
@@ -696,9 +695,7 @@ async function installedVoices(engine: EngineId): Promise<VoiceOption[]> {
     const gpu = online
       ? null
       : readingOnGpu(settings?.preferWebGPU, await loadWorkerGpu().catch(() => null));
-    const sizes = await readCacheSizes();
-    // Phonon's multilingual model here: its French, German, Spanish and Portuguese are no longer experimental.
-    return usableVoices(engine, withPhononPack(manifest, sizes), sizes, { gpu, online });
+    return usableVoices(engine, manifest, await readCacheSizes(), { gpu, online });
   } catch (err) {
     // An empty list means "we do not know", and the bar keeps showing the active voice alone.
     console.warn('[aloud] could not list installed voices:', err);

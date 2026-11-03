@@ -147,13 +147,13 @@ reading positions, history and listening statistics, and private-window activity
   > `wasmPaths = https://cdn.jsdelivr.net/...` (line ~2901 of `dist/transformers.web.js`) runs only
   > when no path is set, which never happens here, and the extension CSP would block it anyway.
   > What is downloaded at run time is voice data from Hugging Face (ONNX and GGUF weights, JSON,
-  > `.bin` and `.safetensors` voice vectors), never code. One optional download, Phonon's
-  > multilingual model (CC BY-NC 4.0), comes from an unmodified, ungated copy of Gradium's gated
-  > repository (`smailoujaoura/phonon-40m-multilingual`), checked against the same SHA-256. Aloud does not run in private windows (`incognito: not_allowed`).
+  > `.bin` and `.safetensors` voice vectors), never code. Phonon's model (CC BY-NC 4.0) comes from
+  > an unmodified, ungated copy of Gradium's gated repository (`smailoujaoura/phonon-40m-multilingual`),
+  > checked against the same SHA-256. Aloud does not run in private windows (`incognito: not_allowed`).
   > On uninstall it opens aloud.souj.dev/feedback.html?bye; the version and browser name follow a
   > `#`, which the browser never sends, so opening it transmits nothing.
   > To try it: open any article, press the toolbar button (or Alt+R), then play. The voice model
-  > (Phonon, about 65 MB; Piper, about 60 MB, on Android) downloads on first use.
+  > (Phonon, about 75 MB; Piper, about 60 MB, on Android) downloads on first use.
 
 - **Android:** the listing is marked compatible with Firefox for Android (`gecko_android`).
   Piper voices are the ones to recommend on phones; Supertonic 3 works there, slower than speech on

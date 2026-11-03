@@ -165,7 +165,7 @@ const EXTERNAL_CACHE_STORES = ['kokoro-voices', 'transformers-cache', 'phonon-tt
 /** Cache API stores that hold files for a given engine, keyed by the engine's cache hint. */
 const EXTERNAL_STORES_BY_MODEL: Record<string, readonly string[]> = {
   'Kokoro-82M': ['kokoro-voices', 'transformers-cache'],
-  'gradium/phonon-': ['phonon-tts-v1'],
+  '/phonon-': ['phonon-tts-v1'],
 };
 
 async function deleteCacheStores(names: readonly string[]): Promise<void> {

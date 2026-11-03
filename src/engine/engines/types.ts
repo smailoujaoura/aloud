@@ -74,21 +74,7 @@ export interface SupertonicManifest {
 }
 
 /** Entry in assets/models.json. */
-/** Another Phonon model, read in place of the 31M one for some languages (`PhononManifest.multilingual`). */
-export interface PhononPack {
-  /** Gradium's repository it comes from, and the copy it is downloaded from. */
-  modelId: string;
-  license: string;
-  /** The copy at its pinned revision: `.../resolve/<revision>`. */
-  base: string;
-  files: { weights: string; tokenizer: string; config: string };
-  sha256: { weights: string; tokenizer: string; config: string };
-  sizeBytes: number;
-  /** The languages it reads in place of the 31M model. */
-  languages: string[];
-}
-
-/** Phonon S (31M), from gradium/phonon-31m-en, and its voices from gradium/phonon-voices (engines/phonon.ts). */
+/** Phonon: Gradium's 40m multilingual model (from an unmodified copy), and its voices from gradium/phonon-voices (engines/phonon.ts). */
 export interface PhononManifest {
   modelId: string;
   license: string;
@@ -102,14 +88,8 @@ export interface PhononManifest {
   voicesBase: string;
   voicesLicense: string;
   sampleRate: number;
-  /** Languages the 31M model speaks with mistakes: offered, marked experimental. */
+  /** Languages the model speaks with mistakes: offered, marked experimental (none, with the multilingual model). */
   experimentalLanguages: string[];
-  /**
-   * Gradium's Phonon 40m multilingual, which reads `languages` well (shared/phonon-voices.ts):
-   * an optional download, under its own licence (CC BY-NC 4.0, non-commercial), from a copy
-   * Aloud can reach (Gradium's own is gated: it needs a signed-in download).
-   */
-  multilingual?: PhononPack;
   voices: Record<string, { label: string; language: string; gender: string; description: string; sha256: string; character?: boolean }>;
 }
 

@@ -2388,54 +2388,26 @@
     ]
   },
   "phonon": {
-    "modelId": "gradium/phonon-31m-en",
-    "license": "Apache-2.0",
-    "base": "https://huggingface.co/gradium/phonon-31m-en/resolve/92741c5b07d085ff840e26fea8ce43110b87852f",
+    "modelId": "gradium/phonon-40m-multilingual",
+    "$source": "An unmodified copy of gradium/phonon-40m-multilingual at 1537ce46c64f42903e0d608b132ccb073dac46d2 (Gradium's is gated: a browser extension cannot sign in to download it), shared under its licence with credit to Gradium. It reads English, French, German, Spanish and Portuguese; Phonon 31M, used before, read only English well.",
+    "license": "CC BY-NC 4.0: non-commercial use only",
+    "base": "https://huggingface.co/smailoujaoura/phonon-40m-multilingual/resolve/514a70f83654b3a81844cc01bbe5438254080433",
     "files": {
       "weights": "model.q8.gguf",
       "tokenizer": "tokenizer.json",
       "config": "config.json"
     },
     "sha256": {
-      "weights": "a7d9aad2cd6dc66473f24a08bc6d2939030ef4d751ef82349361fbef3272dbae",
-      "tokenizer": "691a00068fa7b989f2f3e5ae5daa2d1a5bb319f2d5360deafcfb19a8bb6e7936",
-      "config": "b5d0f88353638370d94035b7d73d7d6577c0554d78f8d7ecfd40490aae39ae85"
+      "weights": "96fa067813244e0c6c5997b98ec2596b65ec8574b14916b48e97db056ff97e27",
+      "tokenizer": "a5e8c6060bf927ed367314f21355148fdf4acff6fadb94e49c86bc7182449433",
+      "config": "e312ab694d5ec1f79ccea520a2eeec989969ce07e9b4189ae7e9ad8e035ef82e"
     },
-    "sizeBytes": 64794953,
+    "sizeBytes": 74835991,
     "voicesRepo": "gradium/phonon-voices",
     "voicesBase": "https://huggingface.co/gradium/phonon-voices/resolve/0ee17205f254b5abc43b266c8a0f215565c352f7",
     "voicesLicense": "Apache-2.0",
     "sampleRate": 24000,
-    "$experimental": "Phonon 31M was trained on English. Its French, Spanish, German and Portuguese voices speak those languages understandably but with mistakes (heard by Whisper, 2026-11-02), so Aloud marks them experimental.",
-    "experimentalLanguages": [
-      "fr",
-      "es",
-      "de",
-      "pt"
-    ],
-    "multilingual": {
-      "modelId": "gradium/phonon-40m-multilingual",
-      "license": "CC BY-NC 4.0: non-commercial use only",
-      "$source": "An unmodified copy of gradium/phonon-40m-multilingual at 1537ce46c64f42903e0d608b132ccb073dac46d2 (gated: a browser extension cannot sign in to download it), shared under its licence with credit to Gradium.",
-      "base": "https://huggingface.co/smailoujaoura/phonon-40m-multilingual/resolve/514a70f83654b3a81844cc01bbe5438254080433",
-      "files": {
-        "weights": "model.q8.gguf",
-        "tokenizer": "tokenizer.json",
-        "config": "config.json"
-      },
-      "sha256": {
-        "weights": "96fa067813244e0c6c5997b98ec2596b65ec8574b14916b48e97db056ff97e27",
-        "tokenizer": "a5e8c6060bf927ed367314f21355148fdf4acff6fadb94e49c86bc7182449433",
-        "config": "e312ab694d5ec1f79ccea520a2eeec989969ce07e9b4189ae7e9ad8e035ef82e"
-      },
-      "sizeBytes": 74835991,
-      "languages": [
-        "fr",
-        "de",
-        "es",
-        "pt"
-      ]
-    },
+    "experimentalLanguages": [],
     "voices": {
       "NbpkqMVS3CJeq2j8": {
         "label": "Zoey",

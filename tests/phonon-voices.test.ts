@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import manifest from '../public/models.json';
-import { phononExperimental, phononLanguage, phononPackInstalled, phononPackUrls, withPhononPack } from '@/shared/phonon-voices';
+import { phononExperimental, phononLanguage } from '@/shared/phonon-voices';
 import { pickVoiceForLanguage } from '@/shared/language-voice';
 import { voiceKeyFor } from '@/shared/settings';
 import { listVoices } from '@/shared/voice-catalog';
@@ -29,10 +29,15 @@ describe('Phonon voices', () => {
     expect(phononLanguage('it')).toBe('en');
   });
 
-  it('marks French, Spanish, German and Portuguese experimental, not English', () => {
-    const exp = m.phonon!.experimentalLanguages;
-    expect(phononExperimental('en-US', exp)).toBe(false);
-    for (const tag of ['fr-FR', 'es-MX', 'de-DE', 'pt-BR']) expect(phononExperimental(tag, exp)).toBe(true);
+  it('is the multilingual model, from the pinned copy: no language experimental', () => {
+    expect(m.phonon!.modelId).toBe('gradium/phonon-40m-multilingual');
+    expect(m.phonon!.base).toBe('https://huggingface.co/smailoujaoura/phonon-40m-multilingual/resolve/514a70f83654b3a81844cc01bbe5438254080433');
+    expect(m.phonon!.sha256.weights).toBe('96fa067813244e0c6c5997b98ec2596b65ec8574b14916b48e97db056ff97e27');
+    expect(m.phonon!.license).toMatch(/non-commercial/);
+    expect(m.phonon!.experimentalLanguages).toEqual([]);
+    for (const tag of ['en-US', 'fr-FR', 'es-MX', 'de-DE', 'pt-BR']) expect(phononExperimental(tag, m.phonon!.experimentalLanguages)).toBe(false);
+    // The marking itself still works, for a model that reads a language less well.
+    expect(phononExperimental('fr-FR', ['fr'])).toBe(true);
   });
 
   it('a chosen Phonon voice is saved as the Phonon voice, not the Piper one', () => {
@@ -43,8 +48,9 @@ describe('Phonon voices', () => {
 
 describe('who reads a language, with Phonon installed', () => {
   const zoey = { engine: 'phonon' as const, id: 'NbpkqMVS3CJeq2j8', label: 'Zoey', language: 'en-US' };
-  // Without the multilingual model: experimental, as the catalogue marks her (withPhononPack).
-  const noemie = { engine: 'phonon' as const, id: 'FXxJ9mANRq6BCTX5', label: 'Noémie', language: 'fr-FR', experimental: true };
+  const noemie = { engine: 'phonon' as const, id: 'FXxJ9mANRq6BCTX5', label: 'Noémie', language: 'fr-FR' };
+  // A voice of a language the model reads less well, as `experimentalLanguages` would mark it.
+  const shaky = { ...noemie, experimental: true };
   const kokoroEn = { engine: 'kokoro' as const, id: 'af_heart', label: 'Heart', language: 'en-us' };
   const supertonicFr = { engine: 'supertonic' as const, id: 'F1@fr', label: 'Female 1', language: 'fr' };
   const piperFr = { engine: 'piper' as const, id: 'fr_FR-siwis-medium', label: 'Siwis', language: 'fr_FR' };
@@ -53,9 +59,13 @@ describe('who reads a language, with Phonon installed', () => {
     expect(pickVoiceForLanguage('en', null, [kokoroEn, { ...supertonicFr, id: 'F1@en', language: 'en' }, zoey])?.engine).toBe('phonon');
   });
 
-  it('French goes to any other engine first: Phonon only speaks it with mistakes', () => {
-    expect(pickVoiceForLanguage('fr', null, [noemie, piperFr])?.engine).toBe('piper');
-    expect(pickVoiceForLanguage('fr', zoey, [noemie, supertonicFr])?.engine).toBe('supertonic');
+  it('French goes to Phonon first too, as English does: its model reads both properly', () => {
+    expect(pickVoiceForLanguage('fr', null, [piperFr, supertonicFr, noemie])?.id).toBe('FXxJ9mANRq6BCTX5');
+  });
+
+  it('a voice marked experimental comes after every other engine’s', () => {
+    expect(pickVoiceForLanguage('fr', null, [shaky, piperFr])?.engine).toBe('piper');
+    expect(pickVoiceForLanguage('fr', zoey, [shaky, supertonicFr])?.engine).toBe('supertonic');
   });
 
   it('never picks one of its characters by itself: a narrator reads, then any other English voice', () => {
@@ -66,8 +76,8 @@ describe('who reads a language, with Phonon installed', () => {
     expect(pickVoiceForLanguage('en', noemie, [captain])?.id).toBe('captain');
   });
 
-  it('…and to Phonon when it is the only French voice there is', () => {
-    expect(pickVoiceForLanguage('fr', zoey, [zoey, noemie])?.id).toBe('FXxJ9mANRq6BCTX5');
+  it('…and is still taken when it is the only voice for its language', () => {
+    expect(pickVoiceForLanguage('fr', zoey, [zoey, shaky])?.id).toBe('FXxJ9mANRq6BCTX5');
   });
 });
 
@@ -81,45 +91,13 @@ describe('Phonon runtime', () => {
 });
 
 describe('Phonon in the voice menus', () => {
-  it('its experimental languages say so', () => {
+  it('say nothing of "experimental": every language is read properly', () => {
     const list = listVoices('phonon', m);
-    expect(list.find((v) => v.id === 'FXxJ9mANRq6BCTX5')?.label).toBe('Noémie · female · experimental');
+    expect(list.find((v) => v.id === 'FXxJ9mANRq6BCTX5')?.label).toBe('Noémie · female');
     expect(list.find((v) => v.id === 'NbpkqMVS3CJeq2j8')?.label).toBe('Zoey · female');
-  });
-});
-
-describe("Phonon's multilingual model", () => {
-  const pack = {
-    modelId: 'gradium/phonon-40m-multilingual',
-    license: 'CC BY-NC 4.0: non-commercial use only',
-    base: 'https://huggingface.co/someone/phonon-40m-multilingual/resolve/abc',
-    files: { weights: 'model.q8.gguf', tokenizer: 'tokenizer.json', config: 'config.json' },
-    sha256: { weights: 'w', tokenizer: 't', config: 'c' },
-    sizeBytes: 74835991,
-    languages: ['fr', 'de', 'es', 'pt'],
-  };
-  const withPack = { ...m, phonon: { ...m.phonon!, multilingual: pack } } as ModelManifest;
-  const here = new Map(Object.values(phononPackUrls(pack)).map((url) => [url, 1000]));
-
-  it('is installed only with all three files', () => {
-    expect(phononPackInstalled(withPack, here)).toBe(true);
-    expect(phononPackInstalled(withPack, new Map([[phononPackUrls(pack).weights, 1000]]))).toBe(false);
-    expect(phononPackInstalled(m, here)).toBe(false);
-  });
-
-  it('here, its languages are no longer experimental, in every list', () => {
-    const read = withPhononPack(withPack, here);
-    expect(read.phonon!.experimentalLanguages).toEqual([]);
-    expect(listVoices('phonon', read).find((v) => v.id === 'FXxJ9mANRq6BCTX5')?.label).toBe('Noémie · female');
-    // Not here: as before.
-    expect(withPhononPack(withPack, new Map())).toBe(withPack);
-    expect(listVoices('phonon', withPack).find((v) => v.id === 'FXxJ9mANRq6BCTX5')?.experimental).toBe(true);
-  });
-
-  it('here, Phonon reads French first, as it does English', () => {
-    const noemieGood = { engine: 'phonon' as const, id: 'FXxJ9mANRq6BCTX5', label: 'Noémie', language: 'fr-FR' };
-    const piperFr = { engine: 'piper' as const, id: 'fr_FR-siwis-medium', label: 'Siwis', language: 'fr_FR' };
-    const supertonicFr = { engine: 'supertonic' as const, id: 'F1@fr', label: 'Female 1', language: 'fr' };
-    expect(pickVoiceForLanguage('fr', null, [piperFr, supertonicFr, noemieGood])?.id).toBe('FXxJ9mANRq6BCTX5');
+    expect(list.some((v) => v.experimental)).toBe(false);
+    // A model with one experimental language would say so, though.
+    const withOne = { ...m, phonon: { ...m.phonon!, experimentalLanguages: ['fr'] } };
+    expect(listVoices('phonon', withOne).find((v) => v.id === 'FXxJ9mANRq6BCTX5')?.label).toBe('Noémie · female · experimental');
   });
 });

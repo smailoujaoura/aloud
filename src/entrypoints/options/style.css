@@ -866,7 +866,4 @@ code {
 .server-form input { width: 100%; min-width: 0; }
 .server-status { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 12px; }
 @media (max-width: 560px) { .server-form { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; } .server-form .server-url { grid-column: 1 / -1; } }
-/* Phonon's experimental languages: the way to the model that reads them properly, over their voices. */
-.pack-note { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.pack-download { display: inline-flex; flex-direction: column; gap: 4px; min-width: 0; }
 .voice-tabs::-webkit-scrollbar { display: none; }

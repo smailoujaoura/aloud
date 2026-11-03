@@ -50,22 +50,17 @@ only "See URL" or nothing; the dataset's own page is then the authority.
 Aloud never bundles a voice: it is downloaded from Hugging Face when you choose it, for you to
 use. Anyone redistributing a voice, or using it in a product, should check its model card.
 
-### Phonon S (31M) — [`gradium/phonon-31m-en`](https://huggingface.co/gradium/phonon-31m-en) @ `92741c5`, voices from [`gradium/phonon-voices`](https://huggingface.co/gradium/phonon-voices) @ `0ee1720`
-
-Model weights (the `q8` GGUF build), tokenizer, config and all 102 voices: **Apache-2.0**. One
-download holds the model and every voice, each from its pinned commit and checked against its
-SHA-256 (`public/models.json`, `phonon`) before it is kept in the extension's IndexedDB store. The
-model was trained on English; its French, Spanish, German and Portuguese voices are offered marked
-experimental. Gradium's larger Phonon models are under a non-commercial licence and are not used.
-
-### Phonon 40m multilingual — [`gradium/phonon-40m-multilingual`](https://huggingface.co/gradium/phonon-40m-multilingual) @ `1537ce4`, from [`smailoujaoura/phonon-40m-multilingual`](https://huggingface.co/smailoujaoura/phonon-40m-multilingual) @ `514a70f`
+### Phonon 40m multilingual — [`gradium/phonon-40m-multilingual`](https://huggingface.co/gradium/phonon-40m-multilingual) @ `1537ce4`, from [`smailoujaoura/phonon-40m-multilingual`](https://huggingface.co/smailoujaoura/phonon-40m-multilingual) @ `514a70f`; voices from [`gradium/phonon-voices`](https://huggingface.co/gradium/phonon-voices) @ `0ee1720`
 
 Model weights (`q8` GGUF), tokenizer and config: **CC BY-NC 4.0**, Gradium's: **non-commercial use
-only**, with credit. An optional download, from Phonon's settings, for its French, German, Spanish
-and Portuguese voices; never fetched unless the reader chooses it, and its licence is named on its
-card before the download. Gradium's own repository is gated (it needs a signed-in download, which
-an extension cannot do), so Aloud downloads an unmodified copy of the three files, shared under
-the same licence with credit to Gradium, each checked against its SHA-256 (identical to Gradium's).
+only**, with credit; the licence is named on Phonon's card in Settings. The 102 voices: **Apache-2.0**.
+One download holds the model and every voice, each from its pinned commit and checked against its
+SHA-256 (`public/models.json`, `phonon`) before it is kept in the extension's IndexedDB store.
+Gradium's own model repository is gated (it needs a signed-in download, which an extension cannot
+do), so Aloud downloads an unmodified copy of its three files, shared under the same licence with
+credit to Gradium; each is byte-identical to Gradium's (same SHA-256). It reads English, French,
+German, Spanish and Portuguese. Phonon 31M (`gradium/phonon-31m-en`, Apache-2.0), which Aloud used
+before it, read only English well.
 
 ### Supertonic 3 — [`Supertone/supertonic-3`](https://huggingface.co/Supertone/supertonic-3) @ `3cadd1e`
 

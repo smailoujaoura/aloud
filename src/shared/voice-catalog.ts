@@ -21,7 +21,7 @@ export interface VoiceOption {
   label: string;
   /** Heading to group under — the language for Piper and Kokoro, which are multilingual. */
   group: string;
-  /** Spoken with mistakes: Phonon's 31M model in a language other than English (phonon-voices.ts). */
+  /** Spoken with mistakes: a language its model reads less well (models.json `experimentalLanguages`). */
   experimental?: boolean;
 }
 

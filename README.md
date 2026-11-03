@@ -14,10 +14,10 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
 
 - **Extraction** — [Mozilla Readability](https://github.com/mozilla/readability) strips nav / ads
   and grabs the article text.
-- **Voices** — [Phonon](https://huggingface.co/gradium/phonon-31m-en) by Gradium, the default on computers (~91 MB with
-  all 102 voices; natural English about twice as fast as real time on one processor thread, no graphics card needed;
-  French, Spanish, German and Portuguese read well with Gradium's optional multilingual model, 75 MB, licensed for
-  non-commercial use only), run by Gradium's own WebAssembly runtime,
+- **Voices** — [Phonon](https://huggingface.co/gradium/phonon-40m-multilingual) by Gradium, the default on computers
+  (~101 MB with all 102 voices; English, French, German, Spanish and Portuguese, about twice as fast as real time on
+  one processor thread, no graphics card needed; licensed for non-commercial use only), run by Gradium's own
+  WebAssembly runtime,
   [Piper](https://github.com/rhasspy/piper) (fast, ~21–137 MB per voice: `medium` around 60 MB, `high` around 110; the default on phones),
   [Supertonic 3](https://huggingface.co/Supertone/supertonic-3) (~402 MB; 10 voices, each in 31 languages; two to
   three times faster than Kokoro on a processor) and [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (~347 MB

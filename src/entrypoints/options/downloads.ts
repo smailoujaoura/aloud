@@ -19,8 +19,7 @@ import { el } from '@/shared/dom';
 import { humanBytes } from '@/shared/log';
 import { KOKORO_VOICE_BYTES, PHONON_VOICE_BYTES, kokoroVoiceUrl, phononVoiceUrl, supertonicStyleUrl } from '@/shared/engine-catalog';
 import type { EngineConfig, WorkerResponse } from '@/engine/protocol';
-import type { PhononPack, PiperVoiceEntry } from '@/engine/engines/types';
-import { phononPackUrls } from '@/shared/phonon-voices';
+import type { PiperVoiceEntry } from '@/engine/engines/types';
 import { downloads, type ProgressSink } from './download-queue';
 
 /**
@@ -322,44 +321,6 @@ async function fetchSupertonicStyles(styles: readonly string[], onBytes: (bytes:
     cancel.throwIfAborted();
     const bytes = await fetchModelFile(supertonicStyleUrl(style), { label: `${style} style`, signal: cancel, mustStore: true });
     onBytes(bytes.byteLength);
-  }
-}
-
-/**
- * Phonon's multilingual model (models.json `phonon.multilingual`): its three files, checked
- * against their SHA-256, under one count. The first failure stops the others, and the job ends
- * only once all have stopped, as for a Piper voice.
- */
-export async function downloadPhononPack(pack: PhononPack, progress: ProgressSink, cancel?: AbortSignal): Promise<void> {
-  const perFile = new Map<string, number>();
-  const onProgress = (p: { file: string; loaded: number }): void => {
-    perFile.set(p.file, p.loaded);
-    const loaded = [...perFile.values()].reduce((a, b) => a + b, 0);
-    progress.set(Math.min(1, loaded / pack.sizeBytes));
-    progress.note(`${humanBytes(loaded)} of ${humanBytes(pack.sizeBytes)}`);
-  };
-  const stop = new AbortController();
-  const stopAll = (): void => stop.abort();
-  cancel?.addEventListener('abort', stopAll, { once: true });
-  if (cancel?.aborted) stopAll();
-  const urls = phononPackUrls(pack);
-  const one = (url: string, label: string, sha256: string) =>
-    fetchModelFile(url, { label, sha256, onProgress, signal: stop.signal, mustStore: true }).catch((err: unknown) => {
-      stop.abort();
-      throw err;
-    });
-  try {
-    const results = await Promise.allSettled([
-      one(urls.weights, 'Phonon languages model', pack.sha256.weights),
-      one(urls.tokenizer, 'tokenizer', pack.sha256.tokenizer),
-      one(urls.config, 'config', pack.sha256.config),
-    ]);
-    const failures = results.flatMap((r) => (r.status === 'rejected' ? [r.reason as unknown] : []));
-    const cause = failures.find((e) => !(e instanceof DOMException && e.name === 'AbortError')) ?? failures[0];
-    if (cause !== undefined) throw cause instanceof Error ? cause : new Error(String(cause));
-    cancel?.throwIfAborted();
-  } finally {
-    cancel?.removeEventListener('abort', stopAll);
   }
 }
 
