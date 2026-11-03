@@ -2413,6 +2413,29 @@
       "de",
       "pt"
     ],
+    "multilingual": {
+      "modelId": "gradium/phonon-40m-multilingual",
+      "license": "CC BY-NC 4.0: non-commercial use only",
+      "$source": "An unmodified copy of gradium/phonon-40m-multilingual at 1537ce46c64f42903e0d608b132ccb073dac46d2 (gated: a browser extension cannot sign in to download it), shared under its licence with credit to Gradium.",
+      "base": "https://huggingface.co/smailoujaoura/phonon-40m-multilingual/resolve/514a70f83654b3a81844cc01bbe5438254080433",
+      "files": {
+        "weights": "model.q8.gguf",
+        "tokenizer": "tokenizer.json",
+        "config": "config.json"
+      },
+      "sha256": {
+        "weights": "96fa067813244e0c6c5997b98ec2596b65ec8574b14916b48e97db056ff97e27",
+        "tokenizer": "a5e8c6060bf927ed367314f21355148fdf4acff6fadb94e49c86bc7182449433",
+        "config": "e312ab694d5ec1f79ccea520a2eeec989969ce07e9b4189ae7e9ad8e035ef82e"
+      },
+      "sizeBytes": 74835991,
+      "languages": [
+        "fr",
+        "de",
+        "es",
+        "pt"
+      ]
+    },
     "voices": {
       "NbpkqMVS3CJeq2j8": {
         "label": "Zoey",

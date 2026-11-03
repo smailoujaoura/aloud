@@ -58,6 +58,15 @@ SHA-256 (`public/models.json`, `phonon`) before it is kept in the extension's In
 model was trained on English; its French, Spanish, German and Portuguese voices are offered marked
 experimental. Gradium's larger Phonon models are under a non-commercial licence and are not used.
 
+### Phonon 40m multilingual — [`gradium/phonon-40m-multilingual`](https://huggingface.co/gradium/phonon-40m-multilingual) @ `1537ce4`, from [`smailoujaoura/phonon-40m-multilingual`](https://huggingface.co/smailoujaoura/phonon-40m-multilingual) @ `514a70f`
+
+Model weights (`q8` GGUF), tokenizer and config: **CC BY-NC 4.0**, Gradium's: **non-commercial use
+only**, with credit. An optional download, from Phonon's settings, for its French, German, Spanish
+and Portuguese voices; never fetched unless the reader chooses it, and its licence is named on its
+card before the download. Gradium's own repository is gated (it needs a signed-in download, which
+an extension cannot do), so Aloud downloads an unmodified copy of the three files, shared under
+the same licence with credit to Gradium, each checked against its SHA-256 (identical to Gradium's).
+
 ### Supertonic 3 — [`Supertone/supertonic-3`](https://huggingface.co/Supertone/supertonic-3) @ `3cadd1e`
 
 Model weights and the ten voice styles: **BigScience OpenRAIL-M**, a *use-restricted* licence — its
