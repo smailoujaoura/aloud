@@ -169,7 +169,8 @@ h3 { font: 650 1.05rem/1.3 var(--display); margin: 24px 0 8px; color: var(--ink)
     <li>Press <strong>Connect</strong>. Your browser asks for permission to reach that address, and Firefox also asks whether Aloud may send it page content. Allow both: that is the text being read, and it goes to this address only.</li>
     <li>It says <strong>Connected</strong> and lists the voices. Press <strong>Use</strong> on one, open an article, and press play.</li>
   </ol>
-  <p>Every speed works. A server that only reads at normal speed (Phonon's) is asked for 1×, and Aloud speeds the audio up itself. The voice board in the same settings can give the server's voice one language and keep built-in voices for the rest.</p>
+  <p>Every speed works. A server that only reads at normal speed (Phonon's) is asked for 1×, and Aloud speeds the audio up itself.</p>
+  <p><strong>Languages.</strong> Aloud tells which language a server voice speaks from its name. Kokoro's names start with it: <code>af_heart</code> is American English, <code>bf_emma</code> British, <code>ff_siwis</code> French, <code>ef_dora</code> Spanish. Any other name is taken to be English. On a page in a language your server voice doesn't speak, Aloud reads with a voice on your device for that language, as usual.</p>
 
   <h2>From your phone or another computer</h2>
   <h3>On the same Wi-Fi</h3>
@@ -237,7 +238,7 @@ curl -s -H &quot;Authorization: Bearer YOUR_KEY&quot; https://tts.example.com/v1
       <tr><td>may not send text</td><td>The permission was taken back, in your browser's settings or by restoring a backup on another device. Press <strong>Connect</strong> again.</td></tr>
     </tbody>
   </table>
-  <p><strong>The voice reads the wrong language.</strong> A Phonon server reads the one language it was started with. Give its voice that language on Aloud's voice board, and let built-in voices read the rest.</p>
+  <p><strong>The voice reads the wrong language.</strong> A Phonon server reads the one language it was started with, and Aloud takes its voices to be English. Start it with <code>PTTS_LANG=en</code>, and let Aloud's own voices read other languages.</p>
   <p><strong>To stop using it,</strong> press <strong>Remove server</strong> in the Custom tab. Aloud forgets the address and the key, gives the permission back, and returns to its built-in voices.</p>
 
   <h2>Privacy</h2>
