@@ -330,6 +330,10 @@ export class MediaSpeedController {
     if (e.composedPath().some((n) => n instanceof HTMLElement && n.id === CONTROL_HOST_ID)) return;
 
     const { keys } = this.settings;
+    if (matchesBinding(e, keys.mute)) {
+      this.toggleMute();
+      return;
+    }
     const seek = matchesBinding(e, keys.rewind) ? -1 : matchesBinding(e, keys.advance) ? 1 : 0;
     if (seek) {
       e.preventDefault();
@@ -354,6 +358,36 @@ export class MediaSpeedController {
       return;
     }
     this.setRate(next);
+  }
+
+  // ---- mute -----------------------------------------------------------------------------
+
+  /**
+   * Sound off, and on again, for the video you are watching.
+   *
+   * Unlike the speed keys, the key is not taken from the page: YouTube, Netflix and most players
+   * mute on M themselves, and a player muted behind its back shows its own volume icon wrong. So
+   * the page goes first, and only if the sound is as it was a moment later does Aloud switch it.
+   * With nothing to mute, M is left alone entirely: on most pages it means something else.
+   */
+  private toggleMute(): void {
+    this.prune();
+    const media = activeMedia(this.known);
+    if (!media) return;
+    const silent = (m: Media): boolean => m.muted || m.volume === 0;
+    const before = silent(media);
+    window.setTimeout(() => {
+      if (!media.isConnected) return;
+      if (silent(media) === before) {
+        if (before) {
+          media.muted = false;
+          if (media.volume === 0) media.volume = 1; // a player that mutes by turning the volume down
+        } else {
+          media.muted = true;
+        }
+      }
+      this.showBadge(silent(media) ? 'Muted' : 'Sound on', media);
+    }, MUTE_AFTER_PAGE_MS);
   }
 
   // ---- seeking --------------------------------------------------------------------------
@@ -499,6 +533,9 @@ function largestBox(media: Iterable<Media>): DOMRect | null {
  * The player the reader means: the one playing (the largest, if several), else the largest on
  * screen. Shorts keeps the next and previous clips loaded and paused beside the one you watch.
  */
+/** How long the page has to answer the mute key itself (players do it in the same keypress). */
+const MUTE_AFTER_PAGE_MS = 120;
+
 function activeMedia(media: Iterable<Media>): Media | null {
   let best: Media | null = null;
   let bestScore = -1;

@@ -30,6 +30,7 @@ const KEY_ROWS: Array<{ key: keyof MediaSpeedSettings['keys']; label: string; hi
   { key: 'previousPreset', label: 'Previous preset', hint: 'Down through the preset speeds' },
   { key: 'rewind', label: 'Rewind', hint: 'Back a few seconds, even without a seek bar' },
   { key: 'advance', label: 'Skip forward', hint: 'Forward a few seconds' },
+  { key: 'mute', label: 'Mute', hint: 'Sound off, and on again' },
 ];
 
 export function renderMediaSpeedPanel(host: HTMLElement, opts: MediaSpeedPanelOptions): void {

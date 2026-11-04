@@ -4,6 +4,13 @@ What changed in each version of Aloud, in the words used for the store release n
 go under **Unreleased** as they are made; a release renames that section to its version and date.
 Website-only and documentation changes are not listed: they never reach the extension.
 
+## Unreleased
+
+### Added
+- **Mute key for videos.** M turns the sound of the video or audio you're watching off, and on
+  again, on any site the speed control runs on. Where the player already mutes on M, as YouTube's
+  does, its own mute is used. M can be changed in Settings → Video speed.
+
 ## 1.0.1 (2026-11-04)
 
 ### Added

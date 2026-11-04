@@ -174,6 +174,8 @@ export interface MediaSpeedSettings {
     /** Back and forward by `seekSeconds` — for players that offer neither (YouTube Shorts). */
     rewind: string;
     advance: string;
+    /** Sound off and on again. Left to the page first: most players mute on M already. */
+    mute: string;
   };
 }
 
@@ -203,6 +205,9 @@ export const DEFAULT_MEDIA_SPEED: MediaSpeedSettings = {
     // Z and X: free on YouTube, Netflix and the BBC, and what Video Speed Controller users know.
     rewind: 'z',
     advance: 'x',
+    // M mutes on YouTube, Netflix and most players: the same job, everywhere else too. With the
+    // reader open, M is the reader's (save as MP3), as S D R Z X are.
+    mute: 'm',
   },
 };
 

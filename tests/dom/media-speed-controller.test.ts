@@ -254,3 +254,62 @@ describe('a rate change from the player, not the viewer', () => {
     });
   });
 });
+
+describe('the mute key', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    document.body.innerHTML = '';
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const press = (key = 'm') => document.body.dispatchEvent(new KeyboardEvent('keydown', { key, code: `Key${key.toUpperCase()}`, bubbles: true, cancelable: true }));
+
+  it('mutes and unmutes a player that does not answer M itself, and leaves the key to the page', () => {
+    const el = player();
+    const { controller } = start(null);
+    let pageSaw = 0;
+    document.addEventListener('keydown', () => pageSaw++);
+    press();
+    vi.advanceTimersByTime(200);
+    expect(el.muted).toBe(true);
+    press();
+    vi.advanceTimersByTime(200);
+    expect(el.muted).toBe(false);
+    expect(pageSaw).toBe(2); // never taken from the page
+    controller.stop();
+  });
+
+  it('a player that mutes on M itself (YouTube) is muted once, not muted and unmuted again', () => {
+    const el = player();
+    const { controller } = start(null);
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'm') el.muted = !el.muted;
+    });
+    press();
+    vi.advanceTimersByTime(200);
+    expect(el.muted).toBe(true);
+    press();
+    vi.advanceTimersByTime(200);
+    expect(el.muted).toBe(false);
+    controller.stop();
+  });
+
+  it('a player muted by turning its volume down gets its sound back', () => {
+    const el = player();
+    el.volume = 0;
+    const { controller } = start(null);
+    press();
+    vi.advanceTimersByTime(200);
+    expect(el.muted || el.volume === 0).toBe(false);
+    controller.stop();
+  });
+
+  it('with nothing to mute, M is the page’s alone', () => {
+    const { controller } = start(null);
+    const e = new KeyboardEvent('keydown', { key: 'm', code: 'KeyM', bubbles: true, cancelable: true });
+    document.body.dispatchEvent(e);
+    vi.advanceTimersByTime(200);
+    expect(e.defaultPrevented).toBe(false);
+    controller.stop();
+  });
+});

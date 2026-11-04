@@ -42,13 +42,15 @@ describe('commandShortcutFor', () => {
 });
 
 describe('default single keys', () => {
-  it('the reader and the video share S D R Z X for the same jobs, and nothing else', async () => {
+  it('the reader and the video share S D R Z X for the same jobs, and M, and nothing else', async () => {
     const { DEFAULT_READER_KEYS: r, DEFAULT_MEDIA_SPEED, DEFAULT_ANNOTATE } = await import('@/shared/settings');
     const m = DEFAULT_MEDIA_SPEED.keys;
     const reader = Object.values(r);
     expect(new Set(reader).size).toBe(reader.length);
     expect([r.slower, r.faster, r.normal, r.back, r.next]).toEqual([m.slower, m.faster, m.reset, m.rewind, m.advance]);
-    const shared = new Set([m.slower, m.faster, m.reset, m.rewind, m.advance]);
+    // M: mute on a video, as on YouTube; with the reader open it is the reader's (save as MP3).
+    expect([m.mute, r.save]).toEqual(['m', 'm']);
+    const shared = new Set([m.slower, m.faster, m.reset, m.rewind, m.advance, m.mute]);
     const video = Object.values(m).filter((k) => k.length === 1 && !shared.has(k));
     const notes = [DEFAULT_ANNOTATE.pageKeys.keep, DEFAULT_ANNOTATE.pageKeys.panel].filter(Boolean);
     expect(reader.filter((k) => video.includes(k) || notes.includes(k))).toEqual([]);
