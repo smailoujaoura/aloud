@@ -1,4 +1,4 @@
-# Aloud — Offline Neural Reader
+# Aloud: Natural Text to Speech, Offline
 
 Read any article aloud with a **fully local** neural voice. No servers, no accounts: synthesis,
 your notes, your highlights and your reading positions never leave this device.
@@ -14,7 +14,7 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
 
 - **Extraction** — [Mozilla Readability](https://github.com/mozilla/readability) strips nav / ads
   and grabs the article text.
-- **Voices** — [Phonon](https://huggingface.co/gradium/phonon-40m-multilingual) by Gradium, the default on computers
+- **Voices** — [Phonon](https://huggingface.co/gradium/phonon-40m-multilingual) by Gradium, the default
   (~101 MB with all 102 voices; English, French, German, Spanish and Portuguese, about twice as fast as real time on
   one processor thread, no graphics card needed; licensed for non-commercial use only), run by Gradium's own
   WebAssembly runtime,
@@ -134,11 +134,11 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
 What decides it is not the browser but whether the extension's Worker can reach the GPU through
 WebGPU. With it, Chromium and Firefox perform the same:
 
-| | Piper | Supertonic 3 | Kokoro-82M |
-|---|---|---|---|
-| **Chromium or Firefox, with WebGPU** | fast | good, in 31 languages | **best English — faster than Piper** |
-| **Chromium or Firefox, CPU only** | **best choice — fast** | ~1.2× real time per worker; two keep up | works, ~3× slower than real time |
-| **Firefox Android** | **the one to use — about real time** | works, slower than speech on older phones (pauses to catch up) | far too slow |
+| | Phonon | Piper | Supertonic 3 | Kokoro-82M |
+|---|---|---|---|---|
+| **Chromium or Firefox, with WebGPU** | fast, in 5 languages | fast | good, in 31 languages | **best English, faster than Piper** |
+| **Chromium or Firefox, CPU only** | **the default: about 2× real time, in 5 languages** | fast | ~1.2× real time per worker; two keep up | works, ~3× slower than real time |
+| **Firefox Android** | **the default** (CPU only, one worker) | smallest and quickest, about real time | works, slower than speech on older phones (pauses to catch up) | far too slow |
 
 Chromium has WebGPU on by default; Firefox turns it on for pages on Windows but not for the
 workers Aloud synthesises in (see below). [Using your graphics card](https://aloud.souj.dev/gpu.html)

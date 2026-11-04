@@ -404,15 +404,13 @@ export default defineBackground({
 });
 
 /**
- * A new install on a computer reads with Phonon: natural, and faster than real time on any
- * processor. Phones keep Piper (the default in settings), until Phonon has been tried on one.
- * Only on a fresh install, and only when nothing is saved yet: someone updating, or a profile
- * restored or synced with its own engine, keeps what they have.
+ * A new install reads with Phonon, on a computer and on a phone: natural, and faster than real
+ * time on an ordinary processor, with no graphics card. Only on a fresh install, and only when
+ * nothing is saved yet: someone updating, or a profile restored or synced with its own engine,
+ * keeps what they have (switching them would cost a 101 MB download they never asked for).
  */
 async function chooseFirstEngine(): Promise<void> {
   try {
-    const os = (await browser.runtime.getPlatformInfo()).os;
-    if (os === 'android') return;
     const { settings } = (await browser.storage.local.get('settings')) as { settings?: { engine?: unknown } };
     if (settings?.engine) return;
     await setSettings({ engine: 'phonon' });

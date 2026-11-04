@@ -40,11 +40,11 @@ export default defineConfig({
     includeSources: ['**/*', '.npmrc'],
     // Nor are the runtime files the build copies in from node_modules and builds (public/vendor/,
     // the worker), which git ignores too: 59 MB a reviewer would otherwise get twice.
-    excludeSources: ['*.wav', 'docs/RELEASE_*', 'docs/CLAUDE_*', 'docs/STORE_POLICY_AUDIT_*', 'docs/POST_RELEASE_*', 'public/vendor/**', 'public/tts-worker.js'],
+    excludeSources: ['*.wav', '*.png', 'docs/RELEASE_*', 'docs/CLAUDE_*', 'docs/STORE_POLICY_AUDIT_*', 'docs/POST_RELEASE_*', 'public/vendor/**', 'public/tts-worker.js'],
   },
 
   manifest: ({ browser }) => ({
-    name: 'Aloud — Offline Neural Reader',
+    name: 'Aloud: Natural Text to Speech, Offline',
     short_name: 'Aloud',
     description:
       // The Chrome Web Store refuses an upload whose description is over 132 characters.

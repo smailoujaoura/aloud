@@ -385,7 +385,10 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  engine: 'piper',
+  // Phonon, on computers and phones: what a new install reads with, and what anything falls back
+  // to. A saved profile always carries its own engine (setSettings writes the whole object), so
+  // changing this never moves someone off the voice they have.
+  engine: 'phonon',
   piperVoice: 'en_GB-alba-medium',
   kokoroVoice: 'af_heart',
   supertonicVoice: 'F1@en',

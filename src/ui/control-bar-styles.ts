@@ -486,37 +486,63 @@ select optgroup { color: var(--bar-muted); font-weight: 600; }
   .play .btn-spin { width: 20px; height: 20px; }
   select { padding: 8px 10px; max-width: none; }
   /*
-   * Two rows of buttons, transport and speed above the secondary ones, and the progress as a thin
-   * line along the bar's top edge, its counter and time left at the end of it. A row of its own
-   * for the progress made the bar three rows tall, a third of a phone's screen with the status
-   * above it. The line is drawn thin but takes touches well above and below it.
+   * Two rows. The first: play, back, previous, next, then the progress in the room that was
+   * left empty there, with the sentence count and time left in small type under it, then speed
+   * and voice. The second: the tools. A row of its own for the progress made the bar three rows
+   * tall, and a line along its top edge still read as one. (Under 375 px the first row has no
+   * room left to aim at: the line goes back along the top edge there, below.)
    */
-  .bar { padding-top: 24px; }
+  .bar { gap: 6px 4px; }
+  select { padding: 8px 6px; }
   .line {
-    display: flex; align-items: center; gap: 8px;
-    position: absolute; top: 4px; left: 14px; right: 14px; height: 18px;
+    flex: 1 1 0; min-width: 56px; align-self: center; margin: 0 2px;
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: 18px auto;
+    column-gap: 6px; row-gap: 1px;
+    container-type: inline-size;
   }
-  .progress { flex: 1 1 auto; min-width: 0; height: 18px; }
-  .progress::before { content: ""; position: absolute; left: 0; right: 0; top: -4px; bottom: -8px; }
+  .line > .progress { grid-column: 1 / -1; grid-row: 1; min-width: 0; height: 18px; }
+  /* Drawn thin, touched thick: the band above and below it is part of it. */
+  .progress::before { content: ""; position: absolute; left: -2px; right: -2px; top: -12px; bottom: -6px; }
   /* Through .line: the touchscreen rules below (pointer: coarse) come later and would make the
      track 10 px again on every phone. */
   .line > .progress > .track, .line > .progress:hover > .track, .line > .progress.dragging > .track { height: 4px; border-radius: 2px; }
   .line > .progress > .track > i { border-radius: 2px; }
   .progress > .knob { width: 14px; height: 14px; margin-left: -7px; transform: translateY(-50%) scale(1); }
-  .count, .eta { font-size: 11px; line-height: 1; }
-  .count { min-width: 0 !important; padding: 0; }
+  .count, .eta { grid-row: 2; font-size: 10.5px; line-height: 1.2; white-space: nowrap; }
+  .count { grid-column: 1; min-width: 0 !important; padding: 0; text-align: left; }
+  .eta { grid-column: 3; text-align: right; }
   /* Eight tools across the second row: on a 360 px phone, at 40 px each with gaps, the last of
      them (close) was cut off. They give up a little width instead, down to 32 px. */
   .side { flex: 1 1 100%; justify-content: space-between; gap: 0; min-width: 0; }
   .side > button { flex: 0 1 40px; min-width: 32px; }
-  /* And the first row's skip buttons, so a 320 px phone keeps the voice on that row: they start
-     from 32 px (rows wrap by that size) and grow to 40 px wherever there is room. */
-  .bar > button:not(.play):not(.voice) { flex: 1 1 32px; min-width: 32px; max-width: 40px; }
+  /* Back, previous and next a little narrower, for the progress beside them. */
+  .bar > button:not(.play):not(.voice) { flex: 0 0 36px; }
   /* The voice stays in the first row, by its face: on a phone it is the only way to change it. */
   .voice { height: 40px; padding: 0 6px 0 4px; }
   .voice .voice-name { display: none; }
-  .sep { display: none; }
-  .spacer { flex: 1 1 auto; }
+  .sep, .spacer { display: none; }
+}
+
+/* Too narrow for the count and the time left side by side under the line: the count stays. */
+@container (max-width: 100px) {
+  .eta { display: none; }
+}
+
+/* The narrowest phones: the progress is a thin line along the bar's top edge, as wide as the bar,
+   and the first row is the buttons alone. */
+@media (max-width: 374px) {
+  .bar { padding-top: 24px; }
+  .line {
+    display: flex; align-items: center; gap: 8px; container-type: normal; margin: 0;
+    position: absolute; top: 4px; left: 14px; right: 14px; height: 18px; min-width: 0;
+  }
+  .line > .progress { flex: 1 1 auto; }
+  .progress::before { top: -4px; bottom: -8px; }
+  .count, .eta { font-size: 11px; line-height: 1; }
+  .spacer { display: block; flex: 1 1 auto; }
+  /* From 32 px (rows wrap by that size), growing to 40 px where there is room: a 320 px phone
+     keeps the voice on the first row. */
+  .bar > button:not(.play):not(.voice) { flex: 1 1 32px; min-width: 32px; max-width: 40px; }
 }
 
 /*

@@ -622,7 +622,7 @@ const SKIP_SWITCHES: Array<[string, keyof Settings['skip']]> = [
 /** The engine to read with once the reader's own server is gone. */
 function engineAfterServer(manifest: ModelManifest, sizes: CacheSizes): EngineId {
   const here = ENGINE_IDS.find((e) => e !== 'server' && engineDownloaded(e, manifest, sizes));
-  return here ?? (capabilities().touchFirst ? DEFAULT_SETTINGS.engine : 'phonon');
+  return here ?? 'phonon';
 }
 
 function currentVoiceInstalled(manifest: ModelManifest, sizes: CacheSizes): boolean {

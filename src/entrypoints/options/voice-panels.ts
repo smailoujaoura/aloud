@@ -238,9 +238,9 @@ function engineTab(info: EngineInfo, open: EngineId, ctx: PanelContext, onPick: 
     role: 'tab',
     'aria-selected': String(selected),
   });
-  // One short row: whether it is here (a mark, its words in the tooltip), the short name, and a dot
-  // on the engine reading now. "Your own server · not downloaded" and "4 on this device" made the
-  // tabs overflow a phone's width.
+  // One short row: whether it is here (a mark, its words in the tooltip) and the short name. "Your
+  // own server · not downloaded" and "4 on this device" made the tabs overflow a phone's width. The
+  // engine reading now is said in the tooltip only: a dot for it looked like a recommendation.
   const status = installedSummary(info.id, ctx);
   const ready = engineDownloaded(info.id, ctx.manifest, ctx.sizes);
   const reading = info.id === ctx.settings.engine;
@@ -249,8 +249,6 @@ function engineTab(info: EngineInfo, open: EngineId, ctx: PanelContext, onPick: 
     el(document, 'span', { class: `voice-tab-mark${ready ? ' is-ready' : ''}`, 'aria-hidden': 'true' }, ready ? '✓' : info.id === 'server' ? '+' : '↓'),
     el(document, 'b', {}, info.short),
   );
-  // The engine currently reading gets a mark, so "which one am I using" survives browsing away.
-  if (reading) label.append(el(document, 'span', { class: 'voice-tab-dot', 'aria-hidden': 'true' }));
   tab.title = `${info.name}: ${status}${reading ? ' · reading to you now' : ''}`;
   tab.setAttribute('aria-label', tab.title);
   tab.append(label);

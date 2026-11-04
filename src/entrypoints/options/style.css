@@ -295,7 +295,6 @@ code {
 /* On this device (✓, green), or not yet: to download (↓, red) or to set up (+, red). The words are in the tooltip. */
 .voice-tab-mark { flex: none; width: 1em; text-align: center; font-size: 12px; font-weight: 700; color: var(--danger); }
 .voice-tab-mark.is-ready { color: var(--ok); font-weight: 700; }
-.voice-tab-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-solid); }
 .model-filter { flex: 1 1 200px; min-width: 150px; margin: 0; padding: 8px 11px; border-radius: 10px; }
 
 /* ---- a tab's contents ---- */

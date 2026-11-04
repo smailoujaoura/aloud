@@ -12,8 +12,8 @@ Website-only and documentation changes are not listed: they never reach the exte
   (American, British and a cast of characters, from a pirate captain to a fairy godmother), and 65
   in French, Spanish, German and Portuguese. One 101 MB download, every voice included. Each voice
   has a face and says what it sounds like, and search finds it ("pirate"). Phonon is licensed for
-  non-commercial use only. New installs on a computer read with Phonon from the start; phones
-  start with Piper.
+  non-commercial use only. New installs read with Phonon from the start, on computers and on
+  phones.
 - **Your own speech server.** In Settings → Voice → Custom, point Aloud at a speech
   server you run, such as Kokoro-FastAPI on a PC at home or over Tailscale, and read with its
   voices from any device: the server does the speaking, Aloud does everything else. Works with any
@@ -30,9 +30,10 @@ Website-only and documentation changes are not listed: they never reach the exte
   does, its own mute is used. M can be changed in Settings → Video speed.
 
 ### Fixed
-- On phones the reading bar is two rows instead of three: the progress is a thin line along its
-  top edge, with the sentence count and time left at its end, and it still takes a tap or a drag.
-  On narrow phones the close button no longer falls off the edge of the bar.
+- On phones the reading bar is two rows instead of three: the progress sits in the first row,
+  beside the play controls, with the sentence count and time left under it, and still takes a
+  tap or a drag (on the narrowest phones it is a thin line along the bar's top edge). On narrow
+  phones the close button no longer falls off the edge of the bar.
 - Text in a writing system none of your voices can read (Chinese, Japanese, Russian, Arabic and
   others, when no voice for that language is downloaded) is now skipped, and the bar says so with
   a **Get one** button, instead of being read by an English voice as noise. Languages written in
@@ -75,6 +76,7 @@ Website-only and documentation changes are not listed: they never reach the exte
   the stand-in avatar there.
 
 ### Changed
+- **A new name: Aloud: Natural Text to Speech, Offline.** The same extension, called what it does.
 - The voice engine tabs in Settings are short and fit a phone: each engine's name (Phonon, Piper,
   Supertonic, Kokoro, Custom) with a mark for whether it is on this device; the details are in its
   tooltip. On a phone they scroll sideways instead of running off the screen.
