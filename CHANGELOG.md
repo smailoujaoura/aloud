@@ -12,6 +12,9 @@ Website-only and documentation changes are not listed: they never reach the exte
   does, its own mute is used. M can be changed in Settings → Video speed.
 
 ### Fixed
+- On phones the reading bar is two rows instead of three: the progress is a thin line along its
+  top edge, with the sentence count and time left at its end, and it still takes a tap or a drag.
+  On narrow phones the close button no longer falls off the edge of the bar.
 - Messages about your own speech server point to the Custom tab, its name in Settings, instead of
   a tab called "Your own server" that no longer exists.
 

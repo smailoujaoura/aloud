@@ -369,6 +369,7 @@ select optgroup { color: var(--bar-muted); font-weight: 600; }
 }
 .eta[hidden] { display: none; }
 .break { display: none; }
+.line { display: contents; }
 @media (min-width: ${NARROW_BREAKPOINT_PX + 1}px) {
   .bar.stacked { row-gap: 6px; }
   .bar.stacked .progress { order: -3; flex: 1 1 0; min-width: 0; }
@@ -485,17 +486,30 @@ select optgroup { color: var(--bar-muted); font-weight: 600; }
   .play .btn-spin { width: 20px; height: 20px; }
   select { padding: 8px 10px; max-width: none; }
   /*
-   * Three rows, in the order they are used: transport and speed, then the scrubber with its
-   * counter, then the secondary buttons. Eight controls and a speed picker do not fit across a
-   * phone, and a predictable three-row bar is far better than a two-row one that reshuffles
-   * itself as the sentence counter grows a digit.
+   * Two rows of buttons, transport and speed above the secondary ones, and the progress as a thin
+   * line along the bar's top edge, its counter and time left at the end of it. A row of its own
+   * for the progress made the bar three rows tall, a third of a phone's screen with the status
+   * above it. The line is drawn thin but takes touches well above and below it.
    */
-  .progress { order: 10; flex: 1 1 60%; height: 22px; }
-  .progress > .track { height: 10px; border-radius: 5px; }
-  .progress > .track > i { border-radius: 5px; }
-  .progress > .knob { width: 16px; height: 16px; margin-left: -8px; transform: translateY(-50%) scale(1); }
-  .count, .eta { order: 11; }
-  .side { order: 12; flex: 1 1 100%; justify-content: space-between; }
+  .bar { padding-top: 24px; }
+  .line {
+    display: flex; align-items: center; gap: 8px;
+    position: absolute; top: 4px; left: 14px; right: 14px; height: 18px;
+  }
+  .progress { flex: 1 1 auto; min-width: 0; height: 18px; }
+  .progress::before { content: ""; position: absolute; left: 0; right: 0; top: -4px; bottom: -8px; }
+  .progress > .track, .progress:hover > .track, .progress.dragging > .track { height: 4px; border-radius: 2px; }
+  .progress > .track > i { border-radius: 2px; }
+  .progress > .knob { width: 14px; height: 14px; margin-left: -7px; transform: translateY(-50%) scale(1); }
+  .count, .eta { font-size: 11px; line-height: 1; }
+  .count { min-width: 0 !important; padding: 0; }
+  /* Eight tools across the second row: on a 360 px phone, at 40 px each with gaps, the last of
+     them (close) was cut off. They give up a little width instead, down to 32 px. */
+  .side { flex: 1 1 100%; justify-content: space-between; gap: 0; min-width: 0; }
+  .side > button { flex: 0 1 40px; min-width: 32px; }
+  /* And the first row's skip buttons, so a 320 px phone keeps the voice on that row: they start
+     from 32 px (rows wrap by that size) and grow to 40 px wherever there is room. */
+  .bar > button:not(.play):not(.voice) { flex: 1 1 32px; min-width: 32px; max-width: 40px; }
   /* The voice stays in the first row, by its face: on a phone it is the only way to change it. */
   .voice { height: 40px; padding: 0 6px 0 4px; }
   .voice .voice-name { display: none; }

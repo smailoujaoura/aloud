@@ -204,6 +204,11 @@ export class ControlBar {
   private etaEl!: HTMLElement;
   /** Ends the first row when the bar is stacked (see `fitLayout`). */
   private breakEl!: HTMLElement;
+  /**
+   * The progress bar with its counter and time left. No box of its own on a wide screen (its
+   * pieces sit in the bar's row); on a phone, a thin line along the bar's top edge.
+   */
+  private lineEl!: HTMLElement;
   private resizeWatch: ResizeObserver | null = null;
   private readonly room: BottomRoom;
   /** The buttons a reader key presses (session.ts: onReaderKey), and their titles without the key. */
@@ -393,6 +398,8 @@ export class ControlBar {
     // The four secondary buttons travel together in a group. On a phone the row cannot hold
     // every control, and a group is what stops the wrap from stranding a lone ✕ on a line of
     // its own: either they all fit beside the transport controls, or they all move down.
+    this.lineEl = this.make('div', { class: 'line' });
+    this.lineEl.append(this.progressEl, this.countEl, this.etaEl);
     const side = this.make('div', { class: 'side' });
     side.append(noteBtn, this.followBtn, this.tapBtn, this.sleepBtn, this.saveBtn, gearBtn, this.hideBtn, closeBtn);
 
@@ -402,9 +409,7 @@ export class ControlBar {
       this.prevBtn,
       this.nextBtn,
       this.make('span', { class: 'sep' }),
-      this.progressEl,
-      this.countEl,
-      this.etaEl,
+      this.lineEl,
       this.breakEl,
       // Only takes up space in the narrow layout, where the progress bar has moved to its own
       // row and the transport controls would otherwise stretch across the whole width.
@@ -466,7 +471,7 @@ export class ControlBar {
    * left across the top, every control below. Decided by measuring, not by a fixed width — a
    * three-digit counter, the words-a-minute figure and a long voice name each take room, and a
    * row that wrapped by itself left the side buttons stranded on a line of their own.
-   * (Phones have their own three-row layout in the stylesheet.)
+   * (Phones have their own layout in the stylesheet: two rows, the progress along the top edge.)
    */
   private fitLayout(): void {
     const bar = this.bar;
@@ -480,7 +485,9 @@ export class ControlBar {
     const gap = parseFloat(style.columnGap) || 6;
     let need = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight) + 2;
     let shown = 0;
-    for (const child of [...bar.children] as HTMLElement[]) {
+    // The line has no box here (display: contents): its pieces are measured one by one.
+    const pieces = [...bar.children].flatMap((c) => (c === this.lineEl ? [...c.children] : [c])) as HTMLElement[];
+    for (const child of pieces) {
       if (child === this.scrubEl || child === this.breakEl || child.classList.contains('spacer')) continue;
       if (child.hidden || view.getComputedStyle(child).display === 'none') continue;
       shown++;
