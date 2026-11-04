@@ -146,51 +146,22 @@ reading positions, history and listening statistics, and private-window activity
 
 - **Data collection:** the manifest declares `data_collection_permissions: { required: ["none"], optional: ["websiteContent"] }`:
   the optional one is asked for only when a reader sets up their own speech server (see above).
-- **Source code:** upload `.output/tts-reader-1.0.1-sources.zip` with this note for the reviewer:
+- **Source code:** upload `.output/tts-reader-1.0.1-sources.zip` with this note for the reviewer
+  (AMO's field takes at most 3,000 characters; this is about 2,250):
 
-  > Built with Node 22.23 and npm 10.9 on Linux: `npm ci && npm run build:firefox` (the archive's
-  > `.npmrc` sets legacy-peer-deps, which the lockfile needs). The build needs no network after
-  > `npm ci`: the voice catalogue (`public/models.json`) is committed, and refreshing it is a
-  > separate maintainer step. Output is `.output/firefox-mv3/`, byte-identical to the uploaded
-  > package — checked by unpacking this archive into another folder, installing from the same
-  > lockfile, building and comparing all 466 files' SHA-256. The code is not minified and file
-  > names carry no hashes, so versions can be compared file by file.
-  > Vendored, unmodified third-party files (ONNX Runtime Web, pdf.js, piper-phonemize WASM, and
-  > phonon-tts 0.4.2, Gradium's runtime for the Phonon voices: `vendor/phonon/`, MIT OR Apache-2.0,
-  > its WASM built from the Rust in https://github.com/gradium-ai/xn-ptts (`ptts-wasm/`), the
-  > crates listed in its `THIRD_PARTY_LICENSES.md`; the files are the npm package's, byte for byte,
-  > pinned by the lockfile's integrity hash) are copied from
-  > node_modules by `scripts/sync-assets.mjs`; versions are listed in THIRD_PARTY.md. phonon-tts
-  > starts its own worker from `vendor/phonon/worker.js`; Aloud gives it the model as local `blob:`
-  > addresses of files it downloaded and checked itself, so the runtime's own Hugging Face lookup
-  > (`hub.js`, used only when given a model *name*) never runs.
-  > Validator warnings: the `Function`-constructor ones come from those libraries, and cannot run:
-  > the extension CSP is `script-src 'self' 'wasm-unsafe-eval'`, with no `'unsafe-eval'`, and
-  > pdf.js is also given `isEvalSupported: false`. The four `innerHTML` warnings
-  > (`reader-inject.js`, `chunks/session.js`) are inside Mozilla Readability 0.6.0, bundled into
-  > both; Aloud runs it on `document.cloneNode(true)` (`src/extract/readability.ts`), an inert
-  > copy of the page. The `import()` warnings (`vendor/rt/ort-loader.js`, `vendor/rt/phonon.js`,
-  > `chunks/pdf.js`, and inside the libraries) load files from the package itself (`vendor/ort/`,
-  > `vendor/phonon/`, `vendor/pdfjs/`) by
-  > their `runtime.getURL` address, never a remote or user-supplied one. Nothing is loaded from a
-  > CDN: ONNX Runtime's WebAssembly path is set to `vendor/ort/` before transformers.js loads
-  > (`src/engine/ort-loader.ts`, `src/engine/engines/kokoro.ts`). transformers.js 3.7.5 is bundled
-  > unmodified from npm (`vendor/rt/transformers.web.js`); its default
-  > `wasmPaths = https://cdn.jsdelivr.net/...` (line ~2901 of `dist/transformers.web.js`) runs only
-  > when no path is set, which never happens here, and the extension CSP would block it anyway.
-  > What is downloaded at run time is voice data from Hugging Face (ONNX and GGUF weights, JSON,
-  > `.bin` and `.safetensors` voice vectors), never code. Phonon's model (CC BY-NC 4.0) comes from
-  > an unmodified, ungated copy of Gradium's gated repository (`smailoujaoura/phonon-40m-multilingual`),
-  > checked against the same SHA-256. Aloud does not run in private windows (`incognito: not_allowed`).
-  > On uninstall it opens aloud.souj.dev/feedback.html?bye; the version and browser name follow a
-  > `#`, which the browser never sends, so opening it transmits nothing.
-  > Optional, off by default: the reader can point Aloud at their own OpenAI-style speech server
-  > (Settings → Voice → Custom). Page text is then sent only to the address they enter, after a
-  > permission prompt for that host (from the optional `*://*/*`) and, in Firefox, the optional
-  > `websiteContent` data consent; both are checked again before every read, and nothing is sent
-  > if either was taken back.
-  > To try it: open any article, press the toolbar button (or Alt+R), then play. The voice model
-  > (Phonon, about 101 MB with its voices, on computers and phones) downloads on first use.
+  > Build: Node 22.23, npm 10.9, Linux: npm ci && npm run build:firefox (the archive's .npmrc sets legacy-peer-deps, which the lockfile needs). No network is needed after npm ci: the voice catalogue (public/models.json) is committed. Output: .output/firefox-mv3/, byte-identical to the uploaded package (checked by building the source archive in a clean folder and comparing all 466 files' SHA-256). Nothing is minified.
+  >
+  > Vendored, unmodified npm files (ONNX Runtime Web, pdf.js, piper-phonemize WASM, and phonon-tts 0.4.2, Gradium's Phonon runtime, its WASM built from https://github.com/gradium-ai/xn-ptts) are copied from node_modules by scripts/sync-assets.mjs and pinned by the lockfile; versions in THIRD_PARTY.md. phonon-tts gets its model as local blob: URLs of files Aloud downloaded and checked itself, so its own Hugging Face lookup (hub.js) never runs.
+  >
+  > Validator warnings: the Function-constructor ones are inside those libraries and cannot run (CSP script-src 'self' 'wasm-unsafe-eval', no 'unsafe-eval'; pdf.js gets isEvalSupported: false). The innerHTML ones are Mozilla Readability 0.6.0, run on document.cloneNode(true), an inert copy of the page. The import() ones load files from the package itself by runtime.getURL. Nothing loads from a CDN: ONNX Runtime's WASM path is set to vendor/ort/ before transformers.js loads.
+  >
+  > Downloaded at run time: voice data from Hugging Face (ONNX and GGUF weights, JSON, voice vectors), never code. Phonon's model (CC BY-NC 4.0) is an unmodified, ungated copy of Gradium's gated repository (smailoujaoura/phonon-40m-multilingual), checked by SHA-256.
+  >
+  > Optional, off by default: a speech server the reader runs (Settings > Voice > Custom). Page text then goes only to the address they enter, after a permission prompt for that host (optional *://*/*) and Firefox's optional websiteContent consent; both are checked again before every read, and nothing is sent if either was taken back.
+  >
+  > No private windows (incognito: not_allowed). On uninstall it opens aloud.souj.dev/feedback.html?bye; the version and browser follow a #, so nothing is transmitted.
+  >
+  > To try it: open an article, press the toolbar button (or Alt+R), then play. Phonon (about 101 MB with its voices) downloads on first use.
 
 - **Android:** the listing is marked compatible with Firefox for Android (`gecko_android`).
   Piper voices are the ones to recommend on phones; Supertonic 3 works there, slower than speech on
