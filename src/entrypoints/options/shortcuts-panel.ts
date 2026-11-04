@@ -168,7 +168,10 @@ function readerKeyRows(host: HTMLElement, opts: ShortcutsPanelOptions): HTMLElem
         if (next) {
           const reader = READER_ROWS.find(([f]) => f !== field && keys[f] === next);
           const note = next === opts.pageKeys.keep ? 'Keep the selected text' : next === opts.pageKeys.panel ? 'Show my notes' : null;
-          const video = Object.values(DEFAULT_MEDIA_SPEED.keys).includes(next) ? 'the video speed keys' : null;
+          // The keys the reader shares with the video by design (S D R Z X, and M) are not a clash
+          // for their own reader job: moved away, they could not be typed back.
+          const shared = next === DEFAULT_READER_KEYS[field];
+          const video = !shared && Object.values(DEFAULT_MEDIA_SPEED.keys).includes(next) ? 'the video speed keys' : null;
           const clash = reader?.[1] ?? note ?? video;
           if (clash) {
             opts.toast(`${next.toUpperCase()} is already ${clash}`, 'error');

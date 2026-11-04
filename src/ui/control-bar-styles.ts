@@ -498,8 +498,10 @@ select optgroup { color: var(--bar-muted); font-weight: 600; }
   }
   .progress { flex: 1 1 auto; min-width: 0; height: 18px; }
   .progress::before { content: ""; position: absolute; left: 0; right: 0; top: -4px; bottom: -8px; }
-  .progress > .track, .progress:hover > .track, .progress.dragging > .track { height: 4px; border-radius: 2px; }
-  .progress > .track > i { border-radius: 2px; }
+  /* Through .line: the touchscreen rules below (pointer: coarse) come later and would make the
+     track 10 px again on every phone. */
+  .line > .progress > .track, .line > .progress:hover > .track, .line > .progress.dragging > .track { height: 4px; border-radius: 2px; }
+  .line > .progress > .track > i { border-radius: 2px; }
   .progress > .knob { width: 14px; height: 14px; margin-left: -7px; transform: translateY(-50%) scale(1); }
   .count, .eta { font-size: 11px; line-height: 1; }
   .count { min-width: 0 !important; padding: 0; }
