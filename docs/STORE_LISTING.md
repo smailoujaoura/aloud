@@ -114,9 +114,11 @@ user reads. So tick, with the explanation below, the dashboard's categories for:
 - **Web history** (web browsing activity) — the addresses of pages read, with where reading stopped
   (history, reading positions) and the sites in the listening statistics.
 
-Explanation to give: *"Used only on the user's device, to read pages aloud and to keep the user's
-own history, reading positions, notes and statistics. Stored in the browser's extension storage on
-the device; never transmitted, sold or shared. Aloud has no server."* Check the dashboard's current
+Explanation to give: *"Used on the user's device, to read pages aloud and to keep the user's own
+history, reading positions, notes and statistics, stored in the browser's extension storage on the
+device. Never sold or shared, and Aloud has no server: the text being read leaves the device only if
+the user sets up a speech server of their own, and then only to the address they enter, after a
+permission prompt."* Check the dashboard's current
 category names and definitions when filling it in. Certify all three statements (no sale, no
 unrelated use, no creditworthiness use).
 
@@ -126,8 +128,9 @@ own device. Aloud's local storage is not encrypted (as with browser storage gene
 reviewer raises it, the answer is that nothing leaves the device and the browser profile is the
 user's own; encrypting it would need a key stored beside it.
 
-Publish the current privacy policy (website/privacy.html, 17 October) before submitting: the live
-page was still the 4 October version, without the Limited Use statement.
+Publish the current privacy policy (website/privacy.html, in effect from 4 November 2026) before
+submitting 1.0.1: it describes the reader's own speech server and its permission, and the live page
+was still the 17 October version.
 
 **Private / incognito windows:** the manifest declares `"incognito": "not_allowed"`. Aloud keeps
 reading positions, history and listening statistics, and private-window activity must not be stored
@@ -144,7 +147,7 @@ reading positions, history and listening statistics, and private-window activity
   > `npm ci`: the voice catalogue (`public/models.json`) is committed, and refreshing it is a
   > separate maintainer step. Output is `.output/firefox-mv3/`, byte-identical to the uploaded
   > package — checked by unpacking this archive into another folder, installing from the same
-  > lockfile, building and comparing all 364 files' SHA-256. The code is not minified and file
+  > lockfile, building and comparing all 466 files' SHA-256. The code is not minified and file
   > names carry no hashes, so versions can be compared file by file.
   > Vendored, unmodified third-party files (ONNX Runtime Web, pdf.js, piper-phonemize WASM, and
   > phonon-tts 0.4.2, Gradium's runtime for the Phonon voices: `vendor/phonon/`, MIT OR Apache-2.0,

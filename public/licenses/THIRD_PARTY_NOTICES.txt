@@ -1,4 +1,4 @@
-Aloud 1.0.0 — third-party notices
+Aloud 1.0.1 — third-party notices
 
 Aloud is free software, distributed under the GNU General Public License, version 3 or (at your
 option) any later version: see LICENSE.txt beside this file. It is GPL because it includes
