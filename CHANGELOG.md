@@ -87,7 +87,7 @@ Website-only and documentation changes are not listed: they never reach the exte
 ## 1.0.0 (2026-10-23)
 
 First release, on the [Chrome Web Store](https://chromewebstore.google.com/detail/ilnojbdjpnnlkjbmldpgbgckkkifheeo)
-and [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/aloud-offline-neural-reader/)
+and [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/aloud-natural-text-to-speech/)
 (desktop and Android).
 
 - Reads any article or PDF aloud with natural neural voices that run on your device: 222 voices in

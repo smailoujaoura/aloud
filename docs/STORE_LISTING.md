@@ -6,9 +6,11 @@ change, change the justifications here too: both stores compare them.
 ## Shared listing text
 
 **Name:** Aloud: Natural Text to Speech, Offline (was "Aloud — Offline Neural Reader" until 1.0.1).
-Chrome takes the name from the manifest. On AMO, check the listing's name after uploading 1.0.1
-(Developer Hub → Edit Product Page) and change it there if it still shows the old one. Keep the
-AMO address `aloud-offline-neural-reader`: links to it keep working.
+Chrome takes the name from the manifest. On AMO the listing's name, summary and description
+are edited in the Developer Hub (Edit Product Page): uploading a version does not change them.
+The AMO address is `aloud-natural-text-to-speech` since 1.0.1. Do not change it again: AMO does
+not redirect an old address (`aloud-offline-neural-reader` shows "Oops" now), so every link to it
+breaks. A link that must survive a rename can use the add-on's ID: `/firefox/addon/aloud@souj.dev/`.
 
 **Summary (Chrome: 132 characters max; this is the manifest description, 129):**
 Reads any article or PDF aloud in a natural neural voice that runs on your device. Offline and private, it highlights every word.
