@@ -22,6 +22,7 @@
  */
 import { sharesModel } from '@/shared/engine-catalog';
 import { withServerKey } from '@/shared/server-key';
+import { noConsentMessage, serverConsented, type PermissionsLike } from '@/shared/server-consent';
 import { browser } from 'wxt/browser';
 import type { EngineConfig, WorkerResponse } from '@/engine/protocol';
 import { PREVIEW_NATIVE } from './preview-sentences';
@@ -257,6 +258,11 @@ export function playSynthesized(
       if (warmKey !== key) {
         onStatus({ phase: 'loading', progress: 0, loadKind: 'compile' });
         // The reader's own server's key: added here, at the extension's origin (shared/server-key.ts).
+        // The reader's own server: only with their permission, asked again now (server-consent.ts).
+        if (config.engine === 'server' && config.server) {
+          const ok = await serverConsented(config.server.url, browser.permissions as unknown as PermissionsLike, import.meta.env.BROWSER === 'firefox');
+          if (!ok) throw new Error(noConsentMessage(config.server.url));
+        }
         const withKey = await withServerKey(config);
         if (my !== token) return;
         const initId = nextId++;

@@ -602,7 +602,13 @@ export class ReaderSession {
       // Another voice was picked while this one loaded. Its load replaced this one — and is
       // under way now: "Failed to load the voice model" showed on the bar until it was ready.
       if (this.voiceReload !== reload) return;
-      this.fail(`Failed to load the voice model: ${err instanceof Error ? err.message : String(err)}`);
+      const raw = err instanceof Error ? err.message : String(err);
+      // "[initialising phonon engine (voice …)]", "[synth-host:consent]": where it failed, for the
+      // log. The bar says what happened.
+      const said = raw.replace(/^(\[[^\]]*\]\s*)+/, '');
+      if (said !== raw) log.warn('voice load failed:', raw);
+      // Refused, not failed: the reader's own server without their permission (server-consent.ts).
+      this.fail(raw.includes('[synth-host:consent]') ? said : `Failed to load the voice model: ${said}`);
     }
   }
 

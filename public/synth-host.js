@@ -140,6 +140,47 @@
 		return s && typeof s.key === "string" && s.key && origin && s.origin === origin ? s.key : "";
 	}
 	//#endregion
+	//#region src/shared/server-voices.ts
+	/** The permission to ask for: this host on any port (both browsers match ports that way). */
+	function serverOrigin(base) {
+		const url = new URL(base);
+		return `${url.protocol}//${url.hostname}/*`;
+	}
+	//#endregion
+	//#region src/shared/server-consent.ts
+	/**
+	* May page text go to the reader's own speech server now?
+	*
+	* Asked once, on Connect (options/voice-panels.ts: askForServer): access to the server's host and,
+	* in Firefox, consent to send it website content. That is not enough on its own: Firefox lets the
+	* reader take the consent back in the add-on's settings, a backup restored on another device names
+	* a server nobody there agreed to, and a server that answers every origin (Kokoro-FastAPI does)
+	* receives text even without the host permission. So the permissions are asked again whenever a
+	* server is about to be read with: by the synthesis host before it starts one, and by the
+	* settings page before a preview. Free of extension APIs, given the permissions object to ask.
+	*/
+	/** `firefox`: also ask for the website-content data consent, which only Firefox has. */
+	async function serverConsented(url, permissions, firefox) {
+		if (!permissions || !url) return false;
+		let origins;
+		try {
+			origins = [serverOrigin(url)];
+		} catch {
+			return false;
+		}
+		if (firefox) try {
+			return await permissions.contains({
+				origins,
+				data_collection: ["websiteContent"]
+			});
+		} catch {}
+		return permissions.contains({ origins }).catch(() => false);
+	}
+	/** What to tell the reader when it may not. */
+	function noConsentMessage(url) {
+		return `Aloud may not send text to ${url} any more: that permission was taken back, or never given on this browser. Connect the server again in Settings → Voice → Custom.`;
+	}
+	//#endregion
 	//#region src/synth-host/job-queue.ts
 	/**
 	* Which worker gets the next sentence.
@@ -604,6 +645,14 @@
 		jobs.reset();
 	}
 	async function startPool(given, gen) {
+		if (given.config.engine === "server" && given.config.server) {
+			const url = given.config.server.url;
+			if (!await serverConsented(url, extensionPermissions(), isFirefox())) {
+				if (disposed || gen !== initGeneration) return;
+				fatalToContent("consent", noConsentMessage(url));
+				return;
+			}
+		}
 		const msg = given.config.engine === "server" && given.config.server ? {
 			...given,
 			config: {
@@ -733,6 +782,15 @@
 			port.postMessage({ __aloud: "host-ready" });
 		});
 	});
+	/** The permissions API of whichever namespace this browser has (promise-based in both in MV3). */
+	function extensionPermissions() {
+		const scope = globalThis;
+		return scope.browser?.permissions ?? scope.chrome?.permissions;
+	}
+	/** Firefox: the only browser with `runtime.getBrowserInfo` (and with data-collection consent). */
+	function isFirefox() {
+		return typeof globalThis.browser?.runtime?.getBrowserInfo === "function";
+	}
 	/** storage.local `serverKey` as stored (shared/server-key.ts), through whichever API this browser has. */
 	async function readServerKey() {
 		const scope = globalThis;

@@ -28,6 +28,7 @@ import type { EngineConfig, WorkerRequest, WorkerResponse } from '@/engine/proto
 import { capabilities } from '@/shared/browser-env';
 import { probeGpu } from '@/shared/gpu-probe';
 import { keyFor } from '@/shared/server-key-match';
+import { noConsentMessage, serverConsented, type PermissionsLike } from '@/shared/server-consent';
 import { JobQueue } from './job-queue';
 import { MAX_POOL, autoPoolSize, clampPool, piperPoolForRate, poolSizeForProvider } from './pool-size';
 
@@ -454,6 +455,15 @@ function teardown(): void {
 }
 
 async function startPool(given: Extract<WorkerRequest, { kind: 'init' }>, gen: number): Promise<void> {
+  // The reader's own server: only with the reader's permission, asked again now (server-consent.ts).
+  if (given.config.engine === 'server' && given.config.server) {
+    const url = given.config.server.url;
+    if (!(await serverConsented(url, extensionPermissions(), isFirefox()))) {
+      if (disposed || gen !== initGeneration) return;
+      fatalToContent('consent', noConsentMessage(url));
+      return;
+    }
+  }
   // The key for the reader's own server is added here, at the extension's origin: the reader in
   // the web page never holds it (shared/server-key.ts).
   const msg = given.config.engine === 'server' && given.config.server ? { ...given, config: { ...given.config, server: { ...given.config.server, key: keyFor(await readServerKey(), given.config.server.url) } } } : given;
@@ -617,6 +627,18 @@ window.addEventListener('message', (ev: MessageEvent) => {
     port.postMessage({ __aloud: 'host-ready' });
   });
 });
+
+/** The permissions API of whichever namespace this browser has (promise-based in both in MV3). */
+function extensionPermissions(): PermissionsLike | undefined {
+  const scope = globalThis as { browser?: { permissions?: PermissionsLike }; chrome?: { permissions?: PermissionsLike } };
+  return scope.browser?.permissions ?? scope.chrome?.permissions;
+}
+
+/** Firefox: the only browser with `runtime.getBrowserInfo` (and with data-collection consent). */
+function isFirefox(): boolean {
+  const scope = globalThis as { browser?: { runtime?: { getBrowserInfo?: unknown } } };
+  return typeof scope.browser?.runtime?.getBrowserInfo === 'function';
+}
 
 /** storage.local `serverKey` as stored (shared/server-key.ts), through whichever API this browser has. */
 async function readServerKey(): Promise<unknown> {

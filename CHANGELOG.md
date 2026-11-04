@@ -17,8 +17,8 @@ Website-only and documentation changes are not listed: they never reach the exte
 - **Your own speech server.** In Settings → Voice → Your own server, point Aloud at a speech
   server you run, such as Kokoro-FastAPI on a PC at home or over Tailscale, and read with its
   voices from any device: the server does the speaking, Aloud does everything else. Works with any
-  OpenAI-style speech API. Text goes only to the address you enter, after you allow it.
-  A server that asks for a key gets one (kept on this device only, never in backups), and a
+  OpenAI-style speech API. Text goes only to the address you enter, after you allow it, and
+  stops if you take that permission back. A server that asks for a key gets one (kept on this device only, never in backups), and a
   server on the internet is only reached over https.
   ([#9](https://github.com/smailoujaoura/aloud/issues/9))
 - **Video speed on phones.** A phone has no keys, so the video speed control was out of reach
