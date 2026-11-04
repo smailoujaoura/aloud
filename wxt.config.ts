@@ -40,7 +40,7 @@ export default defineConfig({
     includeSources: ['**/*', '.npmrc'],
     // Nor are the runtime files the build copies in from node_modules and builds (public/vendor/,
     // the worker), which git ignores too: 59 MB a reviewer would otherwise get twice.
-    excludeSources: ['docs/RELEASE_*', 'docs/CLAUDE_*', 'docs/STORE_POLICY_AUDIT_*', 'docs/POST_RELEASE_*', 'public/vendor/**', 'public/tts-worker.js'],
+    excludeSources: ['*.wav', 'docs/RELEASE_*', 'docs/CLAUDE_*', 'docs/STORE_POLICY_AUDIT_*', 'docs/POST_RELEASE_*', 'public/vendor/**', 'public/tts-worker.js'],
   },
 
   manifest: ({ browser }) => ({

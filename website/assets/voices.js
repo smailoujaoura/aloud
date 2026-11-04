@@ -5,9 +5,15 @@
   const k = (id, name, meta, line) => ({ file: 'kokoro-' + id, portrait: 'kokoro-' + id, name, meta: 'Kokoro · ' + meta, line });
   const p = (id, name, meta, portrait = null, line = null) => ({ file: 'piper-' + id, portrait, name, meta: 'Piper · ' + meta, line });
   const s = (style, lang, name, meta, line) => ({ file: 'supertonic-' + style + '-' + lang, portrait: 'supertonic-' + style, name, meta: 'Supertonic · ' + meta, line });
+  const ph = (id, name, meta, line) => ({ file: 'phonon-' + id, portrait: 'phonon-' + id, name, meta: 'Phonon · ' + meta, line });
 
   window.ALOUD_VOICES = [
     { code: 'en', label: 'English', voices: [
+      ph('NbpkqMVS3CJeq2j8', 'Zoey', 'US', "Hi, I'm Zoey. I'm a Phonon voice, and I keep up on any computer, no graphics card needed."),
+      ph('zUCxzrOrugTSis03', 'Edwin', 'GB', "I'm Edwin. Speed me up to twice as fast, and you'll still catch every word."),
+      ph('LMDIYE0Oa377Qh6Z', 'Easton', 'US', "I'm Easton. A hundred and two of us came in one download, speaking five languages."),
+      ph('6PWnV0Nq4wu7RVBT', 'Maeve', 'GB', "I'm Maeve. Every Phonon voice has a face, so you always know who's reading to you."),
+      ph('xPDpsV3F592srkjA', 'Captain Silas', 'Character', "Captain Silas Blackwater, at your service. I'll read you any story you like, if you promise to listen."),
       s('F1', 'en', 'Female 1', 'EN', "Hi, I'm Female 1. Ten of us share one download, and each of us speaks thirty-one languages."),
       s('M1', 'en', 'Male 1', 'EN', "I'm Male 1. I read the news, novels, and the small print nobody else will."),
       s('F2', 'en', 'Female 2', 'EN', "I'm Female 2. Choose a voice for each language, and I'll switch when the page does."),
@@ -56,6 +62,8 @@
       p('en_US-john-medium', 'John', 'US'),
     ] },
     { code: 'es', label: 'Español', voices: [
+      ph('3p0eIGbkmny71GlA', 'Lucía', 'Spain', 'Hola, soy Lucía. Leo en español, incluso sin conexión a internet. / Hi, I\'m Lucía. I read Spanish, even without an internet connection.'),
+      ph('VDwnGxAo68C8U8vC', 'Ximena', 'Mexico', 'Soy Ximena, de México. Te leo cualquier artículo en voz alta. / I\'m Ximena, from Mexico. I\'ll read you any article aloud.'),
       s('M1', 'es', 'Male 1', 'Spanish', 'Leo artículos en español sin enviar nada a ningún sitio. / I read articles in Spanish without sending anything anywhere.'),
       k('ef_dora', 'Dora', 'ES', 'Hola, soy Dora. Leo en voz alta cualquier artículo, sin enviar nada a ningún sitio. / Hi, I\'m Dora. I read any article aloud, without sending anything anywhere.'),
       k('em_alex', 'Alex', 'ES', 'Soy Alex. Puedo leerte un PDF mientras descansas la vista. / I\'m Alex. I can read you a PDF while you rest your eyes.'),
@@ -64,6 +72,8 @@
       p('es_MX-claude-high', 'Claude', 'Mexico'),
     ] },
     { code: 'fr', label: 'Français', voices: [
+      ph('FXxJ9mANRq6BCTX5', 'Noémie', 'France', 'Bonjour, je suis Noémie. Je lis le français, ici même, sur votre ordinateur. / Hello, I\'m Noémie. I read French, right here on your computer.'),
+      ph('Tek4tJXiX6_yvXq7', 'Augustin', 'France', 'Je m\'appelle Augustin. Rien de ce que vous lisez ne quitte votre appareil. / I\'m Augustin. Nothing you read leaves your device.'),
       s('F3', 'fr', 'Female 3', 'French', "Bonjour ! Je lis le français, et rien ne quitte votre ordinateur. / Hello! I read French, and nothing leaves your computer."),
       k('ff_siwis', 'Siwis', 'FR', 'Bonjour, je m\'appelle Siwis. Je lis vos articles à voix haute, ici même, sur votre appareil. / Hello, I\'m Siwis. I read your articles aloud, right here on your device.'),
       p('fr_FR-gilles-low', 'Gilles', 'France'),
@@ -74,6 +84,8 @@
       k('im_nicola', 'Nicola', 'IT', 'Sono Nicola. Seleziona una parola e ti dico come si pronuncia. / I\'m Nicola. Select a word and I\'ll tell you how it\'s said.'),
     ] },
     { code: 'pt', label: 'Português', voices: [
+      ph('sGCMzFIA53ppIngM', 'Clarice', 'Brazil', 'Olá, eu sou a Clarice. Leio em português, direto no seu computador. / Hello, I\'m Clarice. I read Portuguese, right on your computer.'),
+      ph('NuUr_x5V90hSHzCJ', 'Davi', 'Brazil', 'Eu sou o Davi. Leio qualquer artigo, até sem internet. / I\'m Davi. I read any article, even without the internet.'),
       s('F4', 'pt', 'Female 4', 'Portuguese', 'Olá! Eu leio em português, direto no seu computador. / Hello! I read Portuguese, right on your computer.'),
       k('pf_dora', 'Dora', 'BR', 'Olá, eu sou a Dora. Leio qualquer artigo em voz alta, direto no seu navegador. / Hello, I\'m Dora. I read any article aloud, right in your browser.'),
       k('pm_alex', 'Alex', 'BR', 'Eu sou o Alex. Nada do que você lê sai do seu computador. / I\'m Alex. Nothing you read leaves your computer.'),
@@ -89,6 +101,8 @@
       k('hm_psi', 'Psi', 'IN', 'मैं साई हूँ। मैं इंटरनेट के बिना भी काम करता हूँ। / I\'m Psi. I work without the internet too.'),
     ] },
     { code: 'de', label: 'Deutsch', voices: [
+      ph('3ZKKapPOvuWFcw9f', 'Anton', 'Germany', 'Hallo, ich bin Anton. Ich lese Deutsch, direkt auf Ihrem Computer. / Hi, I\'m Anton. I read German, right on your computer.'),
+      ph('2A2fFf8SkDEJ8nzx', 'Nele', 'Germany', 'Ich bin Nele. Was Sie lesen, bleibt auf Ihrem Gerät. / I\'m Nele. What you read stays on your device.'),
       s('F1', 'de', 'Female 1', 'German', 'Ich lese Deutsch, Russisch, Japanisch und achtundzwanzig weitere Sprachen, alles auf diesem Gerät. / I read German, Russian, Japanese and twenty-eight more languages, all on this device.'),
       p('de_DE-thorsten-high', 'Thorsten', 'Germany'),
       p('de_DE-kerstin-low', 'Kerstin', 'Germany'),

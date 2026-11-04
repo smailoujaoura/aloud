@@ -56,6 +56,20 @@ export const SAMPLES = [
   { file: 'supertonic-M1-es', engine: 'supertonic', voice: 'M1@es', text: 'Leo artículos en español sin enviar nada a ningún sitio.' },
   { file: 'supertonic-F2-ja', engine: 'supertonic', voice: 'F2@ja', text: '日本語の記事も、この端末の中で読み上げます。' },
   { file: 'supertonic-M5-ru', engine: 'supertonic', voice: 'M5@ru', text: 'Я читаю по-русски, и всё это работает без интернета.' },
+  // Phonon (Gradium): the voice on computers. A file per voice id, as its portrait is named.
+  { file: 'phonon-NbpkqMVS3CJeq2j8', engine: 'phonon', voice: 'NbpkqMVS3CJeq2j8', text: "Hi, I'm Zoey. I'm a Phonon voice, and I keep up on any computer, no graphics card needed." },
+  { file: 'phonon-LMDIYE0Oa377Qh6Z', engine: 'phonon', voice: 'LMDIYE0Oa377Qh6Z', text: "I'm Easton. A hundred and two of us came in one download, speaking five languages." },
+  { file: 'phonon-6PWnV0Nq4wu7RVBT', engine: 'phonon', voice: '6PWnV0Nq4wu7RVBT', text: "I'm Maeve. Every Phonon voice has a face, so you always know who's reading to you." },
+  { file: 'phonon-zUCxzrOrugTSis03', engine: 'phonon', voice: 'zUCxzrOrugTSis03', text: "I'm Edwin. Speed me up to twice as fast, and you'll still catch every word." },
+  { file: 'phonon-xPDpsV3F592srkjA', engine: 'phonon', voice: 'xPDpsV3F592srkjA', text: "Captain Silas Blackwater, at your service. I'll read you any story you like, if you promise to listen." },
+  { file: 'phonon-FXxJ9mANRq6BCTX5', engine: 'phonon', voice: 'FXxJ9mANRq6BCTX5', text: 'Bonjour, je suis Noémie. Je lis le français, ici même, sur votre ordinateur.' },
+  { file: 'phonon-Tek4tJXiX6_yvXq7', engine: 'phonon', voice: 'Tek4tJXiX6_yvXq7', text: "Je m'appelle Augustin. Rien de ce que vous lisez ne quitte votre appareil." },
+  { file: 'phonon-3p0eIGbkmny71GlA', engine: 'phonon', voice: '3p0eIGbkmny71GlA', text: 'Hola, soy Lucía. Leo en español, incluso sin conexión a internet.' },
+  { file: 'phonon-VDwnGxAo68C8U8vC', engine: 'phonon', voice: 'VDwnGxAo68C8U8vC', text: 'Soy Ximena, de México. Te leo cualquier artículo en voz alta.' },
+  { file: 'phonon-3ZKKapPOvuWFcw9f', engine: 'phonon', voice: '3ZKKapPOvuWFcw9f', text: 'Hallo, ich bin Anton. Ich lese Deutsch, direkt auf Ihrem Computer.' },
+  { file: 'phonon-2A2fFf8SkDEJ8nzx', engine: 'phonon', voice: '2A2fFf8SkDEJ8nzx', text: 'Ich bin Nele. Was Sie lesen, bleibt auf Ihrem Gerät.' },
+  { file: 'phonon-sGCMzFIA53ppIngM', engine: 'phonon', voice: 'sGCMzFIA53ppIngM', text: 'Olá, eu sou a Clarice. Leio em português, direto no seu computador.' },
+  { file: 'phonon-NuUr_x5V90hSHzCJ', engine: 'phonon', voice: 'NuUr_x5V90hSHzCJ', text: 'Eu sou o Davi. Leio qualquer artigo, até sem internet.' },
 ];
 
 /** The hero demo: the article on the page, sentence by sentence, in Alba's voice. */
