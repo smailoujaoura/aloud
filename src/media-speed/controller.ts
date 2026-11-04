@@ -331,7 +331,7 @@ export class MediaSpeedController {
 
     const { keys } = this.settings;
     if (matchesBinding(e, keys.mute)) {
-      this.toggleMute();
+      if (!e.repeat) this.toggleMute(e.code);
       return;
     }
     const seek = matchesBinding(e, keys.rewind) ? -1 : matchesBinding(e, keys.advance) ? 1 : 0;
@@ -368,15 +368,29 @@ export class MediaSpeedController {
    * Unlike the speed keys, the key is not taken from the page: YouTube, Netflix and most players
    * mute on M themselves, and a player muted behind its back shows its own volume icon wrong. So
    * the page goes first, and only if the sound is as it was a moment later does Aloud switch it.
-   * With nothing to mute, M is left alone entirely: on most pages it means something else.
+   * "A moment later" is after the key comes back up: a player that mutes on keyup, with the key
+   * held longer than a fixed wait, was muted by Aloud and unmuted by itself. Held down, the key
+   * repeats: only the first press counts. With nothing to mute, M is left alone entirely: on
+   * most pages it means something else.
    */
-  private toggleMute(): void {
+  private toggleMute(code: string): void {
     this.prune();
     const media = activeMedia(this.known);
     if (!media) return;
     const silent = (m: Media): boolean => m.muted || m.volume === 0;
     const before = silent(media);
-    window.setTimeout(() => {
+    let decided = false;
+    const onUp = (up: KeyboardEvent): void => {
+      if (up.code === code) window.setTimeout(decide, MUTE_AFTER_PAGE_MS);
+    };
+    // A keyup that never comes (focus moved to another window mid-press) still ends it.
+    const fallback = window.setTimeout(() => decide(), MUTE_AFTER_PAGE_MS + 1000);
+    window.addEventListener('keyup', onUp, true);
+    const decide = (): void => {
+      if (decided) return;
+      decided = true;
+      window.removeEventListener('keyup', onUp, true);
+      window.clearTimeout(fallback);
       if (!media.isConnected) return;
       if (silent(media) === before) {
         if (before) {
@@ -387,7 +401,7 @@ export class MediaSpeedController {
         }
       }
       this.showBadge(silent(media) ? 'Muted' : 'Sound on', media);
-    }, MUTE_AFTER_PAGE_MS);
+    };
   }
 
   // ---- seeking --------------------------------------------------------------------------
@@ -533,7 +547,7 @@ function largestBox(media: Iterable<Media>): DOMRect | null {
  * The player the reader means: the one playing (the largest, if several), else the largest on
  * screen. Shorts keeps the next and previous clips loaded and paused beside the one you watch.
  */
-/** How long the page has to answer the mute key itself (players do it in the same keypress). */
+/** How long after the key comes up the page has had to answer it itself, before Aloud does. */
 const MUTE_AFTER_PAGE_MS = 120;
 
 function activeMedia(media: Iterable<Media>): Media | null {

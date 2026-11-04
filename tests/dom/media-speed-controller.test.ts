@@ -262,7 +262,14 @@ describe('the mute key', () => {
   });
   afterEach(() => vi.useRealTimers());
 
-  const press = (key = 'm') => document.body.dispatchEvent(new KeyboardEvent('keydown', { key, code: `Key${key.toUpperCase()}`, bubbles: true, cancelable: true }));
+  const key = (type: string, key: string, repeat = false) =>
+    document.body.dispatchEvent(new KeyboardEvent(type, { key, code: `Key${key.toUpperCase()}`, bubbles: true, cancelable: true, repeat }));
+  /** A real key press: down, held a little, up. */
+  const press = (k = 'm', held = 80) => {
+    key('keydown', k);
+    vi.advanceTimersByTime(held);
+    key('keyup', k);
+  };
 
   it('mutes and unmutes a player that does not answer M itself, and leaves the key to the page', () => {
     const el = player();
@@ -291,6 +298,44 @@ describe('the mute key', () => {
     press();
     vi.advanceTimersByTime(200);
     expect(el.muted).toBe(false);
+    controller.stop();
+  });
+
+  it('a player that mutes on keyup is muted once, however long the key is held', () => {
+    const el = player();
+    const { controller } = start(null);
+    document.addEventListener('keyup', (e) => {
+      if (e.key === 'm') el.muted = !el.muted;
+    });
+    press('m', 400); // longer than Aloud's wait after keydown used to be
+    vi.advanceTimersByTime(200);
+    expect(el.muted).toBe(true);
+    press('m', 400);
+    vi.advanceTimersByTime(200);
+    expect(el.muted).toBe(false);
+    controller.stop();
+  });
+
+  it('a held key toggles once, not on every repeat', () => {
+    const el = player();
+    const { controller } = start(null);
+    key('keydown', 'm');
+    for (let i = 0; i < 10; i++) {
+      vi.advanceTimersByTime(40);
+      key('keydown', 'm', true);
+    }
+    key('keyup', 'm');
+    vi.advanceTimersByTime(200);
+    expect(el.muted).toBe(true);
+    controller.stop();
+  });
+
+  it('without a keyup (focus left mid-press), it still decides', () => {
+    const el = player();
+    const { controller } = start(null);
+    key('keydown', 'm');
+    vi.advanceTimersByTime(1500);
+    expect(el.muted).toBe(true);
     controller.stop();
   });
 
