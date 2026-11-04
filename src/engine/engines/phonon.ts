@@ -20,9 +20,9 @@
  * The runtime fixes its text normalisation (numbers, dates) when it loads, so each language is
  * its own loaded copy; the two most recent stay loaded, for pages that switch back and forth.
  * Phonon 31M, which it replaced, read only English well (gradium/phonon-31m-en): what a device
- * still has of it is deleted once this model is in.
+ * still has of it is deleted with the other removed engines (model-cache.ts: forgetRemovedEngines).
  */
-import { cacheClear, fetchModelFile } from '@/engine/model-cache';
+import { fetchModelFile } from '@/engine/model-cache';
 import { assetUrl } from '@/engine/runtime-env';
 import { phononVoiceUrl } from '@/shared/engine-catalog';
 import { phononLanguage, type PhononLanguage } from '@/shared/phonon-voices';
@@ -187,8 +187,6 @@ export class PhononEngine implements SynthEngine {
       ]),
     );
     this.files = await ModelFiles.from({ weights, tokenizer, config });
-    // Phonon 31M, from before: no longer read, 65 MB on disk for nothing.
-    void cacheClear('gradium/phonon-31m-en').catch(() => undefined);
 
     ctx.onProgress({ file: 'starting Phonon', loaded: 0, total: 1, phase: 'compile' });
     this.module = await stage('loading the Phonon runtime', async () => (await import(/* @vite-ignore */ assetUrl('vendor/phonon/index.js'))) as PhononModule);

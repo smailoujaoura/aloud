@@ -2391,6 +2391,7 @@
     "modelId": "gradium/phonon-40m-multilingual",
     "$source": "An unmodified copy of gradium/phonon-40m-multilingual at 1537ce46c64f42903e0d608b132ccb073dac46d2 (Gradium's is gated: a browser extension cannot sign in to download it), shared under its licence with credit to Gradium. It reads English, French, German, Spanish and Portuguese; Phonon 31M, used before, read only English well.",
     "license": "CC BY-NC 4.0: non-commercial use only",
+    "licenseUrl": "https://creativecommons.org/licenses/by-nc/4.0/",
     "base": "https://huggingface.co/smailoujaoura/phonon-40m-multilingual/resolve/514a70f83654b3a81844cc01bbe5438254080433",
     "files": {
       "weights": "model.q8.gguf",

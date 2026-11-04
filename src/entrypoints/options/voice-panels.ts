@@ -918,6 +918,17 @@ async function askForServer(base: string): Promise<boolean> {
   return browser.permissions.request({ origins });
 }
 
+/**
+ * "75 MB · CC BY-NC 4.0: …", the licence a link where the model's licence asks for one (Creative
+ * Commons: credit, and a link to the licence).
+ */
+function licenceLine(before: string, licence: string, url: string | undefined): HTMLElement {
+  const line = el(document, 'span', { class: 'vi-meta' }, before);
+  if (!url) line.append(licence);
+  else line.append(el(document, 'a', { href: url, target: '_blank', rel: 'noopener noreferrer' }, licence));
+  return line;
+}
+
 /** Models whose download this page has finished (or tried to): once per page, never in a loop. */
 const finishedOnce = new Set<string>();
 
@@ -949,7 +960,7 @@ function modelCard(
   const text = el(document, 'div', { class: 'mc-text' });
   text.append(
     el(document, 'b', {}, state.downloaded ? `${info.name} is on this device` : `${info.name} model`),
-    el(document, 'span', { class: 'vi-meta' }, `${state.downloaded ? humanBytes(state.bytes) : size} · ${licence}`),
+    licenceLine(`${state.downloaded ? humanBytes(state.bytes) : size} · `, licence, engine === 'phonon' ? ctx.manifest.phonon?.licenseUrl : undefined),
   );
   if (gpuMissing) {
     text.append(el(document, 'span', { class: 'vi-meta' }, `This machine reads with the GPU, which needs Kokoro’s GPU build (${size}). Download it here before you read.`));

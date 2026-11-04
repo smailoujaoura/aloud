@@ -87,3 +87,27 @@ describe('a download that cannot be stored', () => {
     await expect(fetchModelFile('https://hf.co/new/voice.onnx', { label: 'voice', mustStore: true })).rejects.toThrow(/delete a voice you do not use/);
   });
 });
+
+describe('files of engines Aloud no longer reads', () => {
+  let fake: ReturnType<typeof fakeIndexedDb>;
+  beforeEach(() => {
+    vi.resetModules();
+    fake = fakeIndexedDb();
+    vi.stubGlobal('indexedDB', fake.indexedDB);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('Phonon 31M and Supertonic 2 go; Phonon’s model and voices now, and everything else, stay', async () => {
+    const { cachePut, cacheEntries, forgetRemovedEngines } = await import('@/engine/model-cache');
+    const keys = [
+      'https://huggingface.co/gradium/phonon-31m-en/resolve/92741c5b/model.q8.gguf',
+      'https://huggingface.co/Supertone/supertonic-2/resolve/abc/onnx/vocoder.onnx',
+      'https://huggingface.co/smailoujaoura/phonon-40m-multilingual/resolve/514a70f8/model.q8.gguf',
+      'https://huggingface.co/gradium/phonon-voices/resolve/0ee17205/voices/NbpkqMVS3CJeq2j8.safetensors',
+      'https://huggingface.co/rhasspy/piper-voices/resolve/39ab474b/en/en_GB/alba/medium/en_GB-alba-medium.onnx',
+    ];
+    for (const key of keys) await cachePut(key, new ArrayBuffer(4), 'application/octet-stream');
+    expect(await forgetRemovedEngines()).toBe(true);
+    expect((await cacheEntries()).map((e) => e.key).sort()).toEqual(keys.slice(2).sort());
+  });
+});

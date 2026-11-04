@@ -44,7 +44,7 @@ import { applyTheme, watchSystemTheme, THEME_LABEL } from '@/ui/theme';
 import { createThemeSwitch, type ThemeSwitch } from '@/ui/theme-switch';
 import type { ModelManifest } from '@/engine/engines/types';
 
-import { engineDownloaded, piperDownloaded, readCacheSizes, sharedModelBytes, sharedModelInstalled, type CacheSizes } from '@/engine/installed-voices';
+import { engineDownloaded, piperDownloaded, readCacheSizes, sharedModelBytes, type CacheSizes } from '@/engine/installed-voices';
 import { ENGINE_IDS, engineInfo } from '@/shared/engine-catalog';
 import { engineConfigFor } from './engine-config';
 import { renderMediaSpeedPanel } from './media-speed-panel';
@@ -393,7 +393,7 @@ async function render(): Promise<void> {
   }
 }
 
-/** Supertonic 2's files, from before Supertonic 3, are deleted once per page (forgetRemovedEngines). */
+/** Supertonic 2's and Phonon 31M's files, from before their successors, are deleted once per page (forgetRemovedEngines). */
 let removedEnginesChecked = false;
 
 async function renderNow(): Promise<void> {
@@ -405,13 +405,7 @@ async function renderNow(): Promise<void> {
   applyTheme(document, settings.theme);
   for (const control of themeSwitches) control.setTheme(settings.theme);
   const manifest = withServerVoices(await loadManifest(), settings);
-  let sizes = await readCacheSizes();
-  // Phonon 31M, from before Phonon was the multilingual model: no longer read, and counted in
-  // Phonon's size on its card. The engine deletes it too, but only once it next reads.
-  if (sharedModelInstalled('phonon', sizes) && [...sizes.keys()].some((key) => key.includes('gradium/phonon-31m-en'))) {
-    await deleteModels(() => cacheClear('gradium/phonon-31m-en')).catch(() => undefined);
-    sizes = await readCacheSizes();
-  }
+  const sizes = await readCacheSizes();
 
   $<HTMLInputElement>('speed').value = String(settings.speed);
   $('speedOut').textContent = speedLabel(settings.speed);

@@ -241,8 +241,11 @@ export async function deleteModels(fn: () => Promise<void>): Promise<void> {
   if (!done) throw new ModelsInUse();
 }
 
-/** Files Aloud no longer reads: Supertonic-2's, replaced by Supertonic 3. Nothing can read them. */
-const REMOVED_ENGINES = /\/Supertone\/supertonic-2\//;
+/**
+ * Files Aloud no longer reads: Supertonic-2's, replaced by Supertonic 3, and Phonon 31M's, replaced
+ * by Gradium's multilingual model. Nothing can read them.
+ */
+const REMOVED_ENGINES = /\/Supertone\/supertonic-2\/|\/gradium\/phonon-31m-en\//;
 
 /**
  * Delete what is left of removed engines (REMOVED_ENGINES) — hundreds of megabytes nothing will

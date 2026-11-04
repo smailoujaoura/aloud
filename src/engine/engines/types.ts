@@ -78,6 +78,8 @@ export interface SupertonicManifest {
 export interface PhononManifest {
   modelId: string;
   license: string;
+  /** The licence's text, linked where it is named (Creative Commons asks for the link). */
+  licenseUrl?: string;
   /** The model repository at its pinned revision: `.../resolve/<revision>`. */
   base: string;
   files: { weights: string; tokenizer: string; config: string };

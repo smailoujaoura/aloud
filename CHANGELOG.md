@@ -11,8 +11,9 @@ Website-only and documentation changes are not listed: they never reach the exte
   twice as fast as real time on an ordinary processor, no graphics card needed. 37 English voices
   (American, British and a cast of characters, from a pirate captain to a fairy godmother), and 65
   in French, Spanish, German and Portuguese. One 101 MB download, every voice included. Each voice
-  has a face and says what it sounds like, and search finds it ("pirate"). Phonon is licensed for non-commercial
-  use only. New installs on a computer read with Phonon from the start; phones start with Piper.
+  has a face and says what it sounds like, and search finds it ("pirate"). Phonon is licensed for
+  non-commercial use only. New installs on a computer read with Phonon from the start; phones
+  start with Piper.
 - **Your own speech server.** In Settings → Voice → Your own server, point Aloud at a speech
   server you run, such as Kokoro-FastAPI on a PC at home or over Tailscale, and read with its
   voices from any device: the server does the speaking, Aloud does everything else. Works with any
@@ -60,7 +61,6 @@ Website-only and documentation changes are not listed: they never reach the exte
   paragraph or a French phrase quoted in an English article, are read in their own language far
   more often: on lines of one to eight words, Chrome went from about half right to over 80%, and
   Firefox from about two thirds to three quarters. ([#2](https://github.com/smailoujaoura/aloud/issues/2))
-
 - The video speed (1.5×, 2×...) now shows over videos in full screen too, on sites like Loom,
   YouTube and course sites. It was hidden behind the full-screen video.
 
