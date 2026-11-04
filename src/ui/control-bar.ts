@@ -26,6 +26,7 @@ import { resolveTheme, watchSystemTheme } from './theme';
 import type { SleepChoice, SleepState } from '@/content/sleep-timer';
 import { containTyping } from './contain-typing';
 import { genericAvatar } from './voice-avatar';
+import { BottomRoom } from './bottom-room';
 
 /** Where "Save as MP3" is, as the bar shows it. */
 export type ExportState =
@@ -204,6 +205,7 @@ export class ControlBar {
   /** Ends the first row when the bar is stacked (see `fitLayout`). */
   private breakEl!: HTMLElement;
   private resizeWatch: ResizeObserver | null = null;
+  private readonly room: BottomRoom;
   /** The buttons a reader key presses (session.ts: onReaderKey), and their titles without the key. */
   private keyed: Partial<Record<BarAction, HTMLButtonElement>> = {};
   private readonly baseTitles = new Map<BarAction, string>();
@@ -263,6 +265,7 @@ export class ControlBar {
     this.tapToSeek = opts.tapToSeek;
     this.theme = opts.theme;
     this.autoHide = opts.autoHide ?? false;
+    this.room = new BottomRoom(doc);
 
     this.host = doc.createElement('div');
     this.host.id = CONTROL_HOST_ID;
@@ -445,10 +448,17 @@ export class ControlBar {
     this.bar.addEventListener('keydown', (e) => this.onKey(e));
     this.watchScrolling();
     if (typeof ResizeObserver !== 'undefined') {
-      this.resizeWatch = new ResizeObserver(() => this.fitLayout());
+      this.resizeWatch = new ResizeObserver(() => {
+        this.fitLayout();
+        this.makeRoom();
+      });
       this.resizeWatch.observe(this.bar);
       this.offWindow.push(() => this.resizeWatch?.disconnect());
     }
+    const onResize = (): void => this.makeRoom();
+    this.doc.defaultView?.addEventListener('resize', onResize);
+    this.offWindow.push(() => this.doc.defaultView?.removeEventListener('resize', onResize));
+    this.doc.defaultView?.requestAnimationFrame(() => this.makeRoom());
   }
 
   /**
@@ -581,6 +591,21 @@ export class ControlBar {
     if (!view) return this.covered;
     const top = this.bar.getBoundingClientRect().top;
     return top > 0 ? Math.max(0, view.innerHeight - top + 12) : this.covered;
+  }
+
+  /**
+   * Room at the end of the page as tall as the bar (bottom-room.ts), so the last lines can be
+   * scrolled up above it. Measured when the bar is showing; tucked away, it keeps what it had.
+   */
+  private makeRoom(): void {
+    if (!this.tucked) this.covered = this.measureCovered();
+    this.room.setHeight(this.covered);
+  }
+
+  /** The article being read: the room at the end goes after what scrolls it. */
+  reserveRoomFor(content: Element | null): void {
+    this.room.setContent(content);
+    this.makeRoom();
   }
 
   /** Pixels at the bottom of the window the bar covers when showing — for following the reader. */
@@ -919,6 +944,7 @@ export class ControlBar {
     clearTimeout(this.flashTimer);
     this.closePopover();
     this.unwatchTheme();
+    this.room.remove();
     this.host.remove();
   }
 

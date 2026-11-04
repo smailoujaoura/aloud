@@ -141,6 +141,16 @@ export function bestVoiceIndex(engine: EngineId, id: string): number | null {
   return null;
 }
 
+/**
+ * Is `file` a portrait the background may hand to a page (as data: portraits are not
+ * web-accessible)? A file in `portraits/`, by name only. Capitals allowed: Supertonic's styles
+ * (supertonic-F1) and Phonon's voice ids have them, and a lowercase-only check kept every one of
+ * those faces out of the reading bar.
+ */
+export function isPortraitPath(file: unknown): file is string {
+  return typeof file === 'string' && /^\/portraits\/[A-Za-z0-9_-]+\.webp$/.test(file);
+}
+
 /** Every portrait's file, for the test that checks they all exist. */
 export function allPortraitFiles(): string[] {
   return [

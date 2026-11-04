@@ -717,6 +717,8 @@ export class ReaderSession {
     }
 
     this.state.totalChunks = this.playlist.length;
+    // Room at the end of the page for the bar, after what scrolls the article (ui/bottom-room.ts).
+    this.bar?.reserveRoomFor(this.textIndex.root);
     if (this.mode === 'from-cursor') this.startFromCursor();
     // Not on a sentence hidden on the page.
     if (this.playlist.length && !this.readable(this.playlist[this.currentPlayId])) {

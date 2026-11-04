@@ -38,6 +38,7 @@ import { findOwnTab, isOwnTab } from '@/shared/own-tab';
 import { persistChanges, type MarksHandoff } from '@/pdf/annotations/sync';
 import type { Mark } from '@/pdf/annotations/model';
 import { normalizePosition, normalizeStoredMarks } from '@/shared/record-shapes';
+import { isPortraitPath } from '@/ui/voice-portraits';
 
 const CONTENT_FILE = '/reader-inject.js';
 /** The media speed control (src/entrypoints/speed-inject.ts). */
@@ -286,7 +287,7 @@ export default defineBackground({
         // A voice's face for the reading bar's menu: the portraits are not web-accessible (any page
         // could probe for them to recognise Aloud), so they travel as data, one file at a time.
         const file = (m as { file?: unknown }).file;
-        return replyWith(typeof file === 'string' && /^\/portraits\/[a-z0-9_-]+\.webp$/.test(file) ? portraitDataUrl(file).catch(() => null) : Promise.resolve(null));
+        return replyWith(isPortraitPath(file) ? portraitDataUrl(file).catch(() => null) : Promise.resolve(null));
       } else if (m?.type === 'icon-data-url') {
         // The media overlay's artwork, likewise handed over rather than exposed to pages.
         return replyWith(iconDataUrl().catch(() => null));

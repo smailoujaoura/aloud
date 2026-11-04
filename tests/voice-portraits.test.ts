@@ -41,6 +41,12 @@ describe('voicePortrait', () => {
     expect(isBestVoice('kokoro', 'af_heart')).toBe(true);
   });
 
+  it('the background hands every portrait to the reading bar, and nothing outside portraits/', async () => {
+    const { isPortraitPath } = await import('@/ui/voice-portraits');
+    expect(allPortraitFiles().filter((f) => !isPortraitPath(f))).toEqual([]);
+    for (const bad of ['/portraits/../manifest.json', '/options.html', '/portraits/x.webp?y', 'portraits/a.webp', 42]) expect(isPortraitPath(bad)).toBe(false);
+  });
+
   it('ships a file for every portrait it names', () => {
     const missing = allPortraitFiles().filter((f) => !existsSync(resolve('public', `.${f}`)));
     expect(missing).toEqual([]);

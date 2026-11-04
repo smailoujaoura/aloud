@@ -63,6 +63,10 @@ Website-only and documentation changes are not listed: they never reach the exte
   Firefox from about two thirds to three quarters. ([#2](https://github.com/smailoujaoura/aloud/issues/2))
 - The video speed (1.5×, 2×...) now shows over videos in full screen too, on sites like Loom,
   YouTube and course sites. It was hidden behind the full-screen video.
+- Scrolled to the end of a page, the last lines no longer stay hidden under the reading bar: the
+  page gets room at the bottom, as tall as the bar, while it is open.
+- Supertonic voices' faces show on the reading bar's voice button and in its menu; they showed
+  the stand-in avatar there.
 
 ### Changed
 - The voice engine tabs in Settings are short and fit a phone: each engine's name (Phonon, Piper,
