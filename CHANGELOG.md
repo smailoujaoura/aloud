@@ -11,6 +11,10 @@ Website-only and documentation changes are not listed: they never reach the exte
   again, on any site the speed control runs on. Where the player already mutes on M, as YouTube's
   does, its own mute is used. M can be changed in Settings → Video speed.
 
+### Fixed
+- Messages about your own speech server point to the Custom tab, its name in Settings, instead of
+  a tab called "Your own server" that no longer exists.
+
 ## 1.0.1 (2026-11-04)
 
 ### Added

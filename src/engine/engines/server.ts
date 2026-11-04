@@ -34,7 +34,7 @@ export class ServerEngine implements SynthEngine {
   ) {}
 
   async init(ctx: InitContext): Promise<void> {
-    if (!this.base) throw new Error('No server address is set. Add one in Settings → Voice → Your own server.');
+    if (!this.base) throw new Error('No server address is set. Add one in Settings → Voice → Custom.');
     const problem = serverAddressProblem(this.base);
     if (problem) throw new Error(problem);
     this.voice = ctx.voice;
@@ -98,6 +98,6 @@ function refusesSpeed(body: string): boolean {
 
 function refused(base: string, key: string): string {
   return key
-    ? `The speech server at ${base} refused the key. Check it in Settings → Voice → Your own server.`
-    : `The speech server at ${base} asks for a key. Add it in Settings → Voice → Your own server.`;
+    ? `The speech server at ${base} refused the key. Check it in Settings → Voice → Custom.`
+    : `The speech server at ${base} asks for a key. Add it in Settings → Voice → Custom.`;
 }

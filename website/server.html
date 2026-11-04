@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Your own speech server</title>
+<meta name="description" content="Computer or phone too slow for neural voices? Run a speech server on another machine, at home or online, and let Aloud read with it. Step by step, with Docker.">
+<script src="assets/theme.js?v=4eaa486f"></script>
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="canonical" href="https://aloud.souj.dev/server.html">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,400..700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+:root {
+  color-scheme: light;
+  --bg: #fbfbfd; --surface: #ffffff; --surface-2: #f2f2f6;
+  --ink: #17171c; --ink-muted: #54545f; --ink-faint: #6e6e7a;
+  --rule: rgba(20, 20, 35, 0.13); --amber: #8a6300; --ok: #1f7a4d;
+  --display: "Literata", Georgia, serif;
+  --sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #101014; --surface: #191920; --surface-2: #22222b;
+    --ink: #ececf1; --ink-muted: #b0afbd; --ink-faint: #918fa0;
+    --rule: rgba(255, 255, 255, 0.12); --amber: #ffd60a; --ok: #4ade80;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #101014; --surface: #191920; --surface-2: #22222b;
+  --ink: #ececf1; --ink-muted: #b0afbd; --ink-faint: #918fa0;
+  --rule: rgba(255, 255, 255, 0.12); --amber: #ffd60a; --ok: #4ade80;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.65 var(--sans); -webkit-font-smoothing: antialiased; }
+a { color: inherit; text-underline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; border-radius: 4px; }
+.top { border-bottom: 1px solid var(--rule); }
+.top div, main, footer div { max-width: 44rem; margin-inline: auto; padding-inline: 16px; }
+.top div { display: flex; align-items: center; justify-content: space-between; padding-block: 14px; }
+.brand { display: flex; align-items: center; gap: 10px; font: 700 1.15rem/1 var(--display); text-decoration: none; }
+.brand img { width: 28px; height: 28px; }
+.top a.back { font-size: 0.93rem; color: var(--ink-muted); text-decoration: none; }
+main { padding-block: 48px 64px; }
+.eyebrow { font: 500 0.75rem/1.2 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--amber); margin: 0 0 12px; }
+h1 { font: 700 clamp(2rem, 6vw, 2.8rem)/1.1 var(--display); letter-spacing: -0.015em; margin: 0 0 16px; }
+h2 { font: 650 1.35rem/1.25 var(--display); margin: 40px 0 10px; }
+p, li { color: var(--ink-muted); }
+p { margin: 0 0 14px; }
+strong { color: var(--ink); }
+ul { padding-left: 1.2em; margin: 0 0 14px; }
+li { margin-bottom: 6px; }
+.summary { padding: 20px 22px; border: 1px solid var(--rule); border-left: 3px solid var(--ok); border-radius: 12px; background: var(--surface); }
+.summary p { margin: 0; color: var(--ink); }
+.updated { font-size: 0.9rem; color: var(--ink-faint); }
+table { width: 100%; border-collapse: collapse; font-size: 0.95rem; margin: 6px 0 14px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--rule); }
+th { font: 500 0.72rem var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-faint); background: var(--surface-2); }
+td:first-child { color: var(--ink); white-space: nowrap; font: 500 0.88rem var(--mono); }
+td { color: var(--ink-muted); }
+@media (max-width: 560px) { td:first-child { white-space: normal; } }
+footer { border-top: 1px solid var(--rule); padding-block: 28px 40px; font-size: 0.9rem; color: var(--ink-muted); }
+
+.cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 10px 0 18px; }
+@media (max-width: 620px) { .cards { grid-template-columns: minmax(0, 1fr); } }
+.card { padding: 16px 18px; border: 1px solid var(--rule); border-radius: 12px; background: var(--surface); }
+.card h3 { font: 650 1.02rem/1.3 var(--display); margin: 0 0 6px; color: var(--ink); }
+.card p { margin: 0; font-size: 0.95rem; }
+.card.caveat { border-left: 3px solid var(--amber); }
+.speed { display: grid; gap: 10px; margin: 18px 0 8px; }
+.speed-row { display: grid; grid-template-columns: 9.5rem minmax(0, 1fr) 6.5rem; align-items: center; gap: 12px; font-size: 0.92rem; }
+.speed-row span:first-child { color: var(--ink); font-weight: 600; }
+.speed-row span:last-child { font: 500 0.8rem var(--mono); color: var(--ink-faint); text-align: right; }
+.speed-bar { height: 12px; border-radius: 6px; background: var(--surface-2); overflow: hidden; position: relative; }
+.speed-bar i { position: absolute; inset: 0 auto 0 0; border-radius: 6px; background: var(--amber-solid, #ffd60a); }
+.speed-bar i.cpu { background: var(--rule); }
+.speed-bar::after { content: ""; position: absolute; top: -3px; bottom: -3px; left: var(--rt, 50%); width: 2px; background: var(--ink-faint); }
+@media (max-width: 560px) { .speed-row { grid-template-columns: minmax(0, 1fr) 5.5rem; } .speed-bar { grid-column: 1 / -1; grid-row: 2; } }
+details.browser { margin: 10px 0; border: 1px solid var(--rule); border-radius: 12px; background: var(--surface); }
+details.browser > summary { cursor: pointer; list-style: none; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; gap: 12px; color: var(--ink); font-weight: 600; }
+details.browser > summary::-webkit-details-marker { display: none; }
+details.browser > summary small { font-weight: 400; color: var(--ink-faint); font-size: 0.85rem; }
+details.browser > summary::after { content: "+"; font: 500 1.2rem/1 var(--mono); color: var(--ink-faint); }
+details.browser[open] > summary::after { content: "–"; }
+details.browser > div { padding: 0 18px 14px; }
+details.browser ol { padding-left: 1.3em; }
+code { font: 0.86em var(--mono); background: var(--surface-2); border: 1px solid var(--rule); border-radius: 5px; padding: 1px 6px; overflow-wrap: anywhere; color: var(--ink); }
+.copy { font: 600 0.75rem/1 var(--sans); padding: 4px 9px; margin-left: 4px; border-radius: 999px; cursor: pointer; border: 1px solid var(--rule); background: var(--surface); color: var(--ink); vertical-align: 1px; }
+.check { padding: 18px 20px; border: 1px solid var(--rule); border-left: 3px solid var(--ok); border-radius: 12px; background: var(--surface); }
+.check p:last-child { margin: 0; }
+:root { --amber-solid: #ffd60a; }
+.cmd { position: relative; margin: 8px 0 16px; }
+.cmd pre { margin: 0; padding: 14px 16px; padding-right: 76px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface-2); color: var(--ink); font: 0.82rem/1.6 var(--mono); overflow-x: auto; white-space: pre; }
+.cmd .copy { position: absolute; top: 10px; right: 10px; margin: 0; }
+ol.steps { padding-left: 1.3em; margin: 0 0 14px; }
+ol.steps li { margin-bottom: 10px; }
+h3 { font: 650 1.05rem/1.3 var(--display); margin: 24px 0 8px; color: var(--ink); }
+</style>
+</head>
+<body>
+<header class="top"><div><a class="brand" href="./"><img src="assets/icon.svg" alt="">Aloud</a><a class="back" href="./">← Back to Aloud</a></div></header>
+<main>
+  <p class="eyebrow">Your own speech server</p>
+  <h1>Let another computer do the talking.</h1>
+  <p>Aloud makes its voices inside your browser. On an older laptop or a phone that can be slow: the voice stops to catch up, or the richer voices are out of reach. If you have a faster machine somewhere, a desktop at home, a gaming PC, or a small server online, it can make the speech instead. Aloud sends it each sentence, plays what comes back, and highlights along as usual.</p>
+  <div class="summary"><p><strong>The short version.</strong> Start a speech server with one Docker command. Then in Aloud open <strong>Settings → Voice → Custom</strong>, enter the server's address, press <strong>Connect</strong>, and press <strong>Use</strong> on one of its voices.</p></div>
+
+  <h2>Which server?</h2>
+  <p>Aloud works with servers that offer OpenAI's speech API. Three good ones:</p>
+  <div class="cards">
+    <div class="card"><h3>Kokoro on a graphics card</h3><p>Kokoro-FastAPI on an NVIDIA card. Aloud's richest voices, many times faster than speech. The best choice if you have a gaming PC.</p></div>
+    <div class="card"><h3>Kokoro on a processor</h3><p>The same server without a graphics card. Works on any recent PC; a strong desktop keeps up, a small server may not.</p></div>
+    <div class="card"><h3>Phonon on a processor</h3><p>Gradium's own server for Phonon. Fast without a graphics card, so a modest home PC or a cheap server is enough. One language per server. The model is for non-commercial use only.</p></div>
+    <div class="card caveat"><h3>What it costs you</h3><p>Nothing from Aloud: it is your machine. Text you read goes to that machine and nowhere else. A server at home needs to be on while you read.</p></div>
+  </div>
+
+  <h2>1. Install Docker</h2>
+  <p>On Windows and macOS, install <a href="https://www.docker.com/products/docker-desktop/">Docker Desktop</a>. On Linux, install Docker Engine from your distribution or <a href="https://docs.docker.com/engine/install/">Docker's guide</a>.</p>
+  <p>For Kokoro on a graphics card you also need the NVIDIA driver, and on Linux the <a href="https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html">NVIDIA Container Toolkit</a>. On Windows, Docker Desktop with WSL 2 passes the card through by itself.</p>
+
+  <h2>2. Start the server</h2>
+  <p>Pick one, and paste it into a terminal (PowerShell on Windows). The first start downloads the voice model, so give it a minute or two.</p>
+
+  <details class="browser" open>
+    <summary>Kokoro on a graphics card <small>NVIDIA</small></summary>
+    <div>
+      <div class="cmd"><pre>docker run -d --name kokoro --restart unless-stopped --gpus all -p 8880:8880 ghcr.io/remsky/kokoro-fastapi-gpu:v0.9.2</pre><button class="copy" type="button" data-copy="">Copy</button></div>
+    </div>
+  </details>
+  <details class="browser">
+    <summary>Kokoro on a processor <small>any PC</small></summary>
+    <div>
+      <div class="cmd"><pre>docker run -d --name kokoro --restart unless-stopped -p 8880:8880 ghcr.io/remsky/kokoro-fastapi-cpu:v0.9.2</pre><button class="copy" type="button" data-copy="">Copy</button></div>
+    </div>
+  </details>
+  <details class="browser">
+    <summary>Phonon on a processor <small>by Gradium</small></summary>
+    <div>
+      <div class="cmd"><pre>docker run -d --name phonon --restart unless-stopped -p 8880:8880 \
+  -e PTTS_LANG=en -e PTTS_QUANT=q8 \
+  -e PTTS_MODEL=hf://smailoujaoura/phonon-40m-multilingual@514a70f83654b3a81844cc01bbe5438254080433 \
+  ghcr.io/gradium-ai/ptts-openai-server:0.6.0</pre><button class="copy" type="button" data-copy="">Copy</button></div>
+      <p>This is the same model as Aloud's built-in Phonon, from Aloud's mirror of <a href="https://huggingface.co/gradium/phonon-40m-multilingual">Gradium's</a>. <code>PTTS_LANG</code> sets the language it reads: <code>en</code>, <code>fr</code>, <code>de</code>, <code>es</code> or <code>pt</code>. For a second language, start a second server with another name and port, such as <code>--name phonon-fr -p 8881:8880 -e PTTS_LANG=fr</code>. On Windows PowerShell, put it all on one line without the backslashes. Licence: <a href="https://creativecommons.org/licenses/by-nc/4.0/">CC BY-NC 4.0</a>, non-commercial use only.</p>
+    </div>
+  </details>
+
+  <div class="check"><p><strong>Is it running?</strong> On the same computer, open <code>http://localhost:8880/v1/audio/voices</code> in a browser. You should see a list of voice names. If the page does not load yet, the model is still downloading: <code>docker logs -f kokoro</code> (or <code>phonon</code>) shows how far it has got.</p></div>
+
+  <h2>3. Connect Aloud</h2>
+  <ol class="steps">
+    <li>Open Aloud's <strong>Settings → Voice</strong> and choose the <strong>Custom</strong> tab.</li>
+    <li><strong>Address:</strong> <code>http://localhost:8880/v1</code> if the server is on this computer. For one on another machine, see below.</li>
+    <li><strong>Model</strong> and <strong>Key:</strong> leave both empty for a server at home.</li>
+    <li>Press <strong>Connect</strong>. Your browser asks for permission to reach that address, and Firefox also asks whether Aloud may send it page content. Allow both: that is the text being read, and it goes to this address only.</li>
+    <li>It says <strong>Connected</strong> and lists the voices. Press <strong>Use</strong> on one, open an article, and press play.</li>
+  </ol>
+  <p>Every speed works. A server that only reads at normal speed (Phonon's) is asked for 1×, and Aloud speeds the audio up itself. The voice board in the same settings can give the server's voice one language and keep built-in voices for the rest.</p>
+
+  <h2>From your phone or another computer</h2>
+  <h3>On the same Wi-Fi</h3>
+  <p>Use the server computer's address on your network, such as <code>http://192.168.1.20:8880/v1</code>. On Windows, <code>ipconfig</code> shows it (IPv4 Address); on macOS and Linux, your network settings do. If your firewall asks, allow Docker on private networks. Aloud accepts plain <code>http://</code> for addresses on your own network.</p>
+  <h3>Anywhere, privately</h3>
+  <p>Install <a href="https://tailscale.com/download">Tailscale</a> on the server and on your phone or laptop, signed in to the same account. Then use the server's Tailscale name, such as <code>http://my-pc.your-tailnet.ts.net:8880/v1</code>, or its <code>100.x.y.z</code> address. Tailscale encrypts the connection, and nothing is open to the internet.</p>
+
+  <h2>On the internet, with a key</h2>
+  <p>For a server you rent, with a domain name. It has to be reached over <code>https://</code>, and it should ask for a key so strangers cannot use it. This assumes nginx and a certificate (from <a href="https://certbot.eff.org/">Certbot</a>, or Cloudflare's origin certificate if your domain is on Cloudflare).</p>
+  <ol class="steps">
+    <li>Start the server as above, but only for nginx on the same machine: change <code>-p 8880:8880</code> to <code>-p 127.0.0.1:8880:8880</code>.</li>
+    <li>Make a key, and keep it somewhere safe:
+      <div class="cmd"><pre>openssl rand -hex 32</pre><button class="copy" type="button" data-copy="">Copy</button></div></li>
+    <li>Create the site in nginx, with your domain, certificate paths and key:
+      <div class="cmd"><pre># /etc/nginx/sites-available/tts.example.com
+map $http_authorization $tts_key_ok {
+    default                      0;
+    &quot;Bearer PASTE_YOUR_KEY_HERE&quot; 1;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name tts.example.com;
+
+    ssl_certificate     /path/to/fullchain.pem;
+    ssl_certificate_key /path/to/privkey.pem;
+
+    client_max_body_size 64k;
+    access_log off;
+
+    location /v1/ {
+        add_header Access-Control-Allow-Origin  &quot;*&quot; always;
+        add_header Access-Control-Allow-Headers &quot;Authorization, Content-Type&quot; always;
+        add_header Access-Control-Allow-Methods &quot;GET, POST, OPTIONS&quot; always;
+        if ($request_method = OPTIONS) { return 204; }
+        if ($tts_key_ok = 0)           { return 401; }
+        proxy_pass http://127.0.0.1:8880;
+        proxy_http_version 1.1;
+        proxy_buffering off;
+        proxy_read_timeout 120s;
+    }
+
+    location / { return 404; }
+}</pre><button class="copy" type="button" data-copy="">Copy</button></div>
+      Then turn it on and reload:
+      <div class="cmd"><pre>sudo ln -s /etc/nginx/sites-available/tts.example.com /etc/nginx/sites-enabled/
+sudo nginx -t &amp;&amp; sudo systemctl reload nginx</pre><button class="copy" type="button" data-copy="">Copy</button></div>
+      If <code>nginx -t</code> asks you to increase <code>map_hash_bucket_size</code>, add <code>map_hash_bucket_size 128;</code> as the first line inside the <code>http {</code> block of <code>/etc/nginx/nginx.conf</code>. In the site file it is refused as a duplicate.</li>
+    <li>Test it from your own computer. Without the key you should get <code>401</code>; with it, the list of voices:
+      <div class="cmd"><pre>curl -s -o /dev/null -w &quot;%{http_code}\n&quot; https://tts.example.com/v1/audio/voices
+curl -s -H &quot;Authorization: Bearer YOUR_KEY&quot; https://tts.example.com/v1/audio/voices</pre><button class="copy" type="button" data-copy="">Copy</button></div></li>
+    <li>In Aloud: address <code>https://tts.example.com/v1</code>, and paste the key into <strong>Key</strong>, without the word Bearer.</li>
+  </ol>
+  <p>Aloud keeps the key in your browser on that device, sends it only to that server, and never puts it in a backup file. <code>access_log off</code> above keeps nginx from logging requests; the speech servers do not keep the text either.</p>
+
+  <h2>If it doesn't connect</h2>
+  <table>
+    <thead><tr><th scope="col">Aloud says</th><th scope="col">What to do</th></tr></thead>
+    <tbody>
+      <tr><td>Can't reach</td><td>Is the server running (<code>docker ps</code>)? Does the address end in <code>/v1</code>, with the right port? From a phone: is it on the same Wi-Fi, or on Tailscale? Is a firewall in the way?</td></tr>
+      <tr><td>asks for a key</td><td>The server wants a key: paste it into <strong>Key</strong> and connect again.</td></tr>
+      <tr><td>refused the key</td><td>The key is wrong. Paste it again, without "Bearer" and without spaces.</td></tr>
+      <tr><td>only over https://</td><td>The address is on the internet. Put the server behind https as above, or use its address on your network or on Tailscale.</td></tr>
+      <tr><td>may not send text</td><td>The permission was taken back, in your browser's settings or by restoring a backup on another device. Press <strong>Connect</strong> again.</td></tr>
+    </tbody>
+  </table>
+  <p><strong>The voice reads the wrong language.</strong> A Phonon server reads the one language it was started with. Give its voice that language on Aloud's voice board, and let built-in voices read the rest.</p>
+  <p><strong>To stop using it,</strong> press <strong>Remove server</strong> in the Custom tab. Aloud forgets the address and the key, gives the permission back, and returns to its built-in voices.</p>
+
+  <h2>Privacy</h2>
+  <p>With a server set up, the text of each sentence being read goes to the address you entered, and only there. Nothing goes to Aloud, which has no server of its own. The <a href="privacy.html">privacy policy</a> has the details.</p>
+  <p class="updated">Written for Aloud 1.0.1, November 2026.</p>
+</main>
+<footer><div><p>Aloud is made by <a href="https://souj.dev">Smail Oujaoura</a> with <a href="https://claude.com/product/claude-code">Claude Code</a>. This website has no analytics and no tracking cookies; its fonts are served by Google Fonts. <a href="feedback.html">Feedback and bugs</a>.</p></div></footer>
+<script>
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-copy]');
+  if (!b) return;
+  navigator.clipboard?.writeText(b.dataset.copy || b.closest('.cmd')?.querySelector('pre')?.textContent || '').then(() => { const t = b.textContent; b.textContent = 'Copied'; setTimeout(() => (b.textContent = t), 1200); }, () => {});
+});
+</script>
+</body>
+</html>
