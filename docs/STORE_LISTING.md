@@ -184,8 +184,13 @@ reading positions, history and listening statistics, and private-window activity
   > checked against the same SHA-256. Aloud does not run in private windows (`incognito: not_allowed`).
   > On uninstall it opens aloud.souj.dev/feedback.html?bye; the version and browser name follow a
   > `#`, which the browser never sends, so opening it transmits nothing.
+  > Optional, off by default: the reader can point Aloud at their own OpenAI-style speech server
+  > (Settings → Voice → Custom). Page text is then sent only to the address they enter, after a
+  > permission prompt for that host (from the optional `*://*/*`) and, in Firefox, the optional
+  > `websiteContent` data consent; both are checked again before every read, and nothing is sent
+  > if either was taken back.
   > To try it: open any article, press the toolbar button (or Alt+R), then play. The voice model
-  > (Phonon, about 75 MB; Piper, about 60 MB, on Android) downloads on first use.
+  > (Phonon, about 101 MB with its voices, on computers and phones) downloads on first use.
 
 - **Android:** the listing is marked compatible with Firefox for Android (`gecko_android`).
   Piper voices are the ones to recommend on phones; Supertonic 3 works there, slower than speech on
