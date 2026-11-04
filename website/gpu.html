@@ -3,8 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Aloud on your graphics card</title>
+<title>Faster text to speech on your graphics card: Aloud and WebGPU</title>
 <meta name="description" content="Why Aloud's most natural voices run faster on your graphics card, why turning WebGPU on is safe, and how to do it in Chrome, Edge, Brave, Opera, Vivaldi and Firefox.">
+<!-- Link previews need full addresses. The site is served from aloud.souj.dev. -->
+<meta property="og:site_name" content="Aloud">
+<meta property="og:title" content="Faster text to speech on your graphics card: Aloud and WebGPU">
+<meta property="og:description" content="Why Aloud&#x27;s most natural voices run faster on your graphics card, why turning WebGPU on is safe, and how to do it in Chrome, Edge, Brave, Opera, Vivaldi and Firefox.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://aloud.souj.dev/gpu.html">
+<meta property="og:image" content="https://aloud.souj.dev/assets/cover-card.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Aloud's home page: an article read aloud, with its reading bar">
+<meta name="twitter:card" content="summary_large_image">
 <script src="assets/theme.js?v=4eaa486f"></script>
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
 <link rel="canonical" href="https://aloud.souj.dev/gpu.html">
@@ -159,9 +170,9 @@ code { font: 0.86em var(--mono); background: var(--surface-2); border: 1px solid
   </details>
 
   <details class="browser">
-    <summary>Firefox for Android <small>use Piper</small></summary>
+    <summary>Firefox for Android <small>Phonon or Piper</small></summary>
     <div>
-      <p>Firefox on Android does not give extension workers a graphics card. Piper voices are made for exactly this: they read faster than real time on a phone's processor, in 49 languages. Supertonic 3 works too, slower than speech on an older phone, so it pauses to catch up now and then; Kokoro works, but far too slowly to enjoy.</p>
+      <p>Firefox on Android does not give extension workers a graphics card, and the voices that matter most there don't need one. Phonon, the voice Aloud starts with, runs on the processor in English, French, Spanish, German and Portuguese. Piper voices are smaller and quicker still, made for exactly this, in 49 languages. Supertonic 3 works too, slower than speech on an older phone, so it pauses to catch up now and then; Kokoro works, but far too slowly to enjoy.</p>
     </div>
   </details>
 

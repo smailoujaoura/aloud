@@ -3,18 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>How Aloud is built</title>
-<meta name="description" content="Aloud reads any article or PDF aloud in a natural neural voice that runs entirely on your device, highlighting every word as it goes. Free, offline, no account. For Firefox, Firefox for Android and Chrome.">
-<meta property="og:title" content="Aloud: read the web aloud, privately">
-<meta property="og:description" content="324 natural voices that run inside your browser. Works offline, sends nothing anywhere, costs nothing.">
-<meta property="og:type" content="website">
+<title>How Aloud is built: neural text to speech in a browser tab</title>
+<meta name="description" content="From a cluttered web page to a spoken, highlighted sentence, all on your own device: article extraction and four neural voice engines on WebAssembly and WebGPU.">
 <!-- Link previews need full addresses. The site is served from aloud.souj.dev. -->
+<meta property="og:site_name" content="Aloud">
+<meta property="og:title" content="How Aloud is built: neural text to speech in a browser tab">
+<meta property="og:description" content="From a cluttered web page to a spoken, highlighted sentence, all on your own device: article extraction and four neural voice engines on WebAssembly and WebGPU.">
+<meta property="og:type" content="website">
 <meta property="og:url" content="https://aloud.souj.dev/built.html">
-<meta property="og:image" content="https://aloud.souj.dev/assets/cover.webp">
-<meta property="og:image:width" content="1504">
-<meta property="og:image:height" content="900">
-<link rel="canonical" href="https://aloud.souj.dev/built.html">
+<meta property="og:image" content="https://aloud.souj.dev/assets/cover-card.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Aloud's home page: an article read aloud, with its reading bar">
 <meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://aloud.souj.dev/built.html">
 <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#101014" media="(prefers-color-scheme: dark)">
 <script src="assets/theme.js?v=4eaa486f"></script>
@@ -23,7 +25,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400..800;1,7..72,400..600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="assets/site.css?v=014daeab">
-<style>footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }</style>
+<style>footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
+/* The page's main heading, sized as the section headings elsewhere. */
+h1.as-h2 { font-size: clamp(1.85rem, 3.8vw, 2.75rem); line-height: 1.1; font-weight: 650; letter-spacing: -0.015em; font-variation-settings: "opsz" 60; }</style>
 </head>
 <!-- data-stores="live" once any store lists Aloud; "soon" before. A store card still in review
      carries data-soon: it says "Coming soon" and leads nowhere. -->
@@ -46,7 +50,7 @@
     <div class="wrap">
       <div class="head measure">
         <p class="eyebrow">For the curious</p>
-        <h2>A speech engine, an audio scheduler and a PDF reader, inside a browser extension.</h2>
+        <h1 class="as-h2">A speech engine, an audio scheduler and a PDF reader, inside a browser extension.</h1>
         <p class="lede">Aloud is a TypeScript extension with no backend. From a cluttered web page to a spoken, highlighted sentence, every step runs on your machine.</p>
       </div>
       <ol class="pipe">
