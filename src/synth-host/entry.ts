@@ -28,7 +28,7 @@ import type { EngineConfig, WorkerRequest, WorkerResponse } from '@/engine/proto
 import { capabilities } from '@/shared/browser-env';
 import { probeGpu } from '@/shared/gpu-probe';
 import { keyFor } from '@/shared/server-key-match';
-import { noConsentMessage, serverConsented, type PermissionsLike } from '@/shared/server-consent';
+import { noConsentMessage } from '@/shared/server-consent';
 import { JobQueue } from './job-queue';
 import { MAX_POOL, autoPoolSize, clampPool, piperPoolForRate, poolSizeForProvider } from './pool-size';
 
@@ -455,10 +455,13 @@ function teardown(): void {
 }
 
 async function startPool(given: Extract<WorkerRequest, { kind: 'init' }>, gen: number): Promise<void> {
-  // The reader's own server: only with the reader's permission, asked again now (server-consent.ts).
+  // The reader's own server: only with the reader's permission, asked again now (server-consent.ts),
+  // and asked of the background. Firefox answers permissions.contains "no" in this frame, which
+  // sits inside the web page, for permissions the extension holds: every server read failed there.
   if (given.config.engine === 'server' && given.config.server) {
     const url = given.config.server.url;
-    if (!(await serverConsented(url, extensionPermissions(), isFirefox()))) {
+    const reply = (await askBackground({ type: 'server-consent', url })) as { ok?: boolean } | undefined;
+    if (reply?.ok !== true) {
       if (disposed || gen !== initGeneration) return;
       fatalToContent('consent', noConsentMessage(url));
       return;
@@ -628,18 +631,6 @@ window.addEventListener('message', (ev: MessageEvent) => {
   });
 });
 
-/** The permissions API of whichever namespace this browser has (promise-based in both in MV3). */
-function extensionPermissions(): PermissionsLike | undefined {
-  const scope = globalThis as { browser?: { permissions?: PermissionsLike }; chrome?: { permissions?: PermissionsLike } };
-  return scope.browser?.permissions ?? scope.chrome?.permissions;
-}
-
-/** Firefox: the only browser with `runtime.getBrowserInfo` (and with data-collection consent). */
-function isFirefox(): boolean {
-  const scope = globalThis as { browser?: { runtime?: { getBrowserInfo?: unknown } } };
-  return typeof scope.browser?.runtime?.getBrowserInfo === 'function';
-}
-
 /** storage.local `serverKey` as stored (shared/server-key.ts), through whichever API this browser has. */
 async function readServerKey(): Promise<unknown> {
   type Local = { get: (key: string, callback?: (items: Record<string, unknown>) => void) => Promise<Record<string, unknown>> | void };
@@ -662,27 +653,28 @@ async function readServerKey(): Promise<unknown> {
 }
 
 async function redeemTicket(ticket: unknown): Promise<boolean> {
+  const reply = (await askBackground({ type: 'synth-ticket-redeem', ticket })) as { ok?: boolean } | undefined;
+  return reply?.ok === true;
+}
+
+/** A message to the background, and its answer (undefined if it could not be asked). */
+async function askBackground(message: unknown): Promise<unknown> {
   type Runtime = { sendMessage?: (m: unknown, callback?: (reply: unknown) => void) => Promise<unknown> | void; lastError?: unknown };
   const scope = globalThis as { browser?: { runtime?: Runtime }; chrome?: { runtime?: Runtime } };
-  const message = { type: 'synth-ticket-redeem', ticket };
   try {
     // `browser.*` returns a promise everywhere it exists (Firefox). `chrome.*` is asked with a
     // callback, which every Chromium supports, rather than trusting it to return a promise.
-    if (scope.browser?.runtime?.sendMessage) {
-      const reply = (await scope.browser.runtime.sendMessage(message)) as { ok?: boolean } | undefined;
-      return reply?.ok === true;
-    }
+    if (scope.browser?.runtime?.sendMessage) return await scope.browser.runtime.sendMessage(message);
     const runtime = scope.chrome?.runtime;
-    if (!runtime?.sendMessage) return false;
-    const reply = await new Promise<unknown>((resolve) => {
+    if (!runtime?.sendMessage) return undefined;
+    return await new Promise<unknown>((resolve) => {
       runtime.sendMessage!(message, (answer) => {
         void runtime.lastError; // read, so Chromium does not log an unchecked error
         resolve(answer);
       });
     });
-    return (reply as { ok?: boolean } | undefined)?.ok === true;
   } catch {
-    return false;
+    return undefined;
   }
 }
 

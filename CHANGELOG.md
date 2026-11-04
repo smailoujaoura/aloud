@@ -4,20 +4,6 @@ What changed in each version of Aloud, in the words used for the store release n
 go under **Unreleased** as they are made; a release renames that section to its version and date.
 Website-only and documentation changes are not listed: they never reach the extension.
 
-## Unreleased
-
-### Added
-- **Mute key for videos.** M turns the sound of the video or audio you're watching off, and on
-  again, on any site the speed control runs on. Where the player already mutes on M, as YouTube's
-  does, its own mute is used. M can be changed in Settings → Video speed.
-
-### Fixed
-- On phones the reading bar is two rows instead of three: the progress is a thin line along its
-  top edge, with the sentence count and time left at its end, and it still takes a tap or a drag.
-  On narrow phones the close button no longer falls off the edge of the bar.
-- Messages about your own speech server point to the Custom tab, its name in Settings, instead of
-  a tab called "Your own server" that no longer exists.
-
 ## 1.0.1 (2026-11-04)
 
 ### Added
@@ -28,19 +14,25 @@ Website-only and documentation changes are not listed: they never reach the exte
   has a face and says what it sounds like, and search finds it ("pirate"). Phonon is licensed for
   non-commercial use only. New installs on a computer read with Phonon from the start; phones
   start with Piper.
-- **Your own speech server.** In Settings → Voice → Your own server, point Aloud at a speech
+- **Your own speech server.** In Settings → Voice → Custom, point Aloud at a speech
   server you run, such as Kokoro-FastAPI on a PC at home or over Tailscale, and read with its
   voices from any device: the server does the speaking, Aloud does everything else. Works with any
   OpenAI-style speech API. Text goes only to the address you enter, after you allow it, and
-  stops if you take that permission back. A server that asks for a key gets one (kept on this device only, never in backups), and a
-  server on the internet is only reached over https.
+  stops if you take that permission back. A server that asks for a key gets one (kept on this
+  device only, never in backups), and a server on the internet is only reached over https.
   ([#9](https://github.com/smailoujaoura/aloud/issues/9))
 - **Video speed on phones.** A phone has no keys, so the video speed control was out of reach
   there. Now a small speed button sits on the video, appearing when it starts or when you tap
   it: tap it for − and +, tap the number for normal speed. Settings → Video speed has one switch
   to show it on every video. It shows in full screen too.
+- **Mute key for videos.** M turns the sound of the video or audio you're watching off, and on
+  again, on any site the speed control runs on. Where the player already mutes on M, as YouTube's
+  does, its own mute is used. M can be changed in Settings → Video speed.
 
 ### Fixed
+- On phones the reading bar is two rows instead of three: the progress is a thin line along its
+  top edge, with the sentence count and time left at its end, and it still takes a tap or a drag.
+  On narrow phones the close button no longer falls off the edge of the bar.
 - Text in a writing system none of your voices can read (Chinese, Japanese, Russian, Arabic and
   others, when no voice for that language is downloaded) is now skipped, and the bar says so with
   a **Get one** button, instead of being read by an English voice as noise. Languages written in

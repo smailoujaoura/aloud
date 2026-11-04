@@ -39,6 +39,7 @@ import { persistChanges, type MarksHandoff } from '@/pdf/annotations/sync';
 import type { Mark } from '@/pdf/annotations/model';
 import { normalizePosition, normalizeStoredMarks } from '@/shared/record-shapes';
 import { isPortraitPath } from '@/ui/voice-portraits';
+import { serverConsented, type PermissionsLike } from '@/shared/server-consent';
 
 const CONTENT_FILE = '/reader-inject.js';
 /** The media speed control (src/entrypoints/speed-inject.ts). */
@@ -275,6 +276,13 @@ export default defineBackground({
         return replyWith({ ticket: mintSynthTicket() });
       } else if (m?.type === 'synth-ticket-redeem') {
         return replyWith({ ok: redeemSynthTicket((m as { ticket?: unknown }).ticket) });
+      } else if (m?.type === 'server-consent') {
+        // May the synthesis host send text to the reader's own server? Asked here: in Firefox the
+        // host, a frame inside the web page, is told "no" by permissions.contains for permissions
+        // the extension holds (server-consent.ts).
+        const url = (m as { url?: unknown }).url;
+        const asked = typeof url === 'string' ? serverConsented(url, browser.permissions as unknown as PermissionsLike, import.meta.env.BROWSER === 'firefox') : Promise.resolve(false);
+        return replyWith(asked.catch(() => false).then((ok) => ({ ok })));
       } else if (m?.type === 'storage-lock') {
         // One writer at a time per stored value, across every context (shared/storage-lock.ts).
         const key = (m as { key?: string }).key;

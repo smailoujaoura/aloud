@@ -25,7 +25,7 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 > • PDFs too: real pages, highlighted where the text sits; mark them up and save the marks into the file
 > • Picks up at the sentence you stopped at; a reading queue for later; save any article as an MP3
 > • Highlights, notes and tags on any website, kept on your device and exportable as Markdown
-> • The same keys for reading and for any video or audio on the web: S slower, D faster, R normal speed, Z back, X forward (on a phone, a speed button on the video). It can also stop videos that play by themselves
+> • The same keys for reading and for any video or audio on the web: S slower, D faster, R normal speed, Z back, X forward, M mute (on a phone, a speed button on the video). It can also stop videos that play by themselves
 > • Every key can be changed. Light and dark themes. Works on Firefox for Android too.
 >
 > Private by construction: there is no Aloud server. Voices download once from Hugging Face; after
@@ -46,6 +46,7 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 > • Phonon voices by Gradium: natural voices that read about twice as fast as real time on any processor. 102 voices in English, French, Spanish, German and Portuguese, each with a face, in one 101 MB download. The default on computers. Licensed for non-commercial use.
 > • Your own speech server: read with Kokoro-FastAPI or any OpenAI-style speech server you run, at home, over Tailscale, or over the internet with a key.
 > • Video speed on phones: a speed button on the video, in full screen too.
+> • M mutes and unmutes the video you're watching, like the speed keys.
 >
 > Fixed
 > • Text in a script none of your voices can read is skipped, with a Get one button, instead of being read as noise.
@@ -53,6 +54,7 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 > • Short phrases in another language are recognised far more often.
 > • Read from here starts at the sentence you right-clicked.
 > • The bar no longer jumps to two rows at sentence 10, and the video speed shows in full screen.
+> • On phones the reading bar is two rows instead of three, with the progress as a thin line along its top.
 > • PDFs: rotated pages are read, two PDFs with the same name keep separate places, and the newest file chosen wins.
 > • Sites that show each article at its own #/ address keep a place and notes per article.
 > • A download that does not fit no longer damages the voices you have.
