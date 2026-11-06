@@ -4,7 +4,7 @@ What changed in each version of Aloud, in the words used for the store release n
 go under **Unreleased** as they are made; a release renames that section to its version and date.
 Website-only and documentation changes are not listed: they never reach the extension.
 
-## Unreleased
+## 1.0.2 (2026-11-06)
 
 ### Added
 - **Articles inside frames.** A page that shows its text in an embedded frame from another site,

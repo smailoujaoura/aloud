@@ -82,7 +82,7 @@ footer { border-top: 1px solid var(--rule); padding-block: 28px 40px; font-size:
 <main>
   <p class="eyebrow">Privacy policy</p>
   <h1>Aloud collects nothing.</h1>
-  <p class="updated">In effect from 4 November 2026, for Aloud 1.0.1 on Firefox, Firefox for Android and Chromium browsers.</p>
+  <p class="updated">In effect from 6 November 2026, for Aloud 1.0.2 on Firefox, Firefox for Android and Chromium browsers.</p>
 
   <div class="summary"><p>There is no Aloud server, account, analytics, telemetry, advertising or crash reporting. What you read, and everything you keep in Aloud, stays in your browser on your device. Nothing is collected, sold or shared. The developer hears from you only if you choose to send feedback.</p></div>
 
@@ -115,7 +115,7 @@ footer { border-top: 1px solid var(--rule); padding-block: 28px 40px; font-size:
   <p>On Chrome and other Chromium browsers, Aloud's use of information complies with the <a href="https://developer.chrome.com/docs/webstore/program-policies/policies">Chrome Web Store User Data Policy</a>, including the <a href="https://developer.chrome.com/docs/webstore/program-policies/limited-use">Limited Use requirements</a>.</p>
 
   <h2>Access to websites</h2>
-  <p>Aloud runs on a page only when you start it there: with its button, a keyboard shortcut or the right-click menu. Or on sites you add to a list in Settings, each of which your browser asks you to approve. It does not run on every site by default.</p>
+  <p>Aloud runs on a page only when you start it there: with its button, a keyboard shortcut or the right-click menu. Or on sites you add to a list in Settings, each of which your browser asks you to approve. It does not run on every site by default. When a page shows its text in an embedded page from another site (as Claude's artifacts do), Aloud offers to read that embedded page, and runs in it only once you allow that site.</p>
 
   <h2>Permissions, and why</h2>
   <table>
@@ -125,7 +125,7 @@ footer { border-top: 1px solid var(--rule); padding-block: 28px 40px; font-size:
       <tr><td>storage, unlimitedStorage</td><td>Keeping your settings, notes and queue, and voice models that are tens to hundreds of megabytes, on your device.</td></tr>
       <tr><td>contextMenus</td><td>The right-click items: read a selection or from a point, keep a highlight, show your notes, add a page or link to your queue.</td></tr>
       <tr><td>file:// (Chromium)</td><td>Reading PDFs saved on your computer, once you turn on "Allow access to file URLs".</td></tr>
-      <tr><td>Optional: one site, when you ask</td><td>Opening a PDF from that site, or adding a link from it to your reading queue, so Aloud can fetch it. Your browser asks you for that one site first.</td></tr>
+      <tr><td>Optional: one site, when you ask</td><td>Opening a PDF from that site, or adding a link from it to your reading queue, so Aloud can fetch it. Or reading an article a page shows in an embedded page from that site: Aloud runs the reader in that embedded page, as it would on the page itself. Your browser asks you for that one site first.</td></tr>
       <tr><td>Optional: sites you add</td><td>Starting the video speed control or your highlights by themselves on those sites. Asked for one site at a time.</td></tr>
       <tr><td>Optional: your speech server</td><td>Sending the sentences being read to the one address you entered for your own speech server, and nothing else. Asked when you connect it; on Firefox, together with your consent to share website content with it.</td></tr>
       <tr><td>Optional: downloads (Firefox)</td><td>Saving a PDF with your marks as a file, where the browser cannot save it in place. Asked the first time you save.</td></tr>

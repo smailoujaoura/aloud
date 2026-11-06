@@ -1,6 +1,6 @@
 # Store submission: what to paste where
 
-Everything below matches Aloud 1.0.1 as built (`npm run zip`). If the manifest's permissions
+Everything below matches Aloud 1.0.2 as built (`npm run zip`). If the manifest's permissions
 change, change the justifications here too: both stores compare them.
 
 ## Shared listing text
@@ -27,6 +27,7 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 > • 324 natural voices in 52 languages, from four neural engines: Phonon, Supertonic 3, Kokoro-82M and Piper
 > • Reads the article, not the menus and ads, and highlights the sentence and the word in place
 > • A page in two languages? Each passage is read by a voice that speaks it
+> • Reads pages that show their text in an embedded page (Claude artifacts) or inside web components (MSN)
 > • PDFs too: real pages, highlighted where the text sits; mark them up and save the marks into the file
 > • Picks up at the sentence you stopped at; a reading queue for later; save any article as an MP3
 > • Highlights, notes and tags on any website, kept on your device and exportable as Markdown
@@ -44,6 +45,13 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 **Website:** https://aloud.souj.dev — **Privacy policy:** https://aloud.souj.dev/privacy.html
 
 **Support:** https://aloud.souj.dev/feedback.html (bugs go to GitHub issues from there)
+
+## Release notes for 1.0.2 (AMO's version notes; plain text)
+
+> New
+> • Pages that show their text in an embedded page from another site, such as Claude's artifacts, are read: Aloud offers to read the embedded page and asks once for that site.
+> • Pages built from web components, such as MSN's articles, are read, with their highlights. When "Continue reading" reveals the rest of an article, the rest is read too.
+> • Read selection and Read from here work inside embedded pages.
 
 ## Release notes for 1.0.1 (AMO's version notes; plain text)
 
@@ -148,10 +156,10 @@ reading positions, history and listening statistics, and private-window activity
 
 - **Data collection:** the manifest declares `data_collection_permissions: { required: ["none"], optional: ["websiteContent"] }`:
   the optional one is asked for only when a reader sets up their own speech server (see above).
-- **Source code:** upload `.output/tts-reader-1.0.1-sources.zip` with this note for the reviewer
-  (AMO's field takes at most 3,000 characters; this is about 2,250):
+- **Source code:** upload `.output/tts-reader-1.0.2-sources.zip` with this note for the reviewer
+  (AMO's field takes at most 3,000 characters; keep it under 2,900):
 
-  > Build: Node 22.23, npm 10.9, Linux: npm ci && npm run build:firefox (the archive's .npmrc sets legacy-peer-deps, which the lockfile needs). No network is needed after npm ci: the voice catalogue (public/models.json) is committed. Output: .output/firefox-mv3/, byte-identical to the uploaded package (checked by building the source archive in a clean folder and comparing all 466 files' SHA-256). Nothing is minified.
+  > Build: Node 22.23, npm 10.9, Linux: npm ci && npm run build:firefox (the archive's .npmrc sets legacy-peer-deps, which the lockfile needs). No network is needed after npm ci: the voice catalogue (public/models.json) is committed. Output: .output/firefox-mv3/, byte-identical to the uploaded package (checked by building the source archive in a clean folder and comparing all 468 files' SHA-256). Nothing is minified.
   >
   > Vendored, unmodified npm files (ONNX Runtime Web, pdf.js, piper-phonemize WASM, and phonon-tts 0.4.2, Gradium's Phonon runtime, its WASM built from https://github.com/gradium-ai/xn-ptts) are copied from node_modules by scripts/sync-assets.mjs and pinned by the lockfile; versions in THIRD_PARTY.md. phonon-tts gets its model as local blob: URLs of files Aloud downloaded and checked itself, so its own Hugging Face lookup (hub.js) never runs.
   >
@@ -163,17 +171,18 @@ reading positions, history and listening statistics, and private-window activity
   >
   > No private windows (incognito: not_allowed). On uninstall it opens aloud.souj.dev/feedback.html?bye; the version and browser follow a #, so nothing is transmitted.
   >
+  > frame-ask.html, the second web-accessible page: the "Read it" button on a page whose article is in a frame from another site (a Claude artifact). Only a click in an extension page may call permissions.request, so the button is one; it requests only the site named by a one-time ticket the background issued for that tab (storage.session), so a site embedding it can make it ask for nothing.
+  >
   > To try it: open an article, press the toolbar button (or Alt+R), then play. Phonon (about 101 MB with its voices) downloads on first use.
 
 - **Android:** the listing is marked compatible with Firefox for Android (`gecko_android`).
-  Piper voices are the ones to recommend on phones; Supertonic 3 works there, slower than speech on
-  older phones; Kokoro is too heavy for them. Phonon is untested on phones so far.
+  Phonon is the default there too (one worker); Piper voices are the smallest and quickest for older
+  phones; Supertonic 3 works, slower than speech on older phones; Kokoro is too heavy for them.
 
 ## Before pressing submit
 
-- [ ] 1.0.2: privacy.html's permission table says Aloud may also ask for one site to read an
-      article a page shows in a frame from it (frame-ask.html), with a new "In effect from" date;
-      AMO's reviewer note mentions frame-ask.html, the second web-accessible page
+- [ ] The privacy policy deployed (website/privacy.html, in effect from 6 November 2026 for 1.0.2:
+      reading an article in an embedded page from another site, after the reader allows that site)
 
 - [ ] `data-stores="live"` on `website/index.html` `<body>`, and the three store URLs checked
 - [ ] The Piper voice licences reviewed (PIPER_VOICE_LICENCES.md; regenerate with `node scripts/piper-licences.mjs` if the catalogue changed)
