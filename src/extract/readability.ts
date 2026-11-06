@@ -9,6 +9,7 @@
 import { Readability, isProbablyReaderable } from '@mozilla/readability';
 import { markUnread } from '@/content/skip-rules';
 import { Eligibility, invisible, revealPending } from './eligibility';
+import { articleRootFrom, FLAT_MARK, flatCopy, hasShadowRoots } from './flat-tree';
 
 /**
  * Prune Readability's copy of the page using what the *live* page shows. The copy has lost the
@@ -80,6 +81,12 @@ export interface ExtractedArticle {
   html: string;
   /** True when the page looked like a real article. */
   readerable: boolean;
+  /** Found inside web components (flat-tree.ts): the live root is looked for there too. */
+  flat?: boolean;
+  /** Where on the live page that article is, when it was found that way (articleRootFrom). */
+  liveRoot?: Element;
+  /** Its blocks on the live page: only their text is read (MSN keeps promotions beside them). */
+  liveBlocks?: Element[];
 }
 
 const BLOCK_TAGS = new Set([
@@ -165,13 +172,36 @@ export function extractArticle(doc: Document = document, opts: { forSaving?: boo
     // fall through to the heuristic below
   }
 
+  // Too little, on a page drawn with web components (MSN): the same, on a copy with their
+  // contents in place.
+  let flat = false;
+  let liveRoot: { root: Element; blocks: Element[] } | null = null;
+  if ((!text || text.length < 200) && hasShadowRoots(doc)) {
+    try {
+      const live = new Map<string, Element>();
+      const article = new Readability(flatCopy(doc, live), { charThreshold: 250, keepClasses: false }).parse();
+      const found = (article?.textContent ?? '').replace(/\n{2,}/g, '\n').trim();
+      if (article && found.length >= 200) {
+        title = article.title || title;
+        byline = article.byline ?? null;
+        liveRoot = articleRootFrom(article.content ?? '', live, doc);
+        // The marks tie the copy to this page only: not kept in what is saved.
+        html = (article.content ?? '').replace(new RegExp(` ${FLAT_MARK}="\\d+"`, 'g'), '');
+        text = found;
+        flat = true;
+      }
+    } catch {
+      /* the heuristic below */
+    }
+  }
+
   if (!text || text.length < 200) {
     // Readability bailed (docs pages, wikis, forums). Fall back to the largest sensible block.
     const container = pickLargestTextBlock(doc);
     if (container) text = elementToText(container, new Eligibility());
   }
 
-  return { title: title.trim(), text, lang, byline, html, readerable };
+  return { title: title.trim(), text, lang, byline, html, readerable, ...(flat ? { flat } : {}), ...(liveRoot ? { liveRoot: liveRoot.root, liveBlocks: liveRoot.blocks } : {}) };
 }
 
 function safeIsReaderable(doc: Document): boolean {

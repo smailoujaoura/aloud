@@ -11,6 +11,10 @@ Website-only and documentation changes are not listed: they never reach the exte
   such as Claude's artifacts, an embedded report or a newsletter reader, is read: Aloud reads the
   frame, after asking once for that site. Before, it said "This page doesn't look like an
   article". Read selection and Read from here work inside such frames too.
+- **Pages built from web components**, such as MSN's articles, are read. Their text sits inside
+  components, where Aloud did not look, so it found no article. Aloud now reads the article's
+  paragraphs, not the promotions around them, highlights inside the components, and when a
+  "Continue reading" button reveals the rest, the rest is read too.
 
 ## 1.0.1 (2026-11-04)
 

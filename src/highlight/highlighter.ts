@@ -67,6 +67,11 @@ export class Highlighter {
   private wordHighlight: Highlight | null = null;
   private currentSpan: HTMLElement | null = null;
   private styleEl: HTMLStyleElement | null = null;
+  /**
+   * The same rules inside each web component holding text being read (MSN): a page's stylesheet
+   * does not reach into a shadow root, and its `::highlight()` rules with it.
+   */
+  private readonly shadowStyles = new Map<ShadowRoot, HTMLStyleElement>();
   private lastScroll = 0;
   private readonly reduceMotion: boolean;
 
@@ -148,6 +153,19 @@ export class Highlighter {
     `;
     (this.doc.head ?? this.doc.documentElement).appendChild(style);
     this.styleEl = style;
+    for (const root of [...this.shadowStyles.keys()]) this.styleShadowRoots([root]);
+  }
+
+  /** Paint highlights inside these web components too (flat-tree.ts: shadowRootsOf). */
+  styleShadowRoots(roots: readonly ShadowRoot[]): void {
+    if (!this.styleEl) return;
+    for (const root of roots) {
+      this.shadowStyles.get(root)?.remove();
+      const copy = this.doc.createElement('style');
+      copy.textContent = this.styleEl.textContent;
+      root.append(copy);
+      this.shadowStyles.set(root, copy);
+    }
   }
 
   setOptions(opts: Partial<HighlighterOptions>): void {
@@ -387,6 +405,8 @@ export class Highlighter {
     this.wordHighlight = null;
     this.styleEl?.remove();
     this.styleEl = null;
+    for (const style of this.shadowStyles.values()) style.remove();
+    this.shadowStyles.clear();
   }
 }
 

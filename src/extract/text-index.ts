@@ -8,6 +8,7 @@
  */
 
 import { Eligibility } from './eligibility';
+import { flatNodes, hasShadowRoots, renderedParent } from './flat-tree';
 
 export const BLOCK_TAGS = new Set([
   'P', 'DIV', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'PRE',
@@ -58,10 +59,10 @@ export function isHidden(el: Element): boolean {
 }
 
 export function nearestBlock(node: Node, root: Element): Element {
-  let el: Element | null = node.parentElement;
+  let el: Element | null = renderedParent(node);
   while (el && el !== root) {
     if (BLOCK_TAGS.has(el.tagName)) return el;
-    el = el.parentElement;
+    el = renderedParent(el);
   }
   return root;
 }
@@ -74,38 +75,62 @@ export function nearestBlock(node: Node, root: Element): Element {
  * is never prose), and text that is not rendered *now* is kept but marked ineligible, so revealing
  * a translation while reading makes it readable in place, without rebuilding the plan.
  */
-export function buildTextIndex(root: Element, opts: { forReader?: boolean; skip?: string } = {}): TextIndex {
+export function buildTextIndex(root: Element, opts: { forReader?: boolean; skip?: string; within?: ReadonlySet<Element> } = {}): TextIndex {
   const doc = root.ownerDocument;
   const pieces: Piece[] = [];
   let full = '';
   let prevBlock: Element | null = null;
   const reader = opts.forReader ? new Eligibility(opts.skip ?? '') : null;
 
+  // Inside web components (MSN): the text is walked as it is drawn (flat-tree.ts), and every check
+  // below goes up through the rendered parents. A page without them takes the TreeWalker, as before.
+  const flat = hasShadowRoots(root);
+  const parentOf = flat ? renderedParent : (n: Node): Element | null => n.parentElement;
+
+  /** Is this text part of what is indexed? */
+  const acceptText = (node: Node): boolean => {
+    const text = node.nodeValue;
+    if (!text) return false;
+    // Only spaces: kept by the reader as a word break (below), never as text of its own.
+    if (!text.trim()) return reader !== null;
+    // `within`: an article traced back from a flat copy (flat-tree.ts) is its blocks, not
+    // whatever else shares their container.
+    let kept = !opts.within;
+    for (let el = parentOf(node); el; el = el === root ? null : parentOf(el)) {
+      if (SKIP_TAGS.has(el.tagName)) return false;
+      if (!kept && opts.within!.has(el)) kept = true;
+      // The reader keeps `aria-hidden` and `hidden` text as hidden candidates rather than leaving
+      // it out: a disclosure that reveals a translation removes both, and text never indexed
+      // could not be read once it appeared (Eligibility treats both as hidden meanwhile).
+      if (!reader && el.getAttribute('aria-hidden') === 'true') return false;
+      if (!reader && el.hasAttribute('hidden')) return false;
+    }
+    if (!kept) return false;
+    const parent = parentOf(node);
+    if (reader) return !(parent && reader.inControl(parent, root));
+    // Visibility check only on the direct parent — cheap and catches the common cases.
+    return !(parent && isHidden(parent));
+  };
+
   // The reader also sees <br>: a line break between two words is a word break ("quanti.<br>“Santo"
   // read and highlighted as one word, and the word marks drifted by one from there).
-  const walker = doc.createTreeWalker(root, reader ? NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT : NodeFilter.SHOW_TEXT, {
-    acceptNode(node: Node): number {
-      if (node.nodeType === Node.ELEMENT_NODE) return (node as Element).tagName === 'BR' ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
-      const text = node.nodeValue;
-      if (!text) return NodeFilter.FILTER_REJECT;
-      // Only spaces: kept by the reader as a word break (below), never as text of its own.
-      if (!text.trim()) return reader ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
-      for (let el = node.parentElement; el && el !== root.parentElement; el = el.parentElement) {
-        if (SKIP_TAGS.has(el.tagName)) return NodeFilter.FILTER_REJECT;
-        // The reader keeps `aria-hidden` and `hidden` text as hidden candidates rather than leaving
-        // it out: a disclosure that reveals a translation removes both, and text never indexed
-        // could not be read once it appeared (Eligibility treats both as hidden meanwhile).
-        if (!reader && el.getAttribute('aria-hidden') === 'true') return NodeFilter.FILTER_REJECT;
-        if (!reader && el.hasAttribute('hidden')) return NodeFilter.FILTER_REJECT;
-      }
-      if (reader) {
-        return node.parentElement && reader.inControl(node.parentElement, root) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
-      }
-      // Visibility check only on the direct parent — cheap and catches the common cases.
-      if (node.parentElement && isHidden(node.parentElement)) return NodeFilter.FILTER_REJECT;
-      return NodeFilter.FILTER_ACCEPT;
-    },
-  });
+  const walker = flat
+    ? null
+    : doc.createTreeWalker(root, reader ? NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT : NodeFilter.SHOW_TEXT, {
+        acceptNode(node: Node): number {
+          if (node.nodeType === Node.ELEMENT_NODE) return (node as Element).tagName === 'BR' ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
+          return acceptText(node) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+        },
+      });
+  const drawn = flat ? flatNodes(root, reader !== null) : null;
+  const next = (): Text | null => {
+    if (walker) return walker.nextNode() as Text | null;
+    for (let r = drawn!.next(); !r.done; r = drawn!.next()) {
+      const n = r.value;
+      if (n.nodeType === Node.ELEMENT_NODE || acceptText(n)) return n as Text;
+    }
+    return null;
+  };
 
   /**
    * A text node of spaces alone between two words of the same block: a word break. Wikipedia writes
@@ -114,11 +139,11 @@ export function buildTextIndex(root: Element, opts: { forReader?: boolean; skip?
    * check, which then left it out entirely.
    */
   let pendingSpace = false;
-  let node = walker.nextNode() as Text | null;
+  let node = next();
   while (node) {
     if (node.nodeType === Node.ELEMENT_NODE || !node.data.trim()) {
       pendingSpace = true;
-      node = walker.nextNode() as Text | null;
+      node = next();
       continue;
     }
     const block = nearestBlock(node, root);
@@ -134,7 +159,7 @@ export function buildTextIndex(root: Element, opts: { forReader?: boolean; skip?
     pieces.push({ node, at: full.length, len: data.length, ...(reader ? { eligible: reader.spoken(node) } : {}) });
     full += data;
 
-    node = walker.nextNode() as Text | null;
+    node = next();
   }
 
   return { root, fullText: full, pieces, ...(reader ? { forReader: true, ...(opts.skip ? { skip: opts.skip } : {}) } : {}) };
@@ -243,7 +268,16 @@ export function rangeForSpan(index: TextIndex, start: number, end: number): Rang
   if (si >= pieces.length) return null;
 
   const startPiece = pieces[si]!;
-  const endPiece = pieces[Math.min(ei, pieces.length - 1)]!;
+  let endPiece = pieces[Math.min(ei, pieces.length - 1)]!;
+  // A range cannot span two web components (its ends must share a root, or it collapses): one that
+  // would, ends with the last text of the component it starts in.
+  if (endPiece.node.getRootNode() !== startPiece.node.getRootNode()) {
+    const home = startPiece.node.getRootNode();
+    let last = si;
+    for (let i = si + 1; i <= ei && i < pieces.length; i++) if (pieces[i]!.node.getRootNode() === home) last = i;
+    endPiece = pieces[last]!;
+    end = endPiece.at + endPiece.len;
+  }
 
   const range = root.ownerDocument.createRange();
   const startOffset = Math.max(0, Math.min(start - startPiece.at, startPiece.len));

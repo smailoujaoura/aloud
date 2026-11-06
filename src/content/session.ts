@@ -78,6 +78,7 @@ import { SleepTimer, type SleepChoice } from './sleep-timer';
 import { Mp3Export, audioFileName } from './audio-export';
 import { chunkWpm, speedLabel } from '@/shared/reading-rate';
 import { READING_ATTR } from '@/annotate/palette';
+import { shadowRootsOf } from '@/extract/flat-tree';
 
 interface BeginOptions {
   /** For "Read from here": the element that was right-clicked, when the browser can tell us. */
@@ -707,7 +708,12 @@ export class ReaderSession {
       const rules = known ? (known.savedPage ? savedRules(document) : null) : rulesFor(document);
       if (rules) log.info('site rules:', rules.ids.filter((id) => !id.startsWith('generic.')).join(', ') || 'generic only');
       const liveRoot = known ? known.root : (rules && ruleRoot(rules, document)) ?? resolveLiveRoot(article, document);
-      this.textIndex = buildTextIndex(liveRoot, { forReader: true, skip: rules ? skipSelector(rules, this.settings.skip) : '' });
+      this.textIndex = buildTextIndex(liveRoot, {
+        forReader: true,
+        skip: rules ? skipSelector(rules, this.settings.skip) : '',
+        // Found inside web components (MSN): its paragraphs, not the promotions beside them.
+        ...(!known && liveRoot === article.liveRoot && article.liveBlocks ? { within: new Set(article.liveBlocks) } : {}),
+      });
       this.playlist = buildArticlePlaylist({
         index: this.textIndex,
         lang: article.lang,
@@ -723,6 +729,9 @@ export class ReaderSession {
     }
 
     this.state.totalChunks = this.playlist.length;
+    // Text inside web components (MSN): the highlight rules go into each of them too.
+    const shadows = shadowRootsOf(this.textIndex.pieces.map((p) => p.node));
+    if (shadows.length) this.highlighter?.styleShadowRoots(shadows);
     // Room at the end of the page for the bar, after what scrolls the article (ui/bottom-room.ts).
     this.bar?.reserveRoomFor(this.textIndex.root);
     if (this.mode === 'from-cursor') this.startFromCursor();
@@ -947,7 +956,7 @@ export class ReaderSession {
     this.eligibilityObserver = new MutationObserver((records) => {
       // Only changes that can touch the text being read: inside it, or on something around it (a
       // class on <body>). A video's progress bar or a parallax header elsewhere says nothing.
-      if (!records.some((r) => root.contains(r.target) || (r.target as Node).contains(root))) return;
+      if (!records.some((r) => root.contains(r.target) || (r.target as Node).contains(root) || r.target.getRootNode() !== document)) return;
       // A throttle, not a debounce: a page that animates without pause reset a debounce forever,
       // and a translation revealed meanwhile was never looked at.
       if (this.eligibilityTimer) return;
@@ -960,11 +969,16 @@ export class ReaderSession {
           .catch((err) => log.warn('[eligibility] could not follow the page:', err));
       }, 200);
     });
-    this.eligibilityObserver.observe(document.documentElement, {
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['style', 'class', 'hidden', 'open', 'aria-hidden', 'inert'],
-    });
+    const watch = { subtree: true, attributes: true, attributeFilter: ['style', 'class', 'hidden', 'open', 'aria-hidden', 'inert'] };
+    this.eligibilityObserver.observe(document.documentElement, watch);
+    // Inside web components (MSN's "Continue reading" reveals the rest there): an observer on the
+    // page sees nothing in a shadow root, so each one holding the article, and those around them,
+    // is watched too.
+    const shadows = new Set<ShadowRoot>();
+    for (const r of shadowRootsOf(this.textIndex.pieces.map((p) => p.node))) {
+      for (let at: Node | null = r; at && (at as ShadowRoot).host; at = (at as ShadowRoot).host.getRootNode()) shadows.add(at as ShadowRoot);
+    }
+    for (const r of shadows) this.eligibilityObserver.observe(r, watch);
   }
 
   private eligibilityRuns: Promise<void> = Promise.resolve();

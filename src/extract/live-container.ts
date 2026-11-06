@@ -3,6 +3,7 @@
  * extracted, so the highlight text-index is built over prose only (not the whole page chrome).
  */
 import type { ExtractedArticle } from './readability';
+import { deepQueryAll, flatText } from './flat-tree';
 
 const CANDIDATE_SELECTOR =
   'article, main, [role="main"], [itemprop="articleBody"], .post-content, .article-body, .entry-content, .markdown-body, #content, .content, .post, .article';
@@ -12,6 +13,8 @@ function visibleTextLength(el: Element): number {
 }
 
 export function resolveLiveRoot(article: ExtractedArticle, doc: Document = document): Element {
+  // Found in a flat copy through web components, and traced back to the page (flat-tree.ts).
+  if (article.liveRoot?.isConnected) return article.liveRoot;
   const target = article.text.replace(/\s+/g, ' ').trim().length;
   if (target === 0) return doc.body;
 
@@ -19,14 +22,19 @@ export function resolveLiveRoot(article: ExtractedArticle, doc: Document = docum
   let bestScore = -Infinity;
 
   const candidates = new Set<Element>([doc.body]);
-  doc.querySelectorAll(CANDIDATE_SELECTOR).forEach((el) => {
+  // An article found inside web components (flat-tree.ts): its container is in one, and only what
+  // the components show measures it. A component itself can be the container.
+  const flat = article.flat === true;
+  const found = flat ? deepQueryAll(doc, CANDIDATE_SELECTOR) : [...doc.querySelectorAll(CANDIDATE_SELECTOR)];
+  if (flat) for (const el of deepQueryAll(doc, '*')) if (el.shadowRoot) found.push(el);
+  for (const el of found) {
     if (!el.closest('nav, aside, [role="navigation"], [role="complementary"], footer, header')) {
       candidates.add(el);
     }
-  });
+  }
 
   for (const el of candidates) {
-    const len = visibleTextLength(el);
+    const len = flat ? flatText(el).replace(/\s+/g, ' ').trim().length : visibleTextLength(el);
     if (len < Math.min(200, target * 0.3)) continue;
     // Prefer the tightest element that still covers most of the article text.
     const coverage = Math.min(len, target) / target;

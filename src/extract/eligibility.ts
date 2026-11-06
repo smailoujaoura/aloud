@@ -20,6 +20,7 @@
  * Content below the viewport is rendered and stays readable: nothing here looks at position.
  * Results are cached per element for one pass (`new Eligibility()` per build).
  */
+import { renderedParent } from './flat-tree';
 
 const NATIVE_CONTROLS = new Set(['BUTTON', 'SELECT', 'OPTION', 'TEXTAREA', 'INPUT', 'LABEL']);
 
@@ -63,7 +64,7 @@ export class Eligibility {
 
   /** Is this text drawn, and words to say rather than a phonetic transcription? */
   spoken(node: Text): boolean {
-    const parent = node.parentElement;
+    const parent = renderedParent(node);
     return this.rendered(node) && !(parent && (this.notation(parent) || this.skipped(parent)));
   }
 
@@ -93,7 +94,8 @@ export class Eligibility {
 
   /** Is this text node drawn on the page at all? */
   rendered(node: Text): boolean {
-    const parent = node.parentElement;
+    // The element it is drawn in: through web components (flat-tree.ts), the parent elsewhere.
+    const parent = renderedParent(node);
     if (!parent) return false;
     if (this.hidden(parent)) return false;
     // Text straight inside a closed <details>, beside its summary.
@@ -106,14 +108,15 @@ export class Eligibility {
   hidden(el: Element): boolean {
     const known = this.hiddenCache.get(el);
     if (known !== undefined) return known;
-    const result = selfHidden(el, this.fadesIn) || (el.parentElement ? this.hidden(el.parentElement) : false);
+    const up = renderedParent(el);
+    const result = selfHidden(el, this.fadesIn) || (up ? this.hidden(up) : false);
     this.hiddenCache.set(el, result);
     return result;
   }
 
   /** Inside a control, from `el` up to (not past) `root`. */
   inControl(el: Element, root: Element): boolean {
-    for (let at: Element | null = el; at && at !== root.parentElement; at = at.parentElement) {
+    for (let at: Element | null = el; at; at = renderedParent(at)) {
       if (this.control(at)) return true;
       if (at === root) break;
     }
