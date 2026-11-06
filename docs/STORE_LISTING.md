@@ -171,6 +171,10 @@ reading positions, history and listening statistics, and private-window activity
 
 ## Before pressing submit
 
+- [ ] 1.0.2: privacy.html's permission table says Aloud may also ask for one site to read an
+      article a page shows in a frame from it (frame-ask.html), with a new "In effect from" date;
+      AMO's reviewer note mentions frame-ask.html, the second web-accessible page
+
 - [ ] `data-stores="live"` on `website/index.html` `<body>`, and the three store URLs checked
 - [ ] The Piper voice licences reviewed (PIPER_VOICE_LICENCES.md; regenerate with `node scripts/piper-licences.mjs` if the catalogue changed)
 - [ ] Screenshots: Chrome needs 1280×800 or 640×400; a 440×280 promo tile is optional but recommended

@@ -15,6 +15,8 @@ import type { NewQueueItem } from '@/shared/reading-queue';
 import { replyLater } from '@/shared/reply';
 import { normalizePosition } from '@/shared/record-shapes';
 import type { SavedPosition } from '@/shared/reading-positions';
+import { articleFrame, framesOf } from '@/shared/frame-article';
+import { removeFrameAskCard, showFrameAskCard } from '@/ui/frame-ask-card';
 
 interface AloudGlobal {
   __aloudLoaded?: boolean;
@@ -48,6 +50,19 @@ export default defineUnlistedScript(() => {
       void session.externalToggle();
       return;
     }
+    // A page that only wraps another one in a frame (a Claude artifact): read the frame instead.
+    if (!session && mode === 'article' && !resumeAt && window === window.top) {
+      const frame = articleFrame(framesOf(document), window.innerWidth, window.innerHeight);
+      if (frame && !hasOwnArticle()) {
+        void readFrame(frame.src, () => activateHere(mode, targetElement, fresh, resumeAt));
+        return;
+      }
+    }
+    activateHere(mode, targetElement, fresh, resumeAt);
+  };
+
+  const activateHere = (mode: ActivateMode, targetElement?: Element | null, fresh = false, resumeAt: SavedPosition | null = null): void => {
+    const session = w.__aloudSession;
     // "Read selection" / "Read from here" always (re)plan from the new anchor.
     if (session) void session.dispose();
     const next = new ReaderSession();
@@ -84,6 +99,16 @@ export default defineUnlistedScript(() => {
     // "Add page to reading queue": extract now, while the page is open and readable. Answered with
     // `sendResponse`: a returned promise arrives as `undefined` in Chromium 120 (shared/reply.ts).
     if (m?.type === 'extract-for-queue') return replyLater(sendResponse, extractForQueue());
+    // The article is in a frame Aloud may not read yet (clicked there, from the menu).
+    if (m?.type === 'frame-ask') {
+      const ask = msg as { ticket?: unknown; site?: unknown };
+      if (typeof ask.ticket === 'string' && typeof ask.site === 'string') showFrameAskCard(document, ask.ticket, ask.site);
+      return false;
+    }
+    if (m?.type === 'frame-ask-close') {
+      removeFrameAskCard(document);
+      return false;
+    }
     if (m?.type !== 'activate') return false;
     let target: Element | null = null;
     if (m.targetElementId != null) {
@@ -107,6 +132,36 @@ export default defineUnlistedScript(() => {
     { once: true },
   );
 });
+
+/**
+ * Does this page have an article of its own, beside the frame that covers most of it? A wrapper
+ * (a Claude artifact's page holds 81 characters) has next to no text; a page with more is asked
+ * the way the reader asks, and read itself when it has one.
+ */
+function hasOwnArticle(): boolean {
+  if ((document.body?.innerText.trim().length ?? 0) < 1500) return false;
+  try {
+    return extractArticle(document).text.length >= 200;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Read the article in the frame at `src`: the background starts the reader there, or says which
+ * site to ask for, and the card asks. `otherwise`: this page, as before, when neither can be done.
+ */
+async function readFrame(src: string, otherwise: () => void): Promise<void> {
+  const reply = (await browser.runtime.sendMessage({ type: 'read-in-frame', url: src }).catch(() => null)) as
+    | { ok?: boolean; ask?: { ticket: string; site: string } }
+    | null;
+  if (reply?.ok) return;
+  if (reply?.ask) {
+    showFrameAskCard(document, reply.ask.ticket, reply.ask.site);
+    return;
+  }
+  otherwise();
+}
 
 /** This page as a queue entry, or why it cannot be one. */
 function extractForQueue(): NewQueueItem | { error: string } {

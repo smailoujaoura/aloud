@@ -40,6 +40,7 @@ import type { Mark } from '@/pdf/annotations/model';
 import { normalizePosition, normalizeStoredMarks } from '@/shared/record-shapes';
 import { isPortraitPath } from '@/ui/voice-portraits';
 import { serverConsented, type PermissionsLike } from '@/shared/server-consent';
+import { framePattern, frameSite, sameFrame } from '@/shared/frame-article';
 
 const CONTENT_FILE = '/reader-inject.js';
 /** The media speed control (src/entrypoints/speed-inject.ts). */
@@ -66,6 +67,8 @@ interface ActiveSession {
   /** Absent for the PDF reader page, which is an extension page and has no badge of its own. */
   tabId: number | null;
   port: Port;
+  /** The frame reading: 0 for the page itself, another for an article in a frame (readInFrame). */
+  frameId: number;
 }
 
 let active: ActiveSession | null = null;
@@ -228,8 +231,12 @@ export default defineBackground({
         // starts there. Elsewhere it is undefined and the content script falls back to the
         // first sentence in the viewport.
         const targetElementId = (info as { targetElementId?: number }).targetElementId;
+        // Clicked inside a frame (a Claude artifact, an embedded report): read there.
+        const frame = info.frameId && info.frameId > 0 && info.frameUrl ? { id: info.frameId, url: info.frameUrl } : null;
         if (info.menuItemId === MENU_QUEUE_PAGE) void queuePage(tab.id);
         else if (info.menuItemId === MENU_QUEUE_LINK && info.linkUrl) void queueLink(tab.id, info);
+        else if (info.menuItemId === MENU_READ_SELECTION && frame) void readInFrameFromMenu(tab.id, 'selection', frame);
+        else if (info.menuItemId === MENU_READ_FROM_HERE && frame) void readInFrameFromMenu(tab.id, 'from-cursor', frame, targetElementId);
         else if (info.menuItemId === MENU_READ_SELECTION) void activate(tab.id, 'selection');
         else if (info.menuItemId === MENU_HIGHLIGHT) void highlightSelection(tab.id, tab.url ?? '', tab.title ?? '');
         else if (info.menuItemId === MENU_NOTES_PANEL) void showNotesPanel(tab.id);
@@ -274,6 +281,17 @@ export default defineBackground({
       } else if (m?.type === 'synth-ticket') {
         // Only extension contexts reach this listener at all; a web page cannot.
         return replyWith({ ticket: mintSynthTicket() });
+      } else if (m?.type === 'read-in-frame') {
+        // From the reader on a page that only wraps a frame (shared/frame-article.ts).
+        const url = (m as { url?: unknown }).url;
+        const tabId = sender.tab?.id;
+        if (tabId == null || sender.frameId !== 0 || typeof url !== 'string' || !framePattern(url)) return replyWith({ error: true });
+        return replyWith(readInFrame(tabId, url, 'article'));
+      } else if (m?.type === 'frame-ask-info' || m?.type === 'frame-ask-go') {
+        // From frame-ask.html, the button that asks for the frame's site: only for its own ticket.
+        const ticket = (m as { ticket?: unknown }).ticket;
+        if (!fromFrameAskPage(sender) || typeof ticket !== 'string') return replyWith({ error: true });
+        return replyWith(m.type === 'frame-ask-info' ? frameAskInfo(ticket, sender.tab?.id) : frameAskGo(ticket, sender.tab?.id));
       } else if (m?.type === 'synth-ticket-redeem') {
         return replyWith({ ok: redeemSynthTicket((m as { ticket?: unknown }).ticket) });
       } else if (m?.type === 'server-consent') {
@@ -352,7 +370,7 @@ export default defineBackground({
           /* that tab is already gone */
         }
       }
-      active = { tabId, port };
+      active = { tabId, port, frameId: port.sender?.frameId ?? 0 };
       if (tabId != null) setBadge(tabId, '•');
 
       port.onMessage.addListener((msg: ToBackgroundMessage) => {
@@ -447,14 +465,31 @@ async function activate(
   targetElementId?: number,
   fresh = false,
   resumeAt: SavedPosition | null = null,
-): Promise<void> {
+  frameId = 0,
+): Promise<boolean> {
+  // A frame's article (readInFrame): the reader goes into that frame, or this says it could not.
+  if (frameId > 0) {
+    const injected = await browser.scripting
+      .executeScript({ target: { tabId, frameIds: [frameId] }, files: [CONTENT_FILE] })
+      .catch(() => [] as unknown[]);
+    if (!injected.some((r) => r != null)) return false;
+    void browser.scripting.executeScript({ target: { tabId, frameIds: [frameId] }, files: [ANNOTATE_FILE] }).catch(() => undefined);
+    await sendActivate(tabId, mode, targetElementId, 2, fresh, resumeAt, frameId);
+    return true;
+  }
+  // The toolbar button or shortcut on a tab whose article is being read in a frame: play or pause
+  // it there. Sent to the page itself, it would look for an article again and offer the frame.
+  if (mode === 'article' && !fresh && targetElementId == null && active?.tabId === tabId && active.frameId > 0) {
+    postToActive({ type: 'toggle' });
+    return true;
+  }
   // A PDF is never an article: Chromium hands the tab to a plugin <embed> with no text in its
   // DOM, and Firefox renders it in a privileged viewer no content script can touch. Read it in
   // Aloud's own PDF page instead of injecting into something unreadable.
   const tab = await browser.tabs.get(tabId).catch(() => null);
   if (tab?.url && looksLikePdf(tab.url)) {
     await openPdfReader(tab.url, tabId, tab.index);
-    return;
+    return true;
   }
 
   // One of Aloud's own pages (the PDF reader, the Library's queue): its reader is already there,
@@ -463,14 +498,14 @@ async function activate(
   const ownPage = tab?.url ? tab.url.startsWith(browser.runtime.getURL('/')) : await isOwnTab(tabId);
   if (ownPage && active && (active.tabId === tabId || active.tabId === null)) {
     postToActive({ type: 'toggle' });
-    return;
+    return true;
   }
 
   // An empty page — a new tab, about:blank — has nothing to read: settings, as on the browser's
   // own pages. Firefox would let the reader into about:blank, only for it to report no article.
   if (emptyPage(tab?.url)) {
     await openSettingsInstead(tab);
-    return;
+    return false;
   }
 
   let injected: unknown[];
@@ -482,7 +517,7 @@ async function activate(
     // visible — the settings page, saying why — rather than a badge nobody notices.
     console.info('[aloud] cannot read this page, opening settings instead:', err);
     await openSettingsInstead(tab);
-    return;
+    return false;
   }
   // Firefox does not refuse its own pages (about:preferences, about:debugging): it answers [null],
   // "done", though nothing ran — and the button then did nothing at all. A frame where the script
@@ -491,12 +526,104 @@ async function activate(
   if (!injected.some((r) => r != null)) {
     console.info('[aloud] this page refused the reader, opening settings instead');
     await openSettingsInstead(tab, { refused: true });
-    return;
+    return false;
   }
   void browser.scripting.executeScript({ target: { tabId }, files: [ANNOTATE_FILE] }).catch(() => undefined);
   await sendActivate(tabId, mode, targetElementId, 2, fresh, resumeAt);
+  return true;
 }
 
+
+// ---- an article in a frame ------------------------------------------------------------------
+
+/** What a "Read it" card is for, kept where the background finds it after being stopped. */
+interface FrameAsk {
+  tabId: number;
+  frameUrl: string;
+  pattern: string;
+  mode: ActivateMode;
+  /** Known when it came from a click in the frame (the context menu); else found by address. */
+  frameId: number | null;
+  expires: number;
+}
+
+const FRAME_ASK_MS = 30 * 60_000;
+const FRAME_ASK_KEY = 'frameAsk:';
+
+/** The frame of `tabId` showing `frameUrl`, if Aloud may reach it (others are skipped, not failed). */
+async function frameIdFor(tabId: number, frameUrl: string): Promise<number | null> {
+  const found = await browser.scripting
+    .executeScript({ target: { tabId, allFrames: true }, func: () => location.href })
+    .catch(() => [] as Array<{ frameId: number; result?: unknown }>);
+  const hit = found.find((r) => r.frameId !== 0 && typeof r.result === 'string' && sameFrame(r.result, frameUrl));
+  return hit ? hit.frameId : null;
+}
+
+/**
+ * Read the article in a frame of `tabId`: there and then if Aloud may reach the frame's site,
+ * else a ticket for the card that asks for it (frame-ask.html).
+ */
+async function readInFrame(
+  tabId: number,
+  frameUrl: string,
+  mode: ActivateMode,
+  known: { id: number; targetElementId?: number } | null = null,
+): Promise<{ ok: true } | { ask: { ticket: string; site: string } } | { error: true }> {
+  const frameId = known?.id ?? (await frameIdFor(tabId, frameUrl));
+  if (frameId != null && (await activate(tabId, mode, known?.targetElementId, false, null, frameId))) return { ok: true };
+  const pattern = framePattern(frameUrl);
+  if (!pattern) return { error: true };
+  const ticket = crypto.randomUUID();
+  const ask: FrameAsk = { tabId, frameUrl, pattern, mode, frameId: known?.id ?? null, expires: Date.now() + FRAME_ASK_MS };
+  await browser.storage.session.set({ [FRAME_ASK_KEY + ticket]: ask });
+  return { ask: { ticket, site: frameSite(frameUrl) } };
+}
+
+/** "Read selection" or "Read from here" clicked inside a frame. */
+async function readInFrameFromMenu(tabId: number, mode: ActivateMode, frame: { id: number; url: string }, targetElementId?: number): Promise<void> {
+  const answer = await readInFrame(tabId, frame.url, mode, { id: frame.id, targetElementId });
+  if (!('ask' in answer)) return;
+  // The card goes on the page itself, where the menu's click lets the reader's script in.
+  const injected = await browser.scripting.executeScript({ target: { tabId }, files: [CONTENT_FILE] }).catch(() => [] as unknown[]);
+  if (!injected.some((r) => r != null)) return;
+  await browser.tabs.sendMessage(tabId, { type: 'frame-ask', ...answer.ask }, { frameId: 0 }).catch(() => undefined);
+}
+
+/** Is this message from frame-ask.html, Aloud's own page (not a content script, not a site)? */
+function fromFrameAskPage(sender: { id?: string; url?: string }): boolean {
+  if (sender.id !== browser.runtime.id || !sender.url) return false;
+  try {
+    const url = new URL(sender.url);
+    return /^(chrome|moz)-extension:$/.test(url.protocol) && url.pathname === '/frame-ask.html';
+  } catch {
+    return false;
+  }
+}
+
+async function frameAskFor(ticket: string, tabId: number | undefined): Promise<FrameAsk | null> {
+  const key = FRAME_ASK_KEY + ticket;
+  const ask = ((await browser.storage.session.get(key)) as Record<string, FrameAsk | undefined>)[key];
+  if (!ask || ask.expires < Date.now() || ask.tabId !== tabId) return null;
+  return ask;
+}
+
+/** The card's button needs to know what to ask for before it is pressed (the click must ask). */
+async function frameAskInfo(ticket: string, tabId: number | undefined): Promise<{ site: string; pattern: string } | { error: true }> {
+  const ask = await frameAskFor(ticket, tabId);
+  return ask ? { site: frameSite(ask.frameUrl), pattern: ask.pattern } : { error: true };
+}
+
+/** Allowed: read the frame, and take the card away. */
+async function frameAskGo(ticket: string, tabId: number | undefined): Promise<{ ok: true } | { error: string }> {
+  const ask = await frameAskFor(ticket, tabId);
+  if (!ask) return { error: 'expired' };
+  if (!(await browser.permissions.contains({ origins: [ask.pattern] }).catch(() => false))) return { error: 'not-allowed' };
+  const frameId = ask.frameId ?? (await frameIdFor(ask.tabId, ask.frameUrl));
+  if (frameId == null || !(await activate(ask.tabId, ask.mode, undefined, false, null, frameId))) return { error: 'unreachable' };
+  await browser.storage.session.remove(FRAME_ASK_KEY + ticket);
+  await browser.tabs.sendMessage(ask.tabId, { type: 'frame-ask-close' }, { frameId: 0 }).catch(() => undefined);
+  return { ok: true };
+}
 
 /**
  * The toolbar button on a page Aloud cannot read: show its settings, with a line saying why.
@@ -547,13 +674,15 @@ async function sendActivate(
   retries: number,
   fresh = false,
   resumeAt: SavedPosition | null = null,
+  frameId = 0,
 ): Promise<void> {
   try {
-    await browser.tabs.sendMessage(tabId, { type: 'activate', mode, targetElementId, fresh, resumeAt });
+    // To one frame: with a reader in a frame too, a message to the whole tab started both.
+    await browser.tabs.sendMessage(tabId, { type: 'activate', mode, targetElementId, fresh, resumeAt }, { frameId });
   } catch (err) {
     if (retries > 0) {
       await new Promise((r) => setTimeout(r, 120));
-      return sendActivate(tabId, mode, targetElementId, retries - 1, fresh, resumeAt);
+      return sendActivate(tabId, mode, targetElementId, retries - 1, fresh, resumeAt, frameId);
     }
     console.warn('[aloud] activate message not delivered:', err);
   }
@@ -776,7 +905,8 @@ function tellTab(tabId: number, text: string, badge: string): void {
 
 async function sendWithRetry<T>(tabId: number, message: unknown, retries: number): Promise<T | undefined> {
   try {
-    return (await browser.tabs.sendMessage(tabId, message)) as T;
+    // The page itself, not a frame that may also have the reader (readInFrame).
+    return (await browser.tabs.sendMessage(tabId, message, { frameId: 0 })) as T;
   } catch (err) {
     if (retries <= 0) throw err;
     await new Promise((r) => setTimeout(r, 120));

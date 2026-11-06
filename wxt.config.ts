@@ -113,7 +113,10 @@ export default defineConfig({
         // extension's own origin, which needs no listing here; models.json and the icon reach the
         // reader through the background. Every file listed here is one any page can probe to
         // recognise Aloud, so the list is as short as it can be.
-        resources: ['synth-host.html'],
+        // `frame-ask.html` is the "Read it" button on a page whose article is in a frame from
+        // another site (ui/frame-ask-card.ts): the browser asks for a site only from a click in
+        // one of Aloud's pages. It acts only on a ticket from the background.
+        resources: ['synth-host.html', 'frame-ask.html'],
         matches: ['<all_urls>'],
         // Chromium: reachable only through an address that changes every session, so a page
         // cannot probe a fixed address to learn Aloud is installed. (Firefox ignores this key.)

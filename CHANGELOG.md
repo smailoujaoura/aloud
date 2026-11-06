@@ -4,6 +4,14 @@ What changed in each version of Aloud, in the words used for the store release n
 go under **Unreleased** as they are made; a release renames that section to its version and date.
 Website-only and documentation changes are not listed: they never reach the extension.
 
+## Unreleased
+
+### Added
+- **Articles inside frames.** A page that shows its text in an embedded frame from another site,
+  such as Claude's artifacts, an embedded report or a newsletter reader, is read: Aloud reads the
+  frame, after asking once for that site. Before, it said "This page doesn't look like an
+  article". Read selection and Read from here work inside such frames too.
+
 ## 1.0.1 (2026-11-04)
 
 ### Added
