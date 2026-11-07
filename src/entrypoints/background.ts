@@ -1116,11 +1116,53 @@ async function openNote(id: string, url: string, fragmentUrl: string, canInject:
   const tabId = tab.id!;
   try {
     await browser.scripting.executeScript({ target: { tabId }, files: [ANNOTATE_FILE] });
-    await sendWithRetry(tabId, { type: 'annotate-reveal', id }, 3);
+    const shown = await sendWithRetry<{ revealed?: boolean }>(tabId, { type: 'annotate-reveal', id, quiet: true }, 3);
+    if (shown?.revealed) return;
+    // Not on the page itself: an article in a frame (a Claude artifact) has its notes there.
+    if (await revealInFrames(tabId, id, tab.url ?? url)) return;
+    await sendWithRetry(tabId, { type: 'annotate-reveal', id }, 1);
   } catch (err) {
     console.warn('[aloud] could not show the note on the page; using a text link instead:', err);
     await browser.tabs.update(tabId, { url: fragmentUrl });
   }
+}
+
+/**
+ * Show note `id` in a frame of `tabId`: the article a page shows in a frame (a Claude artifact),
+ * where its notes were made. The frames Aloud may reach, largest first, marked as the article
+ * (shared/article-frame.ts) so the notes start there. Waits a little for a frame still loading.
+ */
+async function revealInFrames(tabId: number, id: string, pageUrl: string): Promise<boolean> {
+  const tried = new Set<number>();
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const frames = (
+      await browser.scripting
+        .executeScript({ target: { tabId, allFrames: true }, func: () => window.innerWidth * window.innerHeight })
+        .catch(() => [] as Array<{ frameId: number; result?: unknown }>)
+    )
+      .filter((r) => r.frameId !== 0 && !tried.has(r.frameId) && typeof r.result === 'number' && r.result > 40_000)
+      .sort((a, b) => (b.result as number) - (a.result as number))
+      .slice(0, 3);
+    for (const { frameId } of frames) {
+      tried.add(frameId);
+      try {
+        await browser.scripting.executeScript({
+          target: { tabId, frameIds: [frameId] },
+          args: [pageUrl],
+          func: (page: string) => {
+            (window as unknown as { __aloudArticleFrame?: { pageUrl?: string } }).__aloudArticleFrame = { pageUrl: page };
+          },
+        });
+        await browser.scripting.executeScript({ target: { tabId, frameIds: [frameId] }, files: [ANNOTATE_FILE] });
+        const shown = (await browser.tabs.sendMessage(tabId, { type: 'annotate-reveal', id, quiet: true }, { frameId })) as { revealed?: boolean } | undefined;
+        if (shown?.revealed) return true;
+      } catch {
+        /* a frame Aloud may not reach after all */
+      }
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  return false;
 }
 
 /**

@@ -204,6 +204,8 @@ export class ControlBar {
   private etaEl!: HTMLElement;
   /** Ends the first row when the bar is stacked (see `fitLayout`). */
   private breakEl!: HTMLElement;
+  /** The widest the time left has been, in characters: its width does not shrink as it ticks. */
+  private etaChars = 0;
   /**
    * The progress bar with its counter and time left. No box of its own on a wide screen (its
    * pieces sit in the bar's row); on a phone, a thin line along the bar's top edge.
@@ -478,27 +480,64 @@ export class ControlBar {
     const view = this.doc.defaultView;
     if (!bar?.isConnected || !view) return;
     if (view.matchMedia(`(max-width: ${NARROW_BREAKPOINT_PX}px)`).matches) {
-      bar.classList.remove('stacked');
+      bar.classList.remove('stacked', 'no-eta');
       return;
     }
     const style = view.getComputedStyle(bar);
     const gap = parseFloat(style.columnGap) || 6;
     let need = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight) + 2;
     let shown = 0;
+    let etaWidth = 0;
     // The line has no box here (display: contents): its pieces are measured one by one.
     const pieces = [...bar.children].flatMap((c) => (c === this.lineEl ? [...c.children] : [c])) as HTMLElement[];
     for (const child of pieces) {
       if (child === this.scrubEl || child === this.breakEl || child.classList.contains('spacer')) continue;
-      if (child.hidden || view.getComputedStyle(child).display === 'none') continue;
+      if (child.hidden) continue;
+      // The time left, measured even while hidden for want of room (its text's own width).
+      if (child === this.etaEl) {
+        etaWidth = this.etaWidth();
+        if (etaWidth > 0) shown++;
+        need += etaWidth;
+        continue;
+      }
+      if (view.getComputedStyle(child).display === 'none') continue;
       shown++;
-      // The progress bar stretches: in one row it needs room enough to aim at.
-      need += child === this.progressEl ? 140 : child.getBoundingClientRect().width;
+      // The progress bar stretches: in one row it needs room enough to aim at. 100 px: it gives
+      // up length before the time left goes (a 920 px bar on a 2,233-sentence article had room for
+      // both only so).
+      need += child === this.progressEl ? 100 : child.getBoundingClientRect().width;
     }
     need += gap * Math.max(0, shown - 1);
-    // A little room to spare before going back to one row: the count and time left change width
-    // as they tick ("15 min left", "9 min left"), and the bar flipped between one row and two.
-    const stacked = bar.classList.contains('stacked');
-    bar.classList.toggle('stacked', stacked ? bar.clientWidth < need + 24 : bar.clientWidth < need);
+    // Short of room, the time left goes first (it stays in the count's tooltip), and only then does
+    // the bar take two rows. On a long article ("20/2233", "5h 17m left") the two of them alone
+    // put the progress on a row of its own at any width. A little room to spare before showing
+    // either again, so the bar does not flip back and forth as they tick.
+    const width = bar.clientWidth;
+    const wasStacked = bar.classList.contains('stacked');
+    const wasShort = bar.classList.contains('no-eta');
+    const spare = (on: boolean): number => (on ? 24 : 0);
+    const withEta = need;
+    const withoutEta = need - (etaWidth ? etaWidth + gap : 0);
+    if (width >= withEta + spare(wasStacked || wasShort)) {
+      bar.classList.remove('stacked', 'no-eta');
+    } else if (width >= withoutEta + spare(wasStacked)) {
+      bar.classList.remove('stacked');
+      bar.classList.add('no-eta');
+    } else {
+      bar.classList.add('stacked');
+      bar.classList.remove('no-eta');
+    }
+  }
+
+  /** The time left's width as drawn, measured even when hidden for want of room. */
+  private etaWidth(): number {
+    const el = this.etaEl;
+    if (!el.textContent) return 0;
+    const hiddenForRoom = this.bar.classList.contains('no-eta');
+    if (hiddenForRoom) el.style.display = 'inline-block';
+    const w = el.getBoundingClientRect().width;
+    if (hiddenForRoom) el.style.display = '';
+    return w;
   }
 
   /**
@@ -1400,6 +1439,14 @@ export class ControlBar {
       this.countEl.textContent = count;
       this.etaEl.textContent = eta;
       this.etaEl.hidden = !eta;
+      // Still said when the bar has no room to show it (fitLayout: no-eta).
+      this.countEl.title = eta ? `Sentence ${current} of ${total} · ${eta}` : '';
+      // As wide as it has been, like the count: "5h 17m left" becoming "5h 9m left" moved
+      // everything after it, and could flip the bar between one row and two.
+      if (eta.length > this.etaChars) {
+        this.etaChars = eta.length;
+        this.etaEl.style.minWidth = `${eta.length}ch`;
+      }
       this.fitLayout();
     }
     if (this.dragFraction != null) return; // the pointer owns the fill mid-drag
@@ -1498,5 +1545,6 @@ export function shortTime(seconds: number): string {
   if (minutes < 60) return `${minutes} min`;
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
-  return m ? `${h} h ${m} min` : `${h} h`;
+  // Compact past an hour ("5h 17m"): the bar has room for "17 min", not "5 h 17 min left".
+  return m ? `${h}h ${m}m` : `${h}h`;
 }

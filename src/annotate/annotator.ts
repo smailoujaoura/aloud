@@ -49,7 +49,9 @@ export class PageAnnotator {
    * open when Aloud started — grouped in the Library under the wrong title, and never found again
    * on the page they were taken from. `atCurrentDocument()` moves it when the address moves.
    */
-  private key = documentKey(location.href);
+  // The page's own address; for an article in a frame, the page around it (shared/article-frame.ts),
+  // so notes made with N and with K are filed together, and under an address worth going back to.
+  private key = documentKey(readingPageUrl());
   private notes: Note[] = [];
   private painted: Painted[] = [];
   private missing = 0;
@@ -132,7 +134,7 @@ export class PageAnnotator {
     // stayed on screen and its notes stayed in the panel. So look at the address now and then —
     // one string comparison a second — and at once on the navigations that do fire events.
     const follow = (): void => {
-      if (document.visibilityState === 'hidden' || documentKey(location.href) === this.key) return;
+      if (document.visibilityState === 'hidden' || documentKey(readingPageUrl()) === this.key) return;
       this.repaints = 0;
       this.paint();
     };
@@ -163,7 +165,7 @@ export class PageAnnotator {
    * that document's. Returns true when it moved.
    */
   private atCurrentDocument(): boolean {
-    const now = documentKey(location.href);
+    const now = documentKey(readingPageUrl());
     if (now === this.key) return false;
     this.key = now;
     this.notes = notesForPage(this.allNotes, now);
@@ -319,11 +321,12 @@ export class PageAnnotator {
   }
 
   /** Scroll to a note's highlight and flash it — how the Library opens a note. */
-  reveal(id: string): boolean {
+  reveal(id: string, quiet = false): boolean {
     const painted = this.painted.find((p) => p.note.id === id);
     if (!painted) {
+      // `quiet`: the Library still looks in the page's frames (a Claude artifact) before saying so.
       const known = this.notes.some((n) => n.id === id);
-      this.toast(known ? 'That passage is no longer on this page' : 'That note is not on this page');
+      if (!quiet) this.toast(known ? 'That passage is no longer on this page' : 'That note is not on this page');
       return false;
     }
     const box = painted.range.getBoundingClientRect();

@@ -384,7 +384,7 @@ export class ReaderSession {
       return;
     }
 
-    this.docKey = this.knownArticle?.key ?? documentKey(location.href);
+    this.docKey = this.knownArticle?.key ?? documentKey(readingPageUrl());
     const former = this.knownArticle ? this.knownArticle.formerKey : formerDocumentKey(location.href);
     if (former) await adoptFormerKey(former, this.docKey, this.playlist.map((p) => p.spokenText), this.docSource().title);
     if (superseded()) return;

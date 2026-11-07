@@ -52,9 +52,10 @@ export default defineUnlistedScript(() => {
     }
     if (m?.type === 'annotate-reveal' && m.id) {
       // The page may still be filling in its content; give the passage a few chances to appear.
+      const quiet = (m as { quiet?: unknown }).quiet === true;
       return replyLater(sendResponse, w.__aloudAnnotator!.then(async (a) => {
         for (let attempt = 0; attempt < 6; attempt++) {
-          if (a.reveal(m.id!)) return { revealed: true };
+          if (a.reveal(m.id!, quiet || attempt < 5)) return { revealed: true };
           await new Promise((r) => setTimeout(r, 500));
         }
         return { revealed: false };

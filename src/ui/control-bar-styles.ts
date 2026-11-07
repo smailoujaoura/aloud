@@ -368,6 +368,8 @@ select optgroup { color: var(--bar-muted); font-weight: 600; }
   white-space: nowrap; font-size: 12px;
 }
 .eta[hidden] { display: none; }
+/* No room for the time left in one row: it goes before the bar takes two (fitLayout). */
+.bar.no-eta .eta { display: none; }
 .break { display: none; }
 .line { display: contents; }
 @media (min-width: ${NARROW_BREAKPOINT_PX + 1}px) {

@@ -11,7 +11,8 @@ Website-only and documentation changes are not listed: they never reach the exte
   such as Claude's artifacts, an embedded report or a newsletter reader, is read: Aloud reads the
   frame, after asking once for that site. Before, it said "This page doesn't look like an
   article". Read selection and Read from here work inside such frames too, and so do notes:
-  highlights and notes made there are kept, and the Library goes back to the page around it.
+  highlights and notes made there are kept, and the Library goes back to the page around it and
+  finds them in the frame.
   In Firefox, which lets Aloud ask for a site only from a page of its own, Read it opens a small
   tab that asks.
 - **Pages built from web components**, such as MSN's articles, are read. Their text sits inside
@@ -23,6 +24,9 @@ Website-only and documentation changes are not listed: they never reach the exte
 - A voice of your own speech server chosen for a language (Use → For English, or For every other
   language) shows on the voice board. It was saved, but the board went on showing the voice it
   would have picked itself.
+- On a long article (thousands of sentences, hours to go) the reading bar stays one row: the time
+  left is shorter ("5h 17m left"), keeps its width as it counts down instead of shifting the
+  buttons, and steps aside before the bar would take two rows (it stays in the count's tooltip).
 - A voice of your own speech server reads the languages it is chosen for while your main voice is
   one in the browser (Phonon, say). It failed to load ("No server address is set") and the main
   voice read those passages instead; picking it in the reading bar failed the same way.
