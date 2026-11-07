@@ -55,6 +55,7 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 >
 > Fixed
 > • A voice of your own speech server chosen for a language shows on the voice board.
+> • A voice of your own speech server reads the languages chosen for it beside a voice in the browser, instead of failing to load.
 
 ## Release notes for 1.0.1 (AMO's version notes; plain text)
 

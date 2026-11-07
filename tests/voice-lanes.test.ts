@@ -85,6 +85,22 @@ describe('VoiceLanes', () => {
     expect(audio.map(([id]) => id)).toEqual([1, 0]);
   });
 
+  it('a server voice beside a main voice in the browser gets the server’s address, and only it does', async () => {
+    const lanes = new VoiceLanes(
+      { onReady: () => undefined, onProgress: () => undefined, onError: () => undefined, onAudio: () => undefined },
+      { server: () => ({ url: 'https://tts.example.com/v1', model: '' }) },
+    );
+    const at = hosts.length;
+    const init = lanes.init({ ...base, engine: 'phonon', voice: 'NbpkqMVS3CJeq2j8' });
+    hosts[at]!.ready();
+    await init;
+    lanes.request(0, 'Hello.', 1, { engine: 'server', voice: 'Captain Silas Blackwater' });
+    lanes.request(1, 'Ciao.', 1, { engine: 'piper', voice: 'it_IT-paola-medium' });
+    const server = hosts.find((h) => h.config?.engine === 'server')!;
+    expect(server.config).toMatchObject({ engine: 'server', voice: 'Captain Silas Blackwater', server: { url: 'https://tts.example.com/v1' } });
+    expect((hosts.find((h) => h.config?.engine === 'piper')!.config as { server?: unknown }).server).toBeUndefined();
+  });
+
   it('sentences asked for inside the main voice’s onReady are sent, not held', async () => {
     const hostsBefore = hosts.length;
     let lanes!: InstanceType<typeof VoiceLanes>;

@@ -465,7 +465,11 @@ export class ReaderSession {
         this.bar?.flash(`${label} could not be loaded (${message}). Another voice reads its passages`);
         void this.reroute();
       },
-    }, { maxLanes: capabilities().formFactor === 'android' ? 2 : MAX_LANES });
+    }, {
+      maxLanes: capabilities().formFactor === 'android' ? 2 : MAX_LANES,
+      // A server voice chosen for a language reads beside the main voice: its own address.
+      server: () => (this.settings.server.url ? { url: this.settings.server.url, model: this.settings.server.model } : undefined),
+    });
 
     // Marks the page as being read (annotate/palette.ts: READING_ATTR): the notes panel moves above the bar.
     document.documentElement.setAttribute(READING_ATTR, '');

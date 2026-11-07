@@ -20,6 +20,9 @@ Website-only and documentation changes are not listed: they never reach the exte
 - A voice of your own speech server chosen for a language (Use → For English, or For every other
   language) shows on the voice board. It was saved, but the board went on showing the voice it
   would have picked itself.
+- A voice of your own speech server reads the languages it is chosen for while your main voice is
+  one in the browser (Phonon, say). It failed to load ("No server address is set") and the main
+  voice read those passages instead; picking it in the reading bar failed the same way.
 
 ## 1.0.1 (2026-11-04)
 

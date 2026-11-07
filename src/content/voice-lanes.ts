@@ -69,12 +69,15 @@ export class VoiceLanes {
 
   /** How many models may be loaded at once: MAX_LANES, or fewer (a phone passes 2). */
   private readonly maxLanes: number;
+  /** The reader's own server, for a lane that reads with it (the main voice may not). */
+  private readonly server: () => EngineConfig['server'] | undefined;
 
   constructor(
     private readonly cb: LaneCallbacks,
-    opts: { maxLanes?: number } = {},
+    opts: { maxLanes?: number; server?: () => EngineConfig['server'] | undefined } = {},
   ) {
     this.maxLanes = Math.max(1, Math.min(MAX_LANES, opts.maxLanes ?? MAX_LANES));
+    this.server = opts.server ?? (() => undefined);
   }
 
   /** Load the primary voice; every other lane is closed. Resolves when it is ready. */
@@ -244,11 +247,17 @@ export class VoiceLanes {
     if (open) return open;
     if (this.laneCount >= this.maxLanes && !this.closeLeastRecentIdle()) return 'wait';
     const primary = this.primary!;
+    const { server: _primaryServer, ...shared } = primary.config;
+    // A server voice beside a main voice in the browser (Phonon reads English, the server another
+    // language, or the other way round): the main voice's settings carry no server address, and the
+    // lane failed with "No server address is set", its passages handed back to the main voice.
+    const server = ref.engine === 'server' ? this.server() : undefined;
     const config: EngineConfig = {
-      ...primary.config,
+      ...shared,
       engine: ref.engine,
       voice: ref.voice,
       workers: SECONDARY_WORKERS,
+      ...(server ? { server } : {}),
     };
     const lane: Lane = {
       key,
