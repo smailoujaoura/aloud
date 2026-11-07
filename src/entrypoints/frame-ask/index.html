@@ -16,10 +16,23 @@
       }
       button:disabled { opacity: 0.6; cursor: default; }
       button:focus-visible { outline: 2px solid #ffffff; outline-offset: -4px; }
+      #why { display: none; }
+      /* Opened in a tab of its own (Firefox: see main.ts). */
+      body.in-tab { overflow: auto; background: #f6f6f8; color: #18181c; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+      body.in-tab main { max-width: 460px; margin: 18vh auto 0; padding: 0 20px; }
+      body.in-tab h1 { font-size: 1.35rem; margin: 0 0 10px; }
+      body.in-tab #why { display: block; margin: 0 0 20px; color: #4a4a55; }
+      body.in-tab button { width: auto; padding: 0 28px; height: 42px; font-size: 15px; }
+      @media (prefers-color-scheme: dark) { body.in-tab { background: #141418; color: #ececf1; } body.in-tab #why { color: #b0afbd; } }
+      body:not(.in-tab) h1 { display: none; }
     </style>
   </head>
   <body>
-    <button id="go" type="button" disabled>Read it</button>
+    <main>
+      <h1>Read the embedded page?</h1>
+      <p id="why"></p>
+      <button id="go" type="button" disabled>Read it</button>
+    </main>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>

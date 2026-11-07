@@ -287,11 +287,16 @@ export default defineBackground({
         const tabId = sender.tab?.id;
         if (tabId == null || sender.frameId !== 0 || typeof url !== 'string' || !framePattern(url)) return replyWith({ error: true });
         return replyWith(readInFrame(tabId, url, 'article'));
-      } else if (m?.type === 'frame-ask-info' || m?.type === 'frame-ask-go') {
+      } else if (m?.type === 'frame-ask-info' || m?.type === 'frame-ask-go' || m?.type === 'frame-ask-open') {
         // From frame-ask.html, the button that asks for the frame's site: only for its own ticket.
+        // In the website's page (a frame of that tab), or in a tab of its own (Firefox: no
+        // permissions API inside a website), where the ticket alone says which tab it is for.
         const ticket = (m as { ticket?: unknown }).ticket;
         if (!fromFrameAskPage(sender) || typeof ticket !== 'string') return replyWith({ error: true });
-        return replyWith(m.type === 'frame-ask-info' ? frameAskInfo(ticket, sender.tab?.id) : frameAskGo(ticket, sender.tab?.id));
+        const own = sender.frameId === 0 ? sender.tab?.id : undefined;
+        const tabId = own != null ? undefined : sender.tab?.id;
+        if (m.type === 'frame-ask-open') return replyWith(frameAskOpen(ticket, tabId, sender.tab?.index));
+        return replyWith(m.type === 'frame-ask-info' ? frameAskInfo(ticket, tabId) : frameAskGo(ticket, tabId, own));
       } else if (m?.type === 'synth-ticket-redeem') {
         return replyWith({ ok: redeemSynthTicket((m as { ticket?: unknown }).ticket) });
       } else if (m?.type === 'server-consent') {
@@ -600,11 +605,19 @@ function fromFrameAskPage(sender: { id?: string; url?: string }): boolean {
   }
 }
 
+/** The ask behind a ticket: for the tab it was issued for (`tabId`), or any (`undefined`, Aloud's own tab). */
 async function frameAskFor(ticket: string, tabId: number | undefined): Promise<FrameAsk | null> {
   const key = FRAME_ASK_KEY + ticket;
   const ask = ((await browser.storage.session.get(key)) as Record<string, FrameAsk | undefined>)[key];
-  if (!ask || ask.expires < Date.now() || ask.tabId !== tabId) return null;
+  if (!ask || ask.expires < Date.now() || (tabId !== undefined && ask.tabId !== tabId)) return null;
   return ask;
+}
+
+/** Firefox: the button cannot ask inside the website, so it asks from a tab of Aloud's own. */
+async function frameAskOpen(ticket: string, tabId: number | undefined, index: number | undefined): Promise<{ ok: true } | { error: true }> {
+  if (tabId === undefined || !(await frameAskFor(ticket, tabId))) return { error: true };
+  await browser.tabs.create({ url: `${browser.runtime.getURL('/frame-ask.html')}?tab#${ticket}`, ...(index != null ? { index: index + 1 } : {}) });
+  return { ok: true };
 }
 
 /** The card's button needs to know what to ask for before it is pressed (the click must ask). */
@@ -614,7 +627,7 @@ async function frameAskInfo(ticket: string, tabId: number | undefined): Promise<
 }
 
 /** Allowed: read the frame, and take the card away. */
-async function frameAskGo(ticket: string, tabId: number | undefined): Promise<{ ok: true } | { error: string }> {
+async function frameAskGo(ticket: string, tabId: number | undefined, askTab?: number): Promise<{ ok: true } | { error: string }> {
   const ask = await frameAskFor(ticket, tabId);
   if (!ask) return { error: 'expired' };
   if (!(await browser.permissions.contains({ origins: [ask.pattern] }).catch(() => false))) return { error: 'not-allowed' };
@@ -622,6 +635,11 @@ async function frameAskGo(ticket: string, tabId: number | undefined): Promise<{ 
   if (frameId == null || !(await activate(ask.tabId, ask.mode, undefined, false, null, frameId))) return { error: 'unreachable' };
   await browser.storage.session.remove(FRAME_ASK_KEY + ticket);
   await browser.tabs.sendMessage(ask.tabId, { type: 'frame-ask-close' }, { frameId: 0 }).catch(() => undefined);
+  // Asked from a tab of its own: back to the page being read, and that tab closed.
+  if (askTab != null) {
+    await browser.tabs.update(ask.tabId, { active: true }).catch(() => undefined);
+    await browser.tabs.remove(askTab).catch(() => undefined);
+  }
   return { ok: true };
 }
 
