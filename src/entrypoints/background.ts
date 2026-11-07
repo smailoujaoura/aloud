@@ -283,10 +283,11 @@ export default defineBackground({
         return replyWith({ ticket: mintSynthTicket() });
       } else if (m?.type === 'read-in-frame') {
         // From the reader on a page that only wraps a frame (shared/frame-article.ts).
-        const url = (m as { url?: unknown }).url;
+        const { url, frameId } = m as { url?: unknown; frameId?: unknown };
         const tabId = sender.tab?.id;
         if (tabId == null || sender.frameId !== 0 || typeof url !== 'string' || !framePattern(url)) return replyWith({ error: true });
-        return replyWith(readInFrame(tabId, url, 'article'));
+        const known = typeof frameId === 'number' && Number.isInteger(frameId) && frameId > 0 ? { id: frameId } : null;
+        return replyWith(readInFrame(tabId, url, 'article', known));
       } else if (m?.type === 'frame-ask-info' || m?.type === 'frame-ask-go' || m?.type === 'frame-ask-open') {
         // From frame-ask.html, the button that asks for the frame's site: only for its own ticket.
         // In the website's page (a frame of that tab), or in a tab of its own (Firefox: no
@@ -474,6 +475,18 @@ async function activate(
 ): Promise<boolean> {
   // A frame's article (readInFrame): the reader goes into that frame, or this says it could not.
   if (frameId > 0) {
+    // Marked first: the notes start in a frame only when it is the article (shared/article-frame.ts),
+    // and what is read there goes back to the page around it, not to the frame's own address.
+    const pageUrl = (await browser.tabs.get(tabId).catch(() => null))?.url ?? '';
+    await browser.scripting
+      .executeScript({
+        target: { tabId, frameIds: [frameId] },
+        args: [pageUrl],
+        func: (page: string) => {
+          (window as unknown as { __aloudArticleFrame?: { pageUrl?: string } }).__aloudArticleFrame = page ? { pageUrl: page } : {};
+        },
+      })
+      .catch(() => undefined);
     const injected = await browser.scripting
       .executeScript({ target: { tabId, frameIds: [frameId] }, files: [CONTENT_FILE] })
       .catch(() => [] as unknown[]);
@@ -555,13 +568,34 @@ interface FrameAsk {
 const FRAME_ASK_MS = 30 * 60_000;
 const FRAME_ASK_KEY = 'frameAsk:';
 
-/** The frame of `tabId` showing `frameUrl`, if Aloud may reach it (others are skipped, not failed). */
-async function frameIdFor(tabId: number, frameUrl: string): Promise<number | null> {
+/**
+ * The frame of `tabId` showing `frameUrl`, if Aloud may reach it (others are skipped, not failed).
+ * By its address, else any frame from the site asked for (`pattern`): a site may move its frame to
+ * another address once loaded.
+ */
+async function frameIdFor(tabId: number, frameUrl: string, pattern?: string): Promise<number | null> {
   const found = await browser.scripting
     .executeScript({ target: { tabId, allFrames: true }, func: () => location.href })
-    .catch(() => [] as Array<{ frameId: number; result?: unknown }>);
-  const hit = found.find((r) => r.frameId !== 0 && typeof r.result === 'string' && sameFrame(r.result, frameUrl));
+    .catch((err) => {
+      console.warn('[aloud] could not look into the frames of tab', tabId, err);
+      return [] as Array<{ frameId: number; result?: unknown }>;
+    });
+  const frames = found.filter((r) => r.frameId !== 0 && typeof r.result === 'string') as Array<{ frameId: number; result: string }>;
+  const hit = frames.find((r) => sameFrame(r.result, frameUrl)) ?? (pattern ? frames.find((r) => fromSite(r.result, pattern)) : undefined);
+  if (!hit) console.warn('[aloud] no frame for', frameUrl, 'among', frames.map((r) => r.result));
   return hit ? hit.frameId : null;
+}
+
+/** Is `url` from the site `pattern` names (`https://*.frame.example.com/*`)? */
+function fromSite(url: string, pattern: string): boolean {
+  try {
+    const u = new URL(url);
+    const m = /^(\*|https?):\/\/(\*\.)?([^/]+)\/\*$/.exec(pattern);
+    if (!m || (m[1] !== '*' && `${m[1]}:` !== u.protocol)) return false;
+    return m[2] ? u.hostname.endsWith(`.${m[3]}`) : u.hostname === m[3];
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -630,9 +664,15 @@ async function frameAskInfo(ticket: string, tabId: number | undefined): Promise<
 async function frameAskGo(ticket: string, tabId: number | undefined, askTab?: number): Promise<{ ok: true } | { error: string }> {
   const ask = await frameAskFor(ticket, tabId);
   if (!ask) return { error: 'expired' };
-  if (!(await browser.permissions.contains({ origins: [ask.pattern] }).catch(() => false))) return { error: 'not-allowed' };
-  const frameId = ask.frameId ?? (await frameIdFor(ask.tabId, ask.frameUrl));
-  if (frameId == null || !(await activate(ask.tabId, ask.mode, undefined, false, null, frameId))) return { error: 'unreachable' };
+  if (!(await browser.permissions.contains({ origins: [ask.pattern] }).catch(() => false))) {
+    console.warn('[aloud] the reader allowed', ask.pattern, 'but the browser does not report it');
+    return { error: 'not-allowed' };
+  }
+  const frameId = ask.frameId ?? (await frameIdFor(ask.tabId, ask.frameUrl, ask.pattern));
+  if (frameId == null || !(await activate(ask.tabId, ask.mode, undefined, false, null, frameId))) {
+    console.warn('[aloud] could not start the reader in frame', frameId, 'of tab', ask.tabId);
+    return { error: 'unreachable' };
+  }
   await browser.storage.session.remove(FRAME_ASK_KEY + ticket);
   await browser.tabs.sendMessage(ask.tabId, { type: 'frame-ask-close' }, { frameId: 0 }).catch(() => undefined);
   // Asked from a tab of its own: back to the page being read, and that tab closed.

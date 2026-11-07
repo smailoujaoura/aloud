@@ -65,10 +65,20 @@ button.addEventListener('click', () => {
         return;
       }
       button.textContent = 'Starting…';
-      const reply = (await browser.runtime.sendMessage({ type: 'frame-ask-go', ticket })) as { ok?: boolean } | undefined;
+      const reply = (await browser.runtime.sendMessage({ type: 'frame-ask-go', ticket })) as { ok?: boolean; error?: string } | undefined;
       if (!reply?.ok) {
         button.textContent = 'Try again';
         button.disabled = false;
+        // Said, not only "Try again": what went wrong, and what to do.
+        const why = document.getElementById('why');
+        const text =
+          reply?.error === 'expired'
+            ? 'This request has expired. Go back to the page and press Aloud’s button again.'
+            : reply?.error === 'not-allowed'
+              ? 'The browser did not give Aloud that site. Try again, and choose Allow.'
+              : 'Aloud could not reach the embedded page. Reload that page, then press Aloud’s button again.';
+        if (why) why.textContent = text;
+        button.title = text;
       }
     })
     .catch(() => {

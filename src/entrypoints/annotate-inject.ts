@@ -10,6 +10,7 @@ import { defineUnlistedScript } from 'wxt/utils/define-unlisted-script';
 import { PageAnnotator } from '@/annotate/annotator';
 import { log } from '@/shared/log';
 import { replyLater } from '@/shared/reply';
+import { isArticleFrame } from '@/shared/article-frame';
 
 interface AnnotateGlobal {
   __aloudAnnotator?: Promise<PageAnnotator>;
@@ -17,7 +18,8 @@ interface AnnotateGlobal {
 
 export default defineUnlistedScript(() => {
   // Frames are left alone: notes belong to the page you are reading, not to its ads and embeds.
-  if (window.top !== window) return;
+  // Except the frame that is what you are reading (a Claude artifact), marked by the background.
+  if (window.top !== window && !isArticleFrame()) return;
   const w = window as unknown as AnnotateGlobal;
   if (w.__aloudAnnotator) return;
 

@@ -10,7 +10,10 @@ Website-only and documentation changes are not listed: they never reach the exte
 - **Articles inside frames.** A page that shows its text in an embedded frame from another site,
   such as Claude's artifacts, an embedded report or a newsletter reader, is read: Aloud reads the
   frame, after asking once for that site. Before, it said "This page doesn't look like an
-  article". Read selection and Read from here work inside such frames too.
+  article". Read selection and Read from here work inside such frames too, and so do notes:
+  highlights and notes made there are kept, and the Library goes back to the page around it.
+  In Firefox, which lets Aloud ask for a site only from a page of its own, Read it opens a small
+  tab that asks.
 - **Pages built from web components**, such as MSN's articles, are read. Their text sits inside
   components, where Aloud did not look, so it found no article. Aloud now reads the article's
   paragraphs, not the promotions around them, highlights inside the components, and when a

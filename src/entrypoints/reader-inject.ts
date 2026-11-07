@@ -54,7 +54,7 @@ export default defineUnlistedScript(() => {
     if (!session && mode === 'article' && !resumeAt && window === window.top) {
       const frame = articleFrame(framesOf(document), window.innerWidth, window.innerHeight);
       if (frame && !hasOwnArticle()) {
-        void readFrame(frame.src, () => activateHere(mode, targetElement, fresh, resumeAt));
+        void readFrame(frame.src, frameIdOf(frame.element), () => activateHere(mode, targetElement, fresh, resumeAt));
         return;
       }
     }
@@ -151,8 +151,21 @@ function hasOwnArticle(): boolean {
  * Read the article in the frame at `src`: the background starts the reader there, or says which
  * site to ask for, and the card asks. `otherwise`: this page, as before, when neither can be done.
  */
-async function readFrame(src: string, otherwise: () => void): Promise<void> {
-  const reply = (await browser.runtime.sendMessage({ type: 'read-in-frame', url: src }).catch(() => null)) as
+/**
+ * The browser's id for this frame element, where it can say (Firefox: `runtime.getFrameId`). The
+ * background then needs not find the frame by its address, which a site may change once loaded.
+ */
+function frameIdOf(el: Element): number | null {
+  try {
+    const id = (browser.runtime as { getFrameId?: (target: Element) => number }).getFrameId?.(el);
+    return typeof id === 'number' && id > 0 ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+async function readFrame(src: string, frameId: number | null, otherwise: () => void): Promise<void> {
+  const reply = (await browser.runtime.sendMessage({ type: 'read-in-frame', url: src, ...(frameId ? { frameId } : {}) }).catch(() => null)) as
     | { ok?: boolean; ask?: { ticket: string; site: string } }
     | null;
   if (reply?.ok) return;

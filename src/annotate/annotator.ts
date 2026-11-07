@@ -29,6 +29,7 @@ import { backgroundUnder, toneOf, type PageTone } from '@/highlight/contrast';
 import { PANEL_CSS, PageNotesPanel } from './notes-panel';
 import { containTyping } from '@/ui/contain-typing';
 import { TAG_INPUT_CSS, tagInput } from '@/ui/tag-input';
+import { readingPageUrl } from '@/shared/article-frame';
 
 const HOST_ID = 'aloud-annotate-host';
 const READER_HOST_ID = 'aloud-control-host';
@@ -256,8 +257,8 @@ export class PageAnnotator {
       source: {
         key: this.key,
         title: document.title || location.hostname,
-        site: siteOf(location.href),
-        reopen: { kind: 'web', url: location.href },
+        site: siteOf(readingPageUrl()),
+        reopen: { kind: 'web', url: readingPageUrl() },
       },
       at: null,
       anchor: found.anchor,

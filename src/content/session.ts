@@ -79,6 +79,7 @@ import { Mp3Export, audioFileName } from './audio-export';
 import { chunkWpm, speedLabel } from '@/shared/reading-rate';
 import { READING_ATTR } from '@/annotate/palette';
 import { shadowRootsOf } from '@/extract/flat-tree';
+import { readingPageUrl } from '@/shared/article-frame';
 
 interface BeginOptions {
   /** For "Read from here": the element that was right-clicked, when the browser can tell us. */
@@ -2254,8 +2255,8 @@ export class ReaderSession {
     return {
       key: this.docKey,
       title: hint?.title ?? this.state.title ?? document.title,
-      site: hint?.site ?? siteOf(location.href),
-      reopen: hint?.reopen ?? { kind: 'web', url: location.href },
+      site: hint?.site ?? siteOf(readingPageUrl()),
+      reopen: hint?.reopen ?? { kind: 'web', url: readingPageUrl() },
     };
   }
 
