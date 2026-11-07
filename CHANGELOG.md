@@ -16,6 +16,11 @@ Website-only and documentation changes are not listed: they never reach the exte
   paragraphs, not the promotions around them, highlights inside the components, and when a
   "Continue reading" button reveals the rest, the rest is read too.
 
+### Fixed
+- A voice of your own speech server chosen for a language (Use → For English, or For every other
+  language) shows on the voice board. It was saved, but the board went on showing the voice it
+  would have picked itself.
+
 ## 1.0.1 (2026-11-04)
 
 ### Added

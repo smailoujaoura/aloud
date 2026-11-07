@@ -74,6 +74,12 @@ export function downloadedVoices(ctx: Pick<PanelContext, 'manifest' | 'sizes'>):
   if (sharedModelInstalled('kokoro', ctx.sizes)) {
     for (const [id, v] of Object.entries(ctx.manifest.kokoro.voices)) out.push({ engine: 'kokoro', id, label: v.label, language: v.language });
   }
+  // The reader's own server, while one is set up: nothing to download, its voices are there. Left
+  // out, a server voice chosen with Use → For English was saved but never shown: the board found
+  // no such voice and went on showing the automatic one, for English and for every other language.
+  for (const v of listVoices('server', ctx.manifest)) {
+    out.push({ engine: 'server', id: v.id, label: v.label, language: voiceLanguage('server', v.id, ctx.manifest) });
+  }
   return out;
 }
 

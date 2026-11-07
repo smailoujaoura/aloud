@@ -88,4 +88,16 @@ describe('who reads what', () => {
     expect(c.setUnvoiced).toHaveBeenCalledWith('skip');
   });
 
+
+  it("a server voice chosen for English, or for every other language, is the one the board shows", () => {
+    const withServer = { ...manifest, server: { voices: ['af_sky', 'ff_siwis'] } } as unknown as ModelManifest;
+    const forEnglish = { ...ctx({ languageVoices: { en: { engine: 'server', voice: 'af_sky' } } }), manifest: withServer } as PanelContext;
+    const host = render(forEnglish);
+    const english = rows(host).find((r) => r.querySelector('.vb-lang b')!.textContent === 'English')!;
+    expect(english.querySelector('.vb-face.is-reading')?.getAttribute('title') ?? '').toContain('af_sky');
+    // Its French voice gives French a row, as a downloaded one would.
+    expect(rows(host).map((r) => r.querySelector('.vb-lang b')!.textContent)).toContain('French');
+    const forOthers = { ...ctx({ otherVoice: { engine: 'server', voice: 'af_sky' } }), manifest: withServer } as PanelContext;
+    expect(render(forOthers).querySelector('.vb-others .vb-face.is-reading')?.getAttribute('title') ?? '').toContain('af_sky');
+  });
 });

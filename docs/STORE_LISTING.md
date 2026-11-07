@@ -52,6 +52,9 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 > • Pages that show their text in an embedded page from another site, such as Claude's artifacts, are read: Aloud offers to read the embedded page and asks once for that site.
 > • Pages built from web components, such as MSN's articles, are read, with their highlights. When "Continue reading" reveals the rest of an article, the rest is read too.
 > • Read selection and Read from here work inside embedded pages.
+>
+> Fixed
+> • A voice of your own speech server chosen for a language shows on the voice board.
 
 ## Release notes for 1.0.1 (AMO's version notes; plain text)
 
