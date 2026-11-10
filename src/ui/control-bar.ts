@@ -93,7 +93,7 @@ export interface ControlBarCallbacks {
   onSnapToCurrent(): void;
   /** Keep the sentence being heard (or the selection) in Notes. */
   onSaveNote(): void;
-  /** Replay the last few seconds and show where that is. */
+  /** Back to the start of the sentence (or the one before) and show where that is. */
   onBackALittle(): void;
   /** A sleep-timer option was picked from the moon button's menu. */
   onSleep(choice: SleepChoice): void;
@@ -329,7 +329,7 @@ export class ControlBar {
     this.playBtn = this.iconButton('play', 'Play', ICON_PATHS.play, 'Play / pause');
     this.prevBtn = this.iconButton('prev', 'Previous sentence', ICON_PATHS.prev, 'Previous sentence');
     this.nextBtn = this.iconButton('next', 'Next sentence', ICON_PATHS.next, 'Next sentence');
-    const backBtn = this.iconButton('back', 'Back a little', ICON_PATHS.replay, 'Replay the last few seconds');
+    const backBtn = this.iconButton('back', 'Back a little', ICON_PATHS.replay, 'Back to the start of the sentence, or the one before');
     backBtn.addEventListener('click', () => this.cb.onBackALittle());
     const noteBtn = this.iconButton('note', 'Save to Notes', ICON_PATHS.bookmark, 'Save what you just heard to Notes');
     noteBtn.addEventListener('click', () => this.cb.onSaveNote());

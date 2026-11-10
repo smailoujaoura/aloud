@@ -29,7 +29,7 @@ export interface ShortcutsPanelOptions {
 /** The reader keys, in the bar's order, with what each does. */
 const READER_ROWS: Array<[keyof ReaderKeys, string, string]> = [
   ['playPause', 'Play or pause', ''],
-  ['back', 'Back a little', 'Replay the last few seconds'],
+  ['back', 'Back a little', 'The sentence again, or the one before'],
   ['previous', 'Previous sentence', ''],
   ['next', 'Next sentence', ''],
   ['slower', 'Slower', ''],
@@ -53,7 +53,7 @@ const COMMANDS: Array<{ name: string; label: string; hint: string }> = [
   { name: 'toggle-read', label: 'Read this page aloud', hint: 'Start or stop reading, wherever you are' },
   { name: 'save-note', label: 'Keep the selection (or the sentence you just heard)', hint: 'With nothing selected and nothing reading, shows your notes' },
   { name: 'notes-panel', label: 'Show my notes on this page', hint: 'This page’s notes, or all of them' },
-  { name: 'back-a-little', label: 'Back a little', hint: 'Replay the last few seconds' },
+  { name: 'back-a-little', label: 'Back a little', hint: 'The sentence again, or the one before' },
   { name: 'media-speed', label: 'Control this page’s video or audio speed', hint: 'Then D and S to change it' },
 ];
 

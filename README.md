@@ -101,8 +101,9 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
 - **Your keys** — the shortcuts deliberately avoid <kbd>Alt</kbd>+<kbd>Shift</kbd>+letter, which
   is the chord Firefox gives web pages for their own access keys. Settings → *Shortcuts* shows
   what each key is set to and, on Firefox, sets it to whatever you press.
-- **Drifted off?** <kbd>Alt</kbd>+<kbd>,</kbd> on Firefox (or <kbd>B</kbd> on the bar)
-  goes back about ten seconds and shows you where that is. Chromium allows an add-on only four
+- **Drifted off?** <kbd>Alt</kbd>+<kbd>,</kbd> on Firefox (or <kbd>Z</kbd> on the bar)
+  plays the sentence again, or the one before if it has only just begun, and shows you where that
+  is; each press goes back one more. Chromium allows an add-on only four
   default shortcuts, so there you choose this one's key yourself, in `chrome://extensions/shortcuts`.
 - **One page for everything** — the Library (*Continue*, *Up next*, *Notes*, *History*, *Statistics*) and every
   setting sit side by side in Aloud's page, one click apart. *Continue* lists what you stopped

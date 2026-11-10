@@ -51,6 +51,7 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 > Fixed
 > • Notes, tips and warnings in documentation are read (the Swift book's were all skipped), and so are one-line code listings, passages Readability left out between paragraphs (MDN's opening section) and an article's standfirst.
 > • Read selection no longer loses your place in the page: when it ends, the reader goes back to where you were.
+> • Back a little (Z) goes back one sentence at a time, as X goes forward one, instead of two or three short ones at once.
 > • Read from here is in the right-click menu again, also on selected text, on links and in embedded pages.
 > • PDFs: N highlights the sentence on the page; zooming no longer moves the highlight off the words; closing the reading bar and pressing Aloud again reads in the same tab; highlights say "Kept on this device", as they are.
 > • The video speed keys are left to the page when it has no video or audio to control.

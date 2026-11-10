@@ -24,6 +24,9 @@ Website-only and documentation changes are not listed: they never reach the exte
 - Read selection no longer loses your place in the page. It used to save the selection's place as
   the page's, and clear it at the end, so the page started again from the top. When the selection
   is read, the reader goes back to where you were in the page.
+- Back a little (Z) goes back one sentence at a time, as X goes forward one: the sentence again
+  once a few seconds of it have played, else the one before. It went back ten seconds of speech,
+  two or three short sentences at one press.
 - Read from here is in the right-click menu again, also on selected text (it starts where the
   selection starts), on links and inside frames.
 - In the PDF reader, N (or the bar's bookmark) highlights the sentence on the page, as choosing a

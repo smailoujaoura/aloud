@@ -177,8 +177,8 @@ const JUST_STARTED_SECONDS = 1.2;
  * and looks like a reader that works.
  */
 const MAX_CONSECUTIVE_FAILURES = 3;
-/** How much speech "back a little" replays. */
-const BACK_A_LITTLE_SECONDS = 10;
+/** Heard at least this much of a sentence, "back a little" replays it; less, it goes to the one before. */
+const REPLAY_FROM_SECONDS = 2.5;
 
 /** How often heard audio is written to the statistics while reading (and at every pause). */
 const STATS_WRITE_INTERVAL_MS = 30_000;
@@ -2399,18 +2399,16 @@ export class ReaderSession {
   }
 
   /**
-   * "I drifted off": go back about ten seconds of speech, to the start of a sentence, and show it.
-   * Pressing it again goes back further.
+   * "I drifted off": back one sentence at a time, as X goes forward one. The start of this sentence
+   * once a few seconds of it have played (what was just missed), else the one before; pressing
+   * again goes back another. It used to go back ten seconds of speech, which with short sentences
+   * was two or three of them at one press.
    */
   backALittle(): void {
     if (this.playlist.length === 0) return;
-    const from = this.currentPlayId;
-    let target = from;
-    let seconds = this.scheduler?.playbackPosition()?.seconds ?? 0;
-    while (target > 0 && seconds < BACK_A_LITTLE_SECONDS) {
-      target--;
-      seconds += this.audioSeconds.get(target) ?? (this.playlist[target]?.spokenText.length ?? 0) / 14;
-    }
+    const heard = this.scheduler?.playbackPosition();
+    const into = heard && heard.playId === this.currentPlayId ? heard.seconds : 0;
+    const target = into >= REPLAY_FROM_SECONDS ? this.currentPlayId : Math.max(0, this.currentPlayId - 1);
     const wasPlaying = this.scheduler?.isPlaying() ?? false;
     this.seekTo(target);
     this.snapToCurrent();
