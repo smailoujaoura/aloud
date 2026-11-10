@@ -1,4 +1,4 @@
-# Aloud: Natural Text to Speech, Offline
+# Aloud: Natural Text to Speech Reader, Offline
 
 Read any article aloud with a **fully local** neural voice. No servers, no accounts: synthesis,
 your notes, your highlights and your reading positions never leave this device.

@@ -16,6 +16,8 @@ Website-only and documentation changes are not listed: they never reach the exte
   never starts, for pages whose letter keys are their own.
 
 ### Changed
+- **The name is now Aloud: Natural Text to Speech Reader, Offline**, "Reader" added: the same extension, found by
+  what people search for.
 - **Alt+M turns the video speed control on and off**, and says which. On a site where it starts
   by itself, off means off there: the site goes on the "But never on" list, and Alt+M on it again
   takes it off. It only ever turned the control on, silently, so it seemed to do nothing.

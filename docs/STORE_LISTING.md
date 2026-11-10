@@ -1,12 +1,13 @@
 # Store submission: what to paste where
 
-Everything below matches Aloud 1.0.2 as built (`npm run zip`). If the manifest's permissions
+Everything below matches Aloud 1.0.3 as built (`npm run zip`). If the manifest's permissions
 change, change the justifications here too: both stores compare them.
 
 ## Shared listing text
 
-**Name:** Aloud: Natural Text to Speech, Offline (was "Aloud — Offline Neural Reader" until 1.0.1).
-Chrome takes the name from the manifest. On AMO the listing's name, summary and description
+**Name:** Aloud: Natural Text to Speech Reader, Offline (45 characters; AMO allows 50, Chrome 75). Before:
+"Aloud: Natural Text to Speech, Offline" in 1.0.1 and 1.0.2, "Aloud — Offline Neural Reader" until
+1.0.1. Chrome takes the name from the manifest. On AMO the listing's name, summary and description
 are edited in the Developer Hub (Edit Product Page): uploading a version does not change them.
 The AMO address is `aloud-natural-text-to-speech` since 1.0.1. Do not change it again: AMO does
 not redirect an old address (`aloud-offline-neural-reader` shows "Oops" now), so every link to it
@@ -15,7 +16,7 @@ breaks. A link that must survive a rename can use the add-on's ID: `/firefox/add
 **Summary (Chrome: 132 characters max; this is the manifest description, 129):**
 Reads any article or PDF aloud in a natural neural voice that runs on your device. Offline and private, it highlights every word.
 
-**Description** (for Chrome, drop "Works on Firefox for Android too."):
+**Description** (for Chrome, drop "(on a phone, a speed button on the video)" and "Works on Firefox for Android too.": Chrome has no add-ons on phones):
 
 > Listen to the web in a natural voice that lives on your device.
 >
@@ -25,13 +26,14 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 > own. No account, no subscription, free and open source.
 >
 > • 324 natural voices in 52 languages, from four neural engines: Phonon, Supertonic 3, Kokoro-82M and Piper
-> • Reads the article, not the menus and ads, and highlights the sentence and the word in place
+> • Reads the article, not the menus and ads, and highlights the sentence and the word in place; documentation too, with its notes, tips and code
 > • A page in two languages? Each passage is read by a voice that speaks it
 > • Reads pages that show their text in an embedded page (Claude artifacts) or inside web components (MSN)
-> • PDFs too: real pages, highlighted where the text sits; mark them up and save the marks into the file
+> • The whole page, a selection, or from any sentence: with a click, a right-click or a key
+> • PDFs too: real pages, highlighted where the text sits; mark them up, kept on your device, and save the marks into the file
 > • Picks up at the sentence you stopped at; a reading queue for later; save any article as an MP3
 > • Highlights, notes and tags on any website, kept on your device and exportable as Markdown
-> • The same keys for reading and for any video or audio on the web: S slower, D faster, R normal speed, Z back, X forward, M mute (on a phone, a speed button on the video). It can also stop videos that play by themselves
+> • The same keys for reading and for any video or audio on the web: S slower, D faster, R normal speed, Z back, X forward, M mute (on a phone, a speed button on the video). Alt+M turns the video control on or off for a site, and it can stop videos that play by themselves
 > • Every key can be changed. Light and dark themes. Works on Firefox for Android too.
 >
 > Private by construction: there is no Aloud server. Voices download once from Hugging Face; after
@@ -64,6 +66,7 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 > • Video speed: "But never on", a list of sites where the speed control never starts by itself.
 >
 > Changed
+> • A new name: Aloud: Natural Text to Speech Reader, Offline.
 > • Alt+M turns the video speed control on and off for the site, and says which.
 > • pdf.js is included as Mozilla publishes it unminified, for the Chrome Web Store's code readability rules.
 

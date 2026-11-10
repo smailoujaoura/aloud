@@ -44,7 +44,9 @@ export default defineConfig({
   },
 
   manifest: ({ browser }) => ({
-    name: 'Aloud: Natural Text to Speech, Offline',
+    // "Reader" since 1.0.3: "text to speech reader" is how the stores are searched. AMO allows 50
+    // characters, Chrome 75; this is 45.
+    name: 'Aloud: Natural Text to Speech Reader, Offline',
     short_name: 'Aloud',
     description:
       // The Chrome Web Store refuses an upload whose description is over 132 characters.
