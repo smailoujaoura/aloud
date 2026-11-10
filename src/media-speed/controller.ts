@@ -126,13 +126,24 @@ export class MediaSpeedController {
     }
   }
 
-  stop(): void {
+  /** Stop, and let go of every player. `farewell`: said over the page for a moment as it goes. */
+  stop(farewell?: string): void {
+    if (farewell) this.showBadge(farewell, undefined, true);
     this.observer?.disconnect();
     this.observer = null;
     for (const off of this.cleanups) off();
     this.cleanups.length = 0;
     for (const release of this.listeners.values()) release();
-    this.clearBadge();
+    const badge = farewell ? this.badge : null;
+    if (badge) {
+      this.badge = null;
+      window.setTimeout(() => {
+        clearTimeout(badge.timer);
+        badge.host.remove();
+      }, BADGE_MS * 2);
+    } else {
+      this.clearBadge();
+    }
     this.known.clear();
     this.listeners.clear();
   }
@@ -495,7 +506,7 @@ export class MediaSpeedController {
     chip.className = 'chip';
     root.append(style, chip);
     parent.append(host);
-    this.cleanups.push(() => host.remove());
+    // Removed by `clearBadge` when the control stops (or a moment after, with a farewell).
     this.badge = { host, text: chip, timer: 0 };
     return this.badge;
   }

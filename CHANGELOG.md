@@ -16,10 +16,19 @@ Website-only and documentation changes are not listed: they never reach the exte
   never starts, for pages whose letter keys are their own.
 
 ### Changed
+- **Alt+M turns the video speed control on and off**, and says which. On a site where it starts
+  by itself, off means off there: the site goes on the "But never on" list, and Alt+M on it again
+  takes it off. It only ever turned the control on, silently, so it seemed to do nothing.
 - pdf.js (the PDF reader's engine) is shipped as Mozilla publishes it unminified, for the Chrome
   Web Store's code readability rules. Nothing about it changes when reading.
 
 ### Fixed
+- A voice no longer stops with "… is not producing audio" over a moment's trouble. A sentence that
+  fails is asked for again, and the reader starts again by itself, twice, before it says so. When
+  one of Phonon's workers stopped, every sentence it held failed at once; Play then worked at once.
+- N at the start of a section keeps what you are hearing. A heading is said in less time than N
+  allows for a late press, so the heading gave way to the end of the last section, and the
+  section's first sentence to the heading.
 - Notes, tips and warnings in documentation are read. The Swift book puts each "Note" in an aside,
   and Aloud passed over every one, with every Skip setting off. One-line code listings there were
   skipped too, taken for buttons.

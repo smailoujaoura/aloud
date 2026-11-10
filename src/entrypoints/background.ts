@@ -162,7 +162,7 @@ export default defineBackground({
           if (tab?.id != null) void showNotesPanel(tab.id);
           else void openLibrary('notes');
         } else if (command === 'media-speed') {
-          if (tab?.id != null) void startSpeedControl(tab.id);
+          if (tab?.id != null) void toggleSpeedControl(tab.id, tab.url ?? '');
         } else if (command === 'back-a-little') {
           if (active) postToActive({ type: 'back-a-little' });
           else if (tab?.id != null) tellTab(tab.id, 'Start reading first', '…');
@@ -1070,19 +1070,61 @@ async function openAndRead(url: string, resumeAt: SavedPosition | null = null): 
  * Put the media speed control into a tab, in every frame — embedded players (YouTube in an
  * article, a lecture in a course site) are frames of their own.
  */
-async function startSpeedControl(tabId: number): Promise<void> {
+/**
+ * Alt+M: the video speed control on or off, on this site.
+ *
+ * It only ever turned the control on, and said nothing: pressed again, or on a page with no video,
+ * nothing happened at all. Now it says what it did. Off on a site where it starts by itself (the
+ * sites in Settings, or every site), it stays off there ("But never on"); on again, it comes off
+ * that list.
+ */
+async function toggleSpeedControl(tabId: number, url: string): Promise<void> {
   const { mediaSpeed } = await getSettings();
   if (!mediaSpeed.enabled) {
     tellTab(tabId, 'Video speed control is switched off in Aloud\u2019s settings', '…');
     return;
   }
+  const host = hostOf(url);
+  let running = false;
   try {
-    await browser.scripting.executeScript({ target: { tabId, allFrames: true }, files: [SPEED_FILE] });
+    const [here] = await browser.scripting.executeScript({ target: { tabId }, func: () => !!(window as unknown as { __aloudSpeed?: unknown }).__aloudSpeed });
+    running = here?.result === true;
   } catch (err) {
     // about:, the web stores, a PDF viewer: nothing of ours may run there.
     console.warn('[aloud] cannot control media speed on this page:', err);
     setBadge(tabId, 'n/a');
     setTimeout(() => clearBadge(tabId), 2500);
+    return;
+  }
+  const startsByItself = !!host && mediaSpeed.alwaysOn.some((site) => site === '*' || host === site || host.endsWith(`.${site}`));
+  if (running) {
+    const remember = startsByItself && !mediaSpeed.neverOn.includes(host);
+    const text = remember ? `Video speed off on ${host}. Its keys are the page's again` : 'Video speed off. Its keys are the page\u2019s again';
+    await browser.scripting
+      .executeScript({ target: { tabId, allFrames: true }, args: [text], func: (say: string) => (window as unknown as { __aloudSpeedOff?: (t: string) => void }).__aloudSpeedOff?.(say) })
+      .catch(() => undefined);
+    if (remember) await setSettings({ mediaSpeed: { ...mediaSpeed, neverOn: [...mediaSpeed.neverOn, host] } });
+    return;
+  }
+  if (host && mediaSpeed.neverOn.includes(host)) {
+    await setSettings({ mediaSpeed: { ...mediaSpeed, neverOn: mediaSpeed.neverOn.filter((site) => site !== host) } });
+  }
+  try {
+    await browser.scripting.executeScript({ target: { tabId, allFrames: true }, files: [SPEED_FILE] });
+  } catch (err) {
+    console.warn('[aloud] cannot control media speed on this page:', err);
+    setBadge(tabId, 'n/a');
+    setTimeout(() => clearBadge(tabId), 2500);
+  }
+}
+
+/** "www.youtube.com" → "youtube.com", as the site lists keep it; '' for no web page. */
+function hostOf(url: string): string {
+  try {
+    const { protocol, hostname } = new URL(url);
+    return protocol === 'http:' || protocol === 'https:' ? hostname.replace(/^www\./, '') : '';
+  } catch {
+    return '';
   }
 }
 

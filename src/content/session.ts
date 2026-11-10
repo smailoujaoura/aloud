@@ -169,7 +169,7 @@ const FOLLOW_RESUME_MS = 5000;
 const POSITION_SAVE_INTERVAL_MS = 4000;
 /** Reading history is written this often while playing (and always on pause, close and finish). */
 const HISTORY_WRITE_INTERVAL_MS = 15_000;
-/** A sentence heard for less than this when "save to notes" is pressed gives way to the previous one. */
+/** A sentence heard for less than this when "save to notes" is pressed gives way to the previous one (sentenceMeant). */
 const JUST_STARTED_SECONDS = 1.2;
 /**
  * After this many sentences in a row fail to synthesise, stop and say so. Skipping a sentence that
@@ -177,6 +177,15 @@ const JUST_STARTED_SECONDS = 1.2;
  * and looks like a reader that works.
  */
 const MAX_CONSECUTIVE_FAILURES = 3;
+/**
+ * A sentence that failed is asked for again after this long, once, before it counts as failed. A
+ * worker of Phonon's pool that dies takes every sentence it held with it, all at once, and is
+ * replaced; asked again a moment later, they are made. Counted at once, they stopped the reader
+ * with "is not producing audio", and Play then worked straight away.
+ */
+const RETRY_AFTER_MS = 1500;
+/** Times the reader starts again by itself after a run of failures, before it stops and says so. */
+const MAX_AUTO_RESTARTS = 2;
 /** Heard at least this much of a sentence, "back a little" replays it; less, it goes to the one before. */
 const REPLAY_FROM_SECONDS = 2.5;
 
@@ -247,6 +256,12 @@ export class ReaderSession {
   private readonly wordTimings = new Map<number, WordTiming[]>();
   /** Sentences in a row that failed to synthesise (see MAX_CONSECUTIVE_FAILURES). */
   private failures = 0;
+  /** Sentences asked for again after failing once (RETRY_AFTER_MS), and those waiting to be. */
+  private readonly retried = new Set<number>();
+  private readonly retryQueue = new Set<number>();
+  private retryTimer = 0;
+  /** Times it started again by itself since audio last came (MAX_AUTO_RESTARTS). */
+  private autoRestarts = 0;
   /**
    * Set when the voice stopped producing audio: nothing more is asked of the engine until play
    * is pressed or the voice changes, or it would keep failing the same way in the background.
@@ -428,6 +443,8 @@ export class ReaderSession {
       },
       onAudio: (playId, pcm, sr, words) => {
         this.failures = 0;
+        this.autoRestarts = 0;
+        this.retried.delete(playId);
         if (this.exporter) {
           this.exporter.accept(playId, pcm, sr);
           return;
@@ -461,9 +478,10 @@ export class ReaderSession {
       onError: ({ message, fatal, stack, playId }) => {
         log.error('worker error:', message, stack ? `\n${stack}` : '');
         if (fatal) this.fail(message);
-        else if (this.halted) return;
-        else if (playId != null && ++this.failures >= MAX_CONSECUTIVE_FAILURES && !this.exporter) void this.stopOnFailures(message);
-        else if (playId != null) this.skipSentence(playId);
+        else if (this.halted || playId == null) return;
+        else if (!this.exporter && !this.retried.has(playId)) this.retryLater(playId);
+        else if (++this.failures >= MAX_CONSECUTIVE_FAILURES && !this.exporter) void this.stopOnFailures(message);
+        else this.skipSentence(playId);
       },
       onLaneState: (voice, ready) => {
         if (!ready) this.bar?.flash(`Loading ${this.voiceLabel(voice.voice, voice.engine)} for the ${this.languageOfVoice(voice)} passages…`);
@@ -2149,6 +2167,19 @@ export class ReaderSession {
    */
   private async stopOnFailures(message: string): Promise<void> {
     const reason = message.split('\n')[0]!.replace(/^\[[^\]]*\]\s*/, '').slice(0, 140);
+    // What pressing Play did, done by the reader itself first, a little later each time.
+    if (this.wantsPlayback && this.autoRestarts < MAX_AUTO_RESTARTS) {
+      this.autoRestarts++;
+      log.warn(`${this.failures} sentences in a row failed (${reason}) — trying again by itself (${this.autoRestarts} of ${MAX_AUTO_RESTARTS})`);
+      this.failures = 0;
+      this.retried.clear();
+      this.state.busy = true;
+      this.pushState();
+      window.setTimeout(() => {
+        if (!this.disposed && !this.halted && this.wantsPlayback) this.seekTo(this.currentPlayId, { quiet: true });
+      }, 2000 * this.autoRestarts);
+      return;
+    }
     log.error(`${this.failures} sentences in a row failed — stopping instead of skipping on:`, reason);
     this.failures = 0;
     this.halted = true;
@@ -2165,6 +2196,22 @@ export class ReaderSession {
       label: 'Settings',
       run: () => this.background()?.postMessage({ type: 'open-options' }),
     });
+  }
+
+  /** Ask for `playId` again in a moment (RETRY_AFTER_MS): sentences failing together, together. */
+  private retryLater(playId: number): void {
+    log.warn(`sentence ${playId} failed — asking for it again in ${RETRY_AFTER_MS} ms`);
+    this.retried.add(playId);
+    this.requested.delete(playId);
+    this.retryQueue.add(playId);
+    if (this.retryTimer) return;
+    this.retryTimer = window.setTimeout(() => {
+      this.retryTimer = 0;
+      const ids = [...this.retryQueue].filter((id) => id >= this.currentPlayId);
+      this.retryQueue.clear();
+      if (this.disposed || this.halted || ids.length === 0) return;
+      this.ensureSynth(Math.min(...ids));
+    }, RETRY_AFTER_MS);
   }
 
   private skipSentence(playId: number): void {
@@ -2345,8 +2392,7 @@ export class ReaderSession {
       const element = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
       if (element) index = indexNearElement(this.playlist, element);
     } else {
-      const position = this.scheduler?.playbackPosition();
-      if (position && position.playId === index && position.seconds < JUST_STARTED_SECONDS && index > 0) index--;
+      index = this.sentenceMeant(index);
       const item = this.playlist[index];
       text = item?.sourceText.replace(/\s+/g, ' ').trim() ?? '';
       passage = item?.range ?? null;
@@ -2396,6 +2442,24 @@ export class ReaderSession {
       log.warn('could not save the note:', err);
       this.bar?.flash('Could not save that note');
     }
+  }
+
+  /**
+   * The sentence someone pressing "keep" means. It is pressed *after* hearing what they want, so a
+   * sentence that has only just begun, in the middle of a paragraph, gives way to the one before:
+   * the one they were reacting to; so does one whose pause before it is still playing. Not at the
+   * start of a paragraph or a section, which a pause sets apart, nor ever to a heading: a heading
+   * is said in less time than that, so a section's heading gave way to the end of the last
+   * section, and its first sentence to the heading.
+   */
+  private sentenceMeant(index: number): number {
+    const position = this.scheduler?.playbackPosition();
+    const item = this.playlist[index];
+    const before = this.playlist[index - 1];
+    if (!position || position.playId !== index || !item || !before || before.isHeading) return index;
+    // Negative: the pause before it, with nothing of it heard yet.
+    if (position.seconds < 0) return index - 1;
+    return position.seconds < JUST_STARTED_SECONDS && !item.startsBlock ? index - 1 : index;
   }
 
   /**
@@ -2929,6 +2993,7 @@ export class ReaderSession {
     this.eligibilityObserver?.disconnect();
     this.eligibilityObserver = null;
     clearTimeout(this.eligibilityTimer);
+    clearTimeout(this.retryTimer);
     this.stopFollowingWords(false);
     this.tapToSeek?.dispose();
     this.sleepTimer?.dispose();

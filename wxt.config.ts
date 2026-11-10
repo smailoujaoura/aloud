@@ -178,7 +178,7 @@ export default defineConfig({
       },
       'media-speed': {
         suggested_key: { default: 'Alt+M' },
-        description: 'Control this page’s video / audio speed from the keyboard',
+        description: 'Video speed control on or off for this site',
       },
       'notes-panel': {
         suggested_key: { default: 'Alt+N' },

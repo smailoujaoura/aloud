@@ -10,12 +10,15 @@ import { MediaSpeedController } from '@/media-speed/controller';
 import { AutoplayGuard } from '@/media-speed/autoplay';
 import { loadSiteSpeeds, rememberSiteSpeed, type SiteSpeeds } from '@/media-speed/site-speeds';
 import { formatRate } from '@/media-speed/rate';
+import { formatBinding } from '@/media-speed/keys';
 import { getSettings, watchSettings } from '@/shared/settings';
 import { log } from '@/shared/log';
 import { capabilities } from '@/shared/browser-env';
 
 interface SpeedGlobal {
   __aloudSpeed?: MediaSpeedController;
+  /** Alt+M on a page where the control runs: it stops here, saying `text` (background.ts). */
+  __aloudSpeedOff?: (text: string) => void;
 }
 
 /** The site this frame belongs to: for an embedded player, the page it is embedded in. */
@@ -94,8 +97,20 @@ export default defineUnlistedScript(() => {
       },
     });
     w.__aloudSpeed = controller;
+    w.__aloudSpeedOff = (text) => {
+      stopWatching();
+      guard.enabled = false;
+      controller?.stop(window.top === window ? text : undefined);
+      w.__aloudSpeed = undefined;
+      w.__aloudSpeedOff = undefined;
+    };
     controller.start();
     guard.settle();
+    // Turned on with its key (Alt+M): say so, and how it works, even on a page with no video yet.
+    if (!withThePage && window.top === window) {
+      const k = settings.mediaSpeed.keys;
+      controller.notice(`Video speed on: ${formatBinding(k.faster)} faster, ${formatBinding(k.slower)} slower, ${formatBinding(k.reset)} normal`);
+    }
     if (remembered != null || startAt != null) controller.setInitialRate(remembered ?? startAt!, remembered != null);
     log.info(`[speed] controlling ${controller.mediaCount} media element(s) on ${host}`);
 
@@ -107,6 +122,7 @@ export default defineUnlistedScript(() => {
         stopWatching();
         controller!.stop();
         w.__aloudSpeed = undefined;
+        w.__aloudSpeedOff = undefined;
       }
     });
   })().catch((err) => log.warn('[speed] could not start:', err));

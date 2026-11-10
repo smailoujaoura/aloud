@@ -56,7 +56,7 @@ const COMMANDS: Array<{ name: string; label: string; hint: string }> = [
   { name: 'save-note', label: 'Highlight the selection and keep it in Notes', hint: 'Or the sentence you just heard. With nothing selected and nothing reading, shows your notes' },
   { name: 'notes-panel', label: 'Show my notes on this page', hint: 'This page’s notes, or all of them' },
   { name: 'back-a-little', label: 'Back a little', hint: 'The sentence again, or the one before' },
-  { name: 'media-speed', label: 'Control this page’s video or audio speed', hint: 'Then D and S to change it' },
+  { name: 'media-speed', label: 'Video speed control on or off', hint: 'On: D and S change the speed. Off: the page has its keys back, and on a site where it starts by itself, it stays off' },
 ];
 
 /** What `commands.update` accepts: Ctrl / Alt / Command / MacCtrl, optionally with Shift. */
