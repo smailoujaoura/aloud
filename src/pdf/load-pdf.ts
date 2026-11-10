@@ -126,11 +126,11 @@ function loadPdfJs(): Promise<PdfJsModule> {
   if (modulePromise) return modulePromise;
   ensureStreamIteration(); // pdf.js reads text with `for await`; Chromium 120 cannot (stream-iteration.ts)
   modulePromise = (async () => {
-    const url = vendorUrl('pdf.min.mjs');
+    const url = vendorUrl('pdf.mjs');
     const mod = (await import(/* @vite-ignore */ url)) as unknown as PdfJsModule;
     if (!mod?.getDocument) throw new Error(`pdf.js loaded from ${url} but exposes no getDocument()`);
     // Without this pdf.js tries to fetch its worker from a CDN, which our CSP blocks.
-    mod.GlobalWorkerOptions.workerSrc = vendorUrl('pdf.worker.min.mjs');
+    mod.GlobalWorkerOptions.workerSrc = vendorUrl('pdf.worker.mjs');
     return mod;
   })().catch((err) => {
     modulePromise = null; // let a retry start from scratch

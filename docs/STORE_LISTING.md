@@ -157,6 +157,20 @@ was still the 17 October version.
 reading positions, history and listening statistics, and private-window activity must not be stored
 (Mozilla add-on policy 6.3), so it does not run in private windows at all. The privacy policy says so.
 
+## Chrome Web Store: "obfuscated code" warning (10 November 2026)
+
+Warning "Red Titanium" (Code Readability Requirements), 30 days to fix, on the published item
+`ilnojbdjpnnlkjbmldpgbgckkkifheeo`. It quoted `vendor/pdfjs/pdf.min.mjs` and
+`vendor/pdfjs/pdf.worker.min.mjs`: core-js's `Object.create` fallback, which pdf.js's legacy build
+carries, and which builds `"java" + "script:"` for an iframe. Minified, it read as hidden code.
+
+Fixed by shipping pdf.js's own unminified files (`pdf.mjs`, `pdf.worker.mjs`, same package and
+version, `scripts/sync-assets.mjs`); nothing of ours or of pdf.js was changed. The modern pdf.js
+build has no core-js, but needs `Map.prototype.getOrInsertComputed`, `Math.sumPrecise` and others
+that Chrome 120 lacks. Submit the next version as a new draft; nothing else in the package was
+quoted. If asked: the code is https://github.com/zloirock/core-js (`internals/object-create.js`),
+bundled by https://github.com/mozilla/pdf.js in `pdfjs-dist/legacy/build/`.
+
 ## Firefox Add-ons (AMO)
 
 - **Data collection:** the manifest declares `data_collection_permissions: { required: ["none"], optional: ["websiteContent"] }`:
@@ -168,7 +182,7 @@ reading positions, history and listening statistics, and private-window activity
   >
   > Vendored, unmodified npm files (ONNX Runtime Web, pdf.js, piper-phonemize WASM, and phonon-tts 0.4.2, Gradium's Phonon runtime, its WASM built from https://github.com/gradium-ai/xn-ptts) are copied from node_modules by scripts/sync-assets.mjs and pinned by the lockfile; versions in THIRD_PARTY.md. phonon-tts gets its model as local blob: URLs of files Aloud downloaded and checked itself, so its own Hugging Face lookup (hub.js) never runs.
   >
-  > Validator warnings: the Function-constructor ones are inside those libraries and cannot run (CSP script-src 'self' 'wasm-unsafe-eval', no 'unsafe-eval'; pdf.js gets isEvalSupported: false). The innerHTML ones are Mozilla Readability 0.6.0, run on document.cloneNode(true), an inert copy of the page. The import() ones load files from the package itself by runtime.getURL. Nothing loads from a CDN: ONNX Runtime's WASM path is set to vendor/ort/ before transformers.js loads.
+  > Validator warnings: the Function-constructor ones are inside those libraries and cannot run (CSP script-src 'self' 'wasm-unsafe-eval', no 'unsafe-eval'; pdf.js gets isEvalSupported: false). The innerHTML ones are Mozilla Readability 0.6.0, run on document.cloneNode(true), an inert copy of the page. The import() ones load files from the package itself by runtime.getURL. The document.write ones are core-js's Object.create fallback in pdf.js's legacy build, for engines without Object.create. Nothing loads from a CDN: ONNX Runtime's WASM path is set to vendor/ort/ before transformers.js loads.
   >
   > Downloaded at run time: voice data from Hugging Face (ONNX and GGUF weights, JSON, voice vectors), never code. Phonon's model (CC BY-NC 4.0) is an unmodified, ungated copy of Gradium's gated repository (smailoujaoura/phonon-40m-multilingual), checked by SHA-256.
   >
@@ -176,7 +190,7 @@ reading positions, history and listening statistics, and private-window activity
   >
   > No private windows (incognito: not_allowed). On uninstall it opens aloud.souj.dev/feedback.html?bye; the version and browser follow a #, so nothing is transmitted.
   >
-  > frame-ask.html, the second web-accessible page: the "Read it" button on a page whose article is in a frame from another site (a Claude artifact). Only a click in an extension page may call permissions.request, so the button is one; it requests only the site named by a one-time ticket the background issued for that tab (storage.session), so a site embedding it can make it ask for nothing.
+  > frame-ask.html, the second web-accessible page: the "Read it" button on a page whose article is in a frame from another site (a Claude artifact). Only a click in an extension page may call permissions.request, so the button is one; in Firefox, which gives an extension page inside a website no permissions API, it opens itself in a tab of its own, which asks. It requests only the site named by a one-time ticket the background issued for that tab (storage.session), so a site embedding it can make it ask for nothing.
   >
   > To try it: open an article, press the toolbar button (or Alt+R), then play. Phonon (about 101 MB with its voices) downloads on first use.
 

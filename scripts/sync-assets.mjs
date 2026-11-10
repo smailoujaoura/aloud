@@ -17,7 +17,7 @@
 //    Loaded by URL from the synthesis worker; see src/engine/g2p/piper-phonemize.ts. (Kokoro still
 //    uses the English-only `phonemizer` package that kokoro-js bundles, which is all it needs.)
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, copyFileSync, statSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, copyFileSync, statSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -48,7 +48,14 @@ const ORT_FILES = [
   'ort-wasm-simd-threaded.jsep.mjs',
 ];
 
-const PDFJS_FILES = ['pdf.min.mjs', 'pdf.worker.min.mjs'];
+/**
+ * pdf.js as published *unminified*. The Chrome Web Store took the minified files for obfuscated code
+ * (Nov 2026, "Red Titanium"): the legacy build carries core-js's polyfills, and one of them builds
+ * the string "javascript:" from pieces, which minified looked like something hidden. Readable, it is
+ * core-js's own code with its own comments. The minified copies are removed from vendor/pdfjs.
+ */
+const PDFJS_FILES = ['pdf.mjs', 'pdf.worker.mjs'];
+const PDFJS_RETIRED = ['pdf.min.mjs', 'pdf.worker.min.mjs'];
 
 const PIPER_PHONEMIZE_FILES = ['piper_phonemize.wasm', 'piper_phonemize.data'];
 
@@ -129,6 +136,8 @@ export function syncAssets() {
     copyFileSync(s, d);
     pdfCopied++;
   }
+  // public/vendor/ is kept between builds: files no longer used would still be packaged.
+  for (const f of PDFJS_RETIRED) rmSync(join(pdfDest, f), { force: true });
   for (const dir of PDFJS_DIRS) {
     const s = join(root, 'node_modules/pdfjs-dist', dir);
     const d = join(pdfDest, dir);

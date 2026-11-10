@@ -72,7 +72,7 @@ published (Mozilla does not allow modified libraries). See `scripts/build-worker
      as an ordinary diff, so a build needs no network after `npm ci`.
    - `scripts/sync-assets.mjs` — copies ONNX Runtime Web's `ort.bundle.min.mjs` +
      `ort-wasm-simd-threaded[.jsep].{mjs,wasm}` from `node_modules` into `public/vendor/ort/`,
-     and pdf.js's `pdf.min.mjs` + `pdf.worker.min.mjs`, plus its `standard_fonts/` (the Base-14
+     and pdf.js's `pdf.mjs` + `pdf.worker.mjs` (unminified: the Chrome Web Store took the minified ones for obfuscated code), plus its `standard_fonts/` (the Base-14
      fonts a PDF may reference without embedding) and `cmaps/` (predefined CJK encodings), into
      `public/vendor/pdfjs/` — about 4 MB, needed only once pages are *drawn* rather than just
      read. The **legacy**
@@ -120,12 +120,12 @@ is verified after download (`src/engine/model-cache.ts`).
 | Warning | Count | Why it is expected |
 |---|---|---|
 | `DANGEROUS_EVAL` in `vendor/ort/ort.bundle.min.mjs` and `vendor/ort/ort-wasm-simd-threaded.jsep.mjs` | 2 | Emscripten's way of finding the global object: `typeof globalThis == "object" ? globalThis : Function("return this")()`. Every browser Aloud supports has `globalThis`, so the `Function` branch never runs, and the extension CSP (no `'unsafe-eval'`) would refuse it if it did. (`'wasm-unsafe-eval'` is for compiling WebAssembly, not for this.) |
-| `DANGEROUS_EVAL` in `vendor/pdfjs/pdf.min.mjs` and `vendor/pdfjs/pdf.worker.min.mjs` | 2 | pdf.js's optional expression evaluator for PDF function objects. We load it with `isEvalSupported: false` (`src/pdf/load-pdf.ts`), so the branch is never taken. |
-| `UNSAFE_VAR_ASSIGNMENT` "call to import" in `vendor/rt/ort-loader-*.js`, `vendor/ort/ort.bundle.min.mjs`, `chunks/pdf-*.js` and `vendor/pdfjs/pdf*.min.mjs` | 4 | Deliberate runtime `import()` of a vendored module by URL — both loaders resolve it with `browser.runtime.getURL`, so the argument is never page-controlled. |
-| `UNSAFE_VAR_ASSIGNMENT` "assignment to innerHTML" in `reader-inject.js` and `chunks/session-*.js` | 4 | Inside the bundled `@mozilla/readability`, which parses a *clone* of the document and is bundled into the content script and into the shared reader-session chunk the PDF page and the walkthrough both load. None of our own code assigns `innerHTML`; the control bar, options page, PDF reader and walkthrough build every node with `createElement` (see `src/shared/dom.ts`). |
-| `UNSAFE_VAR_ASSIGNMENT` in `vendor/pdfjs/pdf.worker.min.mjs` | 1 | pdf.js's own worker bootstrap. |
+| `DANGEROUS_EVAL` in `vendor/pdfjs/pdf.mjs` and `vendor/pdfjs/pdf.worker.mjs` | 2 | pdf.js's optional expression evaluator for PDF function objects. We load it with `isEvalSupported: false` (`src/pdf/load-pdf.ts`), so the branch is never taken. |
+| `UNSAFE_VAR_ASSIGNMENT` "call to import" in `vendor/rt/ort-loader.js`, `vendor/rt/phonon.js`, `vendor/ort/ort.bundle.min.mjs`, `chunks/pdf.js`, `vendor/pdfjs/pdf.mjs` and `vendor/pdfjs/pdf.worker.mjs` | 6 | Deliberate runtime `import()` of a vendored module by URL (pdf.js: its own worker): resolved from the extension's own origin, so the argument is never page-controlled. |
+| `UNSAFE_VAR_ASSIGNMENT` "call to activeXDocument.write" / "iframeDocument.write" in `vendor/pdfjs/pdf.mjs` and `vendor/pdfjs/pdf.worker.mjs` | 4 | core-js's `Object.create` fallback, which pdf.js's legacy build includes (`NullProtoObjectViaActiveX` / `NullProtoObjectViaIFrame`): used only by engines without `Object.create`, which no supported browser is. The minified build hid these from the linter, and to a Chrome Web Store reviewer this same code looked obfuscated, which is why the unminified files ship. |
+| `UNSAFE_VAR_ASSIGNMENT` "assignment to innerHTML" in `reader-inject.js` and `chunks/session.js` | 4 | Inside the bundled `@mozilla/readability`, which parses a *clone* of the document and is bundled into the content script and into the shared reader-session chunk the PDF page and the walkthrough both load. None of our own code assigns `innerHTML`; the control bar, options page, PDF reader and walkthrough build every node with `createElement` (see `src/shared/dom.ts`). |
 
-There are **no errors** — 13 warnings, 0 notices, all from vendored code. Verify with:
+There are **no errors** — 18 warnings, 0 notices, all from vendored code. Verify with:
 
 ```bash
 npx web-ext lint --source-dir .output/firefox-mv3 -o json | jq '{errors: (.errors|length), warnings: (.warnings|length)}'

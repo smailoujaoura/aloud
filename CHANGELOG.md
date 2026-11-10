@@ -6,6 +6,10 @@ Website-only and documentation changes are not listed: they never reach the exte
 
 ## Unreleased
 
+### Changed
+- pdf.js (the PDF reader's engine) is shipped as Mozilla publishes it unminified, for the Chrome
+  Web Store's code readability rules. Nothing about it changes when reading.
+
 ### Added
 - **Video speed: "But never on".** With the speed control on every site, a list of sites where it
   never starts, for pages whose letter keys are their own.
