@@ -114,3 +114,20 @@ describe('what is read: the article’s own notes and asides', () => {
     expect(text).toContain('You use optional binding to find out whether an optional contains a value');
   });
 });
+
+describe('what is left to Readability', () => {
+  it('a line above the title stays out, though the title opens the article', () => {
+    document.title = 'The long road';
+    // A class Readability takes for clutter ("supplemental"), and nothing Aloud would call so.
+    const text = said(`<article>
+      <div class="supplemental"><p>Presented in partnership with a sponsor whose name we print here at length.</p></div>
+      <h1>The long road</h1>
+      ${para(1)}
+      ${para(2)}
+      ${para(3)}
+    </article>`);
+    expect(text).not.toContain('Presented in partnership');
+    expect(text).toContain('Paragraph 1 explains');
+    document.title = '';
+  });
+});

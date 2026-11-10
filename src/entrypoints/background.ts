@@ -240,6 +240,11 @@ export default defineBackground({
         const targetElementId = (info as { targetElementId?: number }).targetElementId;
         // Clicked inside a frame (a Claude artifact, an embedded report): read there.
         const frame = info.frameId && info.frameId > 0 && info.frameUrl ? { id: info.frameId, url: info.frameUrl } : null;
+        // "Read from here" opened on selected text starts where the selection starts (reader-inject.ts).
+        if (info.menuItemId === MENU_READ_FROM_HERE) {
+          if (info.selectionText) fromSelection.add(tab.id);
+          else fromSelection.delete(tab.id);
+        }
         if (info.menuItemId === MENU_QUEUE_PAGE) void queuePage(tab.id);
         else if (info.menuItemId === MENU_QUEUE_LINK && info.linkUrl) void queueLink(tab.id, info);
         else if (info.menuItemId === MENU_READ_SELECTION && frame) void readInFrameFromMenu(tab.id, 'selection', frame);
@@ -734,6 +739,12 @@ async function openSettingsInstead(
  * resolving does not guarantee that has happened yet on every browser — so retry briefly rather
  * than dropping the activation the user just asked for.
  */
+/**
+ * Tabs whose "Read from here" was chosen on selected text, until the reader is told: it starts at
+ * the selection then, and only then (an old selection elsewhere on the page is not "here").
+ */
+const fromSelection = new Set<number>();
+
 async function sendActivate(
   tabId: number,
   mode: ActivateMode,
@@ -743,12 +754,14 @@ async function sendActivate(
   resumeAt: SavedPosition | null = null,
   frameId = 0,
 ): Promise<void> {
+  const onSelection = mode === 'from-cursor' && fromSelection.delete(tabId);
   try {
     // To one frame: with a reader in a frame too, a message to the whole tab started both.
-    await browser.tabs.sendMessage(tabId, { type: 'activate', mode, targetElementId, fresh, resumeAt }, { frameId });
+    await browser.tabs.sendMessage(tabId, { type: 'activate', mode, targetElementId, fresh, resumeAt, ...(onSelection ? { fromSelection: true } : {}) }, { frameId });
   } catch (err) {
     if (retries > 0) {
       await new Promise((r) => setTimeout(r, 120));
+      if (onSelection) fromSelection.add(tabId);
       return sendActivate(tabId, mode, targetElementId, retries - 1, fresh, resumeAt, frameId);
     }
     console.warn('[aloud] activate message not delivered:', err);
@@ -1049,7 +1062,11 @@ async function syncRegistration(
   hosts: readonly string[],
   allFrames: boolean,
   runAt: 'document_start' | 'document_idle' = 'document_idle',
-  /** Hosts left out even when "every site" is on. */
+  /**
+   * Hosts listed in `hosts` but also here are not registered. "Every site" stays registered for
+   * them too: the script itself stops there (speed-inject.ts), judging by the page around a frame,
+   * so an embedded player on another site keeps its control.
+   */
   never: readonly string[] = [],
 ): Promise<void> {
   if (!browser.scripting?.registerContentScripts) return;
@@ -1060,7 +1077,6 @@ async function syncRegistration(
       const matches = host === '*' ? ['*://*/*'] : [`*://${host}/*`, `*://*.${host}/*`];
       if (await browser.permissions.contains({ origins: matches }).catch(() => false)) wanted.push(...matches);
     }
-    const excluded = never.flatMap((host) => [`*://${host}/*`, `*://*.${host}/*`]);
     const existing = await browser.scripting.getRegisteredContentScripts({ ids: [id] }).catch(() => []);
     // Already registered as wanted: leave it. This runs on every start of the background, which
     // Chromium stops and starts again whenever it idles; unregistering and registering each time
@@ -1072,7 +1088,6 @@ async function syncRegistration(
       current &&
       wanted.length > 0 &&
       sameSet(current.matches, [...new Set(wanted)]) &&
-      sameSet(current.excludeMatches ?? [], excluded) &&
       sameSet(current.js, [file.slice(1)]) &&
       !!current.allFrames === allFrames &&
       (current.runAt ?? 'document_idle') === runAt
@@ -1082,7 +1097,7 @@ async function syncRegistration(
     if (existing.length > 0) await browser.scripting.unregisterContentScripts({ ids: [id] });
     if (wanted.length === 0) return;
     await browser.scripting.registerContentScripts([
-      { id, js: [file.slice(1)], matches: [...new Set(wanted)], ...(excluded.length ? { excludeMatches: excluded } : {}), allFrames, runAt, persistAcrossSessions: true },
+      { id, js: [file.slice(1)], matches: [...new Set(wanted)], allFrames, runAt, persistAcrossSessions: true },
     ]);
     console.info(`[aloud] ${id} runs by itself on ${new Set(wanted).size} pattern(s)`);
   } catch (err) {

@@ -11,6 +11,7 @@ import { markUnread } from '@/content/skip-rules';
 import { Eligibility, invisible, revealPending } from './eligibility';
 import { articleRootFrom, FLAT_MARK, flatCopy, hasShadowRoots } from './flat-tree';
 import { articleAside, looksLikeBox } from './article-asides';
+import { SKIP_MARK } from './site-rules';
 
 /**
  * Prune Readability's copy of the page using what the *live* page shows. The copy has lost the
@@ -59,6 +60,12 @@ function pruneCopy(live: Document, copy: Document, forSaving: boolean, url?: str
   for (const el of boxes) {
     if (!copy.documentElement.contains(el)) continue;
     const quote = copy.createElement('blockquote');
+    // What the page's rules said of it (markUnread, above: a footnote, a "See also" section) and
+    // its language go with it; its names would only have Readability remove it again.
+    for (const name of [SKIP_MARK, 'lang', 'dir']) {
+      const value = el.getAttribute(name);
+      if (value != null) quote.setAttribute(name, value);
+    }
     quote.append(...el.childNodes);
     el.replaceWith(quote);
   }

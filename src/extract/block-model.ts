@@ -168,8 +168,12 @@ function restoreBetween(kept: Kept[], title: Block | null): void {
   // Or the article's title: what comes between it and the first paragraph Readability kept is
   // where an article opens (MDN's first section was all left out).
   const before: Array<Element | null> = [];
-  let last: Element | null = title?.el && title.end > title.start ? title.el : null;
+  const titleAt = title?.el && title.end > title.start ? title : null;
+  let last: Element | null = null;
   for (const k of kept) {
+    // The title counts from where it is: a line above it (a kicker, a dateline) is not between it
+    // and the article.
+    if (!last && titleAt && k.block.start >= titleAt.end) last = titleAt.el;
     before.push(last);
     if (k.confirmed || (k.block.role === 'heading' && k.block.level === 1)) last = k.block.el;
   }

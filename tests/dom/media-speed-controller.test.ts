@@ -403,6 +403,16 @@ describe('the keys, on a page with nothing to control', () => {
     controller.stop();
   });
 
+  it('but a podcast behind the site’s own buttons can have its speed set before it plays', () => {
+    const podcast = document.createElement('audio');
+    podcast.src = 'https://example.org/episode-12.mp3';
+    document.body.append(podcast);
+    const { controller } = start(null);
+    expect(press('d').defaultPrevented).toBe(true);
+    expect(podcast.playbackRate).toBe(1.25);
+    controller.stop();
+  });
+
   it('takes them as soon as something plays', () => {
     const el = player();
     const { controller } = start(null);

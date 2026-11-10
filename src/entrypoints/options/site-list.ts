@@ -95,10 +95,14 @@ export function hostFrom(input: string): string {
   const text = input.trim().toLowerCase();
   if (!text) return '';
   try {
-    if (/^[a-z]+:\/\//.test(text)) return new URL(text).hostname.replace(/^www\./, '');
+    if (/^[a-z]+:\/\//.test(text)) return validHost(new URL(text).hostname.replace(/^www\./, ''));
   } catch {
     return '';
   }
-  const host = text.split('/')[0]!.replace(/^www\./, '');
-  return /^[a-z0-9.-]+\.[a-z]{2,}$/.test(host) ? host : '';
+  return validHost(text.split('/')[0]!.replace(/^www\./, ''));
+}
+
+/** A plain host name: "*.example.com" parses as a URL's host, but is no site. */
+function validHost(host: string): string {
+  return /^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(host) ? host : '';
 }

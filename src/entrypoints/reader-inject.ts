@@ -32,7 +32,7 @@ export default defineUnlistedScript(() => {
   if (w.__aloudLoaded) return;
   w.__aloudLoaded = true;
 
-  const activate = (mode: ActivateMode, targetElement?: Element | null, fresh = false, resumeAt: SavedPosition | null = null): void => {
+  const activate = (mode: ActivateMode, targetElement?: Element | null, fresh = false, resumeAt: SavedPosition | null = null, onSelection = false): void => {
     // Chromium hands a PDF tab to a plugin `<embed>`: the document's URL is the PDF, but its DOM
     // holds no text at all, so extraction can only ever fail here ("this page doesn't look like
     // an article"). The background opens Aloud's own PDF reader instead — it catches PDFs by URL
@@ -60,10 +60,10 @@ export default defineUnlistedScript(() => {
         return;
       }
     }
-    activateHere(mode, targetElement, fresh, resumeAt);
+    activateHere(mode, targetElement, fresh, resumeAt, onSelection);
   };
 
-  const activateHere = (mode: ActivateMode, targetElement?: Element | null, fresh = false, resumeAt: SavedPosition | null = null): void => {
+  const activateHere = (mode: ActivateMode, targetElement?: Element | null, fresh = false, resumeAt: SavedPosition | null = null, onSelection = false): void => {
     const session = w.__aloudSession;
     // A selection read in the middle of reading the page: afterwards, back to the page, where it
     // had got to (its place is saved as it closes, below).
@@ -72,11 +72,12 @@ export default defineUnlistedScript(() => {
     if (session) void session.dispose();
     const next = new ReaderSession();
     w.__aloudSession = next;
-    const startPoint = mode === 'from-cursor' ? fromHere(rightClickFor(targetElement ?? null)) : null;
+    const startPoint = mode === 'from-cursor' ? fromHere(rightClickFor(targetElement ?? null), onSelection) : null;
     const onFinished = backToPage
       ? () => {
           window.setTimeout(() => {
-            if (w.__aloudSession === next) activateHere('article', null, true);
+            // Only after a selection really read: one that could not be used read the page instead.
+            if (w.__aloudSession === next && next.readsSelection) activateHere('article', null, true);
           }, 900);
         }
       : undefined;
@@ -98,14 +99,17 @@ export default defineUnlistedScript(() => {
     },
     { capture: true, passive: true },
   );
-  /** "Read from here" on a selection starts where it starts; elsewhere, at the spot right-clicked. */
-  const fromHere = (spot: { node: Node; offset: number } | null): { node: Node; offset: number } | null => {
+  /**
+   * "Read from here" on a selection starts where it starts: when the menu was opened on it (the
+   * browser says so), or the spot right-clicked is inside it. Elsewhere, at the spot right-clicked.
+   */
+  const fromHere = (spot: { node: Node; offset: number } | null, onSelection: boolean): { node: Node; offset: number } | null => {
     const selection = document.getSelection();
     if (!selection || selection.isCollapsed || selection.rangeCount === 0 || !selection.toString().trim()) return spot;
     const range = selection.getRangeAt(0);
-    let inside = !spot;
+    let inside = false;
     try {
-      inside ||= range.isPointInRange(spot!.node, spot!.offset);
+      inside = spot ? range.isPointInRange(spot.node, spot.offset) : onSelection;
     } catch {
       /* a spot in another tree */
     }
@@ -120,7 +124,7 @@ export default defineUnlistedScript(() => {
   };
 
   browser.runtime.onMessage.addListener((msg: unknown, _sender, sendResponse: (reply: unknown) => void) => {
-    const m = msg as { type?: string; mode?: ActivateMode; targetElementId?: number; fresh?: boolean; resumeAt?: unknown };
+    const m = msg as { type?: string; mode?: ActivateMode; targetElementId?: number; fresh?: boolean; resumeAt?: unknown; fromSelection?: boolean };
     // "Add page to reading queue": extract now, while the page is open and readable. Answered with
     // `sendResponse`: a returned promise arrives as `undefined` in Chromium 120 (shared/reply.ts).
     if (m?.type === 'extract-for-queue') return replyLater(sendResponse, extractForQueue());
@@ -144,7 +148,7 @@ export default defineUnlistedScript(() => {
         /* not available / stale id */
       }
     }
-    activate(m.mode ?? 'article', target, m.fresh === true, m.resumeAt == null ? null : normalizePosition(m.resumeAt));
+    activate(m.mode ?? 'article', target, m.fresh === true, m.resumeAt == null ? null : normalizePosition(m.resumeAt), m.fromSelection === true);
     return false;
   });
 

@@ -330,8 +330,11 @@ export class MediaSpeedController {
     if (e.composedPath().some((n) => n instanceof HTMLElement && n.id === CONTROL_HOST_ID)) return;
 
     const { keys } = this.settings;
+    const bound = [keys.mute, keys.rewind, keys.advance, keys.faster, keys.slower, keys.reset, keys.preferred, keys.nextPreset, keys.previousPreset];
+    if (!bound.some((binding) => matchesBinding(e, binding))) return;
     // With nothing here to control, the letters are the page's: S, D, R, Z and X were taken, and a
     // "No video or audio here" shown, on every site the control runs on, a page of text included.
+    // Asked only for one of its own keys: it measures the players, which is layout work.
     this.prune();
     if (![...this.known].some(controllable)) return;
     if (matchesBinding(e, keys.mute)) {
@@ -569,19 +572,25 @@ function activeMedia(media: Iterable<Media>): Media | null {
 
 /**
  * Something the keys are for: a video on screen big enough to watch (a Short muted and looping
- * included), one playing with its sound on, audio playing, or an audio player showing its controls.
- * Not a small or hidden player waiting in a corner, nor a muted preview playing out of sight.
+ * included), one playing or played with its sound on, audio playing, or audio the page is plainly
+ * there to play — an audio player showing its controls, or a podcast or audiobook behind the site's
+ * own buttons, whose speed can be set before pressing play. Not a small or hidden player waiting in
+ * a corner, a muted preview playing out of sight, nor a page's short click or notification sound.
  */
 export function controllable(media: Media): boolean {
   if (!media.isConnected) return false;
   const playing = !media.paused && !media.ended;
+  const audible = !media.muted && media.volume > 0;
   const box = media.getBoundingClientRect();
   const onScreen = box.bottom > 0 && box.top < window.innerHeight && box.right > 0 && box.left < window.innerWidth;
   if (media instanceof HTMLVideoElement) {
     if (onScreen && box.width >= 200 && box.height >= 110) return true;
-    return playing && !media.muted && media.volume > 0;
+    return (playing || (media.played?.length ?? 0) > 0) && audible;
   }
-  return playing || (media.controls && onScreen && box.width > 0);
+  if (playing || (media.controls && onScreen && box.width > 0)) return true;
+  // A recording, not a sound effect: it has a source, and is not known to be a few seconds long.
+  const source = !!(media.currentSrc || media.getAttribute('src') || media.querySelector('source[src]'));
+  return source && !(Number.isFinite(media.duration) && media.duration < 30);
 }
 
 /** 83 → "1:23"; 3723 → "1:02:03". */
