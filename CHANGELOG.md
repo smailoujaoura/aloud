@@ -4,6 +4,37 @@ What changed in each version of Aloud, in the words used for the store release n
 go under **Unreleased** as they are made; a release renames that section to its version and date.
 Website-only and documentation changes are not listed: they never reach the extension.
 
+## Unreleased
+
+### Added
+- **Video speed: "But never on".** With the speed control on every site, a list of sites where it
+  never starts, for pages whose letter keys are their own.
+
+### Fixed
+- Notes, tips and warnings in documentation are read. The Swift book puts each "Note" in an aside,
+  and Aloud passed over every one, with every Skip setting off. One-line code listings there were
+  skipped too, taken for buttons.
+- Passages Readability leaves out in the middle of an article are read when nothing around them
+  says they are promotion, navigation or a form: MDN's whole opening section was skipped. So is an
+  article's standfirst, the line under its title.
+- Read selection no longer loses your place in the page. It used to save the selection's place as
+  the page's, and clear it at the end, so the page started again from the top. When the selection
+  is read, the reader goes back to where you were in the page.
+- Read from here is in the right-click menu again, also on selected text (it starts where the
+  selection starts), on links and inside frames.
+- In the PDF reader, N (or the bar's bookmark) highlights the sentence on the page, as choosing a
+  colour for a selection does. It was only kept in Notes.
+- Zooming a PDF no longer moves the sentence highlight off the words it marks.
+- Closing the reading bar on a PDF and pressing the Aloud button (or Alt+R) reads it again in the
+  same tab. It opened Settings in a new tab instead.
+- A PDF's highlights and notes say "Kept on this device": they are kept as they are made, for a
+  PDF from the web too, and come back when it is opened again. "Not in the file yet" read as if
+  they would be lost without a Save.
+- The video speed keys (S, D, R, Z, X, M) are left to the page when it has no video or audio to
+  control. They were taken on every page, and "No video or audio here" shown.
+- On a phone asking for sites' desktop versions, the speed button shows on videos (YouTube Shorts
+  included). Taken for a computer, it was given keys instead.
+
 ## 1.0.2 (2026-11-06)
 
 ### Added

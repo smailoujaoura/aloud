@@ -10,6 +10,7 @@ import { Readability, isProbablyReaderable } from '@mozilla/readability';
 import { markUnread } from '@/content/skip-rules';
 import { Eligibility, invisible, revealPending } from './eligibility';
 import { articleRootFrom, FLAT_MARK, flatCopy, hasShadowRoots } from './flat-tree';
+import { articleAside, looksLikeBox } from './article-asides';
 
 /**
  * Prune Readability's copy of the page using what the *live* page shows. The copy has lost the
@@ -25,6 +26,8 @@ function pruneCopy(live: Document, copy: Document, forSaving: boolean, url?: str
   const check = new Eligibility();
   const drop: Element[] = [];
   const blank: Element[] = [];
+  /** The article's own notes and warnings (article-asides.ts), which Readability would remove. */
+  const boxes: Element[] = [];
   // What the page's rules would not read is marked now, while there is a page to apply them to.
   if (forSaving) {
     const index = new Map<Element, number>();
@@ -39,6 +42,7 @@ function pruneCopy(live: Document, copy: Document, forSaving: boolean, url?: str
     );
   }
   liveEls.forEach((el, i) => {
+    if (looksLikeBox(el) && !el.parentElement?.closest('aside, [role="note"], [role="complementary"]') && articleAside(el)) boxes.push(copyEls[i]!);
     if (check.control(el) || (forSaving && el.ownerDocument.defaultView && check.hidden(el))) drop.push(copyEls[i]!);
     // `visibility: hidden` is inherited but can be undone below: the element's own text goes, and a
     // child that makes itself visible again stays.
@@ -50,6 +54,14 @@ function pruneCopy(live: Document, copy: Document, forSaving: boolean, url?: str
   });
   for (const el of blank) for (const n of [...el.childNodes]) if (n.nodeType === Node.TEXT_NODE) n.remove();
   for (const el of drop) el.remove();
+  // Readability removes every <aside>, and anything with role="complementary" or a class like
+  // "sidebar": a note kept as a quotation, with nothing about it to say otherwise, stays in.
+  for (const el of boxes) {
+    if (!copy.documentElement.contains(el)) continue;
+    const quote = copy.createElement('blockquote');
+    quote.append(...el.childNodes);
+    el.replaceWith(quote);
+  }
   // A wiki's "[edit]" link beside every heading made Readability take the heading for link clutter
   // and drop it: a saved Wikipedia article had no section titles. Never read, never needed.
   if (forSaving) for (const el of copy.querySelectorAll('.mw-editsection, .editsection')) el.remove();

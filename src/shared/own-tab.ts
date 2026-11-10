@@ -17,6 +17,20 @@ interface IsTab {
   type: 'aloud-is-tab';
   tabId: number;
 }
+interface ReadHere {
+  type: 'aloud-read-here';
+  tabId: number;
+}
+
+export interface TabAnswers {
+  /**
+   * The toolbar button or Alt+R on this tab, with no reader of this page's running that the
+   * background knows of (its bar was closed): start reading here again, or play and pause. True
+   * when this page did something. Without it, the button looked for a web page to read in Aloud's
+   * own PDF reader, found none, and opened Settings in another tab.
+   */
+  readHere?: () => boolean;
+}
 
 /**
  * In an Aloud page: answer when the background looks for this page.
@@ -25,7 +39,7 @@ interface IsTab {
  * page answers *only* about itself, at once, from its tab id learned at start-up — a page that
  * said "not me" a moment later could beat the one that is.
  */
-export function answerTabQueries(): void {
+export function answerTabQueries(answers: TabAnswers = {}): void {
   let mine: { id: number; windowId?: number } | null = null;
   const known = browser.tabs
     .getCurrent()
@@ -45,6 +59,10 @@ export function answerTabQueries(): void {
       sendResponse(true);
       return false;
     }
+    if (m?.type === 'aloud-read-here' && answers.readHere && mine && m.tabId === mine.id) {
+      sendResponse(answers.readHere());
+      return false;
+    }
     return false; // not about this page: stay silent, so the page it is about can answer
   });
 }
@@ -56,6 +74,15 @@ export function answerTabQueries(): void {
 export async function isOwnTab(tabId: number): Promise<boolean> {
   try {
     return (await browser.runtime.sendMessage({ type: 'aloud-is-tab', tabId } satisfies IsTab)) === true;
+  } catch {
+    return false;
+  }
+}
+
+/** In the background: ask Aloud's page in tab `tabId` to read (see `TabAnswers.readHere`). */
+export async function askToReadHere(tabId: number): Promise<boolean> {
+  try {
+    return (await browser.runtime.sendMessage({ type: 'aloud-read-here', tabId } satisfies ReadHere)) === true;
   } catch {
     return false;
   }

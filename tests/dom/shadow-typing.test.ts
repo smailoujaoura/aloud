@@ -17,6 +17,12 @@ function shadowInput(): { host: HTMLElement; input: HTMLInputElement } {
   return { host, input };
 }
 
+/** A player on screen, the size of one: what the speed keys are for (controller.ts: controllable). */
+function onScreen(video: HTMLVideoElement): HTMLVideoElement {
+  video.getBoundingClientRect = () => ({ top: 0, left: 0, bottom: 360, right: 640, width: 640, height: 360, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+  return video;
+}
+
 describe('keys typed inside a shadow root', () => {
   it('are seen as typing', () => {
     const { input } = shadowInput();
@@ -27,7 +33,7 @@ describe('keys typed inside a shadow root', () => {
 
   it('do not change the video speed', () => {
     document.body.innerHTML = '<video id="v"></video>';
-    const video = document.getElementById('v') as HTMLVideoElement;
+    const video = onScreen(document.getElementById('v') as HTMLVideoElement);
     const controller = new MediaSpeedController({
       settings: { ...DEFAULT_MEDIA_SPEED, showBadge: false },
       initialRate: null,
@@ -44,7 +50,7 @@ describe('keys typed inside a shadow root', () => {
 
   it('still lets the shortcut work outside a text box', () => {
     document.body.innerHTML = '<video id="v"></video><p id="text">words</p>';
-    const video = document.getElementById('v') as HTMLVideoElement;
+    const video = onScreen(document.getElementById('v') as HTMLVideoElement);
     const controller = new MediaSpeedController({
       settings: { ...DEFAULT_MEDIA_SPEED, showBadge: false },
       initialRate: null,

@@ -20,7 +20,7 @@
  *   3. the **file picker / drop target**, which needs no permission anywhere and is the answer
  *      on Firefox, where add-ons cannot read local files at all.
  */
-import { ReaderSession, type KnownArticle } from '@/content/session';
+import { ReaderSession, type BeginOptions, type KnownArticle } from '@/content/session';
 import { openRenderer, readPdf, type LoadedPdf, type PdfPageView, type PdfRenderer } from '@/pdf/load-pdf';
 import { MarkEditor, type EditorPage } from '@/pdf/annotations/editor';
 import { importAnnotations, type Mark } from '@/pdf/annotations/model';
@@ -40,7 +40,7 @@ import { answerTabQueries } from '@/shared/own-tab';
 
 // First, before anything here can fail: lets the background recognise this tab without the "tabs"
 // permission, so the toolbar button and Alt+R play and pause the reader here (shared/own-tab.ts).
-answerTabQueries();
+answerTabQueries({ readHere: () => readAgain() });
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -572,14 +572,37 @@ async function present(
   if (stale()) return;
   await session?.dispose();
   if (stale()) return;
-  session = new ReaderSession();
   const reopen = origin && /^(https?|file):/.test(origin) ? ({ kind: 'pdf', url: origin } as const) : ({ kind: 'file', name } as const);
   // A title lifted from the first page of a PDF with no real title can be a whole paragraph;
   // in the Library the file name says more.
   const libraryTitle = doc.title.length > 90 ? name.replace(/\.pdf$/i, '') : doc.title;
-  await session.begin('article', { knownArticle: article, source: { title: libraryTitle, site: name, reopen } }).catch((err) =>
-    log.error('[pdf] reader failed to start:', err),
-  );
+  reading = { knownArticle: article, source: { title: libraryTitle, site: name, reopen } };
+  await startReader();
+}
+
+/** What the reader is given for the open document, to start it again once its bar is closed. */
+let reading: Pick<BeginOptions, 'knownArticle' | 'source'> | null = null;
+
+async function startReader(): Promise<void> {
+  if (!reading) return;
+  session = new ReaderSession();
+  await session.begin('article', { ...reading, onKeep: keepOnPage }).catch((err) => log.error('[pdf] reader failed to start:', err));
+}
+
+/** N, or the bar's bookmark, while reading: the passage is highlighted on the page too. */
+function keepOnPage(range: Range): boolean {
+  return editor?.markRange(range) ?? false;
+}
+
+/**
+ * The toolbar button or Alt+R here (shared/own-tab.ts): play or pause, or, once the bar was
+ * closed, read this document again, from where it stopped.
+ */
+function readAgain(): boolean {
+  if (!reading) return false;
+  if (session && !session.closed) void session.externalToggle();
+  else void startReader();
+  return true;
 }
 
 /**

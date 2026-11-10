@@ -52,7 +52,7 @@ import { PORT_NAME, type ActivateMode, type SessionState } from '@/shared/messag
 import { siteOf, type DocSource } from '@/shared/doc-source';
 import { NOTES_FULL_MESSAGE, addNote } from '@/shared/notes';
 import { createAnchor, type TextAnchor } from '@/annotate/anchor';
-import { anchorForRange } from '@/annotate/page-anchoring';
+import { anchorForRange, pageIndex } from '@/annotate/page-anchoring';
 import { recordListening } from '@/shared/reading-history';
 import { countWords, loadStats, recordCompleted, recordHeard, type Heard } from '@/shared/listening-stats';
 import { log } from '@/shared/log';
@@ -81,7 +81,7 @@ import { READING_ATTR } from '@/annotate/palette';
 import { shadowRootsOf } from '@/extract/flat-tree';
 import { readingPageUrl } from '@/shared/article-frame';
 
-interface BeginOptions {
+export interface BeginOptions {
   /** For "Read from here": the element that was right-clicked, when the browser can tell us. */
   targetElement?: Element | null;
   /** For "Read from here": the exact spot right-clicked, when this page's script saw it. */
@@ -112,6 +112,12 @@ interface BeginOptions {
   autoplay?: boolean;
   /** Called once the whole document has been read, so the queue page can move on. */
   onFinished?: () => void;
+  /**
+   * Mark a passage kept with N (or the bar's bookmark) on the page itself, where the page keeps
+   * its own marks: the PDF reader draws it, and writes it into the file when saved. Given the
+   * passage's range; true when it was marked. Web pages are marked by the annotator instead.
+   */
+  onKeep?: (range: Range) => boolean;
   /**
    * Every status change, with the error when it is one. `begin` returns while the voice is still
    * loading, and a voice that then fails says so on the bar, not by throwing: a page that waits
@@ -258,6 +264,7 @@ export class ReaderSession {
   private words: { playId: number; spans: Array<{ start: number; range: Range }>; shown: number } | null = null;
   private wordTimer = 0;
   private finishedHook: (() => void) | null = null;
+  private keepHook: ((range: Range) => boolean) | null = null;
   /**
    * The document was read to the end and nothing has moved since. Play then means "again from
    * the top": the scheduler is parked past the last sentence, so without a seek it has nothing
@@ -346,6 +353,7 @@ export class ReaderSession {
     this.knownArticle = opts.knownArticle ?? null;
     this.tipsAllowed = opts.showTips ?? true;
     this.finishedHook = opts.onFinished ?? null;
+    this.keepHook = opts.onKeep ?? null;
     this.statusHook = opts.onStatus ?? null;
     this.sourceHint = opts.source ?? null;
     this.keepHistory = opts.keepHistory ?? true;
@@ -703,7 +711,11 @@ export class ReaderSession {
         sourceText: this.selection.text,
       });
     } else {
-      if (this.mode === 'selection') log.warn('no usable selection — reading the whole article instead');
+      if (this.mode === 'selection') {
+        log.warn('no usable selection — reading the whole article instead');
+        // The page's read, then: its place is kept as any other's.
+        this.mode = 'article';
+      }
       if (!article.text || article.text.length < 40) {
         throw new Error("This page doesn't look like an article.");
       }
@@ -887,6 +899,21 @@ export class ReaderSession {
     this.stopFollowingWords(false);
     this.recordHistory(this.currentPlayId);
     this.setStatus('paused');
+  }
+
+  /** Stopped for good: its bar closed, or replaced. A new session is needed to read again. */
+  get closed(): boolean {
+    return this.disposed;
+  }
+
+  /** Reading a selection rather than the page. */
+  get readsSelection(): boolean {
+    return this.mode === 'selection';
+  }
+
+  /** A "Read selection" that has read to its end: the page's own read is what is wanted next. */
+  get selectionDone(): boolean {
+    return this.mode === 'selection' && this.finishedAtEnd;
   }
 
   /** Toolbar / shortcut activation on an already-running session. */
@@ -2193,12 +2220,13 @@ export class ReaderSession {
     this.currentPlayId = 0;
     this.state.currentIndex = this.playlist.length;
     this.setStatus('paused');
-    this.bar?.flash('Finished reading this page', 'ok');
+    this.bar?.flash(this.mode === 'selection' ? 'Finished reading the selection' : 'Finished reading this page', 'ok');
     this.currentOffScreen = false;
     this.renderFollow();
-    // Read to the end: next time it opens at the top, not at the last sentence.
+    // Read to the end: next time it opens at the top, not at the last sentence. Not for a selection:
+    // its end is not the page's, and clearing the place there sent the next read back to the top.
     this.lastSavedIndex = -1;
-    if (this.docKey) void clearPosition(this.docKey);
+    if (this.docKey && this.mode !== 'selection') void clearPosition(this.docKey);
     this.recordHistory(this.playlist.length, true);
     this.flushHeard();
     if (this.keepHistory && this.docKey && this.mode !== 'selection') void recordCompleted(this.docKey);
@@ -2307,18 +2335,21 @@ export class ReaderSession {
     let index = this.currentPlayId;
     let text = '';
     let anchor: TextAnchor | null = null;
+    /** The passage on the page, for a page that marks it itself (`onKeep`). */
+    let passage: Range | null = null;
     if (selectedText.length > 1) {
       text = selectedText;
       const range = selected!.getRangeAt(0);
+      passage = range.cloneRange();
       const node = range.startContainer;
       const element = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
       if (element) index = indexNearElement(this.playlist, element);
-      if (this.textIndex) anchor = anchorForRange(this.textIndex, range)?.anchor ?? null;
     } else {
       const position = this.scheduler?.playbackPosition();
       if (position && position.playId === index && position.seconds < JUST_STARTED_SECONDS && index > 0) index--;
       const item = this.playlist[index];
       text = item?.sourceText.replace(/\s+/g, ' ').trim() ?? '';
+      passage = item?.range ?? null;
       if (item && item.sourceAt != null && this.textIndex) {
         anchor = createAnchor(this.textIndex.fullText, item.sourceAt, item.sourceAt + item.sourceText.length);
       }
@@ -2327,6 +2358,22 @@ export class ReaderSession {
     // Anchors are for highlighting web pages again; Aloud's own pages (the PDF reader, the
     // Library's queue) keep their notes by position instead.
     const onWebPage = location.protocol === 'http:' || location.protocol === 'https:';
+    // Anchored in the page's own text, the text the highlights are looked for in (annotate/
+    // page-anchoring.ts), rather than the reader's, which may leave things out or join blocks
+    // differently: the passage's range on the page says exactly where it is.
+    if (onWebPage && passage) {
+      const page = pageIndex(document);
+      const onPage = page ? anchorForRange(page, passage)?.anchor ?? null : null;
+      if (onPage) anchor = onPage;
+      else if (!anchor && this.textIndex) anchor = anchorForRange(this.textIndex, passage)?.anchor ?? null;
+    }
+    if (passage && this.keepHook) {
+      try {
+        this.keepHook(passage);
+      } catch (err) {
+        log.warn('could not mark the passage on the page:', err);
+      }
+    }
 
     try {
       const { duplicate, full } = await addNote({
@@ -2404,6 +2451,9 @@ export class ReaderSession {
 
   /** Save the position, at most every few seconds while reading; `force` for teardown. */
   private rememberPosition(index: number, force = false): void {
+    // A selection's sentences are not the page's: its place, saved under the page, replaced where
+    // the page had got to, and the next read of the page started from the top.
+    if (this.mode === 'selection') return;
     if (!this.docKey || this.playlist.length === 0 || index === this.lastSavedIndex) return;
     const now = Date.now();
     if (!force && now - this.lastPositionSave < POSITION_SAVE_INTERVAL_MS) return;

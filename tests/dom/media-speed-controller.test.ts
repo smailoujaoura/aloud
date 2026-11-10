@@ -14,6 +14,7 @@ function player(): HTMLMediaElement {
   const el = document.createElement('audio');
   Object.defineProperty(el, 'readyState', { value: 4, configurable: true });
   Object.defineProperty(el, 'seeking', { value: false, writable: true, configurable: true });
+  Object.defineProperty(el, 'paused', { value: false, writable: true, configurable: true });
   document.body.append(el);
   return el;
 }
@@ -355,6 +356,58 @@ describe('the mute key', () => {
     document.body.dispatchEvent(e);
     vi.advanceTimersByTime(200);
     expect(e.defaultPrevented).toBe(false);
+    controller.stop();
+  });
+});
+
+describe('the keys, on a page with nothing to control', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    document.body.innerHTML = '';
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const press = (key: string): KeyboardEvent => {
+    const e = new KeyboardEvent('keydown', { key, code: `Key${key.toUpperCase()}`, bubbles: true, cancelable: true });
+    document.body.dispatchEvent(e);
+    return e;
+  };
+
+  it('leaves S, D, R, Z and X to a page with no video or audio', () => {
+    const { controller } = start(null);
+    for (const key of ['s', 'd', 'r', 'z', 'x', 'm']) expect(press(key).defaultPrevented).toBe(false);
+    controller.stop();
+  });
+
+  it('and to one whose only media is a muted preview playing out of sight, or a paused player with no box', () => {
+    const preview = document.createElement('video');
+    preview.muted = true;
+    Object.defineProperty(preview, 'paused', { value: false, configurable: true });
+    const hidden = document.createElement('audio');
+    document.body.append(preview, hidden);
+    const { controller } = start(null);
+    expect(press('d').defaultPrevented).toBe(false);
+    expect(preview.playbackRate).toBe(1);
+    controller.stop();
+  });
+
+  it('but a video big enough to watch is controlled even muted, as a Short often is', () => {
+    const short = document.createElement('video');
+    short.muted = true;
+    short.loop = true;
+    short.getBoundingClientRect = () => ({ top: 60, left: 400, bottom: 820, right: 830, width: 430, height: 760, x: 400, y: 60, toJSON: () => ({}) }) as DOMRect;
+    document.body.append(short);
+    const { controller } = start(null);
+    expect(press('d').defaultPrevented).toBe(true);
+    expect(short.playbackRate).toBe(1.25);
+    controller.stop();
+  });
+
+  it('takes them as soon as something plays', () => {
+    const el = player();
+    const { controller } = start(null);
+    expect(press('d').defaultPrevented).toBe(true);
+    expect(el.playbackRate).toBe(1.25);
     controller.stop();
   });
 });

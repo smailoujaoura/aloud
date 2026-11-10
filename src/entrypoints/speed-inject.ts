@@ -29,6 +29,15 @@ function siteHost(): string {
   }
 }
 
+/** A touch screen and no mouse or touchpad: a phone or tablet, whatever its browser says it is. */
+function touchOnly(): boolean {
+  try {
+    return matchMedia('(any-pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches;
+  } catch {
+    return false;
+  }
+}
+
 export default defineUnlistedScript(() => {
   const w = window as unknown as SpeedGlobal;
   if (w.__aloudSpeed) {
@@ -56,8 +65,15 @@ export default defineUnlistedScript(() => {
       stopWatching();
       return;
     }
-    guard.enabled = settings.mediaSpeed.blockAutoplay;
     const host = siteHost();
+    // Not on this site (Settings: "Not on these sites"), unless asked for with the shortcut. The
+    // registration leaves those sites out already; a frame from another site is caught here.
+    const never = settings.mediaSpeed.neverOn.some((site) => host === site || host.endsWith(`.${site}`));
+    if (never && withThePage) {
+      stopWatching();
+      return;
+    }
+    guard.enabled = settings.mediaSpeed.blockAutoplay;
     const sites: SiteSpeeds = settings.mediaSpeed.rememberPerSite
       ? await loadSiteSpeeds().catch(() => ({}) as SiteSpeeds)
       : {};
@@ -69,8 +85,9 @@ export default defineUnlistedScript(() => {
       settings: settings.mediaSpeed,
       onMedia: (media) => guard.track(media),
       initialRate: remembered ?? startAt,
-      // A phone has no keys: a speed button on the video instead.
-      touchButton: capabilities().touchFirst,
+      // A phone has no keys: a speed button on the video instead. A phone asking for a site's
+      // desktop version says it is a computer, and was left with keys it has no way to press.
+      touchButton: capabilities().touchFirst || touchOnly(),
       // Only the top frame remembers: an embedded player would otherwise store its own host.
       onRate: (rate) => {
         if (settingsNow.rememberPerSite && window.top === window) void rememberSiteSpeed(host, rate);

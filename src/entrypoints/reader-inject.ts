@@ -45,8 +45,10 @@ export default defineUnlistedScript(() => {
     const session = w.__aloudSession;
     // `fresh`: "Listen from here" in the Library, on a tab already being read — start again, so
     // the reader resumes at the sentence just saved.
-    if (session && mode === 'article' && !fresh) {
-      // Toolbar button / shortcut on an already-running session = play/pause toggle.
+    // Toolbar button / shortcut on an already-running session = play/pause toggle. Not on a
+    // selection read to its end: that played the selection again, from its first word, when the
+    // page was what was wanted, from where it had got to.
+    if (session && mode === 'article' && !fresh && !session.selectionDone) {
       void session.externalToggle();
       return;
     }
@@ -63,12 +65,22 @@ export default defineUnlistedScript(() => {
 
   const activateHere = (mode: ActivateMode, targetElement?: Element | null, fresh = false, resumeAt: SavedPosition | null = null): void => {
     const session = w.__aloudSession;
+    // A selection read in the middle of reading the page: afterwards, back to the page, where it
+    // had got to (its place is saved as it closes, below).
+    const backToPage = mode === 'selection' && !!session && !session.readsSelection;
     // "Read selection" / "Read from here" always (re)plan from the new anchor.
     if (session) void session.dispose();
     const next = new ReaderSession();
     w.__aloudSession = next;
-    const startPoint = mode === 'from-cursor' ? rightClickFor(targetElement ?? null) : null;
-    void next.begin(mode, { targetElement: targetElement ?? null, startPoint, resumeAt }).catch((err) =>
+    const startPoint = mode === 'from-cursor' ? fromHere(rightClickFor(targetElement ?? null)) : null;
+    const onFinished = backToPage
+      ? () => {
+          window.setTimeout(() => {
+            if (w.__aloudSession === next) activateHere('article', null, true);
+          }, 900);
+        }
+      : undefined;
+    void next.begin(mode, { targetElement: targetElement ?? null, startPoint, resumeAt, ...(onFinished ? { onFinished } : {}) }).catch((err) =>
       log.error('session failed to start:', err),
     );
   };
@@ -86,6 +98,19 @@ export default defineUnlistedScript(() => {
     },
     { capture: true, passive: true },
   );
+  /** "Read from here" on a selection starts where it starts; elsewhere, at the spot right-clicked. */
+  const fromHere = (spot: { node: Node; offset: number } | null): { node: Node; offset: number } | null => {
+    const selection = document.getSelection();
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0 || !selection.toString().trim()) return spot;
+    const range = selection.getRangeAt(0);
+    let inside = !spot;
+    try {
+      inside ||= range.isPointInRange(spot!.node, spot!.offset);
+    } catch {
+      /* a spot in another tree */
+    }
+    return inside ? { node: range.startContainer, offset: range.startOffset } : spot;
+  };
   const rightClickFor = (target: Element | null): { node: Node; offset: number } | null => {
     const c = lastRightClick;
     if (!c || Date.now() - c.at > 60_000) return null;

@@ -34,7 +34,7 @@ import { getSettings, setSettings, watchSettings } from '@/shared/settings';
 import { createLockTable, useLockTable } from '@/shared/storage-lock';
 import { loadWorkerGpu } from '@/shared/backend-memory';
 import { replyLater } from '@/shared/reply';
-import { findOwnTab, isOwnTab } from '@/shared/own-tab';
+import { askToReadHere, findOwnTab, isOwnTab } from '@/shared/own-tab';
 import { persistChanges, type MarksHandoff } from '@/pdf/annotations/sync';
 import type { Mark } from '@/pdf/annotations/model';
 import { normalizePosition, normalizeStoredMarks } from '@/shared/record-shapes';
@@ -176,7 +176,7 @@ export default defineBackground({
       // that would throw later on a browser without the namespace.
       if (!browser.contextMenus) throw new Error('browser.contextMenus is undefined');
 
-      browser.runtime.onInstalled.addListener(() => {
+      const createMenus = (): void => {
         // `onInstalled` also fires on update and on browser update, when the items already
         // exist; Chromium rejects a duplicate id outright, so start from a clean slate.
         void Promise.resolve(browser.contextMenus.removeAll()).then(() => {
@@ -195,10 +195,13 @@ export default defineBackground({
             title: 'Show my notes',
             contexts: ['page', 'selection'],
           });
+          // Wherever one right-clicks in the text: on a selection (from its start), on a link, and
+          // in a frame (a Claude artifact). With 'page' alone it was missing from the menu whenever
+          // anything was selected, and over every link.
           browser.contextMenus.create({
             id: MENU_READ_FROM_HERE,
             title: 'Read from here',
-            contexts: ['page'],
+            contexts: ['page', 'selection', 'link', 'frame'],
           });
           browser.contextMenus.create({
             id: MENU_QUEUE_PAGE,
@@ -217,7 +220,11 @@ export default defineBackground({
             contexts: ['action'],
           });
         });
-      });
+      };
+      browser.runtime.onInstalled.addListener(createMenus);
+      // And each time the browser starts: Firefox keeps an event page's menu items between its
+      // wake-ups, but not every version kept them across a restart, and "Read from here" was gone.
+      browser.runtime.onStartup.addListener(createMenus);
 
       browser.contextMenus.onClicked.addListener((info, tab) => {
         // The toolbar button's own menu is not about a page, and may arrive without a tab.
@@ -518,6 +525,8 @@ async function activate(
     postToActive({ type: 'toggle' });
     return true;
   }
+  // Its reader closed (the bar's ✕ on a PDF): it reads again, in place, from where it stopped.
+  if (ownPage && (await askToReadHere(tabId))) return true;
 
   // An empty page — a new tab, about:blank — has nothing to read: settings, as on the browser's
   // own pages. Firefox would let the reader into about:blank, only for it to report no article.
@@ -1029,7 +1038,7 @@ async function startSpeedControl(tabId: number): Promise<void> {
 async function syncSpeedSites(): Promise<void> {
   const { mediaSpeed, annotate } = await getSettings();
   // The speed control starts with the page: its autoplay guard must be there before the video is.
-  await syncRegistration(SPEED_SCRIPT_ID, SPEED_FILE, mediaSpeed.enabled ? mediaSpeed.alwaysOn : [], true, 'document_start');
+  await syncRegistration(SPEED_SCRIPT_ID, SPEED_FILE, mediaSpeed.enabled ? mediaSpeed.alwaysOn : [], true, 'document_start', mediaSpeed.neverOn);
   await syncRegistration(ANNOTATE_SCRIPT_ID, ANNOTATE_FILE, annotate.alwaysOn, false);
 }
 
@@ -1040,14 +1049,18 @@ async function syncRegistration(
   hosts: readonly string[],
   allFrames: boolean,
   runAt: 'document_start' | 'document_idle' = 'document_idle',
+  /** Hosts left out even when "every site" is on. */
+  never: readonly string[] = [],
 ): Promise<void> {
   if (!browser.scripting?.registerContentScripts) return;
   try {
     const wanted: string[] = [];
     for (const host of hosts) {
+      if (never.includes(host)) continue;
       const matches = host === '*' ? ['*://*/*'] : [`*://${host}/*`, `*://*.${host}/*`];
       if (await browser.permissions.contains({ origins: matches }).catch(() => false)) wanted.push(...matches);
     }
+    const excluded = never.flatMap((host) => [`*://${host}/*`, `*://*.${host}/*`]);
     const existing = await browser.scripting.getRegisteredContentScripts({ ids: [id] }).catch(() => []);
     // Already registered as wanted: leave it. This runs on every start of the background, which
     // Chromium stops and starts again whenever it idles; unregistering and registering each time
@@ -1059,6 +1072,7 @@ async function syncRegistration(
       current &&
       wanted.length > 0 &&
       sameSet(current.matches, [...new Set(wanted)]) &&
+      sameSet(current.excludeMatches ?? [], excluded) &&
       sameSet(current.js, [file.slice(1)]) &&
       !!current.allFrames === allFrames &&
       (current.runAt ?? 'document_idle') === runAt
@@ -1068,7 +1082,7 @@ async function syncRegistration(
     if (existing.length > 0) await browser.scripting.unregisterContentScripts({ ids: [id] });
     if (wanted.length === 0) return;
     await browser.scripting.registerContentScripts([
-      { id, js: [file.slice(1)], matches: [...new Set(wanted)], allFrames, runAt, persistAcrossSessions: true },
+      { id, js: [file.slice(1)], matches: [...new Set(wanted)], ...(excluded.length ? { excludeMatches: excluded } : {}), allFrames, runAt, persistAcrossSessions: true },
     ]);
     console.info(`[aloud] ${id} runs by itself on ${new Set(wanted).size} pattern(s)`);
   } catch (err) {

@@ -202,7 +202,11 @@ export class MarkEditor {
     this.saveBtn.title = title;
     this.saveBtn.disabled = this.saving;
     this.saveBtn.classList.toggle('unsaved', unsaved);
-    if (!this.saving && !this.status.classList.contains('flash')) this.status.textContent = unsaved ? 'Not in the file yet' : count ? 'Saved in the file' : '';
+    // Every mark is kept on this device as it is made (store.ts), for a PDF from the web as for a
+    // file: opened again, it has them. "Not in the file yet" read as "not saved", as if they would
+    // be lost without a Save; Save puts them in the PDF file itself, for other apps.
+    if (!this.saving && !this.status.classList.contains('flash')) this.status.textContent = unsaved ? 'Kept on this device' : count ? 'Saved in the file' : '';
+    this.status.title = unsaved ? 'Your marks come back whenever you open this PDF in Aloud. Save puts them in the file too, for other apps' : '';
     if (this.panel) this.renderPanel(this.panel);
   }
 
@@ -297,6 +301,26 @@ export class MarkEditor {
   private closeSelectionBar(): void {
     this.selectionBar?.remove();
     this.selectionBar = null;
+  }
+
+  /**
+   * Highlight `range` in the last colour used: the reader's "keep this" (N) on a sentence or a
+   * selection. Kept in Notes only, it was never marked on the page, as a highlight made from the
+   * selection is. False when there is no text there; nothing new when it is highlighted already.
+   */
+  markRange(range: Range): boolean {
+    const found = textInRange(this.pages, range);
+    if (found.length === 0) return false;
+    const now = Date.now();
+    let added = false;
+    for (const { page, boxes, text } of found) {
+      const already = this.history.marks.some((m) => m.page === page && m.kind !== 'note' && m.text === text);
+      if (already) continue;
+      this.history.add({ id: newMarkId(), page, kind: 'highlight', color: toneFor('highlight', this.colorId), boxes, text, note: '', created: now, updated: now });
+      added = true;
+    }
+    if (added) this.changed();
+    return true;
   }
 
   /** Turn the current selection into a mark (one per page it spans). */
@@ -675,7 +699,11 @@ export class MarkEditor {
 export function selectedText(pages: Map<number, EditorPage>): Array<{ page: number; boxes: Box[]; text: string }> {
   const selection = document.getSelection();
   if (!selection || selection.isCollapsed || selection.rangeCount === 0) return [];
-  const range = selection.getRangeAt(0);
+  return textInRange(pages, selection.getRangeAt(0));
+}
+
+/** The text `range` covers in the pages' text layers, and its boxes, page by page. */
+export function textInRange(pages: Map<number, EditorPage>, range: Range): Array<{ page: number; boxes: Box[]; text: string }> {
   const root = range.commonAncestorContainer;
   const scope = root.nodeType === Node.TEXT_NODE ? root.parentNode! : root;
 

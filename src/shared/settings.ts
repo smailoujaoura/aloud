@@ -161,6 +161,11 @@ export interface MediaSpeedSettings {
   blockAutoplay: boolean;
   /** Hosts the control starts on by itself, once that site's permission has been granted. */
   alwaysOn: string[];
+  /**
+   * Hosts it never starts on by itself, whatever `alwaysOn` says: for "every site" but one, where
+   * its keys are the page's own (a game, an editor, a site with a video playing in the background).
+   */
+  neverOn: string[];
   /** How far one press of rewind or skip forward moves, in seconds. */
   seekSeconds: number;
   /** Key bindings, as text — see media-speed/keys.ts. */
@@ -195,6 +200,7 @@ export const DEFAULT_MEDIA_SPEED: MediaSpeedSettings = {
   blockAutoplay: false,
   seekSeconds: 10,
   alwaysOn: [],
+  neverOn: [],
   keys: {
     faster: 'd',
     slower: 's',
@@ -642,6 +648,7 @@ export function sanitizeSettings(raw: Settings): Settings {
       seekSeconds: Math.round(clamp(raw.mediaSpeed?.seekSeconds, 1, 120, DEFAULT_MEDIA_SPEED.seekSeconds)),
       presets: presets.length ? presets : [...DEFAULT_MEDIA_SPEED.presets],
       alwaysOn: hosts(raw.mediaSpeed?.alwaysOn),
+      neverOn: hosts(raw.mediaSpeed?.neverOn).filter((h) => h !== '*'),
       keys: mediaKeys(raw.mediaSpeed?.keys),
     },
   };

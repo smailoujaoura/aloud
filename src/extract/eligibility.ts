@@ -30,6 +30,13 @@ const WIDGET_ROLES = new Set([
   'tab', 'tablist', 'textbox', 'toolbar',
 ]);
 
+/**
+ * Text a page makes focusable so a keyboard can scroll it, not so it can be pressed: a code listing
+ * (`<pre tabindex="0">`, `<code tabindex="0">` on GitHub, MDN and Apple's DocC), a wide table.
+ * A one-line listing in the Swift book was taken for a button and never read.
+ */
+const FOCUSABLE_TEXT = new Set(['PRE', 'CODE', 'KBD', 'SAMP', 'TABLE', 'TD', 'TH', 'P', 'LI', 'BLOCKQUOTE', 'FIGURE', 'DL', 'DD', 'DT', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6']);
+
 /** Attributes of something that toggles or controls another part of the page. */
 const CONTROL_ATTRS = ['onclick', 'aria-controls', 'aria-expanded', 'aria-pressed', 'data-toggle', 'data-bs-toggle', 'data-action'];
 
@@ -361,7 +368,7 @@ function isControl(el: Element): boolean {
   const ownPointer = style?.cursor === 'pointer' && (!parent || styleOf(parent)?.cursor !== 'pointer');
   const toggles =
     CONTROL_ATTRS.some((a) => el.hasAttribute(a)) ||
-    (el.hasAttribute('tabindex') && Number(el.getAttribute('tabindex')) >= 0);
+    (el.hasAttribute('tabindex') && Number(el.getAttribute('tabindex')) >= 0 && !FOCUSABLE_TEXT.has(el.tagName) && !el.closest('pre'));
   if (ownPointer || toggles) return true;
 
   // A label beside its control: short text whose sibling is a clickable thing with no text of its

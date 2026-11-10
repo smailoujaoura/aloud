@@ -51,6 +51,21 @@ export function renderMediaSpeedPanel(host: HTMLElement, opts: MediaSpeedPanelOp
     toast: opts.toast,
   });
   rows.push(sites);
+  // "Every site" but these: where the letters are the page's own (a game, an editor, a page with
+  // a video playing in the background), the control is not there to take them.
+  if (s.alwaysOn.length > 0) {
+    const never = el(document, 'div', { class: 'speed-sites' });
+    renderSiteList(never, {
+      heading: 'But never on',
+      empty: 'No exceptions. Its keys only work while there is a video or audio to control.',
+      what: 'the speed control',
+      sites: s.neverOn,
+      save: (neverOn) => opts.save({ neverOn }),
+      toast: opts.toast,
+      exclusions: true,
+    });
+    rows.push(never);
+  }
 
   // ---- how it behaves ----
   rows.push(

@@ -115,6 +115,9 @@ body.pages-view #article > h1 {
 .text-layer {
   position: absolute;
   inset: 0;
+  /* Zoomed with a scale() (main.ts: zoomTo), from the corner the page grows from. From its centre,
+   * the default, the words moved up and left of the picture of them, and the highlight with them. */
+  transform-origin: 0 0;
   color: transparent;
   /* The lines are positioned individually; nothing here should flow. */
   line-height: 1;

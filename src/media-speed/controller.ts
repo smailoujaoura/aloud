@@ -330,6 +330,10 @@ export class MediaSpeedController {
     if (e.composedPath().some((n) => n instanceof HTMLElement && n.id === CONTROL_HOST_ID)) return;
 
     const { keys } = this.settings;
+    // With nothing here to control, the letters are the page's: S, D, R, Z and X were taken, and a
+    // "No video or audio here" shown, on every site the control runs on, a page of text included.
+    this.prune();
+    if (![...this.known].some(controllable)) return;
     if (matchesBinding(e, keys.mute)) {
       if (!e.repeat) this.toggleMute(e.code);
       return;
@@ -353,10 +357,6 @@ export class MediaSpeedController {
 
     e.preventDefault();
     e.stopPropagation();
-    if (this.known.size === 0) {
-      this.showBadge('No video or audio here');
-      return;
-    }
     this.setRate(next);
   }
 
@@ -375,7 +375,7 @@ export class MediaSpeedController {
    */
   private toggleMute(code: string): void {
     this.prune();
-    const media = activeMedia(this.known);
+    const media = activeMedia([...this.known].filter(controllable));
     if (!media) return;
     const silent = (m: Media): boolean => m.muted || m.volume === 0;
     const before = silent(media);
@@ -414,7 +414,7 @@ export class MediaSpeedController {
    */
   seekBy(seconds: number): void {
     this.prune();
-    const media = activeMedia(this.known);
+    const media = activeMedia([...this.known].filter(controllable));
     if (!media) {
       this.showBadge('No video or audio here', undefined, true);
       return;
@@ -565,6 +565,23 @@ function activeMedia(media: Iterable<Media>): Media | null {
     }
   }
   return best;
+}
+
+/**
+ * Something the keys are for: a video on screen big enough to watch (a Short muted and looping
+ * included), one playing with its sound on, audio playing, or an audio player showing its controls.
+ * Not a small or hidden player waiting in a corner, nor a muted preview playing out of sight.
+ */
+export function controllable(media: Media): boolean {
+  if (!media.isConnected) return false;
+  const playing = !media.paused && !media.ended;
+  const box = media.getBoundingClientRect();
+  const onScreen = box.bottom > 0 && box.top < window.innerHeight && box.right > 0 && box.left < window.innerWidth;
+  if (media instanceof HTMLVideoElement) {
+    if (onScreen && box.width >= 200 && box.height >= 110) return true;
+    return playing && !media.muted && media.volume > 0;
+  }
+  return playing || (media.controls && onScreen && box.width > 0);
 }
 
 /** 83 → "1:23"; 3723 → "1:02:03". */

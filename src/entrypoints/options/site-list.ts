@@ -17,6 +17,11 @@ export interface SiteListOptions {
   sites: readonly string[];
   save(sites: string[]): Promise<void>;
   toast(message: string): void;
+  /**
+   * A list of sites where it does *not* start: nothing to grant, no "Every site…", and messages
+   * that say so.
+   */
+  exclusions?: boolean;
 }
 
 export function renderSiteList(host: HTMLElement, opts: SiteListOptions): void {
@@ -30,7 +35,8 @@ export function renderSiteList(host: HTMLElement, opts: SiteListOptions): void {
     const remove = el(document, 'button', { type: 'button', class: 'chip-x', title: `Remove ${label}`, 'aria-label': `Remove ${label}` }, '✕');
     remove.addEventListener('click', async () => {
       await opts.save(opts.sites.filter((a) => a !== site));
-      opts.toast(`${capitalise(opts.what)} no longer starts on ${site === '*' ? 'every site' : site}`);
+      if (opts.exclusions) opts.toast(`${capitalise(opts.what)} may start on ${site} again`);
+      else opts.toast(`${capitalise(opts.what)} no longer starts on ${site === '*' ? 'every site' : site}`);
     });
     chip.append(remove);
     list.append(chip);
@@ -41,6 +47,10 @@ export function renderSiteList(host: HTMLElement, opts: SiteListOptions): void {
   const addAll = el(document, 'button', { type: 'button', class: 'ghost btn-sm' }, 'Every site…');
 
   const grant = (site: string): void => {
+    if (opts.exclusions) {
+      if (!opts.sites.includes(site)) void opts.save([...opts.sites, site]).then(() => opts.toast(`${capitalise(opts.what)} no longer starts on ${site}`));
+      return;
+    }
     const origins = site === '*' ? ['*://*/*'] : [`*://${site}/*`, `*://*.${site}/*`];
     // permissions.request must be called from the click itself, before anything is awaited.
     void browser.permissions
@@ -71,7 +81,8 @@ export function renderSiteList(host: HTMLElement, opts: SiteListOptions): void {
   addAll.addEventListener('click', () => grant('*'));
 
   const adder = el(document, 'div', { class: 'site-add' });
-  adder.append(input, add, addAll);
+  adder.append(input, add);
+  if (!opts.exclusions) adder.append(addAll);
   host.replaceChildren(head, list, adder);
 }
 
