@@ -4,7 +4,7 @@ What changed in each version of Aloud, in the words used for the store release n
 go under **Unreleased** as they are made; a release renames that section to its version and date.
 Website-only and documentation changes are not listed: they never reach the extension.
 
-## Unreleased
+## 1.0.3 (2026-11-10)
 
 ### Changed
 - pdf.js (the PDF reader's engine) is shipped as Mozilla publishes it unminified, for the Chrome

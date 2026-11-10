@@ -46,6 +46,22 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 
 **Support:** https://aloud.souj.dev/feedback.html (bugs go to GitHub issues from there)
 
+## Release notes for 1.0.3 (AMO's version notes; plain text)
+
+> Fixed
+> • Notes, tips and warnings in documentation are read (the Swift book's were all skipped), and so are one-line code listings, passages Readability left out between paragraphs (MDN's opening section) and an article's standfirst.
+> • Read selection no longer loses your place in the page: when it ends, the reader goes back to where you were.
+> • Read from here is in the right-click menu again, also on selected text, on links and in embedded pages.
+> • PDFs: N highlights the sentence on the page; zooming no longer moves the highlight off the words; closing the reading bar and pressing Aloud again reads in the same tab; highlights say "Kept on this device", as they are.
+> • The video speed keys are left to the page when it has no video or audio to control.
+> • On a phone asking for desktop sites, the speed button shows on videos, YouTube Shorts included.
+>
+> New
+> • Video speed: "But never on", a list of sites where the speed control never starts by itself.
+>
+> Changed
+> • pdf.js is included as Mozilla publishes it unminified, for the Chrome Web Store's code readability rules.
+
 ## Release notes for 1.0.2 (AMO's version notes; plain text)
 
 > New
@@ -175,7 +191,7 @@ bundled by https://github.com/mozilla/pdf.js in `pdfjs-dist/legacy/build/`.
 
 - **Data collection:** the manifest declares `data_collection_permissions: { required: ["none"], optional: ["websiteContent"] }`:
   the optional one is asked for only when a reader sets up their own speech server (see above).
-- **Source code:** upload `.output/tts-reader-1.0.2-sources.zip` with this note for the reviewer
+- **Source code:** upload `.output/tts-reader-1.0.3-sources.zip` with this note for the reviewer
   (AMO's field takes at most 3,000 characters; keep it under 2,900):
 
   > Build: Node 22.23, npm 10.9, Linux: npm ci && npm run build:firefox (the archive's .npmrc sets legacy-peer-deps, which the lockfile needs). No network is needed after npm ci: the voice catalogue (public/models.json) is committed. Output: .output/firefox-mv3/, byte-identical to the uploaded package (checked by building the source archive in a clean folder and comparing all 468 files' SHA-256). Nothing is minified.
@@ -200,8 +216,8 @@ bundled by https://github.com/mozilla/pdf.js in `pdfjs-dist/legacy/build/`.
 
 ## Before pressing submit
 
-- [ ] The privacy policy deployed (website/privacy.html, in effect from 6 November 2026 for 1.0.2:
-      reading an article in an embedded page from another site, after the reader allows that site)
+- [ ] The privacy policy deployed (website/privacy.html, in effect from 6 November 2026, for 1.0.2
+      and 1.0.3: nothing new in 1.0.3 is collected or sent anywhere)
 
 - [ ] `data-stores="live"` on `website/index.html` `<body>`, and the three store URLs checked
 - [ ] The Piper voice licences reviewed (PIPER_VOICE_LICENCES.md; regenerate with `node scripts/piper-licences.mjs` if the catalogue changed)
