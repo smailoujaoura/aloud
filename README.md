@@ -94,7 +94,7 @@ Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave,
   yours to rename and change, and passages kept with a note get their own colour. The passage is
   marked again whenever you come back — anchored by its text, so it survives the page being
   edited around it. While Aloud reads, the same key (or the bookmark on the bar) keeps the
-  sentence you just heard.
+  sentence being read.
 - **Your notes, on the page** — <kbd>Alt</kbd>+<kbd>N</kbd>, <kbd>Alt</kbd>+<kbd>K</kbd> with
   nothing selected, or right-click → *Show my notes*: a panel listing this page's notes or all of
   them, searchable, each one a click from its place.

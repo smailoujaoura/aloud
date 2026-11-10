@@ -331,7 +331,7 @@ export class ControlBar {
     this.nextBtn = this.iconButton('next', 'Next sentence', ICON_PATHS.next, 'Next sentence');
     const backBtn = this.iconButton('back', 'Back a little', ICON_PATHS.replay, 'Back to the start of the sentence, or the one before');
     backBtn.addEventListener('click', () => this.cb.onBackALittle());
-    const noteBtn = this.iconButton('note', 'Save to Notes', ICON_PATHS.bookmark, 'Save what you just heard to Notes');
+    const noteBtn = this.iconButton('note', 'Save to Notes', ICON_PATHS.bookmark, 'Keep the sentence being read in Notes');
     noteBtn.addEventListener('click', () => this.cb.onSaveNote());
     this.followBtn = this.iconButton('follow', 'Follow the reading', ICON_PATHS.snap);
     this.followBtn.setAttribute('aria-pressed', 'true');

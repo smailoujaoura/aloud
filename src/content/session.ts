@@ -169,8 +169,6 @@ const FOLLOW_RESUME_MS = 5000;
 const POSITION_SAVE_INTERVAL_MS = 4000;
 /** Reading history is written this often while playing (and always on pause, close and finish). */
 const HISTORY_WRITE_INTERVAL_MS = 15_000;
-/** A sentence heard for less than this when "save to notes" is pressed gives way to the previous one (sentenceMeant). */
-const JUST_STARTED_SECONDS = 1.2;
 /**
  * After this many sentences in a row fail to synthesise, stop and say so. Skipping a sentence that
  * fails is right; skipping *every* sentence is not — the page races past, highlighted and silent,
@@ -2392,7 +2390,9 @@ export class ReaderSession {
       const element = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
       if (element) index = indexNearElement(this.playlist, element);
     } else {
-      index = this.sentenceMeant(index);
+      // The sentence highlighted as being read, always. A sentence only just begun used to give
+      // way to the one before (pressed late, after hearing it): N then highlighted the sentence
+      // before the one in front of the reader, and pressed again said "Already in your notes".
       const item = this.playlist[index];
       text = item?.sourceText.replace(/\s+/g, ' ').trim() ?? '';
       passage = item?.range ?? null;
@@ -2434,7 +2434,9 @@ export class ReaderSession {
         this.bar?.flash(NOTES_FULL_MESSAGE);
         return;
       }
-      this.bar?.flash(duplicate ? 'Already in your notes' : 'Saved to Notes', 'ok', {
+      // Which passage it was, so what was kept is never a guess.
+      const shown = text.length > 60 ? `${text.slice(0, 57).trimEnd()}…` : text;
+      this.bar?.flash(duplicate ? `Already in your notes: “${shown}”` : `Saved to Notes: “${shown}”`, 'ok', {
         label: 'Open',
         run: () => this.background()?.postMessage({ type: 'open-library', tab: 'notes' }),
       });
@@ -2442,24 +2444,6 @@ export class ReaderSession {
       log.warn('could not save the note:', err);
       this.bar?.flash('Could not save that note');
     }
-  }
-
-  /**
-   * The sentence someone pressing "keep" means. It is pressed *after* hearing what they want, so a
-   * sentence that has only just begun, in the middle of a paragraph, gives way to the one before:
-   * the one they were reacting to; so does one whose pause before it is still playing. Not at the
-   * start of a paragraph or a section, which a pause sets apart, nor ever to a heading: a heading
-   * is said in less time than that, so a section's heading gave way to the end of the last
-   * section, and its first sentence to the heading.
-   */
-  private sentenceMeant(index: number): number {
-    const position = this.scheduler?.playbackPosition();
-    const item = this.playlist[index];
-    const before = this.playlist[index - 1];
-    if (!position || position.playId !== index || !item || !before || before.isHeading) return index;
-    // Negative: the pause before it, with nothing of it heard yet.
-    if (position.seconds < 0) return index - 1;
-    return position.seconds < JUST_STARTED_SECONDS && !item.startsBlock ? index - 1 : index;
   }
 
   /**

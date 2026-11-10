@@ -158,7 +158,7 @@ export default defineConfig({
       },
       'save-note': {
         suggested_key: { default: 'Alt+K' },
-        description: 'Save what you just heard (or the selected text) to Notes',
+        description: 'Highlight the selected text, or the sentence being read, and keep it in Notes',
       },
       'back-a-little': {
         // Chromium allows four suggested shortcuts; this and the two below go without one there

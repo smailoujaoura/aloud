@@ -26,9 +26,10 @@ Website-only and documentation changes are not listed: they never reach the exte
 - A voice no longer stops with "… is not producing audio" over a moment's trouble. A sentence that
   fails is asked for again, and the reader starts again by itself, twice, before it says so. When
   one of Phonon's workers stopped, every sentence it held failed at once; Play then worked at once.
-- N at the start of a section keeps what you are hearing. A heading is said in less time than N
-  allows for a late press, so the heading gave way to the end of the last section, and the
-  section's first sentence to the heading.
+- N keeps the sentence being read, the one highlighted, and says which ("Saved to Notes: …").
+  A sentence only just begun gave way to the one before, so N highlighted the sentence before
+  the one being read, pressed again said "Already in your notes", and the sentence itself never
+  lit up. At a section's start that was the end of the last section, or the heading.
 - Notes, tips and warnings in documentation are read. The Swift book puts each "Note" in an aside,
   and Aloud passed over every one, with every Skip setting off. One-line code listings there were
   skipped too, taken for buttons.

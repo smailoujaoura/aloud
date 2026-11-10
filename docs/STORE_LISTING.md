@@ -50,7 +50,7 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 
 > Fixed
 > • A voice no longer stops with "… is not producing audio" over a moment's trouble: a sentence that fails is asked for again, and the reader starts again by itself before saying so.
-> • N at the start of a section keeps what you are hearing, not the sentence before it.
+> • N keeps the sentence being read, the one highlighted, and says which; it could keep the sentence before it.
 > • Notes, tips and warnings in documentation are read (the Swift book's were all skipped), and so are one-line code listings, passages Readability left out between paragraphs (MDN's opening section) and an article's standfirst.
 > • Read selection no longer loses your place in the page: when it ends, the reader goes back to where you were.
 > • Back a little (Z) goes back one sentence at a time, as X goes forward one, instead of two or three short ones at once.
