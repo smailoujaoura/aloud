@@ -6,13 +6,18 @@ Website-only and documentation changes are not listed: they never reach the exte
 
 ## 1.0.3 (2026-11-10)
 
+### Added
+- **Keys for Read selection and Read from here.** Alt+L reads the selected text, Alt+G reads
+  from here: from the selection, or from where you last clicked in the text (from the top of the
+  screen when that is out of sight). In Chromium, which gives an add-on four keys, you choose
+  them in `chrome://extensions/shortcuts`. Alt+K, which highlights the selected text and keeps
+  it in Notes, says so in Settings → Shortcuts.
+- **Video speed: "But never on".** With the speed control on every site, a list of sites where it
+  never starts, for pages whose letter keys are their own.
+
 ### Changed
 - pdf.js (the PDF reader's engine) is shipped as Mozilla publishes it unminified, for the Chrome
   Web Store's code readability rules. Nothing about it changes when reading.
-
-### Added
-- **Video speed: "But never on".** With the speed control on every site, a list of sites where it
-  never starts, for pages whose letter keys are their own.
 
 ### Fixed
 - Notes, tips and warnings in documentation are read. The Swift book puts each "Note" in an aside,

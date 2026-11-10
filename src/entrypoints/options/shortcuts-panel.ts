@@ -51,7 +51,9 @@ const READER_ROWS: Array<[keyof ReaderKeys, string, string]> = [
 /** In the order they matter, with plainer words than the manifest's descriptions. */
 const COMMANDS: Array<{ name: string; label: string; hint: string }> = [
   { name: 'toggle-read', label: 'Read this page aloud', hint: 'Start or stop reading, wherever you are' },
-  { name: 'save-note', label: 'Keep the selection (or the sentence you just heard)', hint: 'With nothing selected and nothing reading, shows your notes' },
+  { name: 'read-selection', label: 'Read the selected text aloud', hint: 'Then back to where you were in the page' },
+  { name: 'read-from-here', label: 'Read from here', hint: 'From the selection, or where you last clicked, to the end' },
+  { name: 'save-note', label: 'Highlight the selection and keep it in Notes', hint: 'Or the sentence you just heard. With nothing selected and nothing reading, shows your notes' },
   { name: 'notes-panel', label: 'Show my notes on this page', hint: 'This page’s notes, or all of them' },
   { name: 'back-a-little', label: 'Back a little', hint: 'The sentence again, or the one before' },
   { name: 'media-speed', label: 'Control this page’s video or audio speed', hint: 'Then D and S to change it' },

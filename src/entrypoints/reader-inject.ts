@@ -32,7 +32,7 @@ export default defineUnlistedScript(() => {
   if (w.__aloudLoaded) return;
   w.__aloudLoaded = true;
 
-  const activate = (mode: ActivateMode, targetElement?: Element | null, fresh = false, resumeAt: SavedPosition | null = null, onSelection = false): void => {
+  const activate = (mode: ActivateMode, targetElement?: Element | null, fresh = false, resumeAt: SavedPosition | null = null, onSelection = false, onCaret = false): void => {
     // Chromium hands a PDF tab to a plugin `<embed>`: the document's URL is the PDF, but its DOM
     // holds no text at all, so extraction can only ever fail here ("this page doesn't look like
     // an article"). The background opens Aloud's own PDF reader instead — it catches PDFs by URL
@@ -60,10 +60,10 @@ export default defineUnlistedScript(() => {
         return;
       }
     }
-    activateHere(mode, targetElement, fresh, resumeAt, onSelection);
+    activateHere(mode, targetElement, fresh, resumeAt, onSelection, onCaret);
   };
 
-  const activateHere = (mode: ActivateMode, targetElement?: Element | null, fresh = false, resumeAt: SavedPosition | null = null, onSelection = false): void => {
+  const activateHere = (mode: ActivateMode, targetElement?: Element | null, fresh = false, resumeAt: SavedPosition | null = null, onSelection = false, onCaret = false): void => {
     const session = w.__aloudSession;
     // A selection read in the middle of reading the page: afterwards, back to the page, where it
     // had got to (its place is saved as it closes, below).
@@ -72,7 +72,8 @@ export default defineUnlistedScript(() => {
     if (session) void session.dispose();
     const next = new ReaderSession();
     w.__aloudSession = next;
-    const startPoint = mode === 'from-cursor' ? fromHere(rightClickFor(targetElement ?? null), onSelection) : null;
+    // From the keyboard there is no right-click: the selection, or the caret a click left.
+    const startPoint = mode !== 'from-cursor' ? null : onCaret ? caretSpot() : fromHere(rightClickFor(targetElement ?? null), onSelection);
     const onFinished = backToPage
       ? () => {
           window.setTimeout(() => {
@@ -115,6 +116,28 @@ export default defineUnlistedScript(() => {
     }
     return inside ? { node: range.startContainer, offset: range.startOffset } : spot;
   };
+  /**
+   * Where the selection starts, or the caret a click on the text left (the browser keeps one, even
+   * in text that cannot be edited), when it is on screen: a click long scrolled away is not "here",
+   * and the reader starts at the top of the screen instead.
+   */
+  const caretSpot = (): { node: Node; offset: number } | null => {
+    const selection = document.getSelection();
+    if (!selection || selection.rangeCount === 0) return null;
+    const range = selection.getRangeAt(0);
+    let box = range.getBoundingClientRect();
+    if (box.width === 0 && box.height === 0) {
+      const start = range.startContainer;
+      const el = start.nodeType === Node.ELEMENT_NODE ? (start as Element) : start.parentElement;
+      if (!el) return null;
+      box = el.getBoundingClientRect();
+    }
+    // A click on Aloud's own bar or notes leaves the caret at their box, not in the text.
+    const at = range.startContainer.nodeType === Node.ELEMENT_NODE ? (range.startContainer as Element) : range.startContainer.parentElement;
+    if (at?.closest('#aloud-control-host, #aloud-annotate-host')) return null;
+    if (box.bottom < 0 || box.top > window.innerHeight) return null;
+    return { node: range.startContainer, offset: range.startOffset };
+  };
   const rightClickFor = (target: Element | null): { node: Node; offset: number } | null => {
     const c = lastRightClick;
     if (!c || Date.now() - c.at > 60_000) return null;
@@ -124,7 +147,7 @@ export default defineUnlistedScript(() => {
   };
 
   browser.runtime.onMessage.addListener((msg: unknown, _sender, sendResponse: (reply: unknown) => void) => {
-    const m = msg as { type?: string; mode?: ActivateMode; targetElementId?: number; fresh?: boolean; resumeAt?: unknown; fromSelection?: boolean };
+    const m = msg as { type?: string; mode?: ActivateMode; targetElementId?: number; fresh?: boolean; resumeAt?: unknown; fromSelection?: boolean; fromCaret?: boolean };
     // "Add page to reading queue": extract now, while the page is open and readable. Answered with
     // `sendResponse`: a returned promise arrives as `undefined` in Chromium 120 (shared/reply.ts).
     if (m?.type === 'extract-for-queue') return replyLater(sendResponse, extractForQueue());
@@ -148,7 +171,7 @@ export default defineUnlistedScript(() => {
         /* not available / stale id */
       }
     }
-    activate(m.mode ?? 'article', target, m.fresh === true, m.resumeAt == null ? null : normalizePosition(m.resumeAt), m.fromSelection === true);
+    activate(m.mode ?? 'article', target, m.fresh === true, m.resumeAt == null ? null : normalizePosition(m.resumeAt), m.fromSelection === true, m.fromCaret === true);
     return false;
   });
 

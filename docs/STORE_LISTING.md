@@ -58,6 +58,7 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 > • On a phone asking for desktop sites, the speed button shows on videos, YouTube Shorts included.
 >
 > New
+> • Keys for Read selection (Alt+L) and Read from here (Alt+G): from the selection, or from where you last clicked. In Chrome, choose them in chrome://extensions/shortcuts.
 > • Video speed: "But never on", a list of sites where the speed control never starts by itself.
 >
 > Changed

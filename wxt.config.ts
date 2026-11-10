@@ -161,17 +161,25 @@ export default defineConfig({
         description: 'Save what you just heard (or the selected text) to Notes',
       },
       'back-a-little': {
-        // Chromium allows four suggested shortcuts and there are five commands; this is the one
-        // that goes without a default there, since the reading bar has a button for it.
+        // Chromium allows four suggested shortcuts; this and the two below go without one there
+        // (set them on chrome://extensions/shortcuts, as Settings → Shortcuts says).
         ...(browser === 'firefox' ? { suggested_key: { default: 'Alt+Comma' } } : {}),
-        description: 'Back a little: replay the last few seconds',
+        description: 'Back a little: the sentence again, or the one before',
+      },
+      'read-selection': {
+        // L: listen. Free in Firefox and Chromium alike (options/reserved-keys.ts).
+        ...(browser === 'firefox' ? { suggested_key: { default: 'Alt+L' } } : {}),
+        description: 'Read the selected text aloud',
+      },
+      'read-from-here': {
+        // G: go on from here.
+        ...(browser === 'firefox' ? { suggested_key: { default: 'Alt+G' } } : {}),
+        description: 'Read from here: from the selection, or where you last clicked, to the end',
       },
       'media-speed': {
         suggested_key: { default: 'Alt+M' },
         description: 'Control this page’s video / audio speed from the keyboard',
       },
-      // Chromium allows only four suggested shortcuts; "back a little" is the one that goes
-      // without there, since it is also a button on the reading bar.
       'notes-panel': {
         suggested_key: { default: 'Alt+N' },
         description: 'Show your notes on this page',

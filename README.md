@@ -189,7 +189,9 @@ npm run build          # builds BOTH .output/firefox-mv3 and .output/chrome-mv3
 Installing opens the **walkthrough** — six steps, including a live demo that reads the page
 itself aloud. Then open an article and click the **Aloud** toolbar button (or press
 `Alt+R`, which you can change). The first run downloads the voice; after that it works offline. Right-click gives
-**Read selection aloud** and **Read from here**. Settings — theme, engine, voice, speed,
+**Read selection aloud** and **Read from here** (keys too: `Alt+L` and `Alt+G` in Firefox; in
+Chromium you pick them yourself in `chrome://extensions/shortcuts`), and `Alt+K` highlights the
+selected text and keeps it in Notes. Settings — theme, engine, voice, speed,
 highlight colour, cached-model management — are on the extension's options page, which also
 reopens the walkthrough.
 

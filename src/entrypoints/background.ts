@@ -166,6 +166,14 @@ export default defineBackground({
         } else if (command === 'back-a-little') {
           if (active) postToActive({ type: 'back-a-little' });
           else if (tab?.id != null) tellTab(tab.id, 'Start reading first', '…');
+        } else if (command === 'read-selection') {
+          if (tab?.id != null) void readSelectionCommand(tab.id);
+        } else if (command === 'read-from-here') {
+          if (tab?.id != null) {
+            // From the selection or the caret a click left, not a right-click spot (reader-inject.ts).
+            fromCaret.add(tab.id);
+            void activate(tab.id, 'from-cursor', undefined, false, null, readerFrame(tab.id));
+          }
         }
       });
     });
@@ -244,6 +252,7 @@ export default defineBackground({
         if (info.menuItemId === MENU_READ_FROM_HERE) {
           if (info.selectionText) fromSelection.add(tab.id);
           else fromSelection.delete(tab.id);
+          fromCaret.delete(tab.id);
         }
         if (info.menuItemId === MENU_QUEUE_PAGE) void queuePage(tab.id);
         else if (info.menuItemId === MENU_QUEUE_LINK && info.linkUrl) void queueLink(tab.id, info);
@@ -744,6 +753,40 @@ async function openSettingsInstead(
  * the selection then, and only then (an old selection elsewhere on the page is not "here").
  */
 const fromSelection = new Set<number>();
+/** Tabs whose "Read from here" came from its keyboard shortcut: from the selection or the caret. */
+const fromCaret = new Set<number>();
+
+/** The frame this tab's reader is in, when it reads an article in a frame; else the page (0). */
+function readerFrame(tabId: number): number {
+  return active?.tabId === tabId && active.frameId > 0 ? active.frameId : 0;
+}
+
+/**
+ * The "Read selection" shortcut: the selected text, in whichever frame of the tab holds it (a
+ * Claude artifact's), or a word to say there is nothing selected. Without the check, a key pressed
+ * with nothing selected read the whole page from the top.
+ */
+async function readSelectionCommand(tabId: number): Promise<void> {
+  let found: { frameId: number; url: string } | null = null;
+  try {
+    const results = await browser.scripting.executeScript({
+      target: { tabId, allFrames: true },
+      func: () => ((getSelection()?.toString() ?? '').trim() ? location.href : ''),
+    });
+    const hit = results.find((r) => typeof r.result === 'string' && r.result !== '');
+    if (hit) found = { frameId: hit.frameId ?? 0, url: String(hit.result) };
+  } catch {
+    // A page no script may run on (the store, the browser's own pages): `activate` says so.
+    found = { frameId: 0, url: '' };
+  }
+  if (!found) {
+    tellTab(tabId, 'Select some text first, then press the key again', '…');
+    return;
+  }
+  // In a frame (a Claude artifact): as the right-click menu reads a selection there.
+  if (found.frameId > 0) void readInFrameFromMenu(tabId, 'selection', { id: found.frameId, url: found.url });
+  else void activate(tabId, 'selection');
+}
 
 async function sendActivate(
   tabId: number,
@@ -755,13 +798,15 @@ async function sendActivate(
   frameId = 0,
 ): Promise<void> {
   const onSelection = mode === 'from-cursor' && fromSelection.delete(tabId);
+  const onCaret = mode === 'from-cursor' && fromCaret.delete(tabId);
   try {
     // To one frame: with a reader in a frame too, a message to the whole tab started both.
-    await browser.tabs.sendMessage(tabId, { type: 'activate', mode, targetElementId, fresh, resumeAt, ...(onSelection ? { fromSelection: true } : {}) }, { frameId });
+    await browser.tabs.sendMessage(tabId, { type: 'activate', mode, targetElementId, fresh, resumeAt, ...(onSelection ? { fromSelection: true } : {}), ...(onCaret ? { fromCaret: true } : {}) }, { frameId });
   } catch (err) {
     if (retries > 0) {
       await new Promise((r) => setTimeout(r, 120));
       if (onSelection) fromSelection.add(tabId);
+      if (onCaret) fromCaret.add(tabId);
       return sendActivate(tabId, mode, targetElementId, retries - 1, fresh, resumeAt, frameId);
     }
     console.warn('[aloud] activate message not delivered:', err);
