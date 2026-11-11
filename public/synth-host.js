@@ -1,5 +1,5 @@
 (function() {
-	//#region src/shared/browser-env.ts
+	// src/shared/browser-env.ts
 	function readUserAgent() {
 		try {
 			return globalThis.navigator?.userAgent ?? "";
@@ -56,8 +56,7 @@
 	function capabilities() {
 		return cached$1 ??= computeCapabilities();
 	}
-	//#endregion
-	//#region src/shared/gpu-probe.ts
+	// src/shared/gpu-probe.ts
 	function gpuOf(scope) {
 		return scope?.navigator?.gpu;
 	}
@@ -123,8 +122,7 @@
 		});
 		return inFlight;
 	}
-	//#endregion
-	//#region src/shared/server-key-match.ts
+	// src/shared/server-key-match.ts
 	/** `https://host:port` of a server address, or '' when it is not one. */
 	function serverKeyOrigin(url) {
 		try {
@@ -139,14 +137,12 @@
 		const origin = serverKeyOrigin(url);
 		return s && typeof s.key === "string" && s.key && origin && s.origin === origin ? s.key : "";
 	}
-	//#endregion
-	//#region src/shared/server-consent.ts
+	// src/shared/server-consent.ts
 	/** What to tell the reader when it may not. */
 	function noConsentMessage(url) {
 		return `Aloud may not send text to ${url} any more: that permission was taken back, or never given on this browser. Connect the server again in Settings → Voice → Custom.`;
 	}
-	//#endregion
-	//#region src/synth-host/job-queue.ts
+	// src/synth-host/job-queue.ts
 	/**
 	* Which worker gets the next sentence.
 	*
@@ -277,8 +273,7 @@
 	function poolSizeForProvider(engine, provider, env) {
 		return autoPoolSize(engine, provider.startsWith("webgpu"), env);
 	}
-	//#endregion
-	//#region src/synth-host/entry.ts
+	// src/synth-host/entry.ts
 	var WORKER_URL = new URL("/tts-worker.js", location.href).href;
 	/** Whether to print what is being read. Set from the reader's `debug` setting on `init`. */
 	var verbose = false;
@@ -790,5 +785,4 @@
 		}
 	}
 	window.addEventListener("pagehide", teardown);
-	//#endregion
 })();

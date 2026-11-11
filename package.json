@@ -38,17 +38,17 @@
     "kokoro-js": "1.2.1",
     "onnxruntime-web": "1.22.0",
     "pdf-lib": "1.17.1",
-    "pdfjs-dist": "^6.3.289",
+    "pdfjs-dist": "^6.5.438",
     "phonemizer": "1.2.1",
     "phonon-tts": "0.4.2"
   },
   "devDependencies": {
-    "happy-dom": "^20.14.5",
+    "happy-dom": "21.0.4",
     "playwright": "^1.62.1",
     "typescript": "5.7.3",
-    "vite": "^8.2.0",
-    "vitest": "^3.2.7",
-    "web-ext": "^10.7.0",
-    "wxt": "0.21.4"
+    "vite": "8.3.8",
+    "vitest": "5.1.0",
+    "web-ext": "10.8.0",
+    "wxt": "0.21.5"
   }
 }

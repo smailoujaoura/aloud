@@ -10,7 +10,8 @@ included, is welcome at <https://aloud.souj.dev/feedback.html>.
 
 `npm audit` lists advisories for the whole dependency tree, including tools that only run on a
 developer's machine. What matters for users is what ships inside the extension. Last checked
-2026-10-21, against the release candidate.
+2026-11-11, after upgrading the build and test tools (19 advisories, 5 critical, down to 9, none
+critical, none in what ships).
 
 **Shipped in the extension: no open advisories.** The packaged runtime is onnxruntime-web 1.22.0,
 @huggingface/transformers 3.7.5 (its browser build, `transformers.web.js`), kokoro-js 1.2.1,
@@ -28,11 +29,10 @@ Aloud, never in a browser:
 
 | Package | Advisory | Why it does not reach users |
 |---|---|---|
-| vitest, @vitest/mocker, tinypool | path traversal in the mock server; prototype pollution in worker options | test runner only |
-| vite, source-map-js | Windows command escaping in launch-editor (dev server); source-map parsing DoS | build tool; no dev server is exposed |
-| web-ext, fx-runner, shell-quote, @devicefarmer/adbkit, node-forge, adm-zip | command quoting, signature checks, zip extraction | the Firefox linter and test launcher |
-| brace-expansion | CPU denial of service on crafted patterns | used by build tooling on fixed patterns |
+| web-ext, through addons-linter, firefox-profile and @devicefarmer/adbkit: deepmerge, adm-zip, node-forge, brace-expansion | prototype pollution, zip extraction, signature checks, CPU denial of service on crafted patterns | the Firefox linter and test launcher, at its latest version (10.8.0) |
 
-npm's suggested fixes are a major upgrade of vitest, a downgrade of web-ext, and a new vite
-release. They are left for after the first release: vite builds the shipped files, so upgrading it
-would change the package after review. Each will be upgraded and the build re-verified then.
+Upgraded on 2026-11-11: vite 8.3.8, vitest 5.1.0 (with tinypool and @vitest/mocker), happy-dom
+21.0.4, wxt 0.21.5, web-ext 10.8.0 and pdfjs-dist 6.5.438. The build was checked again after it:
+types, every test, both builds, the Firefox linter, and the PDF reader, Dropbox sync and settings
+sync in Chromium.
+
