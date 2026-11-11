@@ -137,8 +137,8 @@ search, shopping, new-tab or ad features).
 | Optional host: *://*/* | Requested one site at a time, only when the user adds a site where the media controls or highlights should start by themselves, opens a PDF from that site, or queues a page from it. |
 
 **Notes sync through the user's Dropbox (1.0.4):** off until the user connects their own Dropbox in
-Settings, Sync & backup. Their notes and PDF highlights then go to one file in the app's folder of
-their Dropbox (App folder access: Apps/Aloud-tts only), never to the developer. Dropbox's API
+Settings, Sync & backup. Their notes, PDF highlights and reading positions (page address and the
+start of the sentence they stopped at) then go to one file in the app's folder of their Dropbox (App folder access: Apps/Aloud-tts only), never to the developer. Dropbox's API
 answers extension origins with CORS headers, so no dropbox.com host permission. New required
 permissions `identity` and `alarms`, neither with an install warning. Firefox asks for the
 optional `websiteContent` and `browsingActivity` data permissions on Connect (notes are passages

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { resetStorage, storage } from './stubs/wxt-storage';
-import { reconcileById } from '@/shared/three-way';
+import { reconcileById, reconcileMaps } from '@/shared/three-way';
 import type { Note } from '@/shared/notes';
 import type { Mark } from '@/pdf/annotations/model';
 import {
@@ -86,7 +86,12 @@ class Device implements LocalData {
       const marks = reconcileById(merged.pdfMarks[hash]?.marks ?? [], seen.pdfMarks[hash]?.marks ?? [], now.pdfMarks[hash]?.marks ?? [], (m) => m.updated);
       if (marks.length) pdfMarks[hash] = { name: now.pdfMarks[hash]?.name ?? merged.pdfMarks[hash]?.name ?? '', marks };
     }
-    this.data = { ...emptyDoc(), notes: reconcileById(merged.notes, seen.notes, now.notes, (n) => n.updatedAt), pdfMarks };
+    this.data = {
+      ...emptyDoc(),
+      notes: reconcileById(merged.notes, seen.notes, now.notes, (n) => n.updatedAt),
+      pdfMarks,
+      positions: reconcileMaps(merged.positions, seen.positions, now.positions, (p) => p.savedAt),
+    };
   }
   async sync(file: RemoteFile, reason: 'here' | 'other' = 'other') {
     await storage.setItem('local:cloudSync', this.book ?? { rev: null, base: null, status: null });
@@ -224,6 +229,55 @@ describe('notes through one file, between two devices', () => {
     a.data.pdfMarks = { [PDF]: { name: 'p.pdf', marks: [mark('m1')] } };
     await a.sync(file);
     expect(await loadCloudStatus()).toEqual({ at: 1000, notes: 2, pdfs: 1 });
+  });
+});
+
+describe('where you stopped, between two devices', () => {
+  let file: FakeFile;
+  let a: Device;
+  let b: Device;
+  const at = (index: number, savedAt: number) => ({ index, total: 40, excerpt: `sentence ${index}`, savedAt });
+  beforeEach(() => {
+    resetStorage();
+    file = new FakeFile();
+    a = new Device();
+    b = new Device();
+  });
+
+  it('a place kept on one device is where the other picks up; the later place wins', async () => {
+    a.data.positions = { 'https://example.org/long-read': at(12, 100) };
+    await a.sync(file);
+    await b.sync(file);
+    expect(b.data.positions['https://example.org/long-read']).toEqual(at(12, 100));
+    b.data.positions = { 'https://example.org/long-read': at(30, 200) };
+    await b.sync(file, 'here');
+    await a.sync(file);
+    expect(a.data.positions['https://example.org/long-read']?.index).toBe(30);
+  });
+
+  it('Forget reading positions on one device forgets them on the other', async () => {
+    a.data.positions = { x: at(1, 10), y: at(2, 20) };
+    await a.sync(file);
+    await b.sync(file);
+    a.data.positions = {};
+    await a.sync(file, 'here');
+    await b.sync(file);
+    expect(b.data.positions).toEqual({});
+  });
+
+  it('a file from before positions were synced reads as having none', () => {
+    const doc = parseDoc(JSON.stringify({ format: 'aloud-sync', version: 1, notes: [], pdfMarks: {} }));
+    expect(doc.positions).toEqual({});
+  });
+
+  it('keeps the 200 most recent, as a device does', async () => {
+    a.data.positions = Object.fromEntries(Array.from({ length: 150 }, (_, i) => [`a${i}`, at(i, 1000 + i)]));
+    b.data.positions = Object.fromEntries(Array.from({ length: 150 }, (_, i) => [`b${i}`, at(i, 2000 + i)]));
+    await a.sync(file);
+    await b.sync(file);
+    expect(Object.keys(file.doc.positions)).toHaveLength(200);
+    expect(file.doc.positions.b149).toBeDefined();
+    expect(file.doc.positions.a0).toBeUndefined();
   });
 });
 

@@ -6,8 +6,9 @@
  * headline and the reader has to scrub around to find their place.
  *
  * The matching rules live in `position-match.ts`; this module is only the storage. Kept in
- * `storage.local`, capped to the most recent entries, and never synced: which pages a person read
- * is exactly the kind of thing that should stay on the device.
+ * `storage.local`, capped to the most recent entries. Which pages a person read is exactly the kind
+ * of thing that should stay on the device, so they leave it only when the reader connects their own
+ * Dropbox (sync/cloud-sync.ts), to reach their other devices; never the browser's sync.
  */
 import { storage } from 'wxt/utils/storage';
 import { withPosition, type PositionMap, type SavedPosition } from './position-match';
@@ -49,6 +50,24 @@ export async function clearPosition(key: string): Promise<void> {
   } catch {
     /* best-effort */
   }
+}
+
+/** Every saved position, by document. */
+export async function loadPositions(): Promise<PositionMap> {
+  try {
+    return await readMap();
+  } catch {
+    return {};
+  }
+}
+
+/** Replace the positions with `change(positions)`, under their lock (sync from another device). */
+export async function rewritePositions(change: (positions: PositionMap) => PositionMap): Promise<void> {
+  await withStorageLock('positions', async () => {
+    const before = await readMap();
+    const after = change(before);
+    if (JSON.stringify(after) !== JSON.stringify(before)) await item.setValue(after);
+  });
 }
 
 /** How many documents have a saved position, for the settings page. */

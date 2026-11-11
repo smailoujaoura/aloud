@@ -1,6 +1,6 @@
 /**
- * Notes and PDF marks, kept in step between devices through one file in the reader's own storage
- * (Dropbox: Apps/Aloud-tts/aloud.json).
+ * Notes, PDF marks and where the reader stopped in each document, kept in step between devices
+ * through one file in the reader's own storage (Dropbox: Apps/Aloud-tts/aloud.json).
  *
  * Each device remembers the file as it last agreed with it (`base`). A round reads the file, and
  * makes one list of three: the file now, this device now, and that base (shared/three-way.ts:
@@ -15,9 +15,10 @@
  */
 import { storage } from 'wxt/utils/storage';
 import { withStorageLock } from '@/shared/storage-lock';
-import { canon, reconcileById } from '@/shared/three-way';
+import { canon, reconcileById, reconcileMaps } from '@/shared/three-way';
 import { normalizeNote, type Note } from '@/shared/notes';
-import { normalizeStoredMarks } from '@/shared/record-shapes';
+import { normalizePosition, normalizeStoredMarks, recordsOf } from '@/shared/record-shapes';
+import { MAX_SAVED_POSITIONS, type PositionMap } from '@/shared/position-match';
 import type { Mark } from '@/pdf/annotations/model';
 
 export const SYNC_FORMAT = 'aloud-sync';
@@ -33,10 +34,20 @@ export interface SyncDoc {
   version: 1;
   notes: Note[];
   pdfMarks: Record<string, SyncedMarks>;
+  /** Where the reader stopped, by document key (shared/position-match.ts). Absent in older files. */
+  positions: PositionMap;
 }
 
 export function emptyDoc(): SyncDoc {
-  return { format: SYNC_FORMAT, version: 1, notes: [], pdfMarks: {} };
+  return { format: SYNC_FORMAT, version: 1, notes: [], pdfMarks: {}, positions: {} };
+}
+
+/** The most recent ones, as the device keeps them. */
+function capPositions(positions: PositionMap): PositionMap {
+  const keys = Object.keys(positions);
+  if (keys.length <= MAX_SAVED_POSITIONS) return positions;
+  keys.sort((a, b) => positions[b]!.savedAt - positions[a]!.savedAt);
+  return Object.fromEntries(keys.slice(0, MAX_SAVED_POSITIONS).map((k) => [k, positions[k]!]));
 }
 
 /** The file's text as a document; what is not a valid note or mark is left out. */
@@ -57,7 +68,10 @@ export function parseDoc(text: string): SyncDoc {
     const stored = normalizeStoredMarks({ updated: 0, ...(entry as object) });
     if (stored && stored.marks.length > 0) pdfMarks[hash] = { name: stored.name, marks: stored.marks as Mark[] };
   }
-  return { format: SYNC_FORMAT, version: 1, notes: dedupe(notes), pdfMarks };
+  const positions = capPositions(
+    Object.fromEntries(Object.entries(recordsOf(obj.positions, normalizePosition)).filter(([key]) => key.length > 0 && key.length <= 4096)),
+  );
+  return { format: SYNC_FORMAT, version: 1, notes: dedupe(notes), pdfMarks, positions };
 }
 
 /** A note twice in one file (two devices' edits written in turn): its newest copy. */
@@ -77,7 +91,7 @@ export function serializeDoc(doc: SyncDoc): string {
 /** What the notes and marks are, names and order aside: to tell whether anything changed. */
 export function contentOf(doc: SyncDoc): string {
   const marks = Object.fromEntries(Object.entries(doc.pdfMarks).map(([hash, entry]) => [hash, [...entry.marks].sort(byId)]));
-  return canon({ notes: [...doc.notes].sort(byId), marks });
+  return canon({ notes: [...doc.notes].sort(byId), marks, positions: doc.positions });
 }
 
 const byId = (a: { id: string }, b: { id: string }): number => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
@@ -98,7 +112,8 @@ export function mergeDocs(latest: SyncDoc, baseline: SyncDoc | null, current: Sy
     // otherwise take turns writing theirs.
     pdfMarks[hash] = { name: there?.name || here?.name || '', marks };
   }
-  return { format: SYNC_FORMAT, version: 1, notes, pdfMarks };
+  const positions = capPositions(reconcileMaps(latest.positions, baseline?.positions ?? {}, current.positions, (p) => p.savedAt));
+  return { format: SYNC_FORMAT, version: 1, notes, pdfMarks, positions };
 }
 
 /** The file, as this device sees it. */

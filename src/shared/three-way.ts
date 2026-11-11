@@ -24,6 +24,18 @@ export function canon(value: unknown): string {
   );
 }
 
+/** The same rules for a map of records by key (reading positions by document). */
+export function reconcileMaps<V>(
+  latest: Readonly<Record<string, V>>,
+  baseline: Readonly<Record<string, V>>,
+  current: Readonly<Record<string, V>>,
+  updatedOf: (value: V) => number,
+): Record<string, V> {
+  const records = (map: Readonly<Record<string, V>>) => Object.entries(map).map(([id, value]) => ({ id, value }));
+  const merged = reconcileById(records(latest), records(baseline), records(current), (r) => updatedOf(r.value));
+  return Object.fromEntries(merged.map((r) => [r.id, r.value]));
+}
+
 export function reconcileById<T extends { id: string }>(
   latest: readonly T[],
   baseline: readonly T[],

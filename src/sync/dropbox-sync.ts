@@ -5,9 +5,10 @@
 import { browser } from 'wxt/browser';
 import { storage } from 'wxt/utils/storage';
 import { loadNotes, rewriteNotes } from '@/shared/notes';
+import { loadPositions, rewritePositions } from '@/shared/reading-positions';
 import { normalizeStoredMarks } from '@/shared/record-shapes';
 import { withStorageLock } from '@/shared/storage-lock';
-import { reconcileById } from '@/shared/three-way';
+import { reconcileById, reconcileMaps } from '@/shared/three-way';
 import { loadMarks, saveMarks } from '@/pdf/annotations/store';
 import type { Mark } from '@/pdf/annotations/model';
 import { DropboxClient, DropboxError, DropboxFile, exchangeCode, type AuthStore, type DropboxAuth } from './dropbox';
@@ -43,6 +44,7 @@ export const localData: LocalData = {
   async read(): Promise<SyncDoc> {
     const doc = emptyDoc();
     doc.notes = await loadNotes();
+    doc.positions = await loadPositions();
     const all = (await browser.storage.local.get(null)) as Record<string, unknown>;
     for (const [key, value] of Object.entries(all)) {
       if (!key.startsWith(PDF_MARKS)) continue;
@@ -54,6 +56,7 @@ export const localData: LocalData = {
 
   async write(merged: SyncDoc, seen: SyncDoc): Promise<void> {
     await rewriteNotes((now) => reconcileById(merged.notes, seen.notes, now, (n) => n.updatedAt ?? 0).sort(newestFirst));
+    await rewritePositions((now) => reconcileMaps(merged.positions, seen.positions, now, (p) => p.savedAt));
     const hashes = new Set([...Object.keys(merged.pdfMarks), ...Object.keys(seen.pdfMarks)]);
     for (const hash of hashes) {
       await withStorageLock(`${PDF_MARKS}${hash}`, async () => {
