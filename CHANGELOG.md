@@ -4,6 +4,15 @@ What changed in each version of Aloud, in the words used for the store release n
 go under **Unreleased** as they are made; a release renames that section to its version and date.
 Website-only and documentation changes are not listed: they never reach the extension.
 
+## Unreleased
+
+### Added
+- **Settings sync.** Settings, Sync & backup: turn on "Sync settings" and your reading speed and
+  pauses, highlights, keys, video speed, pronunciations, what to skip and the theme follow you to
+  your other computers, through Firefox Sync or your Chromium browser's own sync. Each device keeps
+  its own voices and the sites you gave access to. Not on Firefox for Android, which does not sync
+  add-on settings.
+
 ## 1.0.3 (2026-11-10)
 
 ### Added

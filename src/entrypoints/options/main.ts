@@ -50,6 +50,7 @@ import { engineConfigFor } from './engine-config';
 import { renderMediaSpeedPanel } from './media-speed-panel';
 import { renderNoteStylePanel } from './note-style-panel';
 import { renderBackupPanel } from './backup-panel';
+import { loadSyncStatus, watchSyncStatus, type SyncStatus } from '@/shared/settings-sync';
 import { renderShortcutsPanel } from './shortcuts-panel';
 import { renderSiteList } from './site-list';
 import { renderPronunciationEditor } from './pronunciation-editor';
@@ -437,6 +438,7 @@ async function renderNow(): Promise<void> {
   $('synthWorkersOut').textContent = settings.synthWorkers === 0 ? 'auto' : String(settings.synthWorkers);
   $<HTMLInputElement>('preferWebGPU').checked = settings.preferWebGPU;
   $<HTMLInputElement>('debug').checked = settings.debug;
+  $<HTMLInputElement>('syncSettings').checked = settings.syncSettings;
   $('supertonic-steps-row').hidden = settings.engine !== 'supertonic';
 
   renderCapabilityHints();
@@ -678,6 +680,7 @@ function wire(): void {
   }
   wireCheckbox('preferWebGPU', 'preferWebGPU');
   wireCheckbox('debug', 'debug');
+  wireCheckbox('syncSettings', 'syncSettings');
 
   $('wordColor').addEventListener('change', (e) => void save({ wordColor: (e.target as HTMLInputElement).value }));
   $('wordStrength').addEventListener('input', (e) => {
@@ -854,6 +857,29 @@ watchSettings((next) => {
   settings = next;
   void render();
 });
+// Settings sync goes through the browser's own (shared/settings-sync.ts). Firefox for Android keeps
+// add-on sync data on the phone and never sends it, so it is not offered there.
+if (capabilities().formFactor === 'android') {
+  $('syncSection').hidden = true;
+} else {
+  $('syncLead').textContent =
+    capabilities().engine === 'gecko'
+      ? 'Your settings on your other computers, through Firefox Sync (with Add-ons ticked in its settings).'
+      : "Your settings on your other computers, through your browser's sync (with extensions included in its sync settings).";
+  const showSync = (status: SyncStatus | null): void => {
+    const line = $('syncStatus');
+    line.classList.toggle('warn', !!status?.error);
+    if (!status) {
+      line.textContent = '';
+      return;
+    }
+    const time = new Date(status.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    line.textContent = status.error ?? (status.took ? `Now using the settings your other computers synced (${time}).` : `Last synced at ${time}.`);
+  };
+  void loadSyncStatus().then(showSync);
+  watchSyncStatus(showSync);
+}
+
 // Phones and tablets have no keyboard to speak of: no Shortcuts view, and the reader takes no
 // keys there (session.ts: watchReaderKeys). The rest of the page is the same.
 if (capabilities().touchFirst) document.querySelector<HTMLElement>('.nav-item[data-view="shortcuts"]')?.remove();

@@ -40,7 +40,7 @@
           <a href="#speed" data-view="speed" class="nav-item"><span class="nav-icon" aria-hidden="true">»</span><span class="nav-label">Video speed</span></a>
           <a href="#pronunciation" data-view="pronunciation" class="nav-item"><span class="nav-icon" aria-hidden="true">Aa</span><span class="nav-label">Pronunciation</span></a>
           <a href="#shortcuts" data-view="shortcuts" class="nav-item"><span class="nav-icon" aria-hidden="true">⌨</span><span class="nav-label">Shortcuts</span></a>
-          <a href="#backup" data-view="backup" class="nav-item"><span class="nav-icon" aria-hidden="true">⇅</span><span class="nav-label">Backup &amp; restore</span></a>
+          <a href="#backup" data-view="backup" class="nav-item"><span class="nav-icon" aria-hidden="true">⇅</span><span class="nav-label">Sync &amp; backup</span></a>
           <a href="#advanced" data-view="advanced" class="nav-item"><span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-label">Advanced</span></a>
         </div>
         <button id="walkthrough" class="ghost nav-help" type="button">How it works</button>
@@ -452,7 +452,19 @@
       </section>
       </div>
 
-      <div class="view form" id="view-backup" data-view="backup" role="region" aria-label="Backup & restore" hidden>
+      <div class="view form" id="view-backup" data-view="backup" role="region" aria-label="Sync & backup" hidden>
+      <!-- Hidden on Firefox for Android, which keeps add-on sync data on the phone (main.ts). -->
+      <section id="syncSection">
+        <div class="section-head">
+          <h2>Sync</h2>
+          <p class="muted small" id="syncLead">Your settings on your other computers, through your browser's own sync.</p>
+        </div>
+        <label class="row check">
+          <input type="checkbox" id="syncSettings" />
+          <span>Sync settings <small class="check-hint muted">Reading speed and pauses, highlights, keys, video speed, pronunciations, what to skip and the theme. Each device keeps its own voices and the sites you gave access to. Turned on here, it takes what your other computers synced.</small></span>
+        </label>
+        <p class="row-hint flush" id="syncStatus" role="status"></p>
+      </section>
       <section>
         <div class="section-head">
           <h2>Backup &amp; restore</h2>

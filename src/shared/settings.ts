@@ -388,6 +388,11 @@ export interface Settings {
   gpuTipSeen: boolean;
   /** Verbose console logging. */
   debug: boolean;
+  /**
+   * Sync the settings that are about how you read, not this device, through the browser's own
+   * sync (shared/settings-sync.ts). Off until turned on; each device has its own switch.
+   */
+  syncSettings: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -434,6 +439,7 @@ export const DEFAULT_SETTINGS: Settings = {
   tipsSeen: false,
   gpuTipSeen: false,
   debug: false,
+  syncSettings: false,
 };
 
 /** The stored settings' schema version; each step up has a migration below. */
