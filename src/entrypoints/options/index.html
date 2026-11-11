@@ -453,17 +453,20 @@
       </div>
 
       <div class="view form" id="view-backup" data-view="backup" role="region" aria-label="Sync & backup" hidden>
-      <!-- Hidden on Firefox for Android, which keeps add-on sync data on the phone (main.ts). -->
       <section id="syncSection">
         <div class="section-head">
           <h2>Sync</h2>
-          <p class="muted small" id="syncLead">Your settings on your other computers, through your browser's own sync.</p>
+          <p class="muted small">Your notes and settings on your other devices. Nothing goes to Aloud: there is no Aloud server.</p>
         </div>
-        <label class="row check">
-          <input type="checkbox" id="syncSettings" />
-          <span>Sync settings <small class="check-hint muted">Reading speed and pauses, highlights, keys, video speed, pronunciations, what to skip and the theme. Each device keeps its own voices and the sites you gave access to. Turned on here, it takes what your other computers synced.</small></span>
-        </label>
-        <p class="row-hint flush" id="syncStatus" role="status"></p>
+        <div id="dropboxSync" class="sync-block"></div>
+        <!-- Hidden on Firefox for Android, which keeps add-on sync data on the phone (main.ts). -->
+        <div id="settingsSyncBlock" class="sync-block">
+          <label class="row check">
+            <input type="checkbox" id="syncSettings" />
+            <span>Sync settings <small class="check-hint muted" id="syncHint"></small></span>
+          </label>
+          <p class="row-hint flush" id="syncStatus" role="status"></p>
+        </div>
       </section>
       <section>
         <div class="section-head">

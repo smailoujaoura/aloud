@@ -12,6 +12,11 @@ Website-only and documentation changes are not listed: they never reach the exte
   your other computers, through Firefox Sync or your Chromium browser's own sync. Each device keeps
   its own voices and the sites you gave access to. Not on Firefox for Android, which does not sync
   add-on settings.
+- **Notes in your Dropbox.** Settings, Sync & backup, Connect Dropbox: your notes and PDF highlights
+  are kept in one file in your own Dropbox (Apps/Aloud-tts) and merged on every device you
+  connect, Firefox for Android included (there with a code Dropbox shows). A note deleted on one
+  device is deleted on the others; one edited on two, the later edit stays; one deleted on one
+  device but edited on another afterwards is kept.
 
 ## 1.0.3 (2026-11-10)
 

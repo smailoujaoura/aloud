@@ -369,6 +369,18 @@ export async function addNote(entry: NewNote, now = Date.now()): Promise<{ note:
   });
 }
 
+/**
+ * Replace the notes with `change(notes)`, under the notes' lock: what sync from another device
+ * brings (sync/cloud-sync.ts). Nothing is written when nothing changes.
+ */
+export async function rewriteNotes(change: (notes: Note[]) => Note[]): Promise<void> {
+  await withStorageLock(LOCK_KEY, async () => {
+    const before = await loadNotes();
+    const after = change(before);
+    if (JSON.stringify(after) !== JSON.stringify(before)) await item.setValue(after);
+  });
+}
+
 export async function updateNote(id: string, patch: NotePatch): Promise<void> {
   await withStorageLock(LOCK_KEY, async () => item.setValue(withNoteUpdated(await loadNotes(), id, patch)));
 }

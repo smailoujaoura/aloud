@@ -131,8 +131,22 @@ search, shopping, new-tab or ad features).
 | storage | Keeps settings, notes, reading queue, history and reading positions locally. |
 | unlimitedStorage | Voice models are 21–402 MB each and are cached locally so reading works offline. |
 | contextMenus | Right-click items: read the selection or from a point, keep a highlight, show notes, add a page or link to the reading queue. |
+| identity | Signs the user in to their own Dropbox when they connect it in Settings (launchWebAuthFlow, OAuth with PKCE), for the optional sync of their notes. No Google account access, no other use. (1.0.4) |
+| alarms | While the user's Dropbox is connected, checks it every 15 minutes for notes written on their other devices. (1.0.4) |
 | Host: file:///* | Lets the PDF reader open PDFs saved on the user's computer, once they enable "Allow access to file URLs". |
 | Optional host: *://*/* | Requested one site at a time, only when the user adds a site where the media controls or highlights should start by themselves, opens a PDF from that site, or queues a page from it. |
+
+**Notes sync through the user's Dropbox (1.0.4):** off until the user connects their own Dropbox in
+Settings, Sync & backup. Their notes and PDF highlights then go to one file in the app's folder of
+their Dropbox (App folder access: Apps/Aloud-tts only), never to the developer. Dropbox's API
+answers extension origins with CORS headers, so no dropbox.com host permission. New required
+permissions `identity` and `alarms`, neither with an install warning. Firefox asks for the
+optional `websiteContent` and `browsingActivity` data permissions on Connect (notes are passages
+of pages with their addresses), and each sync checks them again. Chrome's data form: tick **Web
+history** as well as Website content (a note keeps its page's address and title), used for the
+single purpose, not sold, not used for anything else. Reviewer note line: "Optional: the reader can
+connect their own Dropbox; their notes are then kept in one file in Aloud's app folder there, and
+sent nowhere else."
 
 **Remote code:** No. All JavaScript and WebAssembly ship in the package, including ONNX
 Runtime's, which transformers.js would otherwise take from cdn.jsdelivr.net (Aloud sets the local

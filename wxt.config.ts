@@ -54,7 +54,14 @@ export default defineConfig({
 
     // No "tabs": it shows users "Read your browsing history" at install, for one convenience —
     // reusing a tab already open on a note's page. activeTab covers every page the user acts on.
-    permissions: ['activeTab', 'scripting', 'storage', 'unlimitedStorage', 'contextMenus'],
+    //
+    // identity and alarms are for notes sync through the reader's own Dropbox (sync/), and
+    // neither shows a warning at install: identity catches Dropbox's sign-in redirect
+    // (launchWebAuthFlow; Firefox for Android has no identity API and signs in with a code
+    // instead), alarms checks Dropbox for other devices' notes every quarter of an hour while
+    // connected. Dropbox's API answers extension origins with CORS headers, so no access to
+    // dropbox.com is asked for.
+    permissions: ['activeTab', 'scripting', 'storage', 'unlimitedStorage', 'contextMenus', 'identity', 'alarms'],
 
     // Not in private windows. Aloud keeps where you stopped, your history and listening statistics,
     // and in a private window it would keep them too — Mozilla forbids storing private-browsing data
@@ -203,7 +210,9 @@ export default defineConfig({
               // Nothing is transmitted, unless the reader sets up their own speech server (Settings →
               // Voice → Your own server): page text then goes to that address, which Firefox asks
               // the reader to agree to at that moment (options/voice-panels.ts: askForServer).
-              data_collection_permissions: { required: ['none'], optional: ['websiteContent'] },
+              // Or connects their Dropbox (Settings → Sync & backup): notes, passages of pages
+              // with their addresses, then go to it, agreed to on Connect (options/dropbox-panel.ts).
+              data_collection_permissions: { required: ['none'], optional: ['websiteContent', 'browsingActivity'] },
             },
             // Firefox for Android. `gecko_android` is what makes the listing installable there;
             // without it AMO treats the add-on as desktop-only.

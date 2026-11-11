@@ -20,43 +20,14 @@
  */
 import { storage } from 'wxt/utils/storage';
 import { withStorageLock } from '@/shared/storage-lock';
+import { canon, reconcileById } from '@/shared/three-way';
 import { normalizeStoredMarks } from '@/shared/record-shapes';
 import type { Mark } from './model';
 import { loadMarks, saveMarks } from './store';
 
-/**
- * Marks as text, field order aside: a mark that went through storage (and `normalizeStoredMarks`)
- * must compare equal to the same mark in the editor, or a tab's own write looks like news.
- */
-function canon(value: unknown): string {
-  return JSON.stringify(value, (_key, v: unknown) =>
-    v && typeof v === 'object' && !Array.isArray(v)
-      ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
-      : v,
-  );
-}
-const same = (a: Mark, b: Mark): boolean => canon(a) === canon(b);
-
-/** `current`'s changes since `baseline`, applied on top of `latest`. */
+/** `current`'s changes since `baseline`, applied on top of `latest` (the rules above: shared/three-way.ts). */
 export function reconcileMarks(latest: readonly Mark[], baseline: readonly Mark[], current: readonly Mark[]): Mark[] {
-  const result = new Map(latest.map((m) => [m.id, m]));
-  const base = new Map(baseline.map((m) => [m.id, m]));
-  const mine = new Map(current.map((m) => [m.id, m]));
-
-  for (const [id, before] of base) {
-    if (mine.has(id)) continue;
-    // Deleted here. Gone there too, or unchanged there since: delete. Edited there since: keep.
-    const theirs = result.get(id);
-    if (theirs && (theirs.updated ?? 0) <= (before.updated ?? 0)) result.delete(id);
-  }
-  for (const mark of current) {
-    const before = base.get(mark.id);
-    if (before && same(before, mark)) continue; // not changed here: whatever is stored stands
-    const theirs = result.get(mark.id);
-    const changedThere = before ? theirs != null && !same(theirs, before) : theirs != null;
-    if (!changedThere || (mark.updated ?? 0) >= (theirs?.updated ?? 0)) result.set(mark.id, mark);
-  }
-  return [...result.values()];
+  return reconcileById(latest, baseline, current, (m) => m.updated ?? 0);
 }
 
 /**

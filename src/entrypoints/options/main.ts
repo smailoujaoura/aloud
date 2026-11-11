@@ -51,6 +51,7 @@ import { renderMediaSpeedPanel } from './media-speed-panel';
 import { renderNoteStylePanel } from './note-style-panel';
 import { renderBackupPanel } from './backup-panel';
 import { loadSyncStatus, watchSyncStatus, type SyncStatus } from '@/shared/settings-sync';
+import { renderDropboxPanel } from './dropbox-panel';
 import { renderShortcutsPanel } from './shortcuts-panel';
 import { renderSiteList } from './site-list';
 import { renderPronunciationEditor } from './pronunciation-editor';
@@ -859,13 +860,15 @@ watchSettings((next) => {
 });
 // Settings sync goes through the browser's own (shared/settings-sync.ts). Firefox for Android keeps
 // add-on sync data on the phone and never sends it, so it is not offered there.
+renderDropboxPanel($('dropboxSync'), { toast });
 if (capabilities().formFactor === 'android') {
-  $('syncSection').hidden = true;
+  $('settingsSyncBlock').hidden = true;
 } else {
-  $('syncLead').textContent =
+  $('syncHint').textContent = `${
     capabilities().engine === 'gecko'
-      ? 'Your settings on your other computers, through Firefox Sync (with Add-ons ticked in its settings).'
-      : "Your settings on your other computers, through your browser's sync (with extensions included in its sync settings).";
+      ? 'Through Firefox Sync, with Add-ons ticked in its settings.'
+      : "Through your browser's own sync, with extensions included in its settings."
+  } Reading speed and pauses, highlights, keys, video speed, pronunciations, what to skip and the theme. Each device keeps its own voices and the sites you gave access to. Turned on here, it takes what your other computers synced.`;
   const showSync = (status: SyncStatus | null): void => {
     const line = $('syncStatus');
     line.classList.toggle('warn', !!status?.error);

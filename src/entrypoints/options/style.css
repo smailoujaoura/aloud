@@ -866,3 +866,12 @@ code {
 .server-status { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 12px; }
 @media (max-width: 560px) { .server-form { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; } .server-form .server-url { grid-column: 1 / -1; } }
 .voice-tabs::-webkit-scrollbar { display: none; }
+
+/* Settings, Sync & backup: Dropbox, then the browser's own sync for settings. */
+.sync-block + .sync-block { border-top: 1px solid var(--border); margin-top: 14px; padding-top: 14px; }
+.sync-title { font-weight: 600; margin: 0 0 2px; }
+.sync-block .muted.small { margin: 0 0 8px; }
+.sync-code { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0 10px; }
+.sync-code p { flex: 1 1 100%; margin: 0; }
+.sync-code input { flex: 1 1 220px; min-width: 0; padding: 6px 8px; font: inherit; }
+.sync-actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 8px; }

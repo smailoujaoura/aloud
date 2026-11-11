@@ -32,6 +32,7 @@ import { withServerVoices, type VoiceOption } from '@/shared/voice-catalog';
 import type { ModelManifest } from '@/engine/engines/types';
 import { getSettings, setSettings, watchSettings } from '@/shared/settings';
 import { runSettingsSync, type SyncArea } from '@/shared/settings-sync';
+import { dropboxAuth, syncWithDropbox, watchDropboxAuth } from '@/sync/dropbox-sync';
 import { createLockTable, useLockTable } from '@/shared/storage-lock';
 import { loadWorkerGpu } from '@/shared/backend-memory';
 import { replyLater } from '@/shared/reply';
@@ -438,9 +439,27 @@ export default defineBackground({
     settingsSyncSoon('start', 1000);
 
     // Another device's settings, arriving through the browser's sync (and this device's own
-    // writes there, which a round finds already agreed).
+    // writes there, which a round finds already agreed). Notes and PDF marks changed here, for
+    // Dropbox (a round with nothing new since the last one asks Dropbox nothing).
     browser.storage.onChanged.addListener((changes, area) => {
-      if (area === 'sync' && Object.keys(changes).some((key) => /^s\d+\./.test(key))) settingsSyncSoon('there', 1500);
+      const keys = Object.keys(changes);
+      if (area === 'sync' && keys.some((key) => /^s\d+\./.test(key))) settingsSyncSoon('there', 1500);
+      if (area === 'local' && keys.some((key) => key === 'notes' || key.startsWith('pdfMarks:'))) cloudSyncSoon('here', 4000);
+    });
+
+    // Dropbox: a round at start, on connecting, and every quarter of an hour for what other
+    // devices wrote.
+    browser.alarms?.onAlarm.addListener((alarm) => {
+      if (alarm.name === CLOUD_ALARM) cloudSyncSoon('other', 0);
+    });
+    void dropboxAuth.get().then((auth) => {
+      void keepCloudAlarm(!!auth);
+      if (auth) cloudSyncSoon('other', 3000);
+    });
+    watchDropboxAuth((auth, before) => {
+      if (!!auth === !!before) return; // a refreshed token, not a new connection
+      void keepCloudAlarm(!!auth);
+      if (auth) cloudSyncSoon('other', 500);
     });
 
     // Relay settings changes to the running session.
@@ -1159,6 +1178,35 @@ function settingsSyncSoon(reason: 'here' | 'there' | 'start', ms: number): void 
     if (!browser.storage.sync) return;
     void runSettingsSync(syncArea, why).catch((err) => console.warn('[aloud] settings sync failed:', err));
   }, ms);
+}
+
+const CLOUD_ALARM = 'aloud-cloud-sync';
+let cloudTimer: ReturnType<typeof setTimeout> | undefined;
+let cloudReason: 'here' | 'other' | null = null;
+
+/** A Dropbox round once changes settle. `other` (ask Dropbox) outranks `here` in the round both join. */
+function cloudSyncSoon(reason: 'here' | 'other', ms: number): void {
+  if (cloudReason !== 'other') cloudReason = reason;
+  clearTimeout(cloudTimer);
+  cloudTimer = setTimeout(() => {
+    const why = cloudReason ?? reason;
+    cloudReason = null;
+    void syncWithDropbox(why).catch((err) => console.warn('[aloud] Dropbox sync failed:', err));
+  }, ms);
+}
+
+/**
+ * The quarter-hourly alarm, while connected. Made only when missing: Chromium starts the
+ * background again every few idle minutes, and making it anew each time would put it off for
+ * ever.
+ */
+async function keepCloudAlarm(connected: boolean): Promise<void> {
+  if (!browser.alarms) return;
+  if (!connected) {
+    await browser.alarms.clear(CLOUD_ALARM);
+    return;
+  }
+  if (!(await browser.alarms.get(CLOUD_ALARM))) await browser.alarms.create(CLOUD_ALARM, { periodInMinutes: 15 });
 }
 
 /**
