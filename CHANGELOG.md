@@ -18,6 +18,12 @@ Website-only and documentation changes are not listed: they never reach the exte
   device is deleted on the others; one edited on two, the later edit stays; one deleted on one
   device but edited on another afterwards is kept.
 
+### Changed
+- **PDFs are read with pdf.js's modern build**, as Mozilla publishes it, for the Chrome Web Store's
+  code readability rules: its older build carried a compatibility library the store took for
+  hidden code. A handful of newer functions it relies on are filled in by Aloud for browsers that
+  lack them.
+
 ## 1.0.3 (2026-11-10)
 
 ### Added

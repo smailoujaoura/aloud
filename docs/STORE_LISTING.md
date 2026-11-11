@@ -202,12 +202,20 @@ Warning "Red Titanium" (Code Readability Requirements), 30 days to fix, on the p
 `vendor/pdfjs/pdf.worker.min.mjs`: core-js's `Object.create` fallback, which pdf.js's legacy build
 carries, and which builds `"java" + "script:"` for an iframe. Minified, it read as hidden code.
 
-Fixed by shipping pdf.js's own unminified files (`pdf.mjs`, `pdf.worker.mjs`, same package and
-version, `scripts/sync-assets.mjs`); nothing of ours or of pdf.js was changed. The modern pdf.js
-build has no core-js, but needs `Map.prototype.getOrInsertComputed`, `Math.sumPrecise` and others
-that Chrome 120 lacks. Submit the next version as a new draft; nothing else in the package was
-quoted. If asked: the code is https://github.com/zloirock/core-js (`internals/object-create.js`),
-bundled by https://github.com/mozilla/pdf.js in `pdfjs-dist/legacy/build/`.
+Answered in 1.0.3 by shipping pdf.js's own unminified files (`pdf.mjs`, `pdf.worker.mjs`).
+
+**Rejected again (11 November 2026)**, same reference, now quoting the readable core-js code in
+`vendor/pdfjs/pdf.mjs` and `vendor/pdfjs/pdf.worker.mjs` (`NullProtoObjectViaActiveX`,
+`NullProtoObjectViaIFrame`). Readable or not, the reviewer takes core-js's string-built script
+address for obfuscation.
+
+Fixed for good by shipping pdf.js's **modern** build, unmodified, which has no core-js at all.
+The few built-ins it calls that supported browsers may lack (`Map.prototype.getOrInsertComputed`,
+`Math.sumPrecise`, `Uint8Array.prototype.toBase64` and a handful more) are Aloud's own short,
+commented functions in `pdfjs-support/polyfills.mjs`, installed only where missing (BUILD.md). The
+Chrome package's PDF files are now byte-identical to `pdfjs-dist/build/`. Note for the reviewer, if
+one is asked for: "pdf.js is now Mozilla's modern build, unmodified, with no core-js. The
+compatibility functions it needs are in pdfjs-support/polyfills.mjs, plain and commented."
 
 ## Firefox Add-ons (AMO)
 
@@ -220,7 +228,7 @@ bundled by https://github.com/mozilla/pdf.js in `pdfjs-dist/legacy/build/`.
   >
   > Vendored, unmodified npm files (ONNX Runtime Web, pdf.js, piper-phonemize WASM, and phonon-tts 0.4.2, Gradium's Phonon runtime, its WASM built from https://github.com/gradium-ai/xn-ptts) are copied from node_modules by scripts/sync-assets.mjs and pinned by the lockfile; versions in THIRD_PARTY.md. phonon-tts gets its model as local blob: URLs of files Aloud downloaded and checked itself, so its own Hugging Face lookup (hub.js) never runs.
   >
-  > Validator warnings: the Function-constructor ones are inside those libraries and cannot run (CSP script-src 'self' 'wasm-unsafe-eval', no 'unsafe-eval'; pdf.js gets isEvalSupported: false). The innerHTML ones are Mozilla Readability 0.6.0, run on document.cloneNode(true), an inert copy of the page. The import() ones load files from the package itself by runtime.getURL. The document.write ones are core-js's Object.create fallback in pdf.js's legacy build, for engines without Object.create. Nothing loads from a CDN: ONNX Runtime's WASM path is set to vendor/ort/ before transformers.js loads.
+  > Validator warnings: the Function-constructor ones are inside those libraries and cannot run (CSP script-src 'self' 'wasm-unsafe-eval', no 'unsafe-eval'; pdf.js gets isEvalSupported: false). The innerHTML ones are Mozilla Readability 0.6.0, run on document.cloneNode(true), an inert copy of the page. The import() ones load files from the package itself by runtime.getURL. Nothing loads from a CDN: ONNX Runtime's WASM path is set to vendor/ort/ before transformers.js loads.
   >
   > Downloaded at run time: voice data from Hugging Face (ONNX and GGUF weights, JSON, voice vectors), never code. Phonon's model (CC BY-NC 4.0) is an unmodified, ungated copy of Gradium's gated repository (smailoujaoura/phonon-40m-multilingual), checked by SHA-256.
   >

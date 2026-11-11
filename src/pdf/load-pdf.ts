@@ -120,17 +120,26 @@ function vendorUrl(file: string): string {
   return new URL(`vendor/pdfjs/${file}`, location.origin + '/').href;
 }
 
+/** Aloud's own files around pdf.js: the built-ins its modern build needs, and its worker's entry. */
+function supportUrl(file: string): string {
+  return new URL(`pdfjs-support/${file}`, location.origin + '/').href;
+}
+
 let modulePromise: Promise<PdfJsModule> | null = null;
 
 function loadPdfJs(): Promise<PdfJsModule> {
   if (modulePromise) return modulePromise;
   ensureStreamIteration(); // pdf.js reads text with `for await`; Chromium 120 cannot (stream-iteration.ts)
   modulePromise = (async () => {
+    // pdf.js's modern build, after the built-ins it calls that this browser may lack
+    // (public/pdfjs-support/polyfills.mjs: what the legacy build's core-js was for).
+    await import(/* @vite-ignore */ supportUrl('polyfills.mjs'));
     const url = vendorUrl('pdf.mjs');
     const mod = (await import(/* @vite-ignore */ url)) as unknown as PdfJsModule;
     if (!mod?.getDocument) throw new Error(`pdf.js loaded from ${url} but exposes no getDocument()`);
-    // Without this pdf.js tries to fetch its worker from a CDN, which our CSP blocks.
-    mod.GlobalWorkerOptions.workerSrc = vendorUrl('pdf.worker.mjs');
+    // Without this pdf.js tries to fetch its worker from a CDN, which our CSP blocks. The entry
+    // installs the same built-ins in the worker before pdf.worker.mjs runs.
+    mod.GlobalWorkerOptions.workerSrc = supportUrl('worker.mjs');
     return mod;
   })().catch((err) => {
     modulePromise = null; // let a retry start from scratch

@@ -49,10 +49,12 @@ const ORT_FILES = [
 ];
 
 /**
- * pdf.js as published *unminified*. The Chrome Web Store took the minified files for obfuscated code
- * (Nov 2026, "Red Titanium"): the legacy build carries core-js's polyfills, and one of them builds
- * the string "javascript:" from pieces, which minified looked like something hidden. Readable, it is
- * core-js's own code with its own comments. The minified copies are removed from vendor/pdfjs.
+ * pdf.js's *modern* build, as published, unminified. The Chrome Web Store rejected the legacy build
+ * twice as obfuscated code ("Red Titanium", Nov 2026): first minified, then readable. Both times
+ * for core-js, which the legacy build bundles, and one of whose fallbacks builds the string
+ * "javascript:" from pieces. The modern build has no core-js; the few built-ins it calls that a
+ * supported browser may lack are in Aloud's own public/pdfjs-support/polyfills.mjs. The minified
+ * copies are removed from vendor/pdfjs.
  */
 const PDFJS_FILES = ['pdf.mjs', 'pdf.worker.mjs'];
 const PDFJS_RETIRED = ['pdf.min.mjs', 'pdf.worker.min.mjs'];
@@ -120,11 +122,11 @@ export function syncAssets() {
   }
   console.log(`[sync-assets] ${copied} ORT file(s) refreshed into public/vendor/ort/`);
 
-  // The *legacy* build, deliberately: the modern one assumes very recent engines (it calls
-  // `Map.prototype.getOrInsertComputed`, which Chrome 143 still does not have) and fails at run
-  // time with "getOrInsertComputed is not a function". Legacy matches the browsers this
-  // extension supports (Chrome 120+, Firefox 142+) and is within a few KB of the same size.
-  const pdfSrc = join(root, 'node_modules/pdfjs-dist/legacy/build');
+  // The *modern* build. It assumes very recent engines (`Map.prototype.getOrInsertComputed`, which
+  // Chrome 143 does not have, and more): public/pdfjs-support/polyfills.mjs supplies those, loaded
+  // before it on the page and in its worker. After a pdfjs-dist update, compare the builds again
+  // (BUILD.md): what the legacy build adds over the modern one is what polyfills.mjs must cover.
+  const pdfSrc = join(root, 'node_modules/pdfjs-dist/build');
   const pdfDest = join(root, 'public/vendor/pdfjs');
   mkdirSync(pdfDest, { recursive: true });
   let pdfCopied = 0;

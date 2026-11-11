@@ -120,16 +120,35 @@ is verified after download (`src/engine/model-cache.ts`).
 | Warning | Count | Why it is expected |
 |---|---|---|
 | `DANGEROUS_EVAL` in `vendor/ort/ort.bundle.min.mjs` and `vendor/ort/ort-wasm-simd-threaded.jsep.mjs` | 2 | Emscripten's way of finding the global object: `typeof globalThis == "object" ? globalThis : Function("return this")()`. Every browser Aloud supports has `globalThis`, so the `Function` branch never runs, and the extension CSP (no `'unsafe-eval'`) would refuse it if it did. (`'wasm-unsafe-eval'` is for compiling WebAssembly, not for this.) |
-| `DANGEROUS_EVAL` in `vendor/pdfjs/pdf.mjs` and `vendor/pdfjs/pdf.worker.mjs` | 2 | pdf.js's optional expression evaluator for PDF function objects. We load it with `isEvalSupported: false` (`src/pdf/load-pdf.ts`), so the branch is never taken. |
-| `UNSAFE_VAR_ASSIGNMENT` "call to import" in `vendor/rt/ort-loader.js`, `vendor/rt/phonon.js`, `vendor/ort/ort.bundle.min.mjs`, `chunks/pdf.js`, `vendor/pdfjs/pdf.mjs` and `vendor/pdfjs/pdf.worker.mjs` | 6 | Deliberate runtime `import()` of a vendored module by URL (pdf.js: its own worker): resolved from the extension's own origin, so the argument is never page-controlled. |
-| `UNSAFE_VAR_ASSIGNMENT` "call to activeXDocument.write" / "iframeDocument.write" in `vendor/pdfjs/pdf.mjs` and `vendor/pdfjs/pdf.worker.mjs` | 4 | core-js's `Object.create` fallback, which pdf.js's legacy build includes (`NullProtoObjectViaActiveX` / `NullProtoObjectViaIFrame`): used only by engines without `Object.create`, which no supported browser is. The minified build hid these from the linter, and to a Chrome Web Store reviewer this same code looked obfuscated, which is why the unminified files ship. |
+| `UNSAFE_VAR_ASSIGNMENT` "call to import" in `vendor/rt/ort-loader.js`, `vendor/rt/phonon.js`, `vendor/ort/ort.bundle.min.mjs`, `chunks/pdf.js` (twice: pdf.js, and the built-ins it needs first), `vendor/pdfjs/pdf.mjs` and `vendor/pdfjs/pdf.worker.mjs` | 7 | Deliberate runtime `import()` of a vendored module by URL (pdf.js: its own worker): resolved from the extension's own origin, so the argument is never page-controlled. |
 | `UNSAFE_VAR_ASSIGNMENT` "assignment to innerHTML" in `reader-inject.js` and `chunks/session.js` | 4 | Inside the bundled `@mozilla/readability`, which parses a *clone* of the document and is bundled into the content script and into the shared reader-session chunk the PDF page and the walkthrough both load. None of our own code assigns `innerHTML`; the control bar, options page, PDF reader and walkthrough build every node with `createElement` (see `src/shared/dom.ts`). |
 
-There are **no errors** — 18 warnings, 0 notices, all from vendored code. Verify with:
+There are **no errors**: 13 warnings, 0 notices, all from vendored code. Verify with:
 
 ```bash
 npx web-ext lint --source-dir .output/firefox-mv3 -o json | jq '{errors: (.errors|length), warnings: (.warnings|length)}'
 ```
+
+## pdf.js: the modern build, and the built-ins it needs
+
+Aloud ships pdf.js's *modern* build (`pdfjs-dist/build/`), unmodified. The legacy build bundles
+core-js, which the Chrome Web Store rejected twice as obfuscated code (see docs/STORE_LISTING.md).
+The modern build calls a few built-ins that supported browsers may lack (Chrome 120+, Firefox
+142+); `public/pdfjs-support/polyfills.mjs` supplies those, installed only where missing, on the
+page before `pdf.mjs` (`src/pdf/load-pdf.ts`) and in the worker before `pdf.worker.mjs`
+(`public/pdfjs-support/worker.mjs`, which is pdf.js's `workerSrc`).
+
+**After updating `pdfjs-dist`**, check that list again: what the legacy build adds over the modern
+one (the core-js modules it imports, and the shims at the top of `src/shared/util.js` in the
+bundle) is what `polyfills.mjs` must cover:
+
+```bash
+grep -ohE "node_modules/core-js/modules/[a-z0-9.-]+" node_modules/pdfjs-dist/legacy/build/pdf*.mjs | sort -u
+```
+
+`tests/pdfjs-modern-build.test.ts` deletes every built-in `polyfills.mjs` supplies, then reads each
+test PDF with the modern build and compares its text with the legacy build's; add any new built-in
+to its list (`tests/helpers/pdf-text-old-engine.mjs`).
 
 ## Architecture summary
 
