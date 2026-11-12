@@ -1,4 +1,6 @@
 User-agent: *
 Allow: /
+# Uninstall feedback clicks: only people should make these.
+Disallow: /feedback.html?
 
 Sitemap: https://aloud.souj.dev/sitemap.xml
