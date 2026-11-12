@@ -33,7 +33,11 @@ export function writeNotices() {
   for (const dir of productionPackages()) {
     const manifest = join(dir, 'package.json');
     if (!existsSync(manifest)) continue;
-    const { name, version, license } = JSON.parse(readFileSync(manifest, 'utf8'));
+    const { name, version, license, cpu } = JSON.parse(readFileSync(manifest, 'utf8'));
+    // A native binary for one processor (sharp's libvips, pdf.js's Node canvas): Node-only, never in
+    // the extension, and installed or not depending on the machine, which made the notices, and so
+    // the package, differ from one clean build to the next (a reviewer's rebuild among them).
+    if (cpu) continue;
     const files = readdirSync(dir).filter((f) => LICENSE_FILE.test(f)).sort();
     const texts = files.map((f) => readFileSync(join(dir, f), 'utf8').trim());
     sections.push(

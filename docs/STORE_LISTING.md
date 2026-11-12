@@ -1,6 +1,6 @@
 # Store submission: what to paste where
 
-Everything below matches Aloud 1.0.3 as built (`npm run zip`). If the manifest's permissions
+Everything below matches Aloud 1.0.4 as built (`npm run zip`). If the manifest's permissions
 change, change the justifications here too: both stores compare them.
 
 ## Shared listing text
@@ -47,6 +47,15 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 **Website:** https://aloud.souj.dev — **Privacy policy:** https://aloud.souj.dev/privacy.html
 
 **Support:** https://aloud.souj.dev/feedback.html (bugs go to GitHub issues from there)
+
+## Release notes for 1.0.4 (AMO's version notes; plain text)
+
+> New
+> • Notes in your Dropbox: Settings, Sync & backup, Connect Dropbox. Your notes, PDF highlights and where you stopped in each page are kept in one file in your own Dropbox (Apps/Aloud-tts) and merged on every device you connect, phones included. Stop reading on one device and another picks up at the same sentence. Off until you connect it; it goes to your Dropbox and nowhere else.
+> • Settings sync: turn on "Sync settings" and your reading speed and pauses, highlights, keys, video speed, pronunciations, what to skip and the theme follow you to your other computers, through Firefox Sync or Chrome's own sync. Each device keeps its own voices.
+>
+> Changed
+> • PDFs are read with pdf.js's modern build, as Mozilla publishes it. A few newer functions it relies on are filled in for browsers that lack them.
 
 ## Release notes for 1.0.3 (AMO's version notes; plain text)
 
@@ -219,26 +228,27 @@ compatibility functions it needs are in pdfjs-support/polyfills.mjs, plain and c
 
 ## Firefox Add-ons (AMO)
 
-- **Data collection:** the manifest declares `data_collection_permissions: { required: ["none"], optional: ["websiteContent"] }`:
-  the optional one is asked for only when a reader sets up their own speech server (see above).
-- **Source code:** upload `.output/tts-reader-1.0.3-sources.zip` with this note for the reviewer
+- **Data collection:** the manifest declares `data_collection_permissions: { required: ["none"], optional: ["websiteContent", "browsingActivity"] }`:
+  websiteContent is asked for when a reader sets up their own speech server (see above), and both
+  when they connect their Dropbox (1.0.4).
+- **Source code:** upload `.output/tts-reader-1.0.4-sources.zip` with this note for the reviewer
   (AMO's field takes at most 3,000 characters; keep it under 2,900):
 
-  > Build: Node 22.23, npm 10.9, Linux: npm ci && npm run build:firefox (the archive's .npmrc sets legacy-peer-deps, which the lockfile needs). No network is needed after npm ci: the voice catalogue (public/models.json) is committed. Output: .output/firefox-mv3/, byte-identical to the uploaded package (checked by building the source archive in a clean folder and comparing all 468 files' SHA-256). Nothing is minified.
+  > Build: Node 22.23, npm 10.9, Linux: npm ci && npm run build:firefox (the archive's .npmrc sets legacy-peer-deps, which the lockfile needs). Output: .output/firefox-mv3/, byte-identical to the uploaded package (all 470 files' SHA-256 compared after a clean build of the source archive). Nothing is minified.
   >
-  > Vendored, unmodified npm files (ONNX Runtime Web, pdf.js, piper-phonemize WASM, and phonon-tts 0.4.2, Gradium's Phonon runtime, its WASM built from https://github.com/gradium-ai/xn-ptts) are copied from node_modules by scripts/sync-assets.mjs and pinned by the lockfile; versions in THIRD_PARTY.md. phonon-tts gets its model as local blob: URLs of files Aloud downloaded and checked itself, so its own Hugging Face lookup (hub.js) never runs.
+  > Vendored, unmodified npm files (ONNX Runtime Web, pdf.js's modern build, piper-phonemize WASM, phonon-tts 0.4.2, Gradium's Phonon runtime built from https://github.com/gradium-ai/xn-ptts) are copied from node_modules by scripts/sync-assets.mjs, pinned by the lockfile; versions in THIRD_PARTY.md. pdfjs-support/ is Aloud's own: the few built-ins pdf.js's modern build needs that older browsers lack. phonon-tts gets its model as blob: URLs of files Aloud downloaded and checked, so its Hugging Face lookup never runs.
   >
-  > Validator warnings: the Function-constructor ones are inside those libraries and cannot run (CSP script-src 'self' 'wasm-unsafe-eval', no 'unsafe-eval'; pdf.js gets isEvalSupported: false). The innerHTML ones are Mozilla Readability 0.6.0, run on document.cloneNode(true), an inert copy of the page. The import() ones load files from the package itself by runtime.getURL. Nothing loads from a CDN: ONNX Runtime's WASM path is set to vendor/ort/ before transformers.js loads.
+  > Validator warnings: the Function-constructor ones are inside ONNX Runtime and cannot run (CSP: no 'unsafe-eval'). The innerHTML ones are Mozilla Readability 0.6.0 on document.cloneNode(true), an inert copy. The import() ones load files from the package. Nothing loads from a CDN.
   >
-  > Downloaded at run time: voice data from Hugging Face (ONNX and GGUF weights, JSON, voice vectors), never code. Phonon's model (CC BY-NC 4.0) is an unmodified, ungated copy of Gradium's gated repository (smailoujaoura/phonon-40m-multilingual), checked by SHA-256.
+  > Downloaded at run time: voice data from Hugging Face (ONNX and GGUF weights, JSON, voice vectors), never code, checked by SHA-256. Phonon's model (CC BY-NC 4.0) is an unmodified, ungated copy of Gradium's repository (smailoujaoura/phonon-40m-multilingual).
   >
-  > Optional, off by default: a speech server the reader runs (Settings > Voice > Custom). Page text then goes only to the address they enter, after a permission prompt for that host (optional *://*/*) and Firefox's optional websiteContent consent; both are checked again before every read, and nothing is sent if either was taken back.
+  > New in 1.0.4, both off until the reader turns them on (Settings > Sync & backup): settings in storage.sync (speed, keys, colours, pronunciations; no page data); and notes, PDF marks and reading positions in one file in the reader's own Dropbox (App folder access: Apps/Aloud-tts only), merged across their devices. Sign-in is OAuth with PKCE through identity.launchWebAuthFlow (on Android, a code Dropbox shows); alarms checks the file every 15 minutes while connected. Firefox's optional websiteContent and browsingActivity consent is asked on Connect and checked before every sync. Nothing goes to the developer.
   >
-  > No private windows (incognito: not_allowed). On uninstall it opens aloud.souj.dev/feedback.html?bye; the version and browser follow a #, so nothing is transmitted.
+  > Optional, off by default: a speech server the reader runs (Settings > Voice > Custom); page text goes only to that address, after a host permission prompt and websiteContent consent, both checked before every read.
   >
-  > frame-ask.html, the second web-accessible page: the "Read it" button on a page whose article is in a frame from another site (a Claude artifact). Only a click in an extension page may call permissions.request, so the button is one; in Firefox, which gives an extension page inside a website no permissions API, it opens itself in a tab of its own, which asks. It requests only the site named by a one-time ticket the background issued for that tab (storage.session), so a site embedding it can make it ask for nothing.
+  > No private windows. frame-ask.html: the "Read it" button for an article in a frame from another site; it asks only for the site named by a one-time ticket from the background (in Firefox, from a tab of its own).
   >
-  > To try it: open an article, press the toolbar button (or Alt+R), then play. Phonon (about 101 MB with its voices) downloads on first use.
+  > To try: open an article, press the toolbar button or Alt+R, then play. Phonon (about 101 MB with its voices) downloads on first use.
 
 - **Android:** the listing is marked compatible with Firefox for Android (`gecko_android`).
   Phonon is the default there too (one worker); Piper voices are the smallest and quickest for older
@@ -246,8 +256,12 @@ compatibility functions it needs are in pdfjs-support/polyfills.mjs, plain and c
 
 ## Before pressing submit
 
-- [ ] The privacy policy deployed (website/privacy.html, in effect from 6 November 2026, for 1.0.2
-      and 1.0.3: nothing new in 1.0.3 is collected or sent anywhere)
+- [ ] The privacy policy deployed (website/privacy.html, in effect from 12 November 2026, for
+      1.0.2 to 1.0.4: 1.0.4 adds settings sync through the browser and notes sync through the
+      reader's own Dropbox, both off until turned on)
+- [ ] Chrome, Privacy practices: the identity and alarms justifications (table above) pasted, and
+      **Web history** ticked as well as Website content (1.0.4)
+- [ ] Dropbox console: the redirect addresses saved, "Enable additional users" pressed
 
 - [ ] `data-stores="live"` on `website/index.html` `<body>`, and the three store URLs checked
 - [ ] The Piper voice licences reviewed (PIPER_VOICE_LICENCES.md; regenerate with `node scripts/piper-licences.mjs` if the catalogue changed)
