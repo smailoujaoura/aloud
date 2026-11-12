@@ -25,6 +25,7 @@ import {
   getSettings,
   watchSettings,
   setSettings,
+  updateSettings,
   voiceKeyFor,
   type EngineId,
   type Settings,
@@ -51,6 +52,7 @@ import { renderMediaSpeedPanel } from './media-speed-panel';
 import { renderNoteStylePanel } from './note-style-panel';
 import { renderBackupPanel } from './backup-panel';
 import { renderDropboxPanel } from './dropbox-panel';
+import { rebase, rebaseRules } from './rebase';
 import { dropboxAuth, watchDropboxAuth } from '@/sync/dropbox-sync';
 import { renderShortcutsPanel } from './shortcuts-panel';
 import { renderSiteList } from './site-list';
@@ -360,10 +362,18 @@ function renderNoteStyle(): void {
 }
 
 function mediaSpeedOptions(): Parameters<typeof renderMediaSpeedPanel>[1] {
+  // What the panel was drawn with: its saves apply only what changed since (rebase.ts).
+  const base = settings.mediaSpeed;
   return {
-    settings: settings.mediaSpeed,
+    settings: base,
     save: async (patch) => {
-      settings = await setSettings({ mediaSpeed: { ...settings.mediaSpeed, ...patch } });
+      ownSaves++;
+      try {
+        await updateSettings((now) => ({ mediaSpeed: rebase(now.mediaSpeed, base, { ...base, ...patch }) }));
+        settings = await getSettings();
+      } finally {
+        ownSaves--;
+      }
       flashSaved();
       renderMediaSpeedPanel($('mediaSpeed'), mediaSpeedOptions());
     },
@@ -526,16 +536,35 @@ async function renderNow(): Promise<void> {
   $<HTMLInputElement>('mediaSpeedEnabled').checked = settings.mediaSpeed.enabled;
   renderMediaSpeedPanel($('mediaSpeed'), mediaSpeedOptions());
   renderNoteStyle();
+  // The panel saves its whole copy of each key map: only what it changed is applied (rebase.ts).
+  let pageKeysBase = settings.annotate.pageKeys;
+  let readerKeysBase = settings.readerKeys;
   void renderShortcutsPanel($('shortcuts'), {
     toast: (message, kind) => toast(message, kind ?? 'info'),
     pageKeys: settings.annotate.pageKeys,
     savePageKeys: async (pageKeys) => {
-      settings = await setSettings({ annotate: { ...settings.annotate, pageKeys } });
+      const before = pageKeysBase;
+      pageKeysBase = pageKeys;
+      ownSaves++;
+      try {
+        await updateSettings((now) => ({ annotate: { ...now.annotate, pageKeys: rebase(now.annotate.pageKeys, before, pageKeys) } }));
+        settings = await getSettings();
+      } finally {
+        ownSaves--;
+      }
       flashSaved();
     },
     readerKeys: settings.readerKeys,
     saveReaderKeys: async (readerKeys) => {
-      settings = await setSettings({ readerKeys });
+      const before = readerKeysBase;
+      readerKeysBase = readerKeys;
+      ownSaves++;
+      try {
+        await updateSettings((now) => ({ readerKeys: rebase(now.readerKeys, before, readerKeys) }));
+        settings = await getSettings();
+      } finally {
+        ownSaves--;
+      }
       flashSaved();
     },
   });
@@ -552,10 +581,21 @@ async function renderNow(): Promise<void> {
     });
   }
 
+  // The editor saves its whole list: only what it changed is applied, rule by rule (rebase.ts).
+  let rulesBase = settings.pronunciations.map((r) => ({ ...r }));
   renderPronunciationEditor($('pronunciations'), {
     rules: settings.pronunciations,
     save: async (rules) => {
-      settings = await setSettings({ pronunciations: rules.map((r) => ({ ...r })) });
+      const before = rulesBase;
+      const mine = rules.map((r) => ({ ...r }));
+      rulesBase = mine;
+      ownSaves++;
+      try {
+        await updateSettings((now) => ({ pronunciations: rebaseRules(now.pronunciations, before, mine) }));
+        settings = await getSettings();
+      } finally {
+        ownSaves--;
+      }
       flashSaved('Pronunciation saved');
     },
     // Each fix is heard in the voice that will say it: the one reading its language, or, for a
@@ -874,7 +914,25 @@ watchSettings((next) => {
   if (ownSaves > 0) return;
   const active = document.activeElement;
   const typing =
-    document.hasFocus() && active instanceof HTMLElement && active.matches('input:not([type]), input[type="text"], input[type="search"], textarea, [contenteditable="true"]');
+    document.hasFocus() &&
+    active instanceof HTMLElement &&
+    active.matches(
+      'input:not([type]), input[type="text"], input[type="search"], input[type="url"], input[type="password"], input[type="email"], input[type="number"], input[type="tel"], textarea, [contenteditable="true"]',
+    );
+  // A key recorder waiting for its key keeps a listener on the window: redrawn under it, the next
+  // key pressed anywhere would be taken as the new binding. Redrawn once it has its key.
+  const recording = (): boolean => [...document.querySelectorAll('button')].some((b) => b.textContent === 'Press a key…');
+  if (recording()) {
+    if (redrawOnBlur) return;
+    redrawOnBlur = true;
+    const wait = window.setInterval(() => {
+      if (recording()) return;
+      window.clearInterval(wait);
+      redrawOnBlur = false;
+      void render();
+    }, 400);
+    return;
+  }
   if (!typing) {
     void render();
     return;

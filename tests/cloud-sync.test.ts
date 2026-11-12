@@ -377,6 +377,34 @@ describe('settings, between two devices', () => {
     expect(file.doc.settings.speed?.v).toBe(1.3);
   });
 
+  it('rules added on both devices between syncs: both kept', async () => {
+    a.data.settings = { pronunciations: { v: [{ from: 'GIF', to: 'jif' }], at: 0 } };
+    await a.sync(file);
+    await b.sync(file);
+    a.data.settings = { pronunciations: { v: [{ from: 'GIF', to: 'jif' }, { from: 'SQL', to: 'sequel' }], at: 0 } };
+    b.data.settings = { pronunciations: { v: [{ from: 'GIF', to: 'jif' }, { from: 'nginx', to: 'engine x' }], at: 0 } };
+    await a.sync(file, 'here');
+    await b.sync(file, 'here');
+    await a.sync(file);
+    const froms = (d: Device) => (d.data.settings.pronunciations?.v as Array<{ from: string }>).map((r) => r.from).sort();
+    expect(froms(a)).toEqual(['GIF', 'SQL', 'nginx']);
+    expect(froms(b)).toEqual(['GIF', 'SQL', 'nginx']);
+  });
+
+  it('different switches of one group changed on two devices: both kept', async () => {
+    const skip = (code: boolean, tables: boolean) => ({ v: { code, tables, captions: false, references: false }, at: 0 });
+    a.data.settings = { skip: skip(false, false) };
+    await a.sync(file);
+    await b.sync(file);
+    a.data.settings = { skip: skip(true, false) };
+    b.data.settings = { skip: skip(false, true) };
+    await a.sync(file, 'here');
+    await b.sync(file, 'here');
+    await a.sync(file);
+    expect(a.data.settings.skip?.v).toMatchObject({ code: true, tables: true });
+    expect(b.data.settings.skip?.v).toMatchObject({ code: true, tables: true });
+  });
+
   it('only the settings that travel are read from the file', () => {
     const doc = parseDoc(JSON.stringify({ format: 'aloud-sync', version: 1, notes: [], pdfMarks: {}, settings: { speed: { v: 1.2, at: 3 }, engine: { v: 'kokoro', at: 3 }, theme: 'dark' }, settingsVersion: 10 }));
     expect(Object.keys(doc.settings)).toEqual(['speed']);
@@ -422,6 +450,30 @@ describe('a file replaced, restored or written by a newer Aloud', () => {
     expect(file.doc.notes).toHaveLength(2);
   });
 
+  it('restored, then written on: a device that remembered more is still not fooled by the counts', async () => {
+    const c = new Device();
+    a.data.notes = [note('base', 'Base')];
+    await a.sync(file);
+    await c.sync(file);
+    const early = { text: file.text, rev: file.rev };
+    c.data.notes = [...c.data.notes, note('x', 'Kept on C')];
+    await c.sync(file, 'here');
+    for (let i = 0; i < 3; i++) {
+      c.data.notes = [...c.data.notes, note(`c${i}`, `More ${i}`)];
+      await c.sync(file, 'here');
+    }
+    // The early version is put back, then A (which never saw C's notes) writes several times.
+    file.text = early.text;
+    file.rev += 1;
+    for (let i = 0; i < 6; i++) {
+      a.data.notes = [...a.data.notes, note(`a${i}`, `A ${i}`)];
+      await a.sync(file, 'here');
+    }
+    await c.sync(file);
+    expect(c.texts()).toContain('Kept on C');
+    expect(file.doc.notes.map((n) => n.text)).toContain('Kept on C');
+  });
+
   it('written by a newer Aloud: refused, and left exactly as it is', async () => {
     file.text = JSON.stringify({ format: 'aloud-sync', version: 2, notes: [note('1', 'From the future')], pdfMarks: {}, queue: [{ id: 'q' }] });
     file.rev = 3;
@@ -432,15 +484,14 @@ describe('a file replaced, restored or written by a newer Aloud', () => {
     expect(a.texts()).toEqual(['Mine']);
   });
 
-  it('each upload counts on the same lineage', async () => {
+  it('each upload adds one write to the file’s ancestry', async () => {
     a.data.notes = [note('1', 'One')];
     await a.sync(file);
     const first = file.doc;
     a.data.notes = [...a.data.notes, note('2', 'Two')];
     await a.sync(file, 'here');
-    expect(first.epoch).not.toBe('');
-    expect(file.doc.epoch).toBe(first.epoch);
-    expect(file.doc.seq).toBe(first.seq + 1);
+    expect(first.writes).toHaveLength(1);
+    expect(file.doc.writes).toEqual([...first.writes, file.doc.writes[1]]);
   });
 });
 
@@ -459,7 +510,7 @@ describe('a device that synced with an earlier build', () => {
     const remembered = JSON.parse(JSON.stringify((a as unknown as { book: { base: Record<string, unknown> } }).book));
     delete remembered.base.history;
     delete remembered.base.settings;
-    delete remembered.base.epoch;
+    delete remembered.base.writes;
     (a as unknown as { book: unknown }).book = remembered;
     a.data.history = {};
     await a.sync(file, 'here');

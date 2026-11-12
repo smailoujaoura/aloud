@@ -52,6 +52,18 @@ describe('merging the file’s settings with this device’s', () => {
     expect(mergeSettings({ speed: entry(1.7, 50) }, base, here(1), 99).speed).toEqual(entry(1.7, 50));
   });
 
+  it('a damaged rule in the file does not stop a device joining', () => {
+    const file = { pronunciations: entry([null, { from: 'GIF', to: 'jif' }, 7], 10) };
+    const merged = mergeSettings(file, null, { pronunciations: entry([{ from: 'SQL', to: 'sequel' }], 0) }, 99);
+    expect((merged.pronunciations!.v as Array<{ from: string }>).map((r) => r.from)).toEqual(['GIF', 'SQL']);
+  });
+
+  it('a setting newly in sync, with nothing agreed for it, joins rather than overriding', () => {
+    const base = { speed: entry(1, 5) }; // agreed before "theme" travelled
+    const merged = mergeSettings({ speed: entry(1, 5), theme: entry('dark', 50) }, base, { speed: entry(1, 0), theme: entry(DEFAULT_SETTINGS.theme, 0) }, 99);
+    expect(merged.theme).toEqual(entry('dark', 50));
+  });
+
   it('changed on both before either synced: this device’s, the later to sync', () => {
     expect(mergeSettings({ speed: entry(1.7, 50) }, { speed: entry(1, 5) }, here(1.3), 99).speed).toEqual(entry(1.3, 99));
   });

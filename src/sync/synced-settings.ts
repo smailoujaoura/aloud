@@ -92,6 +92,10 @@ let defaults: Settings | null = null;
 const isDefault = (key: string, value: unknown): boolean =>
   isSyncedSetting(key) && canon(value) === canon(syncedValue((defaults ??= withDefaults({})), key));
 
+const isRule = (rule: unknown): rule is PronunciationRule => !!rule && typeof rule === 'object' && typeof (rule as PronunciationRule).from === 'string';
+const rules = (value: unknown): PronunciationRule[] => (Array.isArray(value) ? value.filter(isRule) : []);
+const isPlain = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
+
 /** A rule, by what it matches: the same word in the same case and language. */
 const ruleKey = (rule: PronunciationRule): string => `${rule.matchCase ? rule.from : rule.from.toLowerCase()}\u0000${rule.matchCase ? 1 : 0}\u0000${rule.language ?? ''}`;
 
@@ -103,19 +107,59 @@ const ruleKey = (rule: PronunciationRule): string => `${rule.matchCase ? rule.fr
  */
 function join(key: string, there: SyncedSettingEntry, here: SyncedSettingEntry, now: number): SyncedSettingEntry {
   if (key === 'pronunciations' && Array.isArray(there.v) && Array.isArray(here.v)) {
-    const known = new Set((there.v as PronunciationRule[]).map(ruleKey));
-    const added = (here.v as PronunciationRule[]).filter((rule) => rule && typeof rule.from === 'string' && !known.has(ruleKey(rule)));
-    return added.length > 0 ? { v: [...there.v, ...added], at: now } : there;
+    const theirs = rules(there.v);
+    const known = new Set(theirs.map(ruleKey));
+    const added = rules(here.v).filter((rule) => !known.has(ruleKey(rule)));
+    return added.length > 0 ? { v: [...theirs, ...added], at: now } : there;
   }
   if (isDefault(key, there.v) && !isDefault(key, here.v)) return { v: here.v, at: now };
   return there;
 }
 
 /**
+ * Pronunciation lists, three ways, rule by rule (by what each matches): one added on either side is
+ * kept; one removed here and unchanged there is removed; one changed here is this device's. A
+ * damaged entry is left out.
+ */
+export function mergeRuleLists(there: unknown, before: unknown, here: unknown): PronunciationRule[] {
+  const byKey = (list: PronunciationRule[]) => new Map(list.map((rule) => [ruleKey(rule), rule] as const));
+  const theirs = byKey(rules(there));
+  const agreed = byKey(rules(before));
+  const mine = byKey(rules(here));
+  const out = new Map(theirs);
+  for (const [key, rule] of agreed) {
+    if (!mine.has(key) && theirs.has(key) && canon(theirs.get(key)) === canon(rule)) out.delete(key);
+  }
+  for (const [key, rule] of mine) {
+    const was = agreed.get(key);
+    if (was && canon(was) === canon(rule)) continue;
+    out.set(key, rule);
+  }
+  return [...out.values()];
+}
+
+/**
+ * A grouped setting both sides changed (keys, skips, video speed): field by field, so two devices
+ * changing different keys keep both; where both changed one, this device's (the later to sync).
+ */
+function mergeValue(there: unknown, before: unknown, here: unknown): unknown {
+  if (!isPlain(there) || !isPlain(before) || !isPlain(here)) return here;
+  const out: Record<string, unknown> = { ...there };
+  for (const field of new Set([...Object.keys(here), ...Object.keys(before)])) {
+    if (canon(here[field]) === canon(before[field])) continue;
+    if (field in here) out[field] = mergeValue(there[field], before[field], here[field]);
+    else delete out[field];
+  }
+  return out;
+}
+
+/**
  * One setting list from the file's (`latest`), this device's (`current`) and the last agreed
  * (`baseline`), per setting:
  * - changed on one side only: that side's;
- * - changed on both before either synced: this device's, the later to sync;
+ * - changed on both before either synced: merged (pronunciations rule by rule, grouped settings
+ *   field by field), this device's where both changed the same one;
+ * - a setting newly in sync (none agreed yet for it): as when joining;
  * - no baseline (this device just connected): see `join`; this device's for any the file does not
  *   have yet.
  */
@@ -141,7 +185,11 @@ export function mergeSettings(latest: SyncedSettings, baseline: SyncedSettings |
       continue;
     }
     const before = baseline[key];
-    out[key] = !same(here, before) ? { v: here.v, at: now } : there;
+    if (!before) out[key] = join(key, there, here, now);
+    else if (same(here, before)) out[key] = there;
+    else if (same(there, before)) out[key] = { v: here.v, at: now };
+    else if (key === 'pronunciations') out[key] = { v: mergeRuleLists(there.v, before.v, here.v), at: now };
+    else out[key] = { v: mergeValue(there.v, before.v, here.v), at: now };
   }
   return out;
 }

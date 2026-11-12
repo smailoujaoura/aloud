@@ -59,14 +59,16 @@ export interface SyncDoc {
   settings: SyncedSettings;
   settingsVersion: number;
   /**
-   * The file's lineage: an id given when the file is first written, and a count of writes since.
-   * A device trusts what it remembers of the file only for the same lineage, at the same count or
-   * later: a file deleted and written anew (another id), or restored from Dropbox's version history
-   * (a lower count), is merged keeping both sides, so nothing it lacks is read as deleted.
+   * The file's ancestry: an id for each of its last writes, oldest first. A device trusts what it
+   * remembers of the file only if the write it last agreed with is among them, so the file now
+   * descends from it. A file deleted and written anew, or restored from Dropbox's version history,
+   * does not: it is merged keeping both sides, once, and nothing it lacks is read as deleted.
    */
-  epoch: string;
-  seq: number;
+  writes: string[];
 }
+
+/** Writes remembered in the file: a device offline for longer than this many keeps both sides once. */
+export const MAX_WRITES = 1000;
 
 export function emptyDoc(): SyncDoc {
   return {
@@ -78,12 +80,11 @@ export function emptyDoc(): SyncDoc {
     history: {},
     settings: {},
     settingsVersion: SETTINGS_VERSION,
-    epoch: '',
-    seq: 0,
+    writes: [],
   };
 }
 
-function newEpoch(): string {
+function newWriteId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
@@ -141,9 +142,8 @@ export function parseDoc(text: string): SyncDoc {
   );
   const history = capHistory(recordsOf(obj.history, normalizeHistoryEntry));
   const settings = readSettings(obj.settings, obj.settingsVersion);
-  const epoch = typeof obj.epoch === 'string' ? obj.epoch : '';
-  const seq = typeof obj.seq === 'number' && Number.isFinite(obj.seq) ? obj.seq : 0;
-  return { format: SYNC_FORMAT, version: 1, notes: dedupe(notes), pdfMarks, positions, history, settings, settingsVersion: SETTINGS_VERSION, epoch, seq };
+  const writes = Array.isArray(obj.writes) ? obj.writes.filter((w): w is string => typeof w === 'string').slice(-MAX_WRITES) : [];
+  return { format: SYNC_FORMAT, version: 1, notes: dedupe(notes), pdfMarks, positions, history, settings, settingsVersion: SETTINGS_VERSION, writes };
 }
 
 /** A note twice in one file (two devices' edits written in turn): its newest copy. */
@@ -200,8 +200,7 @@ export function mergeDocs(latest: SyncDoc, baseline: SyncDoc | null, current: Sy
     history,
     settings,
     settingsVersion: SETTINGS_VERSION,
-    epoch: latest.epoch,
-    seq: latest.seq,
+    writes: [...latest.writes],
   };
 }
 
@@ -267,8 +266,11 @@ export async function pauseCloudSync(): Promise<void> {
 }
 
 export async function setCloudError(error: string, now = Date.now()): Promise<void> {
-  const was = await book.getValue();
-  await book.setValue({ ...was, status: { ...(was.status ?? { at: now }), at: now, error } });
+  // Under the sync lock, as a round writes the book: never over a round's newer memory of the file.
+  await withStorageLock('cloud-sync', async () => {
+    const was = await book.getValue();
+    await book.setValue({ ...was, status: { ...(was.status ?? { at: now }), at: now, error } });
+  });
 }
 
 const ATTEMPTS = 3;
@@ -284,7 +286,7 @@ export async function runCloudSync(remote: RemoteFile, local: LocalData, reason:
       // A file remembered by an earlier build lacks what later builds added (positions, history,
       // settings). Those parts are read as nothing agreed (empty: both sides kept), and the file
       // itself is downloaded, since what is remembered of it is not the whole of it.
-      const partial = !!stored.base && (['positions', 'history', 'settings', 'epoch'] as const).some((k) => !(k in stored.base!));
+      const partial = !!stored.base && (['positions', 'history', 'settings', 'writes'] as const).some((k) => !(k in stored.base!));
       const state = { ...stored, base: stored.base ? { ...emptyDoc(), ...stored.base } : null };
       const seen = await local.read();
       if (reason === 'here' && state.base && !partial && contentOf(seen) === contentOf(state.base)) return;
@@ -307,16 +309,16 @@ export async function runCloudSync(remote: RemoteFile, local: LocalData, reason:
         }
       }
 
-      // What this device remembers holds only for the same file: not when there is none, or it was
-      // written anew (another lineage), or restored to an earlier write. Merging against it then
-      // would read whatever the file lacks as deleted there, and delete it here.
+      // What this device remembers holds only for a file that descends from it: not when there is
+      // none, or it was written anew, or put back to an earlier write. Merging against it then would
+      // read whatever the file lacks as deleted there, and delete it here.
+      const agreedWrite = state.base?.writes.at(-1);
       const sameFile =
-        latestRev !== null && !!state.base && latest.epoch === state.base.epoch && latest.seq >= state.base.seq;
+        latestRev !== null && !!state.base && (agreedWrite ? latest.writes.includes(agreedWrite) : latest.writes.length === 0);
       const merged = mergeDocs(latest, sameFile ? state.base : null, seen, now);
       let newRev = latestRev;
       if (latestRev === null || contentOf(merged) !== contentOf(latest)) {
-        merged.epoch = latest.epoch || newEpoch();
-        merged.seq = latest.seq + 1;
+        merged.writes = [...latest.writes, newWriteId()].slice(-MAX_WRITES);
         const written = await remote.upload(serializeDoc(merged), latestRev);
         if (written === 'conflict') continue;
         newRev = written;
