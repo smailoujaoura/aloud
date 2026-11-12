@@ -213,7 +213,10 @@ const ATTEMPTS = 3;
 export async function runCloudSync(remote: RemoteFile, local: LocalData, reason: 'here' | 'other', now = Date.now()): Promise<void> {
   await withStorageLock('cloud-sync', async () => {
     for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
-      const state = await book.getValue();
+      const stored = await book.getValue();
+      // A file remembered by an earlier build lacks what later builds added (history, settings):
+      // read as empty, never as missing.
+      const state = { ...stored, base: stored.base ? { ...emptyDoc(), ...stored.base } : null };
       const seen = await local.read();
       if (reason === 'here' && state.base && contentOf(seen) === contentOf(state.base)) return;
 

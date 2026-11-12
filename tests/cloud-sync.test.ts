@@ -382,6 +382,26 @@ describe('settings, between two devices', () => {
   });
 });
 
+describe('a device that synced with an earlier build', () => {
+  it('its remembered file, without positions, history or settings, is read as having none', async () => {
+    resetStorage();
+    const file = new FakeFile();
+    const a = new Device();
+    a.data.notes = [note('1', 'Kept before the update')];
+    await a.sync(file);
+    // What a build from before positions, history and settings left behind.
+    const old = { format: 'aloud-sync', version: 1, notes: [note('1', 'Kept before the update')], pdfMarks: {} };
+    file.text = JSON.stringify(old);
+    (a as unknown as { book: unknown }).book = { rev: `r${file.rev}`, base: old, status: null };
+    a.data.settings = { speed: { v: 1.3, at: 0 } };
+    a.data.history = {};
+    await a.sync(file, 'here');
+    expect(await loadCloudStatus()).not.toHaveProperty('error');
+    expect(file.doc.settings.speed?.v).toBe(1.3);
+    expect(file.doc.notes.map((n) => n.text)).toEqual(['Kept before the update']);
+  });
+});
+
 describe('the file', () => {
   it('one that is not Aloud’s is refused, not read as empty', () => {
     expect(() => parseDoc('{"hello": 1}')).toThrow(/not one Aloud can read/);
