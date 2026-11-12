@@ -91,6 +91,7 @@ class Device implements LocalData {
       notes: reconcileById(merged.notes, seen.notes, now.notes, (n) => n.updatedAt),
       pdfMarks,
       positions: reconcileMaps(merged.positions, seen.positions, now.positions, (p) => p.savedAt),
+      history: reconcileMaps(merged.history, seen.history, now.history, (h) => h.lastReadAt),
     };
   }
   async sync(file: RemoteFile, reason: 'here' | 'other' = 'other') {
@@ -228,7 +229,9 @@ describe('notes through one file, between two devices', () => {
     a.data.notes = [note('1', 'One'), note('2', 'Two')];
     a.data.pdfMarks = { [PDF]: { name: 'p.pdf', marks: [mark('m1')] } };
     await a.sync(file);
-    expect(await loadCloudStatus()).toEqual({ at: 1000, notes: 2, pdfs: 1 });
+    a.data.positions = { 'https://example.org/a': { index: 3, total: 9, excerpt: 'three', savedAt: 5 } };
+    await a.sync(file, 'here');
+    expect(await loadCloudStatus()).toEqual({ at: 1000, notes: 2, pdfs: 1, places: 1 });
   });
 });
 
@@ -278,6 +281,60 @@ describe('where you stopped, between two devices', () => {
     expect(Object.keys(file.doc.positions)).toHaveLength(200);
     expect(file.doc.positions.b149).toBeDefined();
     expect(file.doc.positions.a0).toBeUndefined();
+  });
+});
+
+describe('what you listened to (Continue and History), between two devices', () => {
+  let file: FakeFile;
+  let a: Device;
+  let b: Device;
+  const entry = (url: string, index: number, lastReadAt: number) => ({
+    source: { key: url, title: 'A long read', site: 'example.org', reopen: { kind: 'web' as const, url } },
+    index,
+    total: 40,
+    charsRead: index * 100,
+    charsTotal: 4000,
+    listenedSeconds: index * 6,
+    secondsPerChar: 0.06,
+    finished: false,
+    firstReadAt: 1,
+    lastReadAt,
+  });
+  beforeEach(() => {
+    resetStorage();
+    file = new FakeFile();
+    a = new Device();
+    b = new Device();
+  });
+
+  it('what one device was listening to is in the other’s Continue list, as far as it got', async () => {
+    const url = 'https://example.org/long-read';
+    a.data.history = { [url]: entry(url, 12, 100) };
+    await a.sync(file);
+    await b.sync(file);
+    expect(b.data.history[url]?.index).toBe(12);
+    b.data.history = { [url]: entry(url, 30, 200) };
+    await b.sync(file, 'here');
+    await a.sync(file);
+    expect(a.data.history[url]?.index).toBe(30);
+  });
+
+  it('removed from History on one device, removed on the other', async () => {
+    const url = 'https://example.org/x';
+    a.data.history = { [url]: entry(url, 5, 10) };
+    await a.sync(file);
+    await b.sync(file);
+    a.data.history = {};
+    await a.sync(file, 'here');
+    await b.sync(file);
+    expect(b.data.history).toEqual({});
+  });
+
+  it('broken entries in the file are left out, and a file without history reads as none', () => {
+    const url = 'https://example.org/y';
+    const doc = parseDoc(JSON.stringify({ format: 'aloud-sync', version: 1, notes: [], pdfMarks: {}, history: { [url]: entry(url, 1, 1), bad: { index: 'x' } } }));
+    expect(Object.keys(doc.history)).toEqual([url]);
+    expect(parseDoc(JSON.stringify({ format: 'aloud-sync', version: 1, notes: [], pdfMarks: {} })).history).toEqual({});
   });
 });
 

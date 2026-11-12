@@ -1,5 +1,6 @@
 /**
- * Notes, PDF marks and where the reader stopped in each document, kept in step between devices
+ * Notes, PDF marks, where the reader stopped in each document and what they listened to (the
+ * Library's Continue and History lists), kept in step between devices
  * through one file in the reader's own storage (Dropbox: Apps/Aloud-tts/aloud.json).
  *
  * Each device remembers the file as it last agreed with it (`base`). A round reads the file, and
@@ -17,7 +18,8 @@ import { storage } from 'wxt/utils/storage';
 import { withStorageLock } from '@/shared/storage-lock';
 import { canon, reconcileById, reconcileMaps } from '@/shared/three-way';
 import { normalizeNote, type Note } from '@/shared/notes';
-import { normalizePosition, normalizeStoredMarks, recordsOf } from '@/shared/record-shapes';
+import { normalizeHistoryEntry, normalizePosition, normalizeStoredMarks, recordsOf } from '@/shared/record-shapes';
+import { MAX_HISTORY, type History } from '@/shared/reading-history';
 import { MAX_SAVED_POSITIONS, type PositionMap } from '@/shared/position-match';
 import type { Mark } from '@/pdf/annotations/model';
 
@@ -36,10 +38,20 @@ export interface SyncDoc {
   pdfMarks: Record<string, SyncedMarks>;
   /** Where the reader stopped, by document key (shared/position-match.ts). Absent in older files. */
   positions: PositionMap;
+  /** What was listened to, by document key (shared/reading-history.ts). Absent in older files. */
+  history: History;
 }
 
 export function emptyDoc(): SyncDoc {
-  return { format: SYNC_FORMAT, version: 1, notes: [], pdfMarks: {}, positions: {} };
+  return { format: SYNC_FORMAT, version: 1, notes: [], pdfMarks: {}, positions: {}, history: {} };
+}
+
+/** The most recently read, as the device keeps them. */
+function capHistory(history: History): History {
+  const keys = Object.keys(history);
+  if (keys.length <= MAX_HISTORY) return history;
+  keys.sort((a, b) => history[b]!.lastReadAt - history[a]!.lastReadAt);
+  return Object.fromEntries(keys.slice(0, MAX_HISTORY).map((k) => [k, history[k]!]));
 }
 
 /** The most recent ones, as the device keeps them. */
@@ -71,7 +83,8 @@ export function parseDoc(text: string): SyncDoc {
   const positions = capPositions(
     Object.fromEntries(Object.entries(recordsOf(obj.positions, normalizePosition)).filter(([key]) => key.length > 0 && key.length <= 4096)),
   );
-  return { format: SYNC_FORMAT, version: 1, notes: dedupe(notes), pdfMarks, positions };
+  const history = capHistory(recordsOf(obj.history, normalizeHistoryEntry));
+  return { format: SYNC_FORMAT, version: 1, notes: dedupe(notes), pdfMarks, positions, history };
 }
 
 /** A note twice in one file (two devices' edits written in turn): its newest copy. */
@@ -91,7 +104,7 @@ export function serializeDoc(doc: SyncDoc): string {
 /** What the notes and marks are, names and order aside: to tell whether anything changed. */
 export function contentOf(doc: SyncDoc): string {
   const marks = Object.fromEntries(Object.entries(doc.pdfMarks).map(([hash, entry]) => [hash, [...entry.marks].sort(byId)]));
-  return canon({ notes: [...doc.notes].sort(byId), marks, positions: doc.positions });
+  return canon({ notes: [...doc.notes].sort(byId), marks, positions: doc.positions, history: doc.history });
 }
 
 const byId = (a: { id: string }, b: { id: string }): number => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
@@ -113,7 +126,8 @@ export function mergeDocs(latest: SyncDoc, baseline: SyncDoc | null, current: Sy
     pdfMarks[hash] = { name: there?.name || here?.name || '', marks };
   }
   const positions = capPositions(reconcileMaps(latest.positions, baseline?.positions ?? {}, current.positions, (p) => p.savedAt));
-  return { format: SYNC_FORMAT, version: 1, notes, pdfMarks, positions };
+  const history = capHistory(reconcileMaps(latest.history, baseline?.history ?? {}, current.history, (h) => h.lastReadAt));
+  return { format: SYNC_FORMAT, version: 1, notes, pdfMarks, positions, history };
 }
 
 /** The file, as this device sees it. */
@@ -134,6 +148,8 @@ export interface CloudStatus {
   at: number;
   notes?: number;
   pdfs?: number;
+  /** Documents with a place to pick up at. */
+  places?: number;
   error?: string;
 }
 
@@ -210,7 +226,7 @@ export async function runCloudSync(remote: RemoteFile, local: LocalData, reason:
       await book.setValue({
         rev: newRev,
         base: merged,
-        status: { at: now, notes: merged.notes.length, pdfs: Object.keys(merged.pdfMarks).length },
+        status: { at: now, notes: merged.notes.length, pdfs: Object.keys(merged.pdfMarks).length, places: Object.keys(merged.positions).length },
       });
       return;
     }

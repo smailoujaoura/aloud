@@ -6,6 +6,7 @@ import { browser } from 'wxt/browser';
 import { storage } from 'wxt/utils/storage';
 import { loadNotes, rewriteNotes } from '@/shared/notes';
 import { loadPositions, rewritePositions } from '@/shared/reading-positions';
+import { loadHistory, rewriteHistory } from '@/shared/reading-history';
 import { normalizeStoredMarks } from '@/shared/record-shapes';
 import { withStorageLock } from '@/shared/storage-lock';
 import { reconcileById, reconcileMaps } from '@/shared/three-way';
@@ -45,6 +46,7 @@ export const localData: LocalData = {
     const doc = emptyDoc();
     doc.notes = await loadNotes();
     doc.positions = await loadPositions();
+    doc.history = await loadHistory();
     const all = (await browser.storage.local.get(null)) as Record<string, unknown>;
     for (const [key, value] of Object.entries(all)) {
       if (!key.startsWith(PDF_MARKS)) continue;
@@ -57,6 +59,7 @@ export const localData: LocalData = {
   async write(merged: SyncDoc, seen: SyncDoc): Promise<void> {
     await rewriteNotes((now) => reconcileById(merged.notes, seen.notes, now, (n) => n.updatedAt ?? 0).sort(newestFirst));
     await rewritePositions((now) => reconcileMaps(merged.positions, seen.positions, now, (p) => p.savedAt));
+    await rewriteHistory((now) => reconcileMaps(merged.history, seen.history, now, (h) => h.lastReadAt));
     const hashes = new Set([...Object.keys(merged.pdfMarks), ...Object.keys(seen.pdfMarks)]);
     for (const hash of hashes) {
       await withStorageLock(`${PDF_MARKS}${hash}`, async () => {

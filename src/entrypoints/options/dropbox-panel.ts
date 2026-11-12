@@ -45,7 +45,7 @@ export function renderDropboxPanel(host: HTMLElement, opts: DropboxPanelOptions)
     doc,
     'p',
     { class: 'muted small' },
-    'One file in your own Dropbox (Apps/Aloud-tts/aloud.json), merged on every device you connect, phones included: your notes, PDF highlights, and where you stopped in each page, so another device picks up there. It goes to your Dropbox and nowhere else.',
+    'One file in your own Dropbox (Apps/Aloud-tts/aloud.json), merged on every device you connect, phones included: your notes, PDF highlights, where you stopped in each page and what you listened to (Continue and History), so another device picks up there. It goes to your Dropbox and nowhere else.',
   );
   const who = el(doc, 'p', { class: 'small' });
   const status = el(doc, 'p', { class: 'row-hint flush', role: 'status' });
@@ -79,7 +79,8 @@ export function renderDropboxPanel(host: HTMLElement, opts: DropboxPanelOptions)
     else if (last) {
       const time = new Date(last.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
       const pdfs = last.pdfs ? `, highlights in ${plural(last.pdfs, 'PDF', 'PDFs')}` : '';
-      status.textContent = `Synced at ${time}: ${plural(last.notes ?? 0, 'note', 'notes')}${pdfs}.`;
+      const places = last.places ? `, your place in ${plural(last.places, 'page', 'pages')}` : '';
+      status.textContent = `Synced at ${time}: ${plural(last.notes ?? 0, 'note', 'notes')}${pdfs}${places}.`;
     } else status.textContent = 'Syncing…';
   };
 

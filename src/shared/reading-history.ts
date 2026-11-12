@@ -3,7 +3,8 @@
  *
  * Updated by the reader as it plays, a few times a minute. Kept in `storage.local` on this device,
  * capped to the most recent documents. Like reading positions, this is exactly the kind of record
- * that should never leave the machine.
+ * that should stay on the machine: it leaves it only when the reader connects their own Dropbox
+ * (sync/cloud-sync.ts), so their other devices list the same things to continue.
  */
 import { storage } from 'wxt/utils/storage';
 import type { DocSource } from './doc-source';
@@ -152,6 +153,15 @@ export async function renameHistoryEntry(from: string, to: string, accept: (entr
 
 export async function clearHistory(): Promise<void> {
   await withStorageLock('history', () => item.setValue({}));
+}
+
+/** Replace the history with `change(history)`, under its lock (sync from another device). */
+export async function rewriteHistory(change: (history: History) => History): Promise<void> {
+  await withStorageLock('history', async () => {
+    const before = await loadHistory();
+    const after = change(before);
+    if (JSON.stringify(after) !== JSON.stringify(before)) await item.setValue(after);
+  });
 }
 
 export function watchHistory(cb: (history: History) => void): () => void {

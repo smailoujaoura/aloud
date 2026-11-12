@@ -51,7 +51,7 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 ## Release notes for 1.0.4 (AMO's version notes; plain text)
 
 > New
-> • Notes in your Dropbox: Settings, Sync & backup, Connect Dropbox. Your notes, PDF highlights and where you stopped in each page are kept in one file in your own Dropbox (Apps/Aloud-tts) and merged on every device you connect, phones included. Stop reading on one device and another picks up at the same sentence. Off until you connect it; it goes to your Dropbox and nowhere else.
+> • Notes in your Dropbox: Settings, Sync & backup, Connect Dropbox. Your notes, PDF highlights, where you stopped in each page and what you listened to (Continue and History) are kept in one file in your own Dropbox (Apps/Aloud-tts) and merged on every device you connect, phones included. Stop reading on one device and another lists it to continue, at the same sentence. Off until you connect it; it goes to your Dropbox and nowhere else.
 > • Settings sync: turn on "Sync settings" and your reading speed and pauses, highlights, keys, video speed, pronunciations, what to skip and the theme follow you to your other computers, through Firefox Sync or Chrome's own sync. Each device keeps its own voices.
 >
 > Changed
@@ -146,8 +146,9 @@ search, shopping, new-tab or ad features).
 | Optional host: *://*/* | Requested one site at a time, only when the user adds a site where the media controls or highlights should start by themselves, opens a PDF from that site, or queues a page from it. |
 
 **Notes sync through the user's Dropbox (1.0.4):** off until the user connects their own Dropbox in
-Settings, Sync & backup. Their notes, PDF highlights and reading positions (page address and the
-start of the sentence they stopped at) then go to one file in the app's folder of their Dropbox (App folder access: Apps/Aloud-tts only), never to the developer. Dropbox's API
+Settings, Sync & backup. Their notes, PDF highlights, reading positions (page address and the
+start of the sentence they stopped at) and reading history (pages listened to, how far, for how
+long) then go to one file in the app's folder of their Dropbox (App folder access: Apps/Aloud-tts only), never to the developer. Dropbox's API
 answers extension origins with CORS headers, so no dropbox.com host permission. New required
 permissions `identity` and `alarms`, neither with an install warning. Firefox asks for the
 optional `websiteContent` and `browsingActivity` data permissions on Connect (notes are passages
@@ -242,7 +243,7 @@ compatibility functions it needs are in pdfjs-support/polyfills.mjs, plain and c
   >
   > Downloaded at run time: voice data from Hugging Face (ONNX and GGUF weights, JSON, voice vectors), never code, checked by SHA-256. Phonon's model (CC BY-NC 4.0) is an unmodified, ungated copy of Gradium's repository (smailoujaoura/phonon-40m-multilingual).
   >
-  > New in 1.0.4, both off until the reader turns them on (Settings > Sync & backup): settings in storage.sync (speed, keys, colours, pronunciations; no page data); and notes, PDF marks and reading positions in one file in the reader's own Dropbox (App folder access: Apps/Aloud-tts only), merged across their devices. Sign-in is OAuth with PKCE through identity.launchWebAuthFlow (on Android, a code Dropbox shows); alarms checks the file every 15 minutes while connected. Firefox's optional websiteContent and browsingActivity consent is asked on Connect and checked before every sync. Nothing goes to the developer.
+  > New in 1.0.4, both off until the reader turns them on (Settings > Sync & backup): settings in storage.sync (speed, keys, colours, pronunciations; no page data); and notes, PDF marks, reading positions and history in one file in the reader's own Dropbox (App folder access: Apps/Aloud-tts only), merged across their devices. Sign-in is OAuth with PKCE through identity.launchWebAuthFlow (on Android, a code Dropbox shows); alarms checks the file every 15 minutes while connected. Firefox's optional websiteContent and browsingActivity consent is asked on Connect and checked before every sync. Nothing goes to the developer.
   >
   > Optional, off by default: a speech server the reader runs (Settings > Voice > Custom); page text goes only to that address, after a host permission prompt and websiteContent consent, both checked before every read.
   >

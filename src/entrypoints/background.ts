@@ -445,9 +445,9 @@ export default defineBackground({
       const keys = Object.keys(changes);
       if (area === 'sync' && keys.some((key) => /^s\d+\./.test(key))) settingsSyncSoon('there', 1500);
       if (area === 'local' && keys.some((key) => key === 'notes' || key.startsWith('pdfMarks:'))) cloudSyncSoon('here', 4000);
-      // Positions change every few sentences while reading: once reading pauses for a minute (or at
-      // the quarter-hourly round), not a Dropbox upload every few seconds.
-      if (area === 'local' && keys.includes('readingPositions')) positionsSyncLater();
+      // Positions and history change every few sentences while reading: once reading pauses for a
+      // minute (or at the quarter-hourly round), not a Dropbox upload every few seconds.
+      if (area === 'local' && keys.some((key) => key === 'readingPositions' || key === 'readingHistory')) positionsSyncLater();
     });
 
     // Dropbox: a round at start, on connecting, and every quarter of an hour for what other
