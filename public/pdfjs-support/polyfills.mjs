@@ -16,7 +16,7 @@
  *   Response.prototype.bytes                       Chrome 132
  *   Promise.try                                    Chrome 128
  *   URL.parse                                      Chrome 126
- *   Iterator helpers (map, filter, some, find…)    Chrome 122
+ *   Iterator (the global) and its helpers          Chrome 122
  *   Set: intersection, union and the rest          Chrome 122
  *
  * Loaded before pdf.mjs on the page (src/pdf/load-pdf.ts) and before pdf.worker.mjs in its worker
@@ -253,6 +253,16 @@ export function install(scope = globalThis) {
   note(scope.Promise, 'try', promiseTry, 'Promise.try');
   note(scope.URL, 'parse', parseUrl, 'URL.parse');
   const iteratorPrototype = Object.getPrototypeOf(Object.getPrototypeOf([][Symbol.iterator]()));
+  // pdf.js reads `Iterator.prototype` itself as it loads: without the global (Chrome 120 and 121)
+  // that line alone threw, and no PDF opened.
+  if (typeof scope.Iterator !== 'function') {
+    before.add('Iterator');
+    const Iterator = function Iterator() {
+      throw new TypeError('Iterator cannot be called directly');
+    };
+    Iterator.prototype = iteratorPrototype;
+    Object.defineProperty(scope, 'Iterator', { value: Iterator, writable: true, configurable: true });
+  }
   for (const [name, fn] of Object.entries(iteratorHelpers)) note(iteratorPrototype, name, fn, `Iterator.${name}`);
   for (const [name, fn] of Object.entries(setMethods)) note(scope.Set?.prototype, name, fn, `Set.${name}`);
   return [...before];

@@ -40,6 +40,7 @@ import { MAX_LANES, VoiceLanes } from './voice-lanes';
 import { listVoices, parseVoiceValue, voiceValue, withServerVoices, type EngineVoice, type VoiceOption } from '@/shared/voice-catalog';
 import {
   clearPosition,
+  watchPosition,
   documentKey,
   formerDocumentKey,
   excerptOf,
@@ -249,6 +250,16 @@ export class ReaderSession {
   /** Throttles position saves while reading; the last one is always forced on teardown. */
   private lastPositionSave = 0;
   private lastSavedIndex = -1;
+  /** When the saved place this reader knows of was saved: the one it resumed from, or its own. */
+  private placeAt = 0;
+  /** A newer place was saved elsewhere that this page's text cannot follow: not to be overwritten idly. */
+  private placeSuperseded = false;
+  /**
+   * The saved place belongs to a longer version of this page (the full article, where this is a
+   * teaser or a mobile cut): this reader neither moves it nor clears it, nor the history entry.
+   */
+  private othersPlace = false;
+  private stopWatchingPlace: (() => void) | null = null;
   private outputLogged = false;
   /** When each word of a synthesised sentence is spoken, as the engine reported it (Piper). */
   private readonly wordTimings = new Map<number, WordTiming[]>();
@@ -2271,7 +2282,7 @@ export class ReaderSession {
     // Read to the end: next time it opens at the top, not at the last sentence. Not for a selection:
     // its end is not the page's, and clearing the place there sent the next read back to the top.
     this.lastSavedIndex = -1;
-    if (this.docKey && this.mode !== 'selection') void clearPosition(this.docKey);
+    if (this.docKey && this.mode !== 'selection' && !this.othersPlace) void clearPosition(this.docKey);
     this.recordHistory(this.playlist.length, true);
     this.flushHeard();
     if (this.keepHistory && this.docKey && this.mode !== 'selection') void recordCompleted(this.docKey);
@@ -2340,6 +2351,8 @@ export class ReaderSession {
   private recordHistory(index: number, finished = false): void {
     const { listening } = this;
     if (!this.keepHistory || !this.docKey || this.playlist.length === 0 || this.mode === 'selection') return;
+    // The history entry is the longer version's too (see othersPlace): its progress stands.
+    if (this.othersPlace) return;
     if (listening.pendingSeconds <= 0 && !finished) return;
     if (!this.charsBefore) {
       let sum = 0;
@@ -2479,10 +2492,20 @@ export class ReaderSession {
     if (this.mode !== 'article' || this.currentPlayId > 0 || !this.docKey) return;
     const requested = this.requestedResume;
     const saved = requested ?? (await loadPosition(this.docKey));
+    this.placeAt = saved?.savedAt ?? 0;
+    this.watchPlace();
     const at = resumeIndex(saved, this.playlist.map((p) => p.spokenText));
-    if (at == null) return;
+    if (at == null) {
+      // Not found here, and saved from a much longer text: another version of the page (synced from
+      // a device that saw all of it). Reading this one to the end must not wipe that place.
+      if (saved && !requested && saved.total > this.playlist.length * 1.5) this.othersPlace = true;
+      return;
+    }
     // Stored as well, over whatever the closing reader wrote, so the page opens here next time too.
-    if (requested) void savePosition(this.docKey, { ...requested, savedAt: Date.now() });
+    if (requested) {
+      this.placeAt = Date.now();
+      void savePosition(this.docKey, { ...requested, savedAt: this.placeAt });
+    }
 
     this.currentPlayId = at;
     this.state.currentIndex = at;
@@ -2495,15 +2518,47 @@ export class ReaderSession {
     log.info(`resuming at sentence ${at} of ${this.playlist.length}`);
   }
 
+  /**
+   * Follow this page's saved place while the reader is open: another device's, arriving through
+   * Dropbox, or another tab's. While paused, the reader moves there, so pressing play carries on
+   * from the further place instead of saving its own older one over it everywhere. While playing,
+   * this device's place stands: it is the one being listened to now.
+   */
+  private watchPlace(): void {
+    if (this.stopWatchingPlace || !this.docKey || this.mode !== 'article') return;
+    this.stopWatchingPlace = watchPosition(this.docKey, (pos) => {
+      if (this.disposed || !pos || pos.savedAt <= this.placeAt) return;
+      this.placeAt = pos.savedAt;
+      if (this.wantsPlayback || this.state.status === 'playing') return;
+      const at = resumeIndex(pos, this.playlist.map((p) => p.spokenText));
+      if (at == null) {
+        this.placeSuperseded = true;
+        return;
+      }
+      this.placeSuperseded = false;
+      this.lastSavedIndex = at;
+      if (at === this.currentPlayId) return;
+      this.currentPlayId = at;
+      this.state.currentIndex = at;
+      this.highlighter?.show(this.rangeOf(at));
+      this.pushState();
+      this.bar?.flash(`Your place moved on elsewhere: sentence ${at + 1} of ${this.playlist.length}`, 'info');
+    });
+  }
+
   /** Save the position, at most every few seconds while reading; `force` for teardown. */
   private rememberPosition(index: number, force = false): void {
     // A selection's sentences are not the page's: its place, saved under the page, replaced where
     // the page had got to, and the next read of the page started from the top.
-    if (this.mode === 'selection') return;
+    if (this.mode === 'selection' || this.othersPlace) return;
     if (!this.docKey || this.playlist.length === 0 || index === this.lastSavedIndex) return;
+    // Closing a reader that never played since a further place was saved elsewhere: keep that one.
+    if (force && this.placeSuperseded) return;
     const now = Date.now();
     if (!force && now - this.lastPositionSave < POSITION_SAVE_INTERVAL_MS) return;
+    this.placeSuperseded = false;
     this.lastPositionSave = now;
+    this.placeAt = now;
     this.lastSavedIndex = index;
     void savePosition(this.docKey, {
       index,
@@ -2969,6 +3024,8 @@ export class ReaderSession {
     this.countPartlyHeard();
     this.flushHeard();
     this.disposed = true;
+    this.stopWatchingPlace?.();
+    this.stopWatchingPlace = null;
     // Anything still working through `begin()` stops at its next checkpoint.
     this.generation++;
     this.stopReaderKeys?.();

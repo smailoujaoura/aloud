@@ -25,7 +25,7 @@ export interface SavedPosition {
 export type PositionMap = Record<string, SavedPosition>;
 
 /** Enough for a reading list's worth of pages without the storage entry growing unbounded. */
-export const MAX_SAVED_POSITIONS = 200;
+export const MAX_SAVED_POSITIONS = 500;
 /** Characters of the sentence kept as its fingerprint. */
 const EXCERPT_CHARS = 60;
 /** Positions this close to the start aren't worth offering to resume. */

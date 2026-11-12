@@ -8,7 +8,9 @@
  * - the custom speech server: its permission is given per device;
  * - the sites given access ("Starts by itself on"): granted per device too, and a site listed
  *   without its permission would only look as though it worked;
- * - GPU and worker choices, debug logging.
+ * - GPU and worker choices, debug logging;
+ * - how PDFs are shown (pages or reflowed text) and tap-to-jump: one suits a phone, the other a
+ *   computer.
  *
  * (1.0.4 first had these in the browser's own sync too. Most people are not signed in to their
  * browser, it cannot cross from Firefox to Chrome, and Firefox for Android never syncs add-on data,
@@ -16,6 +18,7 @@
  */
 import { canon } from '@/shared/three-way';
 import { sanitizeSettings, withDefaults, type Settings } from '@/shared/settings';
+import type { PronunciationRule } from '@/segment/pronunciations';
 
 export const SYNCED_SETTINGS = [
   'speed',
@@ -28,10 +31,8 @@ export const SYNCED_SETTINGS = [
   'wordStrength',
   'highlightReadable',
   'scrollMode',
-  'pdfView',
   'skipUrls',
   'expandAbbreviations',
-  'tapToSeek',
   'pronunciations',
   'skip',
   'readerKeys',
@@ -87,13 +88,36 @@ export function settingsForSync(settings: Settings): SyncedSettings {
 
 const same = (a: SyncedSettingEntry | undefined, b: SyncedSettingEntry | undefined): boolean => !!a && !!b && canon(a.v) === canon(b.v);
 
+let defaults: Settings | null = null;
+const isDefault = (key: string, value: unknown): boolean =>
+  isSyncedSetting(key) && canon(value) === canon(syncedValue((defaults ??= withDefaults({})), key));
+
+/** A rule, by what it matches: the same word in the same case and language. */
+const ruleKey = (rule: PronunciationRule): string => `${rule.matchCase ? rule.from : rule.from.toLowerCase()}\u0000${rule.matchCase ? 1 : 0}\u0000${rule.language ?? ''}`;
+
+/**
+ * A device joining (no settings agreed with the file yet) with a value that differs from the
+ * file's. Where the file still has the default and this device changed it, this device's: a fresh
+ * phone that connected first must not reset a tuned computer. Pronunciations from both, the
+ * file's winning for the same word. Otherwise the file's, the settings the others use.
+ */
+function join(key: string, there: SyncedSettingEntry, here: SyncedSettingEntry, now: number): SyncedSettingEntry {
+  if (key === 'pronunciations' && Array.isArray(there.v) && Array.isArray(here.v)) {
+    const known = new Set((there.v as PronunciationRule[]).map(ruleKey));
+    const added = (here.v as PronunciationRule[]).filter((rule) => rule && typeof rule.from === 'string' && !known.has(ruleKey(rule)));
+    return added.length > 0 ? { v: [...there.v, ...added], at: now } : there;
+  }
+  if (isDefault(key, there.v) && !isDefault(key, here.v)) return { v: here.v, at: now };
+  return there;
+}
+
 /**
  * One setting list from the file's (`latest`), this device's (`current`) and the last agreed
  * (`baseline`), per setting:
  * - changed on one side only: that side's;
  * - changed on both before either synced: this device's, the later to sync;
- * - no baseline (this device just connected): the file's, so a new device takes the settings the
- *   others use; this device's for any the file does not have yet.
+ * - no baseline (this device just connected): see `join`; this device's for any the file does not
+ *   have yet.
  */
 export function mergeSettings(latest: SyncedSettings, baseline: SyncedSettings | null, current: SyncedSettings, now: number): SyncedSettings {
   const out: SyncedSettings = {};
@@ -108,8 +132,12 @@ export function mergeSettings(latest: SyncedSettings, baseline: SyncedSettings |
       out[key] = { v: here.v, at: now };
       continue;
     }
-    if (same(here, there) || !baseline) {
+    if (same(here, there)) {
       out[key] = there;
+      continue;
+    }
+    if (!baseline) {
+      out[key] = join(key, there, here, now);
       continue;
     }
     const before = baseline[key];
@@ -129,6 +157,9 @@ export function settingsToStore(now: Settings, merged: SyncedSettings, seen: Syn
   for (const key of SYNCED_SETTINGS) {
     const entry = merged[key];
     if (!entry) continue;
+    // A group with a part of its own on this device (its sites) must arrive as a group: anything
+    // else (a damaged file) would come out of the checks as defaults, its site list empty.
+    if (DEVICE_PARTS[key] && (!entry.v || typeof entry.v !== 'object' || Array.isArray(entry.v))) continue;
     const here = syncedValue(now, key);
     if (seen[key] && canon(here) !== canon(seen[key]!.v)) continue; // changed here meanwhile: ours stands
     if (canon(here) === canon(entry.v)) continue;

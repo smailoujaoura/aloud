@@ -26,6 +26,19 @@ import { MAX_SAVED_POSITIONS, type PositionMap } from '@/shared/position-match';
 import type { Mark } from '@/pdf/annotations/model';
 
 export const SYNC_FORMAT = 'aloud-sync';
+/**
+ * The file's layout. Raise it whenever a later Aloud adds a section, or a field to any record:
+ * an older Aloud refuses a newer file (and says to update) rather than read it, drop what it does
+ * not know, and write it back without it, which every newer device would read as deletions.
+ */
+export const SYNC_VERSION = 1;
+
+/** A newer Aloud wrote the file: this one leaves it alone. */
+export class NewerFileError extends Error {
+  constructor() {
+    super('The file in your Dropbox was written by a newer Aloud. Update Aloud on this device to keep syncing it.');
+  }
+}
 
 /** One PDF's marks, by the hash of its bytes (pdf/annotations/store.ts). */
 export interface SyncedMarks {
@@ -45,10 +58,33 @@ export interface SyncDoc {
   /** The settings that travel, by name (sync/synced-settings.ts), as of `settingsVersion`. */
   settings: SyncedSettings;
   settingsVersion: number;
+  /**
+   * The file's lineage: an id given when the file is first written, and a count of writes since.
+   * A device trusts what it remembers of the file only for the same lineage, at the same count or
+   * later: a file deleted and written anew (another id), or restored from Dropbox's version history
+   * (a lower count), is merged keeping both sides, so nothing it lacks is read as deleted.
+   */
+  epoch: string;
+  seq: number;
 }
 
 export function emptyDoc(): SyncDoc {
-  return { format: SYNC_FORMAT, version: 1, notes: [], pdfMarks: {}, positions: {}, history: {}, settings: {}, settingsVersion: SETTINGS_VERSION };
+  return {
+    format: SYNC_FORMAT,
+    version: 1,
+    notes: [],
+    pdfMarks: {},
+    positions: {},
+    history: {},
+    settings: {},
+    settingsVersion: SETTINGS_VERSION,
+    epoch: '',
+    seq: 0,
+  };
+}
+
+function newEpoch(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 /** The file's settings, brought up to this version's shapes; only those that travel. */
@@ -91,6 +127,7 @@ export function parseDoc(text: string): SyncDoc {
   }
   const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   if (obj.format !== SYNC_FORMAT) throw new Error('The file in your Dropbox is not one Aloud can read (aloud.json).');
+  if (typeof obj.version === 'number' && obj.version > SYNC_VERSION) throw new NewerFileError();
   const notes = Array.isArray(obj.notes) ? obj.notes.map((n) => normalizeNote(n)).filter((n): n is Note => !!n) : [];
   const pdfMarks: Record<string, SyncedMarks> = {};
   const marks = obj.pdfMarks && typeof obj.pdfMarks === 'object' ? (obj.pdfMarks as Record<string, unknown>) : {};
@@ -100,11 +137,13 @@ export function parseDoc(text: string): SyncDoc {
     if (stored && stored.marks.length > 0) pdfMarks[hash] = { name: stored.name, marks: stored.marks as Mark[] };
   }
   const positions = capPositions(
-    Object.fromEntries(Object.entries(recordsOf(obj.positions, normalizePosition)).filter(([key]) => key.length > 0 && key.length <= 4096)),
+    Object.fromEntries(Object.entries(recordsOf(obj.positions, normalizePosition)).filter(([key]) => key.length > 0)),
   );
   const history = capHistory(recordsOf(obj.history, normalizeHistoryEntry));
   const settings = readSettings(obj.settings, obj.settingsVersion);
-  return { format: SYNC_FORMAT, version: 1, notes: dedupe(notes), pdfMarks, positions, history, settings, settingsVersion: SETTINGS_VERSION };
+  const epoch = typeof obj.epoch === 'string' ? obj.epoch : '';
+  const seq = typeof obj.seq === 'number' && Number.isFinite(obj.seq) ? obj.seq : 0;
+  return { format: SYNC_FORMAT, version: 1, notes: dedupe(notes), pdfMarks, positions, history, settings, settingsVersion: SETTINGS_VERSION, epoch, seq };
 }
 
 /** A note twice in one file (two devices' edits written in turn): its newest copy. */
@@ -148,8 +187,22 @@ export function mergeDocs(latest: SyncDoc, baseline: SyncDoc | null, current: Sy
   }
   const positions = capPositions(reconcileMaps(latest.positions, baseline?.positions ?? {}, current.positions, (p) => p.savedAt));
   const history = capHistory(reconcileMaps(latest.history, baseline?.history ?? {}, current.history, (h) => h.lastReadAt));
-  const settings = mergeSettings(latest.settings, baseline?.settings ?? null, current.settings, now);
-  return { format: SYNC_FORMAT, version: 1, notes, pdfMarks, positions, history, settings, settingsVersion: SETTINGS_VERSION };
+  // No settings agreed yet (a new connection, or a device remembered from before settings were in
+  // the file): this device joins, as synced-settings.ts mergeSettings says.
+  const settingsBase = baseline && Object.keys(baseline.settings ?? {}).length > 0 ? baseline.settings : null;
+  const settings = mergeSettings(latest.settings, settingsBase, current.settings, now);
+  return {
+    format: SYNC_FORMAT,
+    version: 1,
+    notes,
+    pdfMarks,
+    positions,
+    history,
+    settings,
+    settingsVersion: SETTINGS_VERSION,
+    epoch: latest.epoch,
+    seq: latest.seq,
+  };
 }
 
 /** The file, as this device sees it. */
@@ -181,6 +234,8 @@ interface CloudBook {
   /** The file's content then. */
   base: SyncDoc | null;
   status: CloudStatus | null;
+  /** The Dropbox account it belongs to: reconnecting the same one carries on from it. */
+  accountId?: string;
 }
 
 const NOTHING: CloudBook = { rev: null, base: null, status: null };
@@ -194,9 +249,21 @@ export function watchCloudStatus(cb: (status: CloudStatus | null) => void): () =
   return book.watch((value) => cb(value?.status ?? null));
 }
 
-/** Forget the file (on disconnecting): a later connection starts by keeping both sides. */
-export async function forgetCloudSync(): Promise<void> {
-  await book.setValue(NOTHING);
+/**
+ * Before a connection to `accountId`. The same account as before (reconnecting after its access
+ * was taken back, say) carries on from what this device remembers, so what was deleted meanwhile
+ * stays deleted; another account, or none remembered, starts by keeping both sides.
+ */
+export async function prepareCloudSync(accountId: string): Promise<void> {
+  const was = await book.getValue();
+  if (was.accountId && was.accountId === accountId) await book.setValue({ ...was, status: null });
+  else await book.setValue({ ...NOTHING, accountId });
+}
+
+/** On disconnecting: the status goes, what the file was is kept for a reconnection (prepareCloudSync). */
+export async function pauseCloudSync(): Promise<void> {
+  const was = await book.getValue();
+  await book.setValue({ ...was, status: null });
 }
 
 export async function setCloudError(error: string, now = Date.now()): Promise<void> {
@@ -214,18 +281,20 @@ export async function runCloudSync(remote: RemoteFile, local: LocalData, reason:
   await withStorageLock('cloud-sync', async () => {
     for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
       const stored = await book.getValue();
-      // A file remembered by an earlier build lacks what later builds added (history, settings):
-      // read as empty, never as missing.
+      // A file remembered by an earlier build lacks what later builds added (positions, history,
+      // settings). Those parts are read as nothing agreed (empty: both sides kept), and the file
+      // itself is downloaded, since what is remembered of it is not the whole of it.
+      const partial = !!stored.base && (['positions', 'history', 'settings', 'epoch'] as const).some((k) => !(k in stored.base!));
       const state = { ...stored, base: stored.base ? { ...emptyDoc(), ...stored.base } : null };
       const seen = await local.read();
-      if (reason === 'here' && state.base && contentOf(seen) === contentOf(state.base)) return;
+      if (reason === 'here' && state.base && !partial && contentOf(seen) === contentOf(state.base)) return;
 
       const rev = await remote.revision();
       let latest: SyncDoc;
       let latestRev: string | null = rev;
       if (rev === null) {
         latest = emptyDoc();
-      } else if (rev === state.rev && state.base) {
+      } else if (rev === state.rev && state.base && !partial) {
         latest = state.base; // as this device left it: nothing to download
       } else {
         const got = await remote.download();
@@ -238,17 +307,27 @@ export async function runCloudSync(remote: RemoteFile, local: LocalData, reason:
         }
       }
 
-      // No file: nothing agreed with it any more. Merging against the old base would read every
-      // note as deleted there.
-      const merged = mergeDocs(latest, latestRev === null ? null : state.base, seen, now);
+      // What this device remembers holds only for the same file: not when there is none, or it was
+      // written anew (another lineage), or restored to an earlier write. Merging against it then
+      // would read whatever the file lacks as deleted there, and delete it here.
+      const sameFile =
+        latestRev !== null && !!state.base && latest.epoch === state.base.epoch && latest.seq >= state.base.seq;
+      const merged = mergeDocs(latest, sameFile ? state.base : null, seen, now);
       let newRev = latestRev;
       if (latestRev === null || contentOf(merged) !== contentOf(latest)) {
+        merged.epoch = latest.epoch || newEpoch();
+        merged.seq = latest.seq + 1;
         const written = await remote.upload(serializeDoc(merged), latestRev);
         if (written === 'conflict') continue;
         newRev = written;
       }
       await local.write(merged, seen);
+      // Only over what this round started from: a round that outlived its lock (a frozen tab)
+      // must not put back an older memory of the file after a newer round's.
+      const current = await book.getValue();
+      if (current.rev !== stored.rev) return;
       await book.setValue({
+        ...current,
         rev: newRev,
         base: merged,
         status: { at: now, notes: merged.notes.length, pdfs: Object.keys(merged.pdfMarks).length, places: Object.keys(merged.positions).length },

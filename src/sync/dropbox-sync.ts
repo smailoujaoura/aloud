@@ -15,7 +15,7 @@ import { reconcileById, reconcileMaps } from '@/shared/three-way';
 import { loadMarks, saveMarks } from '@/pdf/annotations/store';
 import type { Mark } from '@/pdf/annotations/model';
 import { DropboxClient, DropboxError, DropboxFile, exchangeCode, type AuthStore, type DropboxAuth } from './dropbox';
-import { contentOf, emptyDoc, forgetCloudSync, runCloudSync, setCloudError, type LocalData, type SyncDoc } from './cloud-sync';
+import { NewerFileError, contentOf, emptyDoc, pauseCloudSync, prepareCloudSync, runCloudSync, setCloudError, type LocalData, type SyncDoc } from './cloud-sync';
 
 /** In Apps/Aloud-tts, the only folder the app can see. */
 export const SYNC_PATH = '/aloud.json';
@@ -32,7 +32,15 @@ const pendingItem = storage.defineItem<{ verifier: string; at: number } | null>(
 
 export const dropboxAuth: AuthStore = {
   get: () => authItem.getValue(),
-  set: (auth) => authItem.setValue(auth),
+  // Only over the same connection: a refresh that lands after Disconnect (or a new connection)
+  // must not bring the old one back.
+  set: (auth) =>
+    withStorageLock('dropbox-auth', async () => {
+      const stored = await authItem.getValue();
+      if (!stored || stored.refresh !== auth.refresh) return false;
+      await authItem.setValue({ ...stored, access: auth.access, expiresAt: auth.expiresAt });
+      return true;
+    }),
 };
 
 export function watchDropboxAuth(cb: (auth: DropboxAuth | null, before: DropboxAuth | null) => void): () => void {
@@ -90,6 +98,9 @@ async function consented(): Promise<boolean> {
 
 /** What went wrong, in words for the Sync section. */
 export function describeSyncError(err: unknown): string {
+  if (err instanceof NewerFileError) return err.message;
+  if (err instanceof DOMException && (err.name === 'TimeoutError' || err.name === 'AbortError'))
+    return 'Dropbox took too long to answer. Aloud will try again shortly.';
   if (err instanceof DropboxError) {
     if (err.status === 401 || /invalid_grant|expired_access_token|invalid_access_token/.test(err.summary))
       return 'Dropbox no longer lets Aloud in (its access was taken back). Disconnect, then connect again.';
@@ -98,7 +109,8 @@ export function describeSyncError(err: unknown): string {
     if (err.status >= 500) return 'Dropbox is not answering just now. Aloud will try again shortly.';
     return `Dropbox said: ${err.summary}`;
   }
-  if (err instanceof TypeError) return 'Dropbox could not be reached. Aloud will try again when you are online.';
+  // fetch's own failure; any other TypeError is a fault in Aloud and is shown as one.
+  if (err instanceof TypeError && /fetch|network/i.test(err.message)) return 'Dropbox could not be reached. Aloud will try again when you are online.';
   return err instanceof Error ? err.message : String(err);
 }
 
@@ -120,23 +132,27 @@ export async function syncWithDropbox(reason: 'here' | 'other'): Promise<void> {
 /** The code Dropbox gave (or showed): connected, and who to. */
 export async function connectDropbox(code: string, verifier: string, redirectUri: string | undefined): Promise<void> {
   const auth = await exchangeCode(code, verifier, redirectUri, (url, init) => fetch(url, init));
-  // A new connection keeps both sides: what this device has and what the file has.
-  await forgetCloudSync();
+  // The same account again carries on from what this device remembers; another starts by keeping
+  // both sides (cloud-sync.ts prepareCloudSync).
+  await withStorageLock('cloud-sync', () => prepareCloudSync(auth.accountId));
   await pendingItem.setValue(null);
   let who = '';
   try {
-    who = await new DropboxClient({ get: async () => auth, set: async () => undefined }, (url, init) => fetch(url, init)).who();
+    who = await new DropboxClient({ get: async () => auth, set: async () => false }, (url, init) => fetch(url, init)).who();
   } catch {
     /* shown without a name */
   }
-  await authItem.setValue({ ...auth, ...(who ? { who } : {}) });
+  await withStorageLock('dropbox-auth', () => authItem.setValue({ ...auth, ...(who ? { who } : {}) }));
 }
 
 /** Stop syncing. Notes stay on this device and in the reader's Dropbox. */
 export async function disconnectDropbox(): Promise<void> {
-  if (await authItem.getValue()) await new DropboxClient(dropboxAuth, (url, init) => fetch(url, init)).revoke();
-  await authItem.setValue(null);
-  await forgetCloudSync();
+  // After any round under way, so none carries on with the connection once it is gone.
+  await withStorageLock('cloud-sync', async () => {
+    if (await authItem.getValue()) await new DropboxClient(dropboxAuth, (url, init) => fetch(url, init)).revoke();
+    await withStorageLock('dropbox-auth', () => authItem.setValue(null));
+    await pauseCloudSync();
+  });
 }
 
 export async function setPendingSignIn(verifier: string): Promise<void> {

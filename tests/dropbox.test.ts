@@ -24,7 +24,7 @@ const json = (status: number, body: unknown, headers: Record<string, string> = {
 
 function memoryAuth(auth: DropboxAuth) {
   let current = auth;
-  return { get: async () => current, set: async (next: DropboxAuth) => void (current = next), now: () => current };
+  return { get: async () => current, set: async (next: DropboxAuth) => ((current = next), true), now: () => current };
 }
 
 const AUTH: DropboxAuth = { access: 'old', refresh: 'refresh-1', expiresAt: 10_000, accountId: 'dbid:1' };

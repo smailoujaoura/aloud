@@ -3,6 +3,7 @@
  */
 import { el } from '@/shared/dom';
 import { sourceUrl } from '@/shared/doc-source';
+import { dropboxAuth } from '@/sync/dropbox-sync';
 import {
   clearHistory,
   continueList,
@@ -29,7 +30,8 @@ export async function initReading(opts: { onContinueCount: (n: number) => void; 
   render(await loadHistory());
   watchHistory(render);
   $('clearHistory').addEventListener('click', async () => {
-    if (!confirm('Forget everything you have listened to? Notes and the queue are kept.')) return;
+    const synced = !!(await dropboxAuth.get());
+    if (!confirm(`Forget everything you have listened to? Notes and the queue are kept.${synced ? ' Your other devices, through Dropbox, forget it too.' : ''}`)) return;
     await clearHistory();
   });
 }

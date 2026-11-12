@@ -4,6 +4,7 @@
  * back, and asking again for the sites that were allowed, since a browser grants those to an
  * install, not to a file.
  */
+import { dropboxAuth } from '@/sync/dropbox-sync';
 import { browser } from 'wxt/browser';
 import {
   BACKUP_PARTS,
@@ -132,6 +133,9 @@ function showRestore(host: HTMLElement, backup: Backup, opts: BackupPanelOptions
     list.append(row);
   }
   const note = el(document, 'p', { class: 'muted small' }, 'Settings are replaced by the backup’s. Everything else is merged: nothing you kept since is lost.');
+  void dropboxAuth.get().then((auth) => {
+    if (auth) note.textContent += ' With Dropbox connected, your other devices take the restored settings too.';
+  });
   const go = el(document, 'button', { type: 'button', class: 'primary' }, 'Restore');
   const after = el(document, 'div', { class: 'backup-after' });
   go.addEventListener('click', async () => {

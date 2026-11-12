@@ -51,6 +51,7 @@ import { renderMediaSpeedPanel } from './media-speed-panel';
 import { renderNoteStylePanel } from './note-style-panel';
 import { renderBackupPanel } from './backup-panel';
 import { renderDropboxPanel } from './dropbox-panel';
+import { dropboxAuth, watchDropboxAuth } from '@/sync/dropbox-sync';
 import { renderShortcutsPanel } from './shortcuts-panel';
 import { renderSiteList } from './site-list';
 import { renderPronunciationEditor } from './pronunciation-editor';
@@ -147,10 +148,24 @@ function syncWordRows(): void {
   $('wordStrengthRow').hidden = !marksWords || style === 'underline';
 }
 
+/** Saves this page has under way: their own echo from storage is not news to redraw for. */
+let ownSaves = 0;
+
 async function save(patch: Partial<Settings>): Promise<void> {
-  settings = await setSettings(patch);
+  ownSaves++;
+  try {
+    settings = await setSettings(patch);
+  } finally {
+    ownSaves--;
+  }
   flashSaved();
 }
+
+/** Whether Dropbox sync is on, for the warnings on what reaches every device. */
+let dropboxConnected = false;
+void dropboxAuth.get().then((auth) => (dropboxConnected = !!auth));
+watchDropboxAuth((auth) => (dropboxConnected = !!auth));
+const everywhere = (): string => (dropboxConnected ? ' Your other devices, through Dropbox, too.' : '');
 
 /** Switch engine and/or voice from anywhere on the page, then redraw. */
 /**
@@ -737,7 +752,7 @@ function wire(): void {
         await clearAllPositions();
         await refreshPositionsHint();
       },
-      'Every page will start from the top again',
+      dropboxConnected ? 'Every page will start from the top again, on your other devices too' : 'Every page will start from the top again',
     );
   });
   $('openPdf').addEventListener('click', (e) => {
@@ -754,7 +769,7 @@ function wire(): void {
   });
 
   $('reset').addEventListener('click', (e) => {
-    if (!confirm('Put every setting back to its default? Downloaded voices are kept.')) return;
+    if (!confirm(`Put every setting back to its default? Downloaded voices are kept.${everywhere()}`)) return;
     void withBusy(
       e.currentTarget as HTMLButtonElement,
       'Restoring…',
@@ -847,13 +862,33 @@ function explainUnreadablePage(): void {
 
 explainUnreadablePage();
 
-// Settings changed somewhere else — another Aloud tab, the reading bar's voice menu, a restored
-// backup — are shown here too. Changes made on this page are already on it: only a page that is
-// not the one being used redraws, so nothing moves under the cursor.
+// Settings changed somewhere else (another Aloud tab, the reading bar's voice menu, a restored
+// backup, another device through Dropbox) are shown here too, and always kept: every save here
+// patches what is stored now, never an older copy the page held (one that, saved, put another
+// device's pronunciation or key back as it was). The page redraws for them, except under someone
+// typing in a field: then when they leave it.
+let redrawOnBlur = false;
 watchSettings((next) => {
-  if (document.hasFocus() || !settings) return;
+  if (!settings) return;
   settings = next;
-  void render();
+  if (ownSaves > 0) return;
+  const active = document.activeElement;
+  const typing =
+    document.hasFocus() && active instanceof HTMLElement && active.matches('input:not([type]), input[type="text"], input[type="search"], textarea, [contenteditable="true"]');
+  if (!typing) {
+    void render();
+    return;
+  }
+  if (redrawOnBlur) return;
+  redrawOnBlur = true;
+  active.addEventListener(
+    'blur',
+    () => {
+      redrawOnBlur = false;
+      void render();
+    },
+    { once: true },
+  );
 });
 // Notes, settings and reading, through the reader's own Dropbox (sync/).
 renderDropboxPanel($('dropboxSync'), { toast });

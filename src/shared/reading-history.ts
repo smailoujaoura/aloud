@@ -43,7 +43,7 @@ export interface ListeningUpdate {
 
 export type History = Record<string, HistoryEntry>;
 
-export const MAX_HISTORY = 300;
+export const MAX_HISTORY = 500;
 /** A page opened and closed again straight away is not something to "continue". */
 export const MIN_SECONDS_TO_CONTINUE = 20;
 /** Speech at 1× in Piper's voices runs at about this many characters a second. */

@@ -27,6 +27,21 @@ describe('merging the file’s settings with this device’s', () => {
     expect(mergeSettings({ speed: entry(1.5, 10) }, null, here(1), 99).speed).toEqual(entry(1.5, 10));
   });
 
+  it('…but not defaults over what it changed: a fresh phone connected first must not reset a tuned computer', () => {
+    const fileDefault = { speed: entry(DEFAULT_SETTINGS.speed, 10), theme: entry(DEFAULT_SETTINGS.theme, 10) };
+    const tuned = { speed: entry(1.6, 0), theme: entry('dark', 0) };
+    const merged = mergeSettings(fileDefault, null, tuned, 99);
+    expect(merged.speed).toEqual(entry(1.6, 99));
+    expect(merged.theme).toEqual(entry('dark', 99));
+  });
+
+  it('…and pronunciations from both are kept, the file’s winning for the same word', () => {
+    const file = { pronunciations: entry([{ from: 'GIF', to: 'jif' }, { from: 'SQL', to: 'sequel' }], 10) };
+    const mine = { pronunciations: entry([{ from: 'gif', to: 'gif' }, { from: 'nginx', to: 'engine x' }], 0) };
+    const merged = mergeSettings(file, null, mine, 99).pronunciations!.v as Array<{ from: string; to: string }>;
+    expect(merged.map((r) => `${r.from}=${r.to}`)).toEqual(['GIF=jif', 'SQL=sequel', 'nginx=engine x']);
+  });
+
   it('…and gives the file any it does not have yet', () => {
     expect(mergeSettings({}, null, here(1.2), 99).speed).toEqual(entry(1.2, 99));
   });
@@ -63,6 +78,17 @@ describe('storing what the file brought', () => {
   it('nothing to change: null, so nothing is written', () => {
     const s = with_({ speed: 1.4 });
     expect(settingsToStore(s, sync(s), sync(s))).toBeNull();
+  });
+
+  it('a damaged group in the file never empties this device’s own sites', () => {
+    const now = with_({ speed: 1, mediaSpeed: { ...DEFAULT_SETTINGS.mediaSpeed, alwaysOn: ['example.org'], step: 0.5 } });
+    expect(settingsToStore(now, { ...sync(now), mediaSpeed: entry(null) }, sync(now))).toBeNull();
+    expect(settingsToStore(now, { ...sync(now), mediaSpeed: entry([]) }, sync(now))).toBeNull();
+  });
+
+  it('PDF view and tap-to-jump stay on each device', () => {
+    expect(SYNCED_SETTINGS as readonly string[]).not.toContain('pdfView');
+    expect(SYNCED_SETTINGS as readonly string[]).not.toContain('tapToSeek');
   });
 
   it('a value no setting can have is put right, as a restored backup is', () => {

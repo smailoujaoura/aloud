@@ -7,7 +7,7 @@
  * - changed here, untouched there: ours;
  * - changed in both since the baseline: the later `updated` wins;
  * - deleted here, untouched there: deleted;
- * - deleted here, but edited there afterwards: kept, so a deletion never silently takes someone's
+ * - deleted here, but edited there since: kept, so a deletion never silently takes someone's
  *   later work with it;
  * - added anywhere: kept.
  *
@@ -49,9 +49,12 @@ export function reconcileById<T extends { id: string }>(
 
   for (const [id, before] of base) {
     if (mine.has(id)) continue;
-    // Deleted here. Gone there too, or unchanged there since: delete. Edited there since: keep.
+    // Deleted here. Gone there too, or unchanged there since: delete. Edited there since: keep,
+    // whatever its time says: a device whose clock runs slow, or an Undo that put an older copy
+    // back, still edited it after this side last saw it. (Its time, not its content: a copy that
+    // differs only by normalisation keeps its time, and stays deleted.)
     const theirs = result.get(id);
-    if (theirs && updatedOf(theirs) <= updatedOf(before)) result.delete(id);
+    if (theirs && updatedOf(theirs) === updatedOf(before)) result.delete(id);
   }
   for (const record of current) {
     const before = base.get(record.id);

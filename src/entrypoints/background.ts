@@ -446,6 +446,11 @@ export default defineBackground({
       if (area === 'local' && keys.some((key) => key === 'readingPositions' || key === 'readingHistory')) positionsSyncLater();
     });
 
+    // Firefox starts an event page at launch only for a startup listener, and keeps no alarm across
+    // a restart. Without this one (the context menus' is not registered on Firefox for Android),
+    // a phone's background stayed asleep after Firefox restarted, with no round and no alarm.
+    browser.runtime.onStartup.addListener(() => cloudSyncSoon('other', 3000));
+
     // Dropbox: a round at start, on connecting, and every quarter of an hour for what other
     // devices wrote.
     browser.alarms?.onAlarm.addListener((alarm) => {

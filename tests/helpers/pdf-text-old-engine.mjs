@@ -26,6 +26,8 @@ const gone = [
   ...['intersection', 'union', 'difference', 'symmetricDifference', 'isSubsetOf', 'isSupersetOf', 'isDisjointFrom'].map((n) => [Set.prototype, n]),
 ];
 for (const [target, name] of gone) delete target[name];
+// Chrome 120 and 121 have no Iterator global at all, and pdf.js reads Iterator.prototype as it loads.
+delete globalThis.Iterator;
 
 const root = new URL('../../', import.meta.url);
 const { install } = await import(new URL('public/pdfjs-support/polyfills.mjs', root).href);
@@ -46,4 +48,5 @@ for (const file of process.argv.slice(2)) {
   out[file] = pages.join('\n');
 }
 const missing = gone.filter(([target, name]) => typeof target[name] !== 'function').map(([, name]) => name);
+if (typeof globalThis.Iterator !== 'function') missing.push('Iterator');
 console.log(JSON.stringify({ out, missing }));

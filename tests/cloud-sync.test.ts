@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { resetStorage, storage } from './stubs/wxt-storage';
 import { reconcileById, reconcileMaps } from '@/shared/three-way';
+import { MAX_SAVED_POSITIONS } from '@/shared/position-match';
 import type { Note } from '@/shared/notes';
 import type { Mark } from '@/pdf/annotations/model';
 import {
@@ -277,13 +278,13 @@ describe('where you stopped, between two devices', () => {
     expect(doc.positions).toEqual({});
   });
 
-  it('keeps the 200 most recent, as a device does', async () => {
-    a.data.positions = Object.fromEntries(Array.from({ length: 150 }, (_, i) => [`a${i}`, at(i, 1000 + i)]));
-    b.data.positions = Object.fromEntries(Array.from({ length: 150 }, (_, i) => [`b${i}`, at(i, 2000 + i)]));
+  it('keeps the most recent, as many as a device does', async () => {
+    a.data.positions = Object.fromEntries(Array.from({ length: 300 }, (_, i) => [`a${i}`, at(i, 1000 + i)]));
+    b.data.positions = Object.fromEntries(Array.from({ length: 300 }, (_, i) => [`b${i}`, at(i, 2000 + i)]));
     await a.sync(file);
     await b.sync(file);
-    expect(Object.keys(file.doc.positions)).toHaveLength(200);
-    expect(file.doc.positions.b149).toBeDefined();
+    expect(Object.keys(file.doc.positions)).toHaveLength(MAX_SAVED_POSITIONS);
+    expect(file.doc.positions.b299).toBeDefined();
     expect(file.doc.positions.a0).toBeUndefined();
   });
 });
@@ -382,7 +383,90 @@ describe('settings, between two devices', () => {
   });
 });
 
+describe('a file replaced, restored or written by a newer Aloud', () => {
+  let file: FakeFile;
+  let a: Device;
+  let b: Device;
+  beforeEach(() => {
+    resetStorage();
+    file = new FakeFile();
+    a = new Device();
+    b = new Device();
+  });
+
+  it('deleted, and written anew by a device that was offline: nothing it lacked is deleted elsewhere', async () => {
+    a.data.notes = [note('x', 'Old note')];
+    await a.sync(file);
+    await b.sync(file);
+    b.data.notes = [...b.data.notes, note('n', 'Added on B')];
+    await b.sync(file, 'here');
+    file.text = null; // the reader deleted aloud.json
+    await a.sync(file); // A never saw "Added on B"
+    await b.sync(file);
+    expect(b.texts()).toEqual(['Added on B', 'Old note']);
+    expect(file.doc.notes.map((n) => n.text).sort()).toEqual(['Added on B', 'Old note']);
+    await a.sync(file);
+    expect(a.texts()).toEqual(['Added on B', 'Old note']);
+  });
+
+  it('restored from Dropbox’s version history: what was added since is kept, not deleted', async () => {
+    a.data.notes = [note('x', 'Old note')];
+    await a.sync(file);
+    const before = { text: file.text, rev: file.rev };
+    a.data.notes = [...a.data.notes, note('n', 'Added later')];
+    await a.sync(file, 'here');
+    file.text = before.text; // an earlier version put back
+    file.rev += 1;
+    await a.sync(file);
+    expect(a.texts()).toEqual(['Added later', 'Old note']);
+    expect(file.doc.notes).toHaveLength(2);
+  });
+
+  it('written by a newer Aloud: refused, and left exactly as it is', async () => {
+    file.text = JSON.stringify({ format: 'aloud-sync', version: 2, notes: [note('1', 'From the future')], pdfMarks: {}, queue: [{ id: 'q' }] });
+    file.rev = 3;
+    const untouched = file.text;
+    a.data.notes = [note('2', 'Mine')];
+    await expect(a.sync(file)).rejects.toThrow(/newer Aloud/);
+    expect(file.text).toBe(untouched);
+    expect(a.texts()).toEqual(['Mine']);
+  });
+
+  it('each upload counts on the same lineage', async () => {
+    a.data.notes = [note('1', 'One')];
+    await a.sync(file);
+    const first = file.doc;
+    a.data.notes = [...a.data.notes, note('2', 'Two')];
+    await a.sync(file, 'here');
+    expect(first.epoch).not.toBe('');
+    expect(file.doc.epoch).toBe(first.epoch);
+    expect(file.doc.seq).toBe(first.seq + 1);
+  });
+});
+
 describe('a device that synced with an earlier build', () => {
+  it('remembering the file without history: other devices’ history is not deleted', async () => {
+    resetStorage();
+    const file = new FakeFile();
+    const a = new Device();
+    const b = new Device();
+    const url = 'https://example.org/read-on-b';
+    const entry = { source: { key: url, title: 'B read it', site: 'example.org', reopen: { kind: 'web' as const, url } }, index: 3, total: 9, charsRead: 30, charsTotal: 90, listenedSeconds: 60, secondsPerChar: null, finished: false, firstReadAt: 1, lastReadAt: 5 };
+    b.data.history = { [url]: entry };
+    await b.sync(file);
+    await a.sync(file);
+    // A's memory as a build from before history was in the file left it: without history.
+    const remembered = JSON.parse(JSON.stringify((a as unknown as { book: { base: Record<string, unknown> } }).book));
+    delete remembered.base.history;
+    delete remembered.base.settings;
+    delete remembered.base.epoch;
+    (a as unknown as { book: unknown }).book = remembered;
+    a.data.history = {};
+    await a.sync(file, 'here');
+    await b.sync(file);
+    expect(b.data.history[url]).toBeDefined();
+  });
+
   it('its remembered file, without positions, history or settings, is read as having none', async () => {
     resetStorage();
     const file = new FakeFile();
@@ -426,5 +510,29 @@ describe('the file', () => {
     const one = { ...emptyDoc(), notes: [note('1', 'A'), note('2', 'B')], pdfMarks: { [PDF]: { name: 'x.pdf', marks: [mark('m1')] } } };
     const two = { ...emptyDoc(), notes: [note('2', 'B'), note('1', 'A')], pdfMarks: { [PDF]: { name: 'y.pdf', marks: [mark('m1')] } } };
     expect(contentOf(one)).toBe(contentOf(two));
+  });
+});
+
+describe('reconnecting', () => {
+  it('the same account carries on from what this device remembers; another starts afresh', async () => {
+    const { prepareCloudSync } = await import('@/sync/cloud-sync');
+    resetStorage();
+    await storage.setItem('local:cloudSync', { rev: 'r9', base: { ...emptyDoc(), notes: [note('1', 'Kept')] }, status: { at: 1, error: 'x' }, accountId: 'dbid:A' });
+    await prepareCloudSync('dbid:A');
+    const same = (await storage.getItem('local:cloudSync')) as { rev: string; base: SyncDoc; status: unknown };
+    expect(same.rev).toBe('r9');
+    expect(same.base.notes).toHaveLength(1);
+    expect(same.status).toBeNull();
+    await prepareCloudSync('dbid:B');
+    expect(await storage.getItem('local:cloudSync')).toEqual({ rev: null, base: null, status: null, accountId: 'dbid:B' });
+  });
+});
+
+describe('three-way rules', () => {
+  it('deleted here, but edited there by a device whose clock runs slow: kept', () => {
+    const before = note('1', 'Text', 100);
+    const editedSlowClock = { ...note('1', 'Text'), comment: 'added later, clock behind', updatedAt: 90 };
+    expect(reconcileById([editedSlowClock], [before], [], (n) => n.updatedAt)).toEqual([editedSlowClock]);
+    expect(reconcileById([before], [before], [], (n) => n.updatedAt)).toEqual([]);
   });
 });

@@ -30,6 +30,14 @@ export interface DropboxAuth {
 
 export type FetchFn = (input: string, init?: RequestInit) => Promise<Response>;
 
+/**
+ * How long one request to Dropbox may take. A round holds the sync lock while it waits, so a
+ * connection that dies mid-request (a laptop put to sleep) must not hold every later round up.
+ */
+export const REQUEST_TIMEOUT_MS = 60_000;
+const timeout = (): AbortSignal | undefined =>
+  typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal ? AbortSignal.timeout(REQUEST_TIMEOUT_MS) : undefined;
+
 export class DropboxError extends Error {
   constructor(
     readonly status: number,
@@ -76,9 +84,15 @@ async function tokenCall(body: Record<string, string>, fetchFn: FetchFn): Promis
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams(body).toString(),
+    signal: timeout(),
   });
   const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!res.ok) throw new DropboxError(res.status, String(data.error_description ?? data.error ?? res.statusText));
+  if (!res.ok) {
+    // Both, so the cause can be told: a revoked connection is `invalid_grant`, with a description.
+    const code = typeof data.error === 'string' ? data.error : '';
+    const detail = typeof data.error_description === 'string' ? data.error_description : '';
+    throw new DropboxError(res.status, [code, detail].filter(Boolean).join(': ') || res.statusText);
+  }
   return data;
 }
 
@@ -112,7 +126,11 @@ export async function refreshAccess(auth: DropboxAuth, fetchFn: FetchFn, now = D
 /** Where the reader's connection is kept, and how a refreshed one is saved. */
 export interface AuthStore {
   get(): Promise<DropboxAuth | null>;
-  set(auth: DropboxAuth): Promise<void>;
+  /**
+   * Save a refreshed connection, only if the stored one has the same refresh token (it was not
+   * disconnected or replaced meanwhile). Returns whether it was saved.
+   */
+  set(auth: DropboxAuth): Promise<boolean>;
 }
 
 /** A call to Dropbox with the reader's token, refreshed when it has run out. */
@@ -124,21 +142,28 @@ export class DropboxClient {
   ) {}
 
   private async token(force = false): Promise<string> {
-    let auth = await this.auth.get();
+    const auth = await this.auth.get();
     if (!auth) throw new DropboxError(401, 'not connected');
     if (force || auth.expiresAt <= this.now()) {
-      auth = await refreshAccess(auth, this.fetchFn, this.now());
-      await this.auth.set(auth);
+      const fresh = await refreshAccess(auth, this.fetchFn, this.now());
+      // Kept only if it is still the same connection: one disconnected (or replaced) while the
+      // refresh was on its way must not come back (AuthStore.set checks the refresh token).
+      if (!(await this.auth.set(fresh))) throw new DropboxError(401, 'not connected');
+      return fresh.access;
     }
     return auth.access;
   }
 
   async call(url: string, init: RequestInit): Promise<Response> {
-    let res = await this.fetchFn(url, { ...init, headers: { ...(init.headers as Record<string, string>), Authorization: `Bearer ${await this.token()}` } });
-    if (res.status === 401) {
-      // Expired early, or revoked: one fresh token, then whatever Dropbox says stands.
-      res = await this.fetchFn(url, { ...init, headers: { ...(init.headers as Record<string, string>), Authorization: `Bearer ${await this.token(true)}` } });
-    }
+    const send = async (force: boolean) =>
+      this.fetchFn(url, {
+        ...init,
+        headers: { ...(init.headers as Record<string, string>), Authorization: `Bearer ${await this.token(force)}` },
+        signal: timeout(),
+      });
+    let res = await send(false);
+    // Expired early, or revoked: one fresh token, then whatever Dropbox says stands.
+    if (res.status === 401) res = await send(true);
     return res;
   }
 

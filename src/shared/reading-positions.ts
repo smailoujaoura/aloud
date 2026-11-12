@@ -52,6 +52,11 @@ export async function clearPosition(key: string): Promise<void> {
   }
 }
 
+/** Follow one document's saved position: another tab's, or another device's arriving through sync. */
+export function watchPosition(key: string, cb: (pos: SavedPosition | undefined) => void): () => void {
+  return item.watch((map) => cb(normalizePosition(map?.[key]) ?? undefined));
+}
+
 /** Every saved position, by document. */
 export async function loadPositions(): Promise<PositionMap> {
   try {

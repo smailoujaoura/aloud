@@ -648,7 +648,7 @@ export function sanitizeSettings(raw: Settings): Settings {
       seekSeconds: Math.round(clamp(raw.mediaSpeed?.seekSeconds, 1, 120, DEFAULT_MEDIA_SPEED.seekSeconds)),
       presets: presets.length ? presets : [...DEFAULT_MEDIA_SPEED.presets],
       alwaysOn: hosts(raw.mediaSpeed?.alwaysOn),
-      neverOn: hosts(raw.mediaSpeed?.neverOn).filter((h) => /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(h)),
+      neverOn: hosts(raw.mediaSpeed?.neverOn).filter((h) => /^[a-z0-9-]+(\.[a-z0-9-]+)*$/.test(h)),
       keys: mediaKeys(raw.mediaSpeed?.keys),
     },
   };
