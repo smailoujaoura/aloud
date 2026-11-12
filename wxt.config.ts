@@ -39,8 +39,9 @@ export default defineConfig({
   zip: {
     includeSources: ['**/*', '.npmrc'],
     // Nor are the runtime files the build copies in from node_modules and builds (public/vendor/,
-    // the worker), which git ignores too: 59 MB a reviewer would otherwise get twice.
-    excludeSources: ['*.wav', '*.png', 'docs/RELEASE_*', 'docs/CLAUDE_*', 'docs/STORE_POLICY_AUDIT_*', 'docs/POST_RELEASE_*', 'public/vendor/**', 'public/tts-worker.js'],
+    // the worker), which git ignores too: 59 MB a reviewer would otherwise get twice. Nor the
+    // website (aloud.souj.dev), which the build never reads, and which may hold unfinished edits.
+    excludeSources: ['*.wav', '*.png', 'docs/RELEASE_*', 'docs/CLAUDE_*', 'docs/STORE_POLICY_AUDIT_*', 'docs/POST_RELEASE_*', 'public/vendor/**', 'public/tts-worker.js', 'website/**'],
   },
 
   manifest: ({ browser }) => ({
