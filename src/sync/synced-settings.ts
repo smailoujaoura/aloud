@@ -194,6 +194,11 @@ export function mergeSettings(latest: SyncedSettings, baseline: SyncedSettings |
   return out;
 }
 
+/** The settings changed here since `seen` (while a round ran): left as they are by settingsToStore. */
+export function settingsKeptHere(now: Settings, seen: SyncedSettings): string[] {
+  return SYNCED_SETTINGS.filter((key) => seen[key] && canon(syncedValue(now, key)) !== canon(seen[key]!.v));
+}
+
 /**
  * What to store on this device for `merged`, given `seen` (this device's settings when the round
  * began) and `now` (as they are at this moment): a setting changed here while the round ran is

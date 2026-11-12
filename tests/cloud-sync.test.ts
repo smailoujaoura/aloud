@@ -82,6 +82,8 @@ class Device implements LocalData {
       d();
     }
     const now = this.data;
+    const changedMeanwhile = (k: string) => !!seen.settings[k] && JSON.stringify(now.settings[k]?.v) !== JSON.stringify(seen.settings[k]!.v);
+    const keptSettings = Object.keys(merged.settings).filter(changedMeanwhile);
     const pdfMarks: SyncDoc['pdfMarks'] = {};
     for (const hash of new Set([...Object.keys(merged.pdfMarks), ...Object.keys(seen.pdfMarks), ...Object.keys(now.pdfMarks)])) {
       const marks = reconcileById(merged.pdfMarks[hash]?.marks ?? [], seen.pdfMarks[hash]?.marks ?? [], now.pdfMarks[hash]?.marks ?? [], (m) => m.updated);
@@ -94,10 +96,9 @@ class Device implements LocalData {
       positions: reconcileMaps(merged.positions, seen.positions, now.positions, (p) => p.savedAt),
       history: reconcileMaps(merged.history, seen.history, now.history, (h) => h.lastReadAt),
       // As dropbox-sync.ts stores them: the merged value, unless changed here meanwhile.
-      settings: Object.fromEntries(
-        Object.entries(merged.settings).map(([k, e]) => [k, seen.settings[k] && JSON.stringify(now.settings[k]?.v) !== JSON.stringify(seen.settings[k]!.v) ? now.settings[k]! : { v: e.v, at: 0 }]),
-      ),
+      settings: Object.fromEntries(Object.entries(merged.settings).map(([k, e]) => [k, changedMeanwhile(k) ? now.settings[k]! : { v: e.v, at: 0 }])),
     };
+    return { keptSettings };
   }
   async sync(file: RemoteFile, reason: 'here' | 'other' = 'other') {
     await storage.setItem('local:cloudSync', this.book ?? { rev: null, base: null, status: null });
@@ -389,6 +390,23 @@ describe('settings, between two devices', () => {
     const froms = (d: Device) => (d.data.settings.pronunciations?.v as Array<{ from: string }>).map((r) => r.from).sort();
     expect(froms(a)).toEqual(['GIF', 'SQL', 'nginx']);
     expect(froms(b)).toEqual(['GIF', 'SQL', 'nginx']);
+  });
+
+  it('a pronunciation added on the phone survives an edit made here while the round brought it', async () => {
+    const rule = (from: string) => ({ from, to: from.toLowerCase() });
+    a.data.settings = { pronunciations: { v: [rule('GIF')], at: 0 } };
+    await a.sync(file);
+    await b.sync(file);
+    a.data.settings = { pronunciations: { v: [rule('GIF'), rule('NGINX')], at: 0 } };
+    await a.sync(file, 'here');
+    // B's round brings NGINX; meanwhile B's reader types a rule of their own.
+    b.during = () => (b.data.settings = { pronunciations: { v: [rule('GIF'), rule('SQL')], at: 0 } });
+    await b.sync(file);
+    await b.sync(file, 'here');
+    await a.sync(file);
+    const froms = (list: unknown) => (list as Array<{ from: string }>).map((r) => r.from).sort();
+    expect(froms(file.doc.settings.pronunciations?.v)).toEqual(['GIF', 'NGINX', 'SQL']);
+    expect(froms(a.data.settings.pronunciations?.v)).toEqual(['GIF', 'NGINX', 'SQL']);
   });
 
   it('different switches of one group changed on two devices: both kept', async () => {

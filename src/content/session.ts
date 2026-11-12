@@ -955,14 +955,19 @@ export class ReaderSession {
     this.seekTo(this.currentPlayId + delta);
   }
 
-  seekTo(playId: number, opts: { quiet?: boolean } = {}): void {
+  /**
+   * `internal`: a re-seek of Aloud's own (the page changed, the voice changed, a retry), not the
+   * user moving. `lazy`: move the queue without making speech yet; play makes it (following a place
+   * saved elsewhere while paused, which another tab can do every few seconds).
+   */
+  seekTo(playId: number, opts: { quiet?: boolean; internal?: boolean; lazy?: boolean } = {}): void {
     if (this.exporter) {
       this.bar?.flash('Reading carries on once the MP3 is made', 'info');
       return;
     }
     // Moved here, paused or not, now: a place saved elsewhere before this is older than it, and is
     // not followed (watchPlace). Not when the move is that following.
-    if (!this.followingPlace) this.placeAt = Math.max(this.placeAt, Date.now());
+    if (!this.followingPlace && !opts.internal) this.placeAt = Math.max(this.placeAt, Date.now());
     // The part of the sentence heard before the jump counts; the rest was never heard.
     this.countPartlyHeard();
     const wanted = Math.max(0, Math.min(playId, this.playlist.length - 1));
@@ -984,7 +989,7 @@ export class ReaderSession {
     this.stopFollowingWords(true);
     // A "stop at the end of this paragraph" timer now means the paragraph just jumped to.
     this.sleepTimer?.onSeek();
-    if (this.engineReady) this.ensureSynth(target);
+    if (this.engineReady && !opts.lazy) this.ensureSynth(target);
     // Playback has to wait for the new sentence to synthesise; show that.
     this.state.busy = this.engineReady && this.scheduler.isPlaying();
     this.pushState();
@@ -1123,7 +1128,7 @@ export class ReaderSession {
     if (hereReworded && !this.scheduler.started(current)) {
       if (this.scheduler.discard(current)) changed.unshift(current);
       else {
-        this.seekTo(current, { quiet: true });
+        this.seekTo(current, { quiet: true, internal: true });
         return;
       }
     }
@@ -1163,7 +1168,7 @@ export class ReaderSession {
   private moveOnFrom(from: number): void {
     for (let i = Math.max(0, from); i < this.playlist.length; i++) {
       if (this.readable(this.playlist[i])) {
-        this.seekTo(i, { quiet: true });
+        this.seekTo(i, { quiet: true, internal: true });
         return;
       }
     }
@@ -1896,7 +1901,7 @@ export class ReaderSession {
     if (!this.engineReady) return;
     if (changed.current) {
       // The sentence playing now sounds different, or is now skipped: say it again, or move on.
-      if (this.readable(this.playlist[current])) this.seekTo(current, { quiet: true });
+      if (this.readable(this.playlist[current])) this.seekTo(current, { quiet: true, internal: true });
       else this.moveOnFrom(current + 1);
       return;
     }
@@ -2189,7 +2194,7 @@ export class ReaderSession {
       this.state.busy = true;
       this.pushState();
       window.setTimeout(() => {
-        if (!this.disposed && !this.halted && this.wantsPlayback) this.seekTo(this.currentPlayId, { quiet: true });
+        if (!this.disposed && !this.halted && this.wantsPlayback) this.seekTo(this.currentPlayId, { quiet: true, internal: true });
       }, 2000 * this.autoRestarts);
       return;
     }
@@ -2540,7 +2545,7 @@ export class ReaderSession {
       if (at !== this.currentPlayId) {
         this.followingPlace = true;
         try {
-          this.seekTo(at, { quiet: true });
+          this.seekTo(at, { quiet: true, lazy: true });
         } finally {
           this.followingPlace = false;
         }
@@ -2686,7 +2691,7 @@ export class ReaderSession {
       if (engineIdentity(this.engineConfig()) === prevEngine && (changed.current || changed.upcoming)) {
         this.cancelExport('The voices changed, so the MP3 was stopped');
         if (this.engineReady) {
-          if (changed.current) this.seekTo(this.currentPlayId, { quiet: true });
+          if (changed.current) this.seekTo(this.currentPlayId, { quiet: true, internal: true });
           else this.resynthesizeUpcoming();
         }
       }

@@ -68,7 +68,7 @@ export interface SyncDoc {
 }
 
 /** Writes remembered in the file: a device offline for longer than this many keeps both sides once. */
-export const MAX_WRITES = 1000;
+export const MAX_WRITES = 5000;
 
 export function emptyDoc(): SyncDoc {
   return {
@@ -214,8 +214,11 @@ export interface RemoteFile {
 /** This device's notes and marks. */
 export interface LocalData {
   read(): Promise<SyncDoc>;
-  /** Store `merged`; `seen` is what `read` gave at the start of the round, so changes made since stay. */
-  write(merged: SyncDoc, seen: SyncDoc): Promise<void>;
+  /**
+   * Store `merged`; `seen` is what `read` gave at the start of the round, so changes made since stay.
+   * Returns the settings it left as they were here for that reason.
+   */
+  write(merged: SyncDoc, seen: SyncDoc): Promise<{ keptSettings?: string[] } | void>;
 }
 
 export interface CloudStatus {
@@ -323,15 +326,26 @@ export async function runCloudSync(remote: RemoteFile, local: LocalData, reason:
         if (written === 'conflict') continue;
         newRev = written;
       }
-      await local.write(merged, seen);
+      const written = await local.write(merged, seen);
+      // A setting changed here while the round ran kept its new value, and the file has the merged
+      // one: remembered as it was here before the change (seen), so the next round merges the two
+      // three ways. Remembered as merged, the next round read the other device's part of it (a
+      // pronunciation it added) as removed here, and removed it everywhere.
+      const kept = (written && written.keptSettings) || [];
+      const remembered: SyncDoc =
+        kept.length === 0
+          ? merged
+          : { ...merged, settings: { ...merged.settings, ...Object.fromEntries(kept.filter((k) => seen.settings[k]).map((k) => [k, seen.settings[k]!])) } };
       // Only over what this round started from: a round that outlived its lock (a frozen tab)
       // must not put back an older memory of the file after a newer round's.
       const current = await book.getValue();
       if (current.rev !== stored.rev) return;
       await book.setValue({
         ...current,
-        rev: newRev,
-        base: merged,
+        // Altered as above, the memory is no longer the file at that revision: no revision, so the
+        // next round downloads the file instead of taking the memory for it.
+        rev: kept.length === 0 ? newRev : null,
+        base: remembered,
         status: { at: now, notes: merged.notes.length, pdfs: Object.keys(merged.pdfMarks).length, places: Object.keys(merged.positions).length },
       });
       return;

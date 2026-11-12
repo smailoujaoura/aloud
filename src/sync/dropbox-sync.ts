@@ -8,7 +8,7 @@ import { loadNotes, rewriteNotes } from '@/shared/notes';
 import { loadPositions, rewritePositions } from '@/shared/reading-positions';
 import { loadHistory, rewriteHistory } from '@/shared/reading-history';
 import { getSettings, updateSettings } from '@/shared/settings';
-import { settingsForSync, settingsToStore } from './synced-settings';
+import { settingsForSync, settingsKeptHere, settingsToStore } from './synced-settings';
 import { normalizeStoredMarks } from '@/shared/record-shapes';
 import { withStorageLock } from '@/shared/storage-lock';
 import { reconcileById, reconcileMaps } from '@/shared/three-way';
@@ -67,11 +67,15 @@ export const localData: LocalData = {
     return doc;
   },
 
-  async write(merged: SyncDoc, seen: SyncDoc): Promise<void> {
+  async write(merged: SyncDoc, seen: SyncDoc): Promise<{ keptSettings: string[] }> {
     await rewriteNotes((now) => reconcileById(merged.notes, seen.notes, now, (n) => n.updatedAt ?? 0).sort(newestFirst));
     await rewritePositions((now) => reconcileMaps(merged.positions, seen.positions, now, (p) => p.savedAt));
     await rewriteHistory((now) => reconcileMaps(merged.history, seen.history, now, (h) => h.lastReadAt));
-    await updateSettings((now) => settingsToStore(now, merged.settings, seen.settings));
+    let keptSettings: string[] = [];
+    await updateSettings((now) => {
+      keptSettings = settingsKeptHere(now, seen.settings);
+      return settingsToStore(now, merged.settings, seen.settings);
+    });
     const hashes = new Set([...Object.keys(merged.pdfMarks), ...Object.keys(seen.pdfMarks)]);
     for (const hash of hashes) {
       await withStorageLock(`${PDF_MARKS}${hash}`, async () => {
@@ -84,6 +88,7 @@ export const localData: LocalData = {
         await saveMarks(hash, stored?.name || merged.pdfMarks[hash]?.name || '', result);
       });
     }
+    return { keptSettings };
   },
 };
 

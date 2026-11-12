@@ -362,14 +362,18 @@ function renderNoteStyle(): void {
 }
 
 function mediaSpeedOptions(): Parameters<typeof renderMediaSpeedPanel>[1] {
-  // What the panel was drawn with: its saves apply only what changed since (rebase.ts).
-  const base = settings.mediaSpeed;
+  // What the panel shows: its saves apply only what changed since (rebase.ts), one after another
+  // (a box ticked and unticked while the first save runs is two changes, not none).
+  let shown = settings.mediaSpeed;
   return {
-    settings: base,
+    settings: shown,
     save: async (patch) => {
+      const before = shown;
+      const mine = { ...shown, ...patch };
+      shown = mine;
       ownSaves++;
       try {
-        await updateSettings((now) => ({ mediaSpeed: rebase(now.mediaSpeed, base, { ...base, ...patch }) }));
+        await updateSettings((now) => ({ mediaSpeed: rebase(now.mediaSpeed, before, mine) }));
         settings = await getSettings();
       } finally {
         ownSaves--;
@@ -539,7 +543,7 @@ async function renderNow(): Promise<void> {
   // The panel saves its whole copy of each key map: only what it changed is applied (rebase.ts).
   let pageKeysBase = settings.annotate.pageKeys;
   let readerKeysBase = settings.readerKeys;
-  void renderShortcutsPanel($('shortcuts'), {
+  const shortcutsOpts: Parameters<typeof renderShortcutsPanel>[1] = {
     toast: (message, kind) => toast(message, kind ?? 'info'),
     pageKeys: settings.annotate.pageKeys,
     savePageKeys: async (pageKeys) => {
@@ -549,6 +553,9 @@ async function renderNow(): Promise<void> {
       try {
         await updateSettings((now) => ({ annotate: { ...now.annotate, pageKeys: rebase(now.annotate.pageKeys, before, pageKeys) } }));
         settings = await getSettings();
+        // The panel checks clashes and redraws its resets from these: kept as stored.
+        shortcutsOpts.pageKeys = settings.annotate.pageKeys;
+        shortcutsOpts.readerKeys = settings.readerKeys;
       } finally {
         ownSaves--;
       }
@@ -562,12 +569,15 @@ async function renderNow(): Promise<void> {
       try {
         await updateSettings((now) => ({ readerKeys: rebase(now.readerKeys, before, readerKeys) }));
         settings = await getSettings();
+        shortcutsOpts.pageKeys = settings.annotate.pageKeys;
+        shortcutsOpts.readerKeys = settings.readerKeys;
       } finally {
         ownSaves--;
       }
       flashSaved();
     },
-  });
+  };
+  void renderShortcutsPanel($('shortcuts'), shortcutsOpts);
   if (!backupRendered) {
     // Drawn once: a restore in progress keeps its steps while the rest of the page redraws.
     backupRendered = true;
@@ -907,11 +917,9 @@ explainUnreadablePage();
 // patches what is stored now, never an older copy the page held (one that, saved, put another
 // device's pronunciation or key back as it was). The page redraws for them, except under someone
 // typing in a field: then when they leave it.
-let redrawOnBlur = false;
-watchSettings((next) => {
-  if (!settings) return;
-  settings = next;
-  if (ownSaves > 0) return;
+let redrawWaiting = false;
+/** Someone typing in a field here, or a key recorder waiting for its key (it listens on the window). */
+function busyHere(): boolean {
   const active = document.activeElement;
   const typing =
     document.hasFocus() &&
@@ -919,34 +927,28 @@ watchSettings((next) => {
     active.matches(
       'input:not([type]), input[type="text"], input[type="search"], input[type="url"], input[type="password"], input[type="email"], input[type="number"], input[type="tel"], textarea, [contenteditable="true"]',
     );
-  // A key recorder waiting for its key keeps a listener on the window: redrawn under it, the next
-  // key pressed anywhere would be taken as the new binding. Redrawn once it has its key.
-  const recording = (): boolean => [...document.querySelectorAll('button')].some((b) => b.textContent === 'Press a key…');
-  if (recording()) {
-    if (redrawOnBlur) return;
-    redrawOnBlur = true;
-    const wait = window.setInterval(() => {
-      if (recording()) return;
-      window.clearInterval(wait);
-      redrawOnBlur = false;
-      void render();
-    }, 400);
-    return;
-  }
-  if (!typing) {
+  return typing || [...document.querySelectorAll('button')].some((b) => b.textContent === 'Press a key…');
+}
+/** Redrawn once nobody is typing or recording here: checked, not waited on (a field can go without a blur). */
+function redrawWhenFree(): void {
+  if (!busyHere()) {
     void render();
     return;
   }
-  if (redrawOnBlur) return;
-  redrawOnBlur = true;
-  active.addEventListener(
-    'blur',
-    () => {
-      redrawOnBlur = false;
-      void render();
-    },
-    { once: true },
-  );
+  if (redrawWaiting) return;
+  redrawWaiting = true;
+  const wait = window.setInterval(() => {
+    if (busyHere()) return;
+    window.clearInterval(wait);
+    redrawWaiting = false;
+    void render();
+  }, 400);
+}
+watchSettings((next) => {
+  if (!settings) return;
+  settings = next;
+  if (ownSaves > 0) return;
+  redrawWhenFree();
 });
 // Notes, settings and reading, through the reader's own Dropbox (sync/).
 renderDropboxPanel($('dropboxSync'), { toast });
