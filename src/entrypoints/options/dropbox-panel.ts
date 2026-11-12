@@ -40,12 +40,12 @@ function askConsent(): Promise<boolean> {
 
 export function renderDropboxPanel(host: HTMLElement, opts: DropboxPanelOptions): void {
   const doc = host.ownerDocument;
-  const title = el(doc, 'p', { class: 'sync-title' }, 'Notes, PDF highlights and your place, in your Dropbox');
+  const title = el(doc, 'p', { class: 'sync-title' }, 'Your notes, settings and reading, in your Dropbox');
   const about = el(
     doc,
     'p',
     { class: 'muted small' },
-    'One file in your own Dropbox (Apps/Aloud-tts/aloud.json), merged on every device you connect, phones included: your notes, PDF highlights, where you stopped in each page and what you listened to (Continue and History), so another device picks up there. It goes to your Dropbox and nowhere else.',
+    'One file in your own Dropbox (Apps/Aloud-tts/aloud.json), merged on every device you connect, phones included: your notes and PDF highlights; your settings (reading speed and pauses, highlights, keys, video speed, pronunciations, what to skip, the theme); where you stopped in each page and what you listened to, so another device picks up there. Each device keeps its own voices and the sites you gave access to. A device you connect takes the settings the others use. It goes to your Dropbox and nowhere else.',
   );
   const who = el(doc, 'p', { class: 'small' });
   const status = el(doc, 'p', { class: 'row-hint flush', role: 'status' });

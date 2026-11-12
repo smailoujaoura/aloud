@@ -868,7 +868,6 @@ code {
 .voice-tabs::-webkit-scrollbar { display: none; }
 
 /* Settings, Sync & backup: Dropbox, then the browser's own sync for settings. */
-.sync-block + .sync-block { border-top: 1px solid var(--border); margin-top: 14px; padding-top: 14px; }
 .sync-title { font-weight: 600; margin: 0 0 2px; }
 .sync-block .muted.small { margin: 0 0 8px; }
 .sync-code { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0 10px; }

@@ -7,16 +7,13 @@ Website-only and documentation changes are not listed: they never reach the exte
 ## 1.0.4 (2026-11-12)
 
 ### Added
-- **Settings sync.** Settings, Sync & backup: turn on "Sync settings" and your reading speed and
-  pauses, highlights, keys, video speed, pronunciations, what to skip and the theme follow you to
-  your other computers, through Firefox Sync or your Chromium browser's own sync. Each device keeps
-  its own voices and the sites you gave access to. Not on Firefox for Android, which does not sync
-  add-on settings.
-- **Notes in your Dropbox.** Settings, Sync & backup, Connect Dropbox: your notes, PDF highlights,
-  where you stopped in each page and what you listened to (the Library's Continue and History) are
-  kept in one file in your own Dropbox (Apps/Aloud-tts) and merged on every device you connect,
-  Firefox for Android included (there with a code Dropbox shows). Stop reading on one device and
-  another lists it to continue, and picks up at the same sentence. A note deleted on one
+- **Sync through your Dropbox.** Settings, Sync & backup, Connect Dropbox: your notes, PDF
+  highlights, settings, where you stopped in each page and what you listened to (the Library's
+  Continue and History) are kept in one file in your own Dropbox (Apps/Aloud-tts) and merged on
+  every device you connect, Firefox and Chrome alike, Firefox for Android included (there with a
+  code Dropbox shows). Stop reading on one device and another lists it to continue, and picks up at
+  the same sentence. A device you connect takes the settings the others use; each keeps its own
+  voices and the sites you gave access to. A note deleted on one
   device is deleted on the others; one edited on two, the later edit stays; one deleted on one
   device but edited on another afterwards is kept.
 

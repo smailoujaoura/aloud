@@ -31,7 +31,6 @@ import type { EngineId } from '@/shared/settings';
 import { withServerVoices, type VoiceOption } from '@/shared/voice-catalog';
 import type { ModelManifest } from '@/engine/engines/types';
 import { getSettings, setSettings, watchSettings } from '@/shared/settings';
-import { runSettingsSync, type SyncArea } from '@/shared/settings-sync';
 import { dropboxAuth, syncWithDropbox, watchDropboxAuth } from '@/sync/dropbox-sync';
 import { createLockTable, useLockTable } from '@/shared/storage-lock';
 import { loadWorkerGpu } from '@/shared/backend-memory';
@@ -436,14 +435,11 @@ export default defineBackground({
     });
 
     void syncSpeedSites();
-    settingsSyncSoon('start', 1000);
 
-    // Another device's settings, arriving through the browser's sync (and this device's own
-    // writes there, which a round finds already agreed). Notes and PDF marks changed here, for
-    // Dropbox (a round with nothing new since the last one asks Dropbox nothing).
+    // Notes and PDF marks changed here, for Dropbox (a round with nothing new since the last one
+    // asks Dropbox nothing; settings, below with watchSettings, likewise).
     browser.storage.onChanged.addListener((changes, area) => {
       const keys = Object.keys(changes);
-      if (area === 'sync' && keys.some((key) => /^s\d+\./.test(key))) settingsSyncSoon('there', 1500);
       if (area === 'local' && keys.some((key) => key === 'notes' || key.startsWith('pdfMarks:'))) cloudSyncSoon('here', 4000);
       // Positions and history change every few sentences while reading: once reading pauses for a
       // minute (or at the quarter-hourly round), not a Dropbox upload every few seconds.
@@ -468,7 +464,7 @@ export default defineBackground({
     // Relay settings changes to the running session.
     watchSettings(() => {
       void syncSpeedSites();
-      settingsSyncSoon('here', 2500);
+      cloudSyncSoon('here', 4000);
       if (!active) return;
       try {
         active.port.postMessage({ type: 'settings-changed' });
@@ -1157,30 +1153,6 @@ function hostOf(url: string): string {
   } catch {
     return '';
   }
-}
-
-const syncArea: SyncArea = {
-  get: () => browser.storage.sync.get(null) as Promise<Record<string, unknown>>,
-  set: (items) => browser.storage.sync.set(items),
-  remove: (keys) => browser.storage.sync.remove(keys),
-};
-let syncTimer: ReturnType<typeof setTimeout> | undefined;
-let syncReason: 'here' | 'there' | 'start' | null = null;
-
-/**
- * A round of settings sync once changes settle: a speed held down, or a list edited key by key,
- * is one write to the browser's sync, which allows 120 a minute. A change made here outranks the
- * others for the round it joins (see planSync).
- */
-function settingsSyncSoon(reason: 'here' | 'there' | 'start', ms: number): void {
-  if (syncReason !== 'here') syncReason = reason;
-  clearTimeout(syncTimer);
-  syncTimer = setTimeout(() => {
-    const why = syncReason ?? reason;
-    syncReason = null;
-    if (!browser.storage.sync) return;
-    void runSettingsSync(syncArea, why).catch((err) => console.warn('[aloud] settings sync failed:', err));
-  }, ms);
 }
 
 const CLOUD_ALARM = 'aloud-cloud-sync';

@@ -1,6 +1,6 @@
 /**
- * Notes, PDF marks, where the reader stopped in each document and what they listened to (the
- * Library's Continue and History lists), kept in step between devices
+ * Notes, PDF marks, settings (sync/synced-settings.ts), where the reader stopped in each document
+ * and what they listened to (the Library's Continue and History lists), kept in step between devices
  * through one file in the reader's own storage (Dropbox: Apps/Aloud-tts/aloud.json).
  *
  * Each device remembers the file as it last agreed with it (`base`). A round reads the file, and
@@ -20,6 +20,8 @@ import { canon, reconcileById, reconcileMaps } from '@/shared/three-way';
 import { normalizeNote, type Note } from '@/shared/notes';
 import { normalizeHistoryEntry, normalizePosition, normalizeStoredMarks, recordsOf } from '@/shared/record-shapes';
 import { MAX_HISTORY, type History } from '@/shared/reading-history';
+import { SETTINGS_VERSION, migrateSettings } from '@/shared/settings';
+import { isSyncedSetting, mergeSettings, type SyncedSettings } from './synced-settings';
 import { MAX_SAVED_POSITIONS, type PositionMap } from '@/shared/position-match';
 import type { Mark } from '@/pdf/annotations/model';
 
@@ -40,10 +42,27 @@ export interface SyncDoc {
   positions: PositionMap;
   /** What was listened to, by document key (shared/reading-history.ts). Absent in older files. */
   history: History;
+  /** The settings that travel, by name (sync/synced-settings.ts), as of `settingsVersion`. */
+  settings: SyncedSettings;
+  settingsVersion: number;
 }
 
 export function emptyDoc(): SyncDoc {
-  return { format: SYNC_FORMAT, version: 1, notes: [], pdfMarks: {}, positions: {}, history: {} };
+  return { format: SYNC_FORMAT, version: 1, notes: [], pdfMarks: {}, positions: {}, history: {}, settings: {}, settingsVersion: SETTINGS_VERSION };
+}
+
+/** The file's settings, brought up to this version's shapes; only those that travel. */
+function readSettings(raw: unknown, version: unknown): SyncedSettings {
+  if (!raw || typeof raw !== 'object') return {};
+  const entries = Object.entries(raw as Record<string, unknown>).filter(
+    (e): e is [string, { v: unknown; at: number }] =>
+      isSyncedSetting(e[0]) && !!e[1] && typeof e[1] === 'object' && 'v' in e[1] && typeof (e[1] as { at?: unknown }).at === 'number',
+  );
+  const from = typeof version === 'number' ? version : SETTINGS_VERSION;
+  if (from >= SETTINGS_VERSION) return Object.fromEntries(entries.map(([k, e]) => [k, { v: e.v, at: e.at }]));
+  // Written by an older Aloud: its values through the same migrations a stored profile goes through.
+  const migrated = migrateSettings(Object.fromEntries(entries.map(([k, e]) => [k, e.v])), from);
+  return Object.fromEntries(entries.filter(([k]) => k in migrated).map(([k, e]) => [k, { v: migrated[k], at: e.at }]));
 }
 
 /** The most recently read, as the device keeps them. */
@@ -84,7 +103,8 @@ export function parseDoc(text: string): SyncDoc {
     Object.fromEntries(Object.entries(recordsOf(obj.positions, normalizePosition)).filter(([key]) => key.length > 0 && key.length <= 4096)),
   );
   const history = capHistory(recordsOf(obj.history, normalizeHistoryEntry));
-  return { format: SYNC_FORMAT, version: 1, notes: dedupe(notes), pdfMarks, positions, history };
+  const settings = readSettings(obj.settings, obj.settingsVersion);
+  return { format: SYNC_FORMAT, version: 1, notes: dedupe(notes), pdfMarks, positions, history, settings, settingsVersion: SETTINGS_VERSION };
 }
 
 /** A note twice in one file (two devices' edits written in turn): its newest copy. */
@@ -104,13 +124,14 @@ export function serializeDoc(doc: SyncDoc): string {
 /** What the notes and marks are, names and order aside: to tell whether anything changed. */
 export function contentOf(doc: SyncDoc): string {
   const marks = Object.fromEntries(Object.entries(doc.pdfMarks).map(([hash, entry]) => [hash, [...entry.marks].sort(byId)]));
-  return canon({ notes: [...doc.notes].sort(byId), marks, positions: doc.positions, history: doc.history });
+  const settings = Object.fromEntries(Object.entries(doc.settings).map(([k, e]) => [k, e.v]));
+  return canon({ notes: [...doc.notes].sort(byId), marks, positions: doc.positions, history: doc.history, settings });
 }
 
 const byId = (a: { id: string }, b: { id: string }): number => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
 /** `current`'s changes since `baseline`, on top of `latest`. A null baseline: nothing agreed yet, keep both. */
-export function mergeDocs(latest: SyncDoc, baseline: SyncDoc | null, current: SyncDoc): SyncDoc {
+export function mergeDocs(latest: SyncDoc, baseline: SyncDoc | null, current: SyncDoc, now = Date.now()): SyncDoc {
   const notes = reconcileById(latest.notes, baseline?.notes ?? [], current.notes, (n) => n.updatedAt ?? 0).sort(
     (a, b) => b.createdAt - a.createdAt,
   );
@@ -127,7 +148,8 @@ export function mergeDocs(latest: SyncDoc, baseline: SyncDoc | null, current: Sy
   }
   const positions = capPositions(reconcileMaps(latest.positions, baseline?.positions ?? {}, current.positions, (p) => p.savedAt));
   const history = capHistory(reconcileMaps(latest.history, baseline?.history ?? {}, current.history, (h) => h.lastReadAt));
-  return { format: SYNC_FORMAT, version: 1, notes, pdfMarks, positions, history };
+  const settings = mergeSettings(latest.settings, baseline?.settings ?? null, current.settings, now);
+  return { format: SYNC_FORMAT, version: 1, notes, pdfMarks, positions, history, settings, settingsVersion: SETTINGS_VERSION };
 }
 
 /** The file, as this device sees it. */
@@ -215,7 +237,7 @@ export async function runCloudSync(remote: RemoteFile, local: LocalData, reason:
 
       // No file: nothing agreed with it any more. Merging against the old base would read every
       // note as deleted there.
-      const merged = mergeDocs(latest, latestRev === null ? null : state.base, seen);
+      const merged = mergeDocs(latest, latestRev === null ? null : state.base, seen, now);
       let newRev = latestRev;
       if (latestRev === null || contentOf(merged) !== contentOf(latest)) {
         const written = await remote.upload(serializeDoc(merged), latestRev);

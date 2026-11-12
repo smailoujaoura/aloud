@@ -92,6 +92,10 @@ class Device implements LocalData {
       pdfMarks,
       positions: reconcileMaps(merged.positions, seen.positions, now.positions, (p) => p.savedAt),
       history: reconcileMaps(merged.history, seen.history, now.history, (h) => h.lastReadAt),
+      // As dropbox-sync.ts stores them: the merged value, unless changed here meanwhile.
+      settings: Object.fromEntries(
+        Object.entries(merged.settings).map(([k, e]) => [k, seen.settings[k] && JSON.stringify(now.settings[k]?.v) !== JSON.stringify(seen.settings[k]!.v) ? now.settings[k]! : { v: e.v, at: 0 }]),
+      ),
     };
   }
   async sync(file: RemoteFile, reason: 'here' | 'other' = 'other') {
@@ -335,6 +339,46 @@ describe('what you listened to (Continue and History), between two devices', () 
     const doc = parseDoc(JSON.stringify({ format: 'aloud-sync', version: 1, notes: [], pdfMarks: {}, history: { [url]: entry(url, 1, 1), bad: { index: 'x' } } }));
     expect(Object.keys(doc.history)).toEqual([url]);
     expect(parseDoc(JSON.stringify({ format: 'aloud-sync', version: 1, notes: [], pdfMarks: {} })).history).toEqual({});
+  });
+});
+
+describe('settings, between two devices', () => {
+  let file: FakeFile;
+  let a: Device;
+  let b: Device;
+  const speedOf = (d: Device) => d.data.settings.speed?.v;
+  beforeEach(() => {
+    resetStorage();
+    file = new FakeFile();
+    a = new Device();
+    b = new Device();
+  });
+
+  it('a device that connects takes the others’ settings; a change on either then travels', async () => {
+    a.data.settings = { speed: { v: 1.4, at: 0 }, theme: { v: 'dark', at: 0 } };
+    await a.sync(file);
+    b.data.settings = { speed: { v: 1, at: 0 }, theme: { v: 'light', at: 0 } };
+    await b.sync(file);
+    expect(speedOf(b)).toBe(1.4);
+    expect(b.data.settings.theme?.v).toBe('dark');
+    b.data.settings.speed = { v: 1.8, at: 0 };
+    await b.sync(file, 'here');
+    await a.sync(file);
+    expect(speedOf(a)).toBe(1.8);
+  });
+
+  it('a file from before settings were in it reads as having none, and gets this device’s', async () => {
+    expect(parseDoc(JSON.stringify({ format: 'aloud-sync', version: 1, notes: [], pdfMarks: {} })).settings).toEqual({});
+    file.text = JSON.stringify({ format: 'aloud-sync', version: 1, notes: [], pdfMarks: {} });
+    file.rev = 1;
+    a.data.settings = { speed: { v: 1.3, at: 0 } };
+    await a.sync(file);
+    expect(file.doc.settings.speed?.v).toBe(1.3);
+  });
+
+  it('only the settings that travel are read from the file', () => {
+    const doc = parseDoc(JSON.stringify({ format: 'aloud-sync', version: 1, notes: [], pdfMarks: {}, settings: { speed: { v: 1.2, at: 3 }, engine: { v: 'kokoro', at: 3 }, theme: 'dark' }, settingsVersion: 10 }));
+    expect(Object.keys(doc.settings)).toEqual(['speed']);
   });
 });
 

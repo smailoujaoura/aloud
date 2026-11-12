@@ -50,7 +50,6 @@ import { engineConfigFor } from './engine-config';
 import { renderMediaSpeedPanel } from './media-speed-panel';
 import { renderNoteStylePanel } from './note-style-panel';
 import { renderBackupPanel } from './backup-panel';
-import { loadSyncStatus, watchSyncStatus, type SyncStatus } from '@/shared/settings-sync';
 import { renderDropboxPanel } from './dropbox-panel';
 import { renderShortcutsPanel } from './shortcuts-panel';
 import { renderSiteList } from './site-list';
@@ -439,7 +438,6 @@ async function renderNow(): Promise<void> {
   $('synthWorkersOut').textContent = settings.synthWorkers === 0 ? 'auto' : String(settings.synthWorkers);
   $<HTMLInputElement>('preferWebGPU').checked = settings.preferWebGPU;
   $<HTMLInputElement>('debug').checked = settings.debug;
-  $<HTMLInputElement>('syncSettings').checked = settings.syncSettings;
   $('supertonic-steps-row').hidden = settings.engine !== 'supertonic';
 
   renderCapabilityHints();
@@ -681,7 +679,6 @@ function wire(): void {
   }
   wireCheckbox('preferWebGPU', 'preferWebGPU');
   wireCheckbox('debug', 'debug');
-  wireCheckbox('syncSettings', 'syncSettings');
 
   $('wordColor').addEventListener('change', (e) => void save({ wordColor: (e.target as HTMLInputElement).value }));
   $('wordStrength').addEventListener('input', (e) => {
@@ -858,30 +855,8 @@ watchSettings((next) => {
   settings = next;
   void render();
 });
-// Settings sync goes through the browser's own (shared/settings-sync.ts). Firefox for Android keeps
-// add-on sync data on the phone and never sends it, so it is not offered there.
+// Notes, settings and reading, through the reader's own Dropbox (sync/).
 renderDropboxPanel($('dropboxSync'), { toast });
-if (capabilities().formFactor === 'android') {
-  $('settingsSyncBlock').hidden = true;
-} else {
-  $('syncHint').textContent = `${
-    capabilities().engine === 'gecko'
-      ? 'Through Firefox Sync, with Add-ons ticked in its settings.'
-      : "Through your browser's own sync, with extensions included in its settings."
-  } Reading speed and pauses, highlights, keys, video speed, pronunciations, what to skip and the theme. Each device keeps its own voices and the sites you gave access to. Turned on here, it takes what your other computers synced.`;
-  const showSync = (status: SyncStatus | null): void => {
-    const line = $('syncStatus');
-    line.classList.toggle('warn', !!status?.error);
-    if (!status) {
-      line.textContent = '';
-      return;
-    }
-    const time = new Date(status.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-    line.textContent = status.error ?? (status.took ? `Now using the settings your other computers synced (${time}).` : `Last synced at ${time}.`);
-  };
-  void loadSyncStatus().then(showSync);
-  watchSyncStatus(showSync);
-}
 
 // Phones and tablets have no keyboard to speak of: no Shortcuts view, and the reader takes no
 // keys there (session.ts: watchReaderKeys). The rest of the page is the same.

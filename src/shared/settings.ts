@@ -388,11 +388,6 @@ export interface Settings {
   gpuTipSeen: boolean;
   /** Verbose console logging. */
   debug: boolean;
-  /**
-   * Sync the settings that are about how you read, not this device, through the browser's own
-   * sync (shared/settings-sync.ts). Off until turned on; each device has its own switch.
-   */
-  syncSettings: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -439,7 +434,6 @@ export const DEFAULT_SETTINGS: Settings = {
   tipsSeen: false,
   gpuTipSeen: false,
   debug: false,
-  syncSettings: false,
 };
 
 /** The stored settings' schema version; each step up has a migration below. */
@@ -721,6 +715,19 @@ export async function setSettings(patch: Partial<Settings>): Promise<Settings> {
     const next = { ...(await getSettings()), ...patch };
     await item.setValue(next);
     return next;
+  });
+}
+
+/**
+ * Change the settings from what they are now, under the same lock as every other write: the
+ * Dropbox sync taking in another device's (sync/dropbox-sync.ts). `change` returns the patch, or
+ * null for no change.
+ */
+export async function updateSettings(change: (now: Settings) => Partial<Settings> | null): Promise<void> {
+  await withStorageLock('settings', async () => {
+    const now = await getSettings();
+    const patch = change(now);
+    if (patch) await item.setValue({ ...now, ...patch });
   });
 }
 
