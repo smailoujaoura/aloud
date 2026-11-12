@@ -254,12 +254,11 @@ export class ReaderSession {
   private placeAt = 0;
   /** A newer place was saved elsewhere that this page's text cannot follow: not to be overwritten idly. */
   private placeSuperseded = false;
-  /**
-   * The saved place belongs to a longer version of this page (the full article, where this is a
-   * teaser or a mobile cut): this reader neither moves it nor clears it, nor the history entry.
-   */
-  private othersPlace = false;
   private stopWatchingPlace: (() => void) | null = null;
+  /** The reader is moving itself to a place saved elsewhere (not the user seeking). */
+  private followingPlace = false;
+  /** "Your place moved on" said once per reader, not at every save of a tab reading elsewhere. */
+  private placeFollowSaid = false;
   private outputLogged = false;
   /** When each word of a synthesised sentence is spoken, as the engine reported it (Piper). */
   private readonly wordTimings = new Map<number, WordTiming[]>();
@@ -421,6 +420,8 @@ export class ReaderSession {
     if (former) await adoptFormerKey(former, this.docKey, this.playlist.map((p) => p.spokenText), this.docSource().title);
     if (superseded()) return;
     await this.maybeResume();
+    if (superseded()) return;
+    await this.watchPlace();
     if (superseded()) return;
     await this.matchVoiceToPage();
     if (superseded()) return;
@@ -959,6 +960,9 @@ export class ReaderSession {
       this.bar?.flash('Reading carries on once the MP3 is made', 'info');
       return;
     }
+    // Moved here, paused or not, now: a place saved elsewhere before this is older than it, and is
+    // not followed (watchPlace). Not when the move is that following.
+    if (!this.followingPlace) this.placeAt = Math.max(this.placeAt, Date.now());
     // The part of the sentence heard before the jump counts; the rest was never heard.
     this.countPartlyHeard();
     const wanted = Math.max(0, Math.min(playId, this.playlist.length - 1));
@@ -2282,7 +2286,7 @@ export class ReaderSession {
     // Read to the end: next time it opens at the top, not at the last sentence. Not for a selection:
     // its end is not the page's, and clearing the place there sent the next read back to the top.
     this.lastSavedIndex = -1;
-    if (this.docKey && this.mode !== 'selection' && !this.othersPlace) void clearPosition(this.docKey);
+    if (this.docKey && this.mode !== 'selection') void clearPosition(this.docKey);
     this.recordHistory(this.playlist.length, true);
     this.flushHeard();
     if (this.keepHistory && this.docKey && this.mode !== 'selection') void recordCompleted(this.docKey);
@@ -2351,8 +2355,6 @@ export class ReaderSession {
   private recordHistory(index: number, finished = false): void {
     const { listening } = this;
     if (!this.keepHistory || !this.docKey || this.playlist.length === 0 || this.mode === 'selection') return;
-    // The history entry is the longer version's too (see othersPlace): its progress stands.
-    if (this.othersPlace) return;
     if (listening.pendingSeconds <= 0 && !finished) return;
     if (!this.charsBefore) {
       let sum = 0;
@@ -2493,14 +2495,8 @@ export class ReaderSession {
     const requested = this.requestedResume;
     const saved = requested ?? (await loadPosition(this.docKey));
     this.placeAt = saved?.savedAt ?? 0;
-    this.watchPlace();
     const at = resumeIndex(saved, this.playlist.map((p) => p.spokenText));
-    if (at == null) {
-      // Not found here, and saved from a much longer text: another version of the page (synced from
-      // a device that saw all of it). Reading this one to the end must not wipe that place.
-      if (saved && !requested && saved.total > this.playlist.length * 1.5) this.othersPlace = true;
-      return;
-    }
+    if (at == null) return;
     // Stored as well, over whatever the closing reader wrote, so the page opens here next time too.
     if (requested) {
       this.placeAt = Date.now();
@@ -2520,29 +2516,40 @@ export class ReaderSession {
 
   /**
    * Follow this page's saved place while the reader is open: another device's, arriving through
-   * Dropbox, or another tab's. While paused, the reader moves there, so pressing play carries on
-   * from the further place instead of saving its own older one over it everywhere. While playing,
-   * this device's place stands: it is the one being listened to now.
+   * Dropbox, or another tab's. While paused, the reader moves there (audio queue and all, as a seek
+   * does), so pressing play carries on from the further place instead of saving its own older one
+   * over it everywhere. While playing, this device's place stands: it is the one being listened to.
+   * For every reader that keeps a place (not a selection), whichever way it started.
    */
-  private watchPlace(): void {
-    if (this.stopWatchingPlace || !this.docKey || this.mode !== 'article') return;
-    this.stopWatchingPlace = watchPosition(this.docKey, (pos) => {
+  private async watchPlace(): Promise<void> {
+    if (this.stopWatchingPlace || this.disposed || !this.docKey || this.mode === 'selection') return;
+    const key = this.docKey;
+    const known = await loadPosition(key);
+    if (this.stopWatchingPlace || this.disposed) return;
+    this.placeAt = Math.max(this.placeAt, known?.savedAt ?? 0);
+    this.stopWatchingPlace = watchPosition(key, (pos) => {
       if (this.disposed || !pos || pos.savedAt <= this.placeAt) return;
       this.placeAt = pos.savedAt;
-      if (this.wantsPlayback || this.state.status === 'playing') return;
+      if (this.wantsPlayback || this.state.status === 'playing' || this.exporter) return;
       const at = resumeIndex(pos, this.playlist.map((p) => p.spokenText));
       if (at == null) {
         this.placeSuperseded = true;
         return;
       }
       this.placeSuperseded = false;
-      this.lastSavedIndex = at;
-      if (at === this.currentPlayId) return;
-      this.currentPlayId = at;
-      this.state.currentIndex = at;
-      this.highlighter?.show(this.rangeOf(at));
-      this.pushState();
-      this.bar?.flash(`Your place moved on elsewhere: sentence ${at + 1} of ${this.playlist.length}`, 'info');
+      if (at !== this.currentPlayId) {
+        this.followingPlace = true;
+        try {
+          this.seekTo(at, { quiet: true });
+        } finally {
+          this.followingPlace = false;
+        }
+        if (!this.placeFollowSaid) {
+          this.placeFollowSaid = true;
+          this.bar?.flash(`Your place moved on elsewhere: sentence ${this.currentPlayId + 1} of ${this.playlist.length}`, 'info');
+        }
+      }
+      this.lastSavedIndex = this.currentPlayId;
     });
   }
 
@@ -2550,7 +2557,7 @@ export class ReaderSession {
   private rememberPosition(index: number, force = false): void {
     // A selection's sentences are not the page's: its place, saved under the page, replaced where
     // the page had got to, and the next read of the page started from the top.
-    if (this.mode === 'selection' || this.othersPlace) return;
+    if (this.mode === 'selection') return;
     if (!this.docKey || this.playlist.length === 0 || index === this.lastSavedIndex) return;
     // Closing a reader that never played since a further place was saved elsewhere: keep that one.
     if (force && this.placeSuperseded) return;
