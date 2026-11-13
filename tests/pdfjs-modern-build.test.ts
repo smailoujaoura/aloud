@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { existsSync } from 'node:fs';
 
 /**
  * Aloud ships pdf.js's modern build with its own polyfills (public/pdfjs-support/polyfills.mjs)
@@ -126,4 +127,20 @@ describe('pdf.js’s modern build, on an engine without those built-ins', () => 
       expect(run.out[file]?.length, file).toBeGreaterThan(20);
     }
   }, 120_000);
+});
+
+describe('pdf.js’s image decoders are shipped', () => {
+  it('the decoders and licences the package copies are all in pdfjs-dist (a rename on update fails here)', async () => {
+    const { PDFJS_DIRS } = (await import(/* @vite-ignore */ new URL('../scripts/sync-assets.mjs', import.meta.url).href)) as {
+      PDFJS_DIRS: Array<{ dir: string; only?: RegExp }>;
+    };
+    const wasm = PDFJS_DIRS.find((d) => d.dir === 'wasm');
+    for (const file of ['jbig2.wasm', 'openjpeg.wasm', 'qcms_bg.wasm', 'LICENSE_JBIG2', 'LICENSE_OPENJPEG', 'LICENSE_QCMS']) {
+      expect(wasm?.only?.test(file), file).toBe(true);
+      expect(existsSync(`node_modules/pdfjs-dist/wasm/${file}`), file).toBe(true);
+    }
+    // Never the asm.js fallbacks or PDF scripting.
+    for (const file of ['jbig2_nowasm_fallback.js', 'openjpeg_nowasm_fallback.js', 'quickjs-eval.wasm']) expect(wasm?.only?.test(file), file).toBe(false);
+    expect(PDFJS_DIRS.some((d) => d.dir === 'iccs')).toBe(true);
+  });
 });

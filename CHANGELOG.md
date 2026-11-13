@@ -4,6 +4,14 @@ What changed in each version of Aloud, in the words used for the store release n
 go under **Unreleased** as they are made; a release renames that section to its version and date.
 Website-only and documentation changes are not listed: they never reach the extension.
 
+## Unreleased
+
+### Fixed
+- **Scanned PDFs show their pages.** A scan with a text layer was read aloud over a blank page, or
+  a black block: its images (CCITT fax and JBIG2, what most scanners make, and JPEG 2000) were
+  never decoded, because pdf.js's decoders were not in the package. They are now, with its colour
+  management.
+
 ## 1.0.4 (2026-11-12)
 
 ### Added

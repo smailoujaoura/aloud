@@ -221,6 +221,11 @@ function documentOptions(): Record<string, unknown> {
     standardFontDataUrl: vendorUrl('standard_fonts/'),
     cMapUrl: vendorUrl('cmaps/'),
     cMapPacked: true,
+    // Its image decoders (JBIG2 and CCITT fax, the formats of most scans, and JPEG 2000) and colour
+    // management are WebAssembly, loaded from here: without them a scan's page image was left out
+    // and only its text layer drawn (scripts/sync-assets.mjs).
+    wasmUrl: vendorUrl('wasm/'),
+    iccUrl: vendorUrl('iccs/'),
   };
 }
 

@@ -77,7 +77,20 @@ const PHONON_FILES = [
  * `cmaps/` does the same job for the predefined CJK encodings. Both are only fetched for
  * documents that actually need them.
  */
-const PDFJS_DIRS = ['standard_fonts', 'cmaps'];
+/**
+ * pdf.js's data, copied whole, except `wasm/`: its image decoders (JBIG2 and CCITT fax, the
+ * formats of most scanned PDFs, and JPEG 2000) and its colour management, with their licences.
+ * Without them a scan with a text layer was read aloud over a blank page. Left out: the asm.js
+ * fallbacks (`*_nowasm_fallback.js`, needed only where WebAssembly is blocked, which Aloud's CSP
+ * allows; large generated code of the kind a store reviewer reads as obfuscated) and QuickJS (PDF
+ * scripting, which Aloud never runs).
+ */
+export const PDFJS_DIRS = [
+  { dir: 'standard_fonts' },
+  { dir: 'cmaps' },
+  { dir: 'iccs' },
+  { dir: 'wasm', only: /^(jbig2\.wasm|openjpeg\.wasm|qcms_bg\.wasm|LICENSE_(JBIG2|OPENJPEG|QCMS|PDFJS_JBIG2|PDFJS_OPENJPEG|PDFJS_QCMS))$/ },
+];
 
 export function syncAssets() {
   const phononSrc = join(root, 'node_modules/phonon-tts');
@@ -140,12 +153,13 @@ export function syncAssets() {
   }
   // public/vendor/ is kept between builds: files no longer used would still be packaged.
   for (const f of PDFJS_RETIRED) rmSync(join(pdfDest, f), { force: true });
-  for (const dir of PDFJS_DIRS) {
+  for (const { dir, only } of PDFJS_DIRS) {
     const s = join(root, 'node_modules/pdfjs-dist', dir);
     const d = join(pdfDest, dir);
     if (!existsSync(s)) throw new Error(`missing ${s} — reinstall pdfjs-dist`);
     mkdirSync(d, { recursive: true });
     for (const f of readdirSync(s)) {
+      if (only && !only.test(f)) continue;
       const sf = join(s, f);
       const df = join(d, f);
       if (isCurrent(sf, df)) continue;
