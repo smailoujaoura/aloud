@@ -25,6 +25,7 @@
     "compile": "node scripts/prebuild.mjs && wxt prepare && tsc --noEmit",
     "test": "vitest run",
     "test:e2e:firefox": "node scripts/e2e-firefox.mjs",
+    "test:e2e:chromium": "node scripts/e2e-chromium.mjs",
     "say": "node scripts/say.mjs",
     "lint:ext": "web-ext lint --source-dir .output/firefox-mv3",
     "voices": "node scripts/gen-voices.mjs"

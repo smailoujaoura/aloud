@@ -22,7 +22,20 @@ npm run compile        # tsc --noEmit
 npm run test           # vitest (pure logic + happy-dom DOM tests)
 npm run lint:ext       # web-ext lint on the Firefox output
 npm run test:e2e:firefox  # the Firefox build in a real headless Firefox (see below)
+npm run test:e2e:chromium # the Chromium build: Settings, PDFs, Dropbox sync, places (see below)
 ```
+
+### The Chromium release checks
+
+`scripts/e2e-chromium.mjs` loads `.output/chrome-mv3` into Playwright's Chromium, in a fresh
+temporary profile, and checks what releases have broken before. It checks Settings opening without
+errors, a PDF drawn with its text layer and pdf.js's worker started after its polyfills, and Dropbox
+sync against a fake Dropbox (notes, places, Continue, settings both ways, a device's own sites kept,
+a revoked connection, Disconnect). It also checks that a paused reader follows a newer place saved
+elsewhere without undoing the user's own move. It runs offline: the pages come from
+`tests/fixtures` through a server of its own, and voice downloads are refused. Exits non-zero
+on a failed check. Needs `npx playwright install chromium`; `E2E_LD_LIBRARY_PATH` adds library
+folders, as for Firefox.
 
 ### The Firefox end-to-end check
 
