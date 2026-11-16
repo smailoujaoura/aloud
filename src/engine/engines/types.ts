@@ -12,6 +12,8 @@ export interface InitContext {
   /** Supertonic denoising steps. */
   steps?: number;
   preferWebGPU: boolean;
+  /** The GPU already passed engine/gpu-check.ts for this engine in this browser: skip the test. */
+  gpuChecked?: boolean;
   onProgress: (p: { file: string; loaded: number; total: number; phase: 'download' | 'cache' | 'compile' }) => void;
   /**
    * Report something the reader should know that is not a failure — "the GPU model could not be
@@ -25,6 +27,8 @@ export interface SynthEngine {
   readonly id: 'piper' | 'kokoro' | 'supertonic' | 'phonon' | 'server';
   readonly sampleRate: number;
   readonly executionProvider: string;
+  /** Why the GPU was given up after loading on it (engine/gpu-check.ts): it did not really speak there. */
+  readonly gpuRejected?: string;
   /** The model reads at one speed only: every speed is made by stretching its audio (audio/time-stretch.ts). */
   readonly fixedSpeed?: boolean;
   init(ctx: InitContext): Promise<void>;

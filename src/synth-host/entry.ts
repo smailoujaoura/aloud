@@ -243,6 +243,18 @@ function onWorkerMessage(w: Worker, data: WorkerResponse | undefined): void {
   switch (data.kind) {
     case 'ready': {
       restartFailures = 0;
+      if (data.gpuRejected && initMsg) {
+        // Loaded on the GPU and did not speak there: this worker is on the CPU now; the rest of the
+        // pool starts there, and so does the next voice on this browser (gpuRejectedHere).
+        // eslint-disable-next-line no-console
+        console.warn(`[aloud] ${clock()} ${workerName(w)}: the GPU did not really speak (${data.gpuRejected}); on the CPU from now on`);
+        initMsg = { ...initMsg, config: { ...initMsg.config, preferWebGPU: false } };
+        void rememberGpuVerdict(initMsg.config.engine, false, data.gpuRejected);
+      } else if (initMsg && data.executionProvider.startsWith('webgpu') && !initMsg.config.gpuChecked) {
+        // Passed: the rest of the pool, and later voices in this browser, skip the test.
+        initMsg = { ...initMsg, config: { ...initMsg.config, gpuChecked: true } };
+        void rememberGpuVerdict(initMsg.config.engine, true);
+      }
       if (!readyWorkers.includes(w)) readyWorkers.push(w);
       // eslint-disable-next-line no-console
       console.info(
@@ -469,7 +481,15 @@ async function startPool(given: Extract<WorkerRequest, { kind: 'init' }>, gen: n
   }
   // The key for the reader's own server is added here, at the extension's origin: the reader in
   // the web page never holds it (shared/server-key.ts).
-  const msg = given.config.engine === 'server' && given.config.server ? { ...given, config: { ...given.config, server: { ...given.config.server, key: keyFor(await readServerKey(), given.config.server.url) } } } : given;
+  let msg = given.config.engine === 'server' && given.config.server ? { ...given, config: { ...given.config, server: { ...given.config.server, key: keyFor(await readServerKey(), given.config.server.url) } } } : given;
+  const verdict = msg.config.preferWebGPU ? await gpuVerdictHere(msg.config.engine) : null;
+  if (verdict === 'bad') {
+    // eslint-disable-next-line no-console
+    console.info(`[aloud] ${msg.config.engine}: this browser's GPU did not really speak last time; starting on the CPU`);
+    msg = { ...msg, config: { ...msg.config, preferWebGPU: false } };
+  } else if (verdict === 'ok') {
+    msg = { ...msg, config: { ...msg.config, gpuChecked: true } };
+  }
   if (disposed || gen !== initGeneration) return;
   const engine = msg.config.engine;
   const requested = msg.config.workers ?? 0;
@@ -631,25 +651,72 @@ window.addEventListener('message', (ev: MessageEvent) => {
   });
 });
 
-/** storage.local `serverKey` as stored (shared/server-key.ts), through whichever API this browser has. */
-async function readServerKey(): Promise<unknown> {
-  type Local = { get: (key: string, callback?: (items: Record<string, unknown>) => void) => Promise<Record<string, unknown>> | void };
-  const scope = globalThis as { browser?: { storage?: { local?: Local } }; chrome?: { storage?: { local?: Local }; runtime?: { lastError?: unknown } } };
+type LocalArea = {
+  get: (key: string, callback?: (items: Record<string, unknown>) => void) => Promise<Record<string, unknown>> | void;
+  set: (items: Record<string, unknown>, callback?: () => void) => Promise<void> | void;
+};
+const storageScope = globalThis as {
+  browser?: { storage?: { local?: LocalArea } };
+  chrome?: { storage?: { local?: LocalArea }; runtime?: { lastError?: unknown } };
+};
+
+/** One storage.local value, through whichever API this browser has. */
+async function readLocal(key: string): Promise<unknown> {
   try {
-    const items = scope.browser?.storage?.local
-      ? await (scope.browser.storage.local.get('serverKey') as Promise<Record<string, unknown>>)
+    const items = storageScope.browser?.storage?.local
+      ? await (storageScope.browser.storage.local.get(key) as Promise<Record<string, unknown>>)
       : await new Promise<Record<string, unknown>>((resolve) => {
-          const local = scope.chrome?.storage?.local;
+          const local = storageScope.chrome?.storage?.local;
           if (!local) return resolve({});
-          local.get('serverKey', (got) => {
-            void scope.chrome?.runtime?.lastError;
+          local.get(key, (got) => {
+            void storageScope.chrome?.runtime?.lastError;
             resolve(got ?? {});
           });
         });
-    return items.serverKey ?? null;
+    return items[key] ?? null;
   } catch {
     return null;
   }
+}
+
+async function writeLocal(items: Record<string, unknown>): Promise<void> {
+  try {
+    if (storageScope.browser?.storage?.local) await storageScope.browser.storage.local.set(items);
+    else
+      await new Promise<void>((resolve) => {
+        const local = storageScope.chrome?.storage?.local;
+        if (!local) return resolve();
+        local.set(items, () => {
+          void storageScope.chrome?.runtime?.lastError;
+          resolve();
+        });
+      });
+  } catch {
+    /* remembering is best-effort */
+  }
+}
+
+/** storage.local `serverKey` as stored (shared/server-key.ts). */
+const readServerKey = (): Promise<unknown> => readLocal('serverKey');
+
+/**
+ * Whether each engine's GPU really spoke in this browser (engine/gpu-check.ts). One that did not
+ * starts the next voice on the CPU, instead of loading on the GPU and failing the test again; one
+ * that did is not tested again (Supertonic's test builds a second, CPU copy of its 400 MB model, and
+ * each worker of the pool would). For this browser version only: an update may change its WebGPU.
+ */
+const GPU_VERDICTS = 'gpuVerdicts';
+type GpuVerdicts = Record<string, { browser: string; ok: boolean; why?: string; at: number }>;
+
+async function gpuVerdictHere(engine: string): Promise<'ok' | 'bad' | null> {
+  const verdict = ((await readLocal(GPU_VERDICTS)) as GpuVerdicts | null)?.[engine];
+  if (!verdict || verdict.browser !== navigator.userAgent) return null;
+  return verdict.ok ? 'ok' : 'bad';
+}
+
+async function rememberGpuVerdict(engine: string, ok: boolean, why?: string): Promise<void> {
+  const verdicts = ((await readLocal(GPU_VERDICTS)) as GpuVerdicts | null) ?? {};
+  await writeLocal({ [GPU_VERDICTS]: { ...verdicts, [engine]: { browser: navigator.userAgent, ok, ...(why ? { why } : {}), at: Date.now() } } });
 }
 
 async function redeemTicket(ticket: unknown): Promise<boolean> {

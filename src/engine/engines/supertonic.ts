@@ -20,6 +20,7 @@ import type * as Ort from 'onnxruntime-web';
 import { fetchModelFile } from '@/engine/model-cache';
 import { loadOrt } from '@/engine/ort-loader';
 import { chooseExecutionProviders } from '@/engine/runtime-env';
+import { GPU_TEST_TEXT, notSound, seededRandom, similarity } from '@/engine/gpu-check';
 import type { SynthEngine, SynthResult, InitContext, ModelManifest } from './types';
 import { parseSupertonicVoice } from '@/shared/supertonic-voices';
 
@@ -76,6 +77,7 @@ export class SupertonicEngine implements SynthEngine {
   readonly id = 'supertonic' as const;
   sampleRate = 44100;
   executionProvider = 'wasm';
+  gpuRejected?: string;
 
   private ort!: typeof Ort;
   private dp: Ort.InferenceSession | null = null;
@@ -141,6 +143,14 @@ export class SupertonicEngine implements SynthEngine {
         create(voBytes),
       ]);
       this.executionProvider = eps[0] ?? 'wasm';
+      if (this.executionProvider !== 'wasm' && !ctx.gpuChecked) {
+        // Loaded on the GPU: does it really speak there? (engine/gpu-check.ts, issue #10)
+        const rejected = await this.checkGpu([dpBytes, teBytes, veBytes, voBytes], { ...opts, executionProviders: ['wasm' as const] });
+        if (rejected) {
+          this.gpuRejected = rejected;
+          ctx.onNotice?.('This GPU could not run the voice, so it is running on the CPU.');
+        }
+      }
     } catch (err) {
       if (eps[0] === 'wasm') throw err;
       const wasmOpts = { ...opts, executionProviders: ['wasm' as const] };
@@ -182,7 +192,42 @@ export class SupertonicEngine implements SynthEngine {
     return { ids, len: chars.length };
   }
 
-  async synthesize(text: string, speed: number, voice?: string): Promise<SynthResult> {
+  /**
+   * One phrase on the GPU sessions, and the same phrase on the CPU from the same noise and for the
+   * same length: the weights are the same, so the two should sound alike. If the GPU's is not sound,
+   * or not like the CPU's, the CPU sessions replace the GPU's and the reason is returned.
+   */
+  private async checkGpu(bytes: Uint8Array[], cpuOpts: Ort.InferenceSession.SessionOptions): Promise<string | null> {
+    const fixed = (): { random: () => number; durationSec: number } => ({ random: seededRandom(20261116), durationSec: 1.6 });
+    let gpuPcm: Float32Array;
+    try {
+      gpuPcm = (await this.synthesize(GPU_TEST_TEXT, 1, undefined, fixed())).pcm;
+    } catch (err) {
+      gpuPcm = new Float32Array(0);
+      console.warn('[aloud] [supertonic] the GPU failed its test phrase:', err);
+    }
+    const [cdp, cte, cve, cvo] = await Promise.all(bytes.map((b) => this.ort.InferenceSession.create(b, cpuOpts)));
+    const cpu = [cdp!, cte!, cve!, cvo!];
+    const gpu = [this.dp!, this.textEnc!, this.vectorEst!, this.vocoder!];
+    [this.dp, this.textEnc, this.vectorEst, this.vocoder] = [cdp!, cte!, cve!, cvo!];
+    const cpuPcm = (await this.synthesize(GPU_TEST_TEXT, 1, undefined, fixed())).pcm;
+    const bad = notSound(gpuPcm, this.sampleRate);
+    const alike = bad ? 0 : similarity(gpuPcm, cpuPcm);
+    const rejected = bad ? `its sound was ${bad}` : alike < 0.8 ? `it did not sound like the CPU (similarity ${alike.toFixed(2)})` : null;
+    if (rejected) {
+      await Promise.all(gpu.map((s) => s.release().catch(() => undefined)));
+      this.executionProvider = 'wasm';
+      console.warn(`[aloud] [supertonic] GPU given up: ${rejected}`);
+      return rejected;
+    }
+    [this.dp, this.textEnc, this.vectorEst, this.vocoder] = [gpu[0]!, gpu[1]!, gpu[2]!, gpu[3]!];
+    await Promise.all(cpu.map((s) => s.release().catch(() => undefined)));
+    console.info(`[aloud] [supertonic] GPU checked: like the CPU (similarity ${alike.toFixed(3)})`);
+    return null;
+  }
+
+  /** `fixed`: the noise and length to use instead of random ones (the GPU test, checkGpu). */
+  async synthesize(text: string, speed: number, voice?: string, fixed?: { random: () => number; durationSec: number }): Promise<SynthResult> {
     if (!this.dp || !this.textEnc || !this.vectorEst || !this.vocoder) {
       throw new Error('Supertonic engine not initialised');
     }
@@ -198,7 +243,7 @@ export class SupertonicEngine implements SynthEngine {
     const textMask = new ort.Tensor('float32', new Float32Array(len).fill(1), [1, 1, len]);
 
     const dpOut = await this.dp.run({ text_ids: textIds, style_dp: style.dp, text_mask: textMask });
-    let durationSec = Number((dpOut.duration!.data as Float32Array | number[])[0]) / Math.max(0.1, speed);
+    let durationSec = fixed?.durationSec ?? Number((dpOut.duration!.data as Float32Array | number[])[0]) / Math.max(0.1, speed);
     if (!isFinite(durationSec) || durationSec <= 0) durationSec = Math.max(0.4, len * 0.06);
 
     const teOut = await this.textEnc.run({
@@ -216,9 +261,10 @@ export class SupertonicEngine implements SynthEngine {
     const n = latentDim * latentLen;
 
     let xt = new Float32Array(n);
+    const random = fixed?.random ?? Math.random;
     for (let i = 0; i < n; i++) {
-      const u1 = Math.max(1e-4, Math.random());
-      const u2 = Math.random();
+      const u1 = Math.max(1e-4, random());
+      const u2 = random();
       xt[i] = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
     }
     // latent mask is all-ones here (single, unpadded utterance) — keep it explicit for the graph.

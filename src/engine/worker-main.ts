@@ -194,6 +194,7 @@ async function handleInit(req: Extract<WorkerRequest, { kind: 'init' }>): Promis
         voice: req.config.voice,
         steps: req.config.steps,
         preferWebGPU: req.config.preferWebGPU,
+        gpuChecked: req.config.gpuChecked,
         onProgress,
         onNotice,
       }),
@@ -204,6 +205,7 @@ async function handleInit(req: Extract<WorkerRequest, { kind: 'init' }>): Promis
       id: req.id,
       sampleRate: engine.sampleRate,
       executionProvider: engine.executionProvider,
+      ...(engine.gpuRejected ? { gpuRejected: engine.gpuRejected } : {}),
     });
   } catch (err) {
     // Leave the worker alive so a settings change can retry with a different engine/voice.

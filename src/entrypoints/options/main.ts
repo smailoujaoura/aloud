@@ -839,7 +839,12 @@ function wire(): void {
     void withBusy(
       e.currentTarget as HTMLButtonElement,
       'Checking…',
-      () => checkWorkerGpu(),
+      async () => {
+        // Also forgets which voices' GPU did not really speak in this browser (synth-host/entry.ts):
+        // the next voice tries the GPU again, and tests it again.
+        await browser.storage.local.remove('gpuVerdicts').catch(() => undefined);
+        await checkWorkerGpu();
+      },
       undefined,
     ),
   );

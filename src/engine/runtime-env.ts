@@ -34,11 +34,12 @@ export async function detectWebGPU(): Promise<boolean> {
       }
     ).gpu;
     if (!gpu) {
-      // Expected on Firefox (extension workers get no `navigator.gpu` yet) and on Android;
-      // surprising anywhere else, so name the browser rather than leaving it a mystery.
+      // Expected on Firefox outside Windows (it has offered WebGPU to workers on Windows since 141;
+      // elsewhere only behind about:config prefs) and on Android; surprising anywhere else, so name
+      // the browser rather than leaving it a mystery.
       const why =
         capabilities().engine === 'gecko'
-          ? 'Firefox does not expose it to extension workers yet'
+          ? 'this Firefox does not offer WebGPU to extension workers'
           : 'this worker has no GPU access';
       // eslint-disable-next-line no-console
       console.info(`[aloud] WebGPU: navigator.gpu is not present — ${why}. Using WASM.`);

@@ -7,6 +7,12 @@ Website-only and documentation changes are not listed: they never reach the exte
 ## Unreleased
 
 ### Fixed
+- **Kokoro and Supertonic speak on Windows Firefox with a graphics card** (#10). Firefox on Windows
+  now gives Aloud WebGPU, and there Kokoro was silent and Supertonic said gibberish, with nothing
+  failing. A voice that loads on the graphics card now says a short test phrase first; if that is
+  not real sound (or, for Supertonic, not the sound the processor makes), it runs on the processor
+  and says so, and that browser remembers until it is updated. Settings, Advanced, "Check for a GPU
+  again" tries the graphics card again.
 - **Scanned PDFs show their pages.** A scan with a text layer was read aloud over a blank page, or
   a black block: its images (CCITT fax and JBIG2, what most scanners make, and JPEG 2000) were
   never decoded, because pdf.js's decoders were not in the package. They are now, with its colour

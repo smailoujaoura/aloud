@@ -19,6 +19,8 @@ export interface EngineConfig {
    */
   server?: { url: string; model: string; key?: string };
   preferWebGPU: boolean;
+  /** This browser's GPU already spoke right for this engine (engine/gpu-check.ts): no test again. */
+  gpuChecked?: boolean;
   /** Verbose console logging (settings: `debug`). Sentence text is only logged when it is on. */
   debug?: boolean;
   speed: number;
@@ -66,7 +68,14 @@ export type WorkerRequest =
 
 /** Worker -> Client */
 export type WorkerResponse =
-  | { kind: 'ready'; id: number; sampleRate: number; executionProvider: string }
+  | {
+      kind: 'ready';
+      id: number;
+      sampleRate: number;
+      executionProvider: string;
+      /** The voice loaded on the GPU but did not really speak there (engine/gpu-check.ts). */
+      gpuRejected?: string;
+    }
   /** Answer to `probe-gpu`. */
   | {
       kind: 'gpu-probe';
