@@ -62,6 +62,8 @@ export interface PlaylistItem {
   route?: Route;
   /** The language `spokenText` was prepared for: English expansions are for English voices. */
   spokenAs?: string;
+  /** The engine `spokenText` was prepared for: some read with fixes of their own (segment/phonon-fixes.ts). */
+  spokenBy?: string;
   /** Structural role of the block this sentence belongs to. */
   role: BlockRole;
   /** True when this sentence is the first of a new block (paragraph / list item / heading). */

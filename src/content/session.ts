@@ -23,6 +23,7 @@ import { buildTextIndex, changedEligibility, nearestBlock, rangeForSpan, visible
 import { spokenToSource } from '@/highlight/word-map';
 import { isSpeakable, normalizeForSpeech } from '@/segment/normalize';
 import { applyPronunciations } from '@/segment/pronunciations';
+import { builtInFixes } from '@/segment/phonon-fixes';
 import { GaplessScheduler } from '@/audio/scheduler';
 import { Highlighter } from '@/highlight/highlighter';
 import { CONTROL_HOST_ID, ControlBar, type BarVoice, type ExportState, type LanguageInfo } from '@/ui/control-bar';
@@ -662,9 +663,14 @@ export class ReaderSession {
    */
   private normalize = (text: string): string => this.normalizeAs(text, (this.spokenLanguage = this.readingLanguage()));
 
-  /** Page text → spoken text for a voice speaking `language`. */
-  private normalizeAs(text: string, language: string): string {
-    const fixed = applyPronunciations(text, this.settings.pronunciations, language);
+  /**
+   * Page text → spoken text for `engine` speaking `language`. The reader's own fixes first, then the
+   * engine's built-in ones (segment/phonon-fixes.ts): a word they fixed themselves is no longer there
+   * for a built-in fix to change.
+   */
+  private normalizeAs(text: string, language: string, engine: EngineId = this.engine): string {
+    const own = applyPronunciations(text, this.settings.pronunciations, language);
+    const fixed = applyPronunciations(own, builtInFixes(engine, language), language);
     return normalizeForSpeech(fixed, {
       // Not "read URLs" as a replacement *string*: passing the sentence itself put the whole
        // sentence in place of every address it contained ("Visit Visit https://…  now. now.").
@@ -700,7 +706,8 @@ export class ReaderSession {
   private respeak(): void {
     for (const item of this.playlist) {
       item.spokenAs = this.spokenLanguageOf(item);
-      item.spokenText = this.normalizeAs(item.visibleSource ?? item.sourceText, item.spokenAs);
+      item.spokenBy = this.spokenEngineOf(item);
+      item.spokenText = this.normalizeAs(item.visibleSource ?? item.sourceText, item.spokenAs, item.spokenBy as EngineId);
     }
     this.cancelExport('How words are spoken changed, so the MP3 was stopped');
     if (!this.engineReady) return;
@@ -1072,7 +1079,7 @@ export class ReaderSession {
       if (now === item.eligible && visible === item.visibleSource) continue;
       item.eligible = now;
       item.visibleSource = visible;
-      if (now) item.spokenText = this.normalizeAs(visible, item.spokenAs ?? this.spokenLanguageOf(item));
+      if (now) item.spokenText = this.normalizeAs(visible, item.spokenAs ?? this.spokenLanguageOf(item), (item.spokenBy as EngineId | undefined) ?? this.spokenEngineOf(item));
       if (item.playId > current) changed.push(item.playId);
       else if (item.playId === current) {
         here = true;
@@ -1702,10 +1709,13 @@ export class ReaderSession {
       const before = item.route;
       item.route = routeFor(item.language ?? '', ctx);
       const language = this.spokenLanguageOf(item);
+      const engine = this.spokenEngineOf(item);
       let differs = !sameRoute(before, item.route);
-      if (item.spokenAs !== language) {
-        item.spokenText = this.normalizeAs(item.visibleSource ?? item.sourceText, language);
+      // Prepared again for another language, or another engine (its built-in fixes differ).
+      if (item.spokenAs !== language || item.spokenBy !== engine) {
+        item.spokenText = this.normalizeAs(item.visibleSource ?? item.sourceText, language, engine);
         item.spokenAs = language;
+        item.spokenBy = engine;
         differs = true;
       }
       if (!differs) continue;
@@ -1718,6 +1728,11 @@ export class ReaderSession {
   /** The language the voice reading `item` speaks — what its spoken text is prepared for. */
   private spokenLanguageOf(item: PlaylistItem): string {
     return item.route?.kind === 'voice' ? item.route.voice.language || 'en' : this.readingLanguage();
+  }
+
+  /** The engine that reads `item`: its route's, or the reader's own. */
+  private spokenEngineOf(item: PlaylistItem): EngineId {
+    return item.route?.kind === 'voice' ? item.route.voice.engine : this.engine;
   }
 
   /** The voice to synthesise `item` with; undefined for the primary voice. */
