@@ -18,6 +18,7 @@
     "build": "npm run build:firefox && npm run build:chrome",
     "build:firefox": "wxt build --browser firefox --mv3",
     "build:chrome": "wxt build --browser chrome --mv3",
+    "build:safari": "wxt build --browser safari --mv3",
     "zip": "npm run zip:firefox && npm run zip:chrome",
     "zip:firefox": "wxt zip --browser firefox --mv3",
     "zip:chrome": "wxt zip --browser chrome --mv3",

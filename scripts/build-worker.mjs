@@ -68,7 +68,9 @@ export async function buildWorker(options) {
       },
       conditions: ['browser', 'import', 'default'],
     },
-    define: { 'process.env.NODE_ENV': JSON.stringify('production') },
+    // Safari leaves out the engines that read through eSpeak-NG (GPL-3.0): Piper and Kokoro, whose
+    // chunks are then never emitted (engine/worker-main.ts, shared/engine-catalog.ts).
+    define: { 'process.env.NODE_ENV': JSON.stringify('production'), __ALOUD_ESPEAK__: JSON.stringify(browser !== 'safari') },
     worker: { format: 'es' },
     plugins: browser === 'firefox' ? [] : [noCdnDefault],
     build: {

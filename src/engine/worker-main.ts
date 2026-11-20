@@ -108,16 +108,20 @@ async function createEngine(config: EngineConfig, m: ModelManifest): Promise<Syn
     const { PhononEngine } = await import('./engines/phonon');
     return new PhononEngine(m);
   }
-  if (which === 'kokoro') {
-    const { KokoroEngine } = await import('./engines/kokoro');
-    return new KokoroEngine();
-  }
   if (which === 'supertonic') {
     const { SupertonicEngine } = await import('./engines/supertonic');
     return new SupertonicEngine(m);
   }
-  const { PiperEngine } = await import('./engines/piper');
-  return new PiperEngine(m);
+  // Written so a build without them (Safari: no eSpeak-NG, GPL-3.0) drops both imports entirely.
+  if (__ALOUD_ESPEAK__ && which === 'kokoro') {
+    const { KokoroEngine } = await import('./engines/kokoro');
+    return new KokoroEngine();
+  }
+  if (__ALOUD_ESPEAK__) {
+    const { PiperEngine } = await import('./engines/piper');
+    return new PiperEngine(m);
+  }
+  throw new Error(`${which} is not in this build of Aloud`);
 }
 
 async function handleInit(req: Extract<WorkerRequest, { kind: 'init' }>): Promise<void> {

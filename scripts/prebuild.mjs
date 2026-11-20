@@ -19,7 +19,7 @@ writeNotices();
 // Not minified, for the same reason as the extension's own code (wxt.config.ts): reviewable diffs.
 // The browser decides one thing in the worker: whether transformers.js is bundled as published
 // (Firefox) or with its dead CDN line taken out (Chrome) — see build-worker.mjs.
-const browser = process.argv[2] === 'chrome' ? 'chrome' : 'firefox';
+const browser = ['chrome', 'safari'].includes(process.argv[2]) ? process.argv[2] : 'firefox';
 await buildWorker({ minify: false, browser });
 await buildSynthHost({ minify: false });
 

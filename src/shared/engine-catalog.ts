@@ -178,7 +178,12 @@ const ENGINES: Record<EngineId, EngineInfo> = {
 
 // Supertonic before Kokoro wherever engines are listed: the tabs, the walkthrough, the board.
 // Phonon first: natural and fast on any computer. Your own server last: it is for people who already run one.
-export const ENGINE_IDS: readonly EngineId[] = ['phonon', 'piper', 'supertonic', 'kokoro', 'server'];
+//
+// Safari: Phonon, Supertonic and your own server only. Piper and Kokoro read through eSpeak-NG
+// (GPL-3.0), and a Safari extension ships as an App Store app, whose terms the GPL does not allow;
+// the Safari build leaves their code and data out altogether (wxt.config.ts, scripts/build-worker.mjs).
+export const ENGINE_IDS: readonly EngineId[] =
+  import.meta.env.BROWSER === 'safari' ? ['phonon', 'supertonic', 'server'] : ['phonon', 'piper', 'supertonic', 'kokoro', 'server'];
 
 /**
  * Supertonic's detail (flow-matching steps) for this device. A phone gets 3 unless its reader

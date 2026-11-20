@@ -62,7 +62,10 @@ export default defineConfig({
     // instead), alarms checks Dropbox for other devices' notes every quarter of an hour while
     // connected. Dropbox's API answers extension origins with CORS headers, so no access to
     // dropbox.com is asked for.
-    permissions: ['activeTab', 'scripting', 'storage', 'unlimitedStorage', 'contextMenus', 'identity', 'alarms'],
+    //
+    // Safari has no identity API: its Dropbox sign-in is the code Dropbox shows, as on Firefox for
+    // Android, so it is not asked for there.
+    permissions: ['activeTab', 'scripting', 'storage', 'unlimitedStorage', 'contextMenus', ...(browser === 'safari' ? [] : ['identity']), 'alarms'],
 
     // Not in private windows. Aloud keeps where you stopped, your history and listening statistics,
     // and in a private window it would keep them too — Mozilla forbids storing private-browsing data
@@ -229,13 +232,22 @@ export default defineConfig({
     'build:before'(wxt) {
       execFileSync(process.execPath, ['scripts/prebuild.mjs', wxt.config.browser], { stdio: 'inherit' });
     },
+    // Safari ships as an App Store app, whose terms the GPL does not allow: none of eSpeak-NG
+    // (GPL-3.0, Piper's phonemizer and its data) goes into that package. Its worker is built without
+    // Piper and Kokoro (scripts/build-worker.mjs), so no chunk of theirs is there to leave out.
+    'build:publicAssets'(wxt, files) {
+      if (wxt.config.browser !== 'safari') return;
+      const espeak = /^vendor\/piper\//;
+      for (let i = files.length - 1; i >= 0; i--) if (espeak.test(files[i]!.relativeDest.replace(/\\/g, '/'))) files.splice(i, 1);
+    },
   },
 
   vite: (env) => ({
+    define: { __ALOUD_ESPEAK__: JSON.stringify(env.browser !== 'safari') },
     build: {
       // The worker bundle is built separately (scripts/build-worker.mjs) and targets the same
       // baselines; keep the two in step.
-      target: env.browser === 'firefox' ? 'firefox128' : 'chrome120',
+      target: env.browser === 'firefox' ? 'firefox128' : env.browser === 'safari' ? 'safari17' : 'chrome120',
       chunkSizeWarningLimit: 8192,
       // Vite adds <link rel="modulepreload"> for every chunk an extension page imports. Chromium
       // refuses those for extension resources ("A preload … is not used because it is a
