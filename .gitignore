@@ -18,3 +18,9 @@ docs/STORE_POLICY_AUDIT_*.md
 docs/CLAUDE_*.md
 # Claude Code's lock for scheduled tasks, written while a session runs.
 .claude/scheduled_tasks.lock
+
+# The Safari app's Xcode project lives in safari/ (docs/SAFARI.md); its per-user state does not.
+xcuserdata/
+DerivedData/
+*.xcuserstate
+.DS_Store
