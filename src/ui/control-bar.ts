@@ -27,6 +27,7 @@ import type { SleepChoice, SleepState } from '@/content/sleep-timer';
 import { containTyping } from './contain-typing';
 import { genericAvatar } from './voice-avatar';
 import { BottomRoom } from './bottom-room';
+import { formatRate, nextPreset } from '@/media-speed/rate';
 
 /** Where "Save as MP3" is, as the bar shows it. */
 export type ExportState =
@@ -135,6 +136,16 @@ export interface ControlBarOptions {
 }
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4];
+
+/**
+ * The speeds the bar's list offers: the usual ones, and the reading speed itself when it is none of
+ * them. Settings, Voice sets it in steps of 0.05; at 1.3× the list had no such line, so it showed
+ * nothing, and 0.5× (its first line) on the next page, while reading at 1.3× (#12).
+ */
+export function speedChoices(current: number): number[] {
+  if (!Number.isFinite(current) || current <= 0 || SPEEDS.includes(current)) return SPEEDS;
+  return [...SPEEDS, current].sort((a, b) => a - b);
+}
 
 /** How long a `flash()` confirmation stays up before the bar goes back to reporting status. */
 const FLASH_MS = 1900;
@@ -379,11 +390,7 @@ export class ControlBar {
     const speedBox = this.make('div', { class: 'speedbox' });
     speedBox.append(this.speedEl, this.rateEl);
     this.rateEl.title = 'Current speaking pace · words per minute';
-    for (const s of SPEEDS) {
-      const opt = this.make('option', { value: String(s) }, `${s}×`);
-      if (s === speed) opt.selected = true;
-      this.speedEl.appendChild(opt);
-    }
+    this.offerSpeeds(speed);
 
     this.voiceBtn = this.make('button', { class: 'voice', 'aria-haspopup': 'dialog', 'aria-expanded': 'false', 'aria-label': 'Voice and language', hidden: '' });
     this.voiceFace = this.make('span', { class: 'face' });
@@ -759,13 +766,31 @@ export class ControlBar {
     }
   }
 
+  /**
+   * One step faster or slower: the next of the usual speeds above or below this one. From a speed
+   * between two of them (1.3×, set in Settings) that is the one beside it; it used to count as
+   * 1×, so "faster" from 1.3× went down to 1.25×.
+   */
   private nudgeSpeed(direction: 1 | -1): void {
-    const i = SPEEDS.indexOf(this.currentSpeed);
-    const next = SPEEDS[Math.max(0, Math.min(SPEEDS.length - 1, (i < 0 ? 2 : i) + direction))];
-    if (next == null || next === this.currentSpeed) return;
+    const next = nextPreset(this.currentSpeed, SPEEDS, direction);
+    if (next === this.currentSpeed) return;
     this.currentSpeed = next;
-    this.speedEl.value = String(next);
+    this.offerSpeeds(next);
     this.cb.onSpeed(next);
+  }
+
+  /** The lines of the speed list as offered now, to know when they change. */
+  private offered = '';
+
+  /** Show `speed` in the speed list, as a line of its own when it is not one of the usual ones. */
+  private offerSpeeds(speed: number): void {
+    const choices = speedChoices(speed);
+    const key = choices.join(',');
+    if (key !== this.offered) {
+      this.offered = key;
+      this.speedEl.replaceChildren(...choices.map((s) => this.make('option', { value: String(s) }, formatRate(s))));
+    }
+    this.speedEl.value = String(speed);
   }
 
   // ---- public API ----------------------------------------------------------
@@ -820,7 +845,7 @@ export class ControlBar {
     if (action === 'normal') {
       if (this.currentSpeed === 1) return;
       this.currentSpeed = 1;
-      this.speedEl.value = '1';
+      this.offerSpeeds(1);
       this.cb.onSpeed(1);
       return;
     }
@@ -905,7 +930,7 @@ export class ControlBar {
 
   setSpeed(speed: number): void {
     this.currentSpeed = speed;
-    this.speedEl.value = String(speed);
+    this.offerSpeeds(speed);
   }
 
   /** Live speech pace; zero when stopped, null when the current audio cannot be measured. */

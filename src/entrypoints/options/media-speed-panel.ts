@@ -41,6 +41,7 @@ export function renderMediaSpeedPanel(host: HTMLElement, opts: MediaSpeedPanelOp
 
   // ---- where it runs ----
   if (phone) rows.push(everyVideoRow(s, opts));
+  else rows.push(startHint());
   const sites = el(document, 'div', { class: 'speed-sites' });
   renderSiteList(sites, {
     heading: 'Starts by itself on',
@@ -128,6 +129,27 @@ export function renderMediaSpeedPanel(host: HTMLElement, opts: MediaSpeedPanelOp
 
   host.replaceChildren(...rows);
   host.classList.toggle('is-off', !s.enabled);
+}
+
+/**
+ * How the control is started, with the key it has now. Nothing below does anything on a page until
+ * it is: the keys and speeds were taken for settings of the reading voice, and for broken (#12).
+ */
+function startHint(): HTMLElement {
+  const hint = el(document, 'p', { class: 'muted small speed-start' }, 'It starts on a page when you press its shortcut there, and by itself on the sites listed here.');
+  const say = (shortcut: string): void => {
+    hint.replaceChildren(
+      shortcut
+        ? `It starts on a page when you press ${shortcut} there (again turns it off), and by itself on the sites listed here. `
+        : 'It has no shortcut yet: give it one, or list the sites where it starts by itself. ',
+      el(document, 'a', { href: '#shortcuts', 'data-view': 'shortcuts' }, shortcut ? 'Change the shortcut' : 'Shortcuts'),
+    );
+    // The link is made after the page wired its own (app-nav.ts): the address change shows the view.
+  };
+  void Promise.resolve(browser.commands?.getAll?.())
+    .then((commands) => say(commands?.find((c) => c.name === 'media-speed')?.shortcut ?? ''))
+    .catch(() => undefined);
+  return hint;
 }
 
 function keyRow(
