@@ -6,7 +6,34 @@ Website-only and documentation changes are not listed: they never reach the exte
 
 ## Unreleased
 
+## 1.0.5 (2026-11-22)
+
+### Added
+- **Aloud for Safari, on the Mac, iPhone and iPad**, as an app from the App Store. It reads with
+  Phonon and Supertonic, or a speech server of your own; Piper and Kokoro are not in it (they read
+  through eSpeak-NG, whose licence the App Store's terms do not allow). On an iPhone or iPad it
+  behaves as on a phone: one voice loaded at a time, and the speed button on videos. Dropbox
+  sign-in there uses the code Dropbox shows.
+
 ### Fixed
+- **A page being read no longer slows down, in Firefox most of all.** On a long article, a page
+  that keeps changing (a feed, a ticker, an animation) ran at a few frames a second while Aloud
+  read it, as if in slow motion. Aloud kept a marker in the page for every sentence, and Firefox
+  moves every such marker on every change a page makes: an article of 2,500 sentences made each
+  change 75 times as costly. It now keeps three, whatever the length. Two more stops are gone: one
+  of about a tenth of a second as each sentence's audio arrived, and the page running at half its
+  frame rate for as long as a voice downloaded. Measured in Firefox 160 on such a page: from 8 to
+  40 frames a second while reading, to a steady 60.
+- **The reading bar shows the speed it reads at, whatever it is** (#12). A speed set in Settings,
+  Voice that is not one of the bar's own (1.3×, 2.75×) left the bar's speed list empty, and on
+  0.5× when the page was opened again, while reading went on at the speed set. The list now has
+  a line for it. Faster and slower (D and S) step from it to the usual speed beside it; "faster"
+  from 1.3× used to go down to 1.25×.
+- **Settings, Video speed says what it is for.** Its speeds, steps and keys are for videos and
+  audio on websites, not for Aloud's reading voice, and do nothing on a page until the control is
+  started there: the page now says both, with the shortcut that starts it (#12).
+- The video speed control looks through a page for new players twice a second at most, not on
+  every change the page makes.
 - **Kokoro and Supertonic speak on Windows Firefox with a graphics card** (#10). Firefox on Windows
   now gives Aloud WebGPU, and there Kokoro was silent and Supertonic said gibberish, with nothing
   failing. A voice that loads on the graphics card now says a short test phrase first; if that is

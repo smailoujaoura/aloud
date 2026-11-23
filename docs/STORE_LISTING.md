@@ -1,6 +1,6 @@
 # Store submission: what to paste where
 
-Everything below matches Aloud 1.0.4 as built (`npm run zip`). If the manifest's permissions
+Everything below matches Aloud 1.0.5 as built (`npm run zip`). If the manifest's permissions
 change, change the justifications here too: both stores compare them.
 
 ## Shared listing text
@@ -47,6 +47,15 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 **Website:** https://aloud.souj.dev — **Privacy policy:** https://aloud.souj.dev/privacy.html
 
 **Support:** https://aloud.souj.dev/feedback.html (bugs go to GitHub issues from there)
+
+## Release notes for 1.0.5 (AMO's version notes; plain text)
+
+> Fixed
+> • A page being read no longer slows down. On a long article, a page that keeps changing (a feed, a ticker, an animation) ran at a few frames a second while Aloud read it, in Firefox most of all. It now stays smooth, also while a voice downloads.
+> • The reading bar shows the speed it reads at, whatever it is: a speed set in Settings, Voice that is not one of the bar's own (1.3×, 2.75×) left its speed list empty. Faster and slower (D and S) step from it to the usual speed beside it.
+> • Settings, Video speed says what it is for (videos and audio on websites, not the reading voice) and which shortcut starts it.
+> • Kokoro and Supertonic speak on Windows Firefox with a graphics card: a voice that loads there but does not make real sound runs on the processor instead, and says so.
+> • Scanned PDFs show their pages (they were read over a blank or black page).
 
 ## Release notes for 1.0.4 (AMO's version notes; plain text)
 

@@ -23,6 +23,9 @@ npm run test           # vitest (pure logic + happy-dom DOM tests)
 npm run lint:ext       # web-ext lint on the Firefox output
 npm run test:e2e:firefox  # the Firefox build in a real headless Firefox (see below)
 npm run test:e2e:chromium # the Chromium build: Settings, PDFs, Dropbox sync, places (see below)
+npm run build:safari      # -> .output/safari-mv3, for the Xcode project in safari/ (docs/SAFARI.md)
+npm run test:engine:webkit # the Safari build's speech worker, speaking in WebKit (see below)
+npm run perf:firefox      # how smoothly a page runs while it is read, in your own Firefox (see below)
 ```
 
 ### The Chromium release checks
@@ -35,7 +38,29 @@ a revoked connection, Disconnect). It also checks that a paused reader follows a
 elsewhere without undoing the user's own move. It runs offline: the pages come from
 `tests/fixtures` through a server of its own, and voice downloads are refused. Exits non-zero
 on a failed check. Needs `npx playwright install chromium`; `E2E_LD_LIBRARY_PATH` adds library
-folders, as for Firefox.
+folders, as for Firefox. On a Mac and on Windows the test page's permission cannot be written into
+the profile (Chromium signs that file there), so the checks run against a copy of the build whose
+manifest also names `http://127.0.0.1/*`; the script says when it does.
+
+### The speech worker by itself, in any engine
+
+`scripts/engine-check.mjs` serves a build's files and runs its synthesis worker in a plain page,
+with no extension around it: a voice loaded, three sentences made, one again at 2×, and how fast
+against real time. It runs where Playwright cannot load an extension, WebKit above all
+(`npm run test:engine:webkit`, the nearest thing to Safari a terminal offers), and with any engine:
+`node scripts/engine-check.mjs chromium .output/chrome-mv3 piper en_GB-alba-medium`. It downloads
+the voice each time and exits non-zero on a failure or on silence.
+
+### Frame times while reading, in Firefox
+
+`scripts/perf-firefox.mjs` starts the Firefox installed on the machine (headless, a throwaway
+profile), installs `.output/firefox-mv3`, and reads a long article that keeps changing itself. It
+prints the page's own frame times and the cost of each of its changes: before the reader opens,
+while the voice loads and while it reads. A page that is not held up shows about 600 frames in 10 s
+with none over 25 ms. `PROFILE=1` also times the reader's own methods and synthesis against real
+time; the script's first lines list the rest. Run it before a release that touches the reader, the
+highlight or the audio path: it is what found a page read by 1.0.4 running at 8 to 40 frames a
+second.
 
 ### The Firefox end-to-end check
 
@@ -93,7 +118,9 @@ published (Mozilla does not allow modified libraries). See `scripts/build-worker
      which Chrome 143 and our Firefox baseline do not have, and the PDF reader page dies with
      `getOrInsertComputed is not a function` on the first document.
    - `scripts/build-worker.mjs` — a standalone Vite build of `src/worker/entry.ts` →
-     `.gen/worker/tts-worker.js` (ES-module worker), plus `src/synth-host/entry.ts` →
+     `.gen/worker/tts-worker.js` (ES-module worker; a few lines that load the worker proper,
+     `vendor/rt/worker-main.js`, by its address, so that no file imports the entry: WebKit runs
+     an entry that is imported a second time, see src/worker/entry.ts), plus `src/synth-host/entry.ts` →
      `.gen/worker/synth-host.js` (a classic IIFE). `onnxruntime-web` / `onnxruntime-common` are
      **external**, rewritten via `output.paths` to `./vendor/ort/ort.bundle.min.mjs`, so ORT's
      ~33 MB of WASM is never base64-inlined. The output is copied into `public/`.
@@ -133,10 +160,10 @@ is verified after download (`src/engine/model-cache.ts`).
 | Warning | Count | Why it is expected |
 |---|---|---|
 | `DANGEROUS_EVAL` in `vendor/ort/ort.bundle.min.mjs` and `vendor/ort/ort-wasm-simd-threaded.jsep.mjs` | 2 | Emscripten's way of finding the global object: `typeof globalThis == "object" ? globalThis : Function("return this")()`. Every browser Aloud supports has `globalThis`, so the `Function` branch never runs, and the extension CSP (no `'unsafe-eval'`) would refuse it if it did. (`'wasm-unsafe-eval'` is for compiling WebAssembly, not for this.) |
-| `UNSAFE_VAR_ASSIGNMENT` "call to import" in `vendor/rt/ort-loader.js`, `vendor/rt/phonon.js`, `vendor/ort/ort.bundle.min.mjs`, `chunks/pdf.js` (twice: pdf.js, and the built-ins it needs first), `vendor/pdfjs/pdf.mjs` and `vendor/pdfjs/pdf.worker.mjs` | 7 | Deliberate runtime `import()` of a vendored module by URL (pdf.js: its own worker): resolved from the extension's own origin, so the argument is never page-controlled. |
+| `UNSAFE_VAR_ASSIGNMENT` "call to import" in `tts-worker.js`, `vendor/rt/ort-loader.js`, `vendor/rt/phonon.js`, `vendor/ort/ort.bundle.min.mjs`, `chunks/pdf.js` (twice: pdf.js, and the built-ins it needs first), `vendor/pdfjs/pdf.mjs` and `vendor/pdfjs/pdf.worker.mjs` | 8 | Deliberate runtime `import()` of a packaged module by URL (pdf.js: its own worker; `tts-worker.js`: the worker proper, `vendor/rt/worker-main.js`, see src/worker/entry.ts): resolved from the extension's own origin, so the argument is never page-controlled. |
 | `UNSAFE_VAR_ASSIGNMENT` "assignment to innerHTML" in `reader-inject.js` and `chunks/session.js` | 4 | Inside the bundled `@mozilla/readability`, which parses a *clone* of the document and is bundled into the content script and into the shared reader-session chunk the PDF page and the walkthrough both load. None of our own code assigns `innerHTML`; the control bar, options page, PDF reader and walkthrough build every node with `createElement` (see `src/shared/dom.ts`). |
 
-There are **no errors**: 13 warnings, 0 notices, all from vendored code. Verify with:
+There are **no errors**: 14 warnings, 0 notices, all but the one in `tts-worker.js` from vendored code. Verify with:
 
 ```bash
 npx web-ext lint --source-dir .output/firefox-mv3 -o json | jq '{errors: (.errors|length), warnings: (.warnings|length)}'
