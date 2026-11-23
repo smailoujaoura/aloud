@@ -26,16 +26,25 @@
 		})();
 		if (protocol === "moz-extension:") return "gecko";
 		if (protocol === "chrome-extension:") return "chromium";
+		if (protocol === "safari-web-extension:") return "webkit";
 		const origin = extensionOrigin();
 		if (origin.startsWith("moz-extension:")) return "gecko";
 		if (origin.startsWith("chrome-extension:")) return "chromium";
+		if (origin.startsWith("safari-web-extension:")) return "webkit";
 		const ua = readUserAgent();
 		if (/firefox\/|gecko\//i.test(ua)) return "gecko";
 		if (/chrome\/|chromium\/|edg\//i.test(ua)) return "chromium";
+		if (/iphone|ipad|ipod/i.test(ua) || /safari\//i.test(ua)) return "webkit";
 		return "unknown";
 	}
 	function detectFormFactor() {
-		return /android/i.test(readUserAgent()) ? "android" : "desktop";
+		const ua = readUserAgent();
+		if (/android/i.test(ua)) return "android";
+		if (/iphone|ipad|ipod/i.test(ua)) return "ios";
+		try {
+			if (/macintosh/i.test(ua) && (globalThis.navigator?.maxTouchPoints ?? 0) > 1) return "ios";
+		} catch {}
+		return "desktop";
 	}
 	function computeCapabilities() {
 		const engine = detectEngine();
@@ -47,8 +56,8 @@
 			workerWebGPU: chromium && formFactor === "desktop",
 			contentScriptCanSpawnExtensionWorker: chromium,
 			menusTargetElement: engine === "gecko",
-			backgroundIsServiceWorker: chromium,
-			touchFirst: formFactor === "android"
+			backgroundIsServiceWorker: chromium || engine === "webkit",
+			touchFirst: formFactor !== "desktop"
 		};
 	}
 	var cached$1 = null;

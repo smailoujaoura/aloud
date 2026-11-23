@@ -1,0 +1,557 @@
+{
+  "default-configuration": "Release",
+  "configurations": [
+    "Debug",
+    "Release",
+  ],
+  "localizations": {
+    "development": "en",
+    "supported": [
+      "Base",
+    ],
+  },
+  "files": [
+    {
+      "kind": "group",
+      "path": "Shared (App)",
+      "children": [
+        {
+          "path": "ViewController.swift",
+          "target-membership": [
+            "Aloud (iOS)/compile-sources",
+            "Aloud (macOS)/compile-sources",
+          ],
+        }, {
+          "path": "Assets.xcassets",
+          "target-membership": [
+            "Aloud (iOS)/resources",
+            "Aloud (macOS)/resources",
+          ],
+        }, {
+          "kind": "group",
+          "path": "Resources",
+          "children": [
+            {
+              "kind": "variant-group",
+              "name": "Main.html",
+              "target-membership": [
+                "Aloud (iOS)/resources",
+                "Aloud (macOS)/resources",
+              ],
+              "children": [
+                {
+                  "path": "Base.lproj/Main.html",
+                },
+              ],
+            }, {
+              "path": "Icon.png",
+              "target-membership": [
+                "Aloud (iOS)/resources",
+                "Aloud (macOS)/resources",
+              ],
+            }, {
+              "path": "Style.css",
+              "target-membership": [
+                "Aloud (iOS)/resources",
+                "Aloud (macOS)/resources",
+              ],
+            }, {
+              "path": "Script.js",
+              "target-membership": [
+                "Aloud (iOS)/resources",
+                "Aloud (macOS)/resources",
+              ],
+            },
+          ],
+        },
+      ],
+    }, {
+      "kind": "group",
+      "path": "Shared (Extension)",
+      "children": [
+        {
+          "kind": "group",
+          "path": "<PROJECT>/Shared (Extension)",
+          "name": "Resources",
+          "children": [
+            {
+              "path": "../../../.output/safari-mv3/models.json",
+              "target-membership": [
+                "Aloud Extension (iOS)/resources",
+                "Aloud Extension (macOS)/resources",
+              ],
+            }, {
+              "path": "../../../.output/safari-mv3/speed-inject.js",
+              "target-membership": [
+                "Aloud Extension (iOS)/resources",
+                "Aloud Extension (macOS)/resources",
+              ],
+            }, {
+              "path": "../../../.output/safari-mv3/flags",
+              "target-membership": [
+                "Aloud Extension (iOS)/resources",
+                "Aloud Extension (macOS)/resources",
+              ],
+            }, {
+              "path": "../../../.output/safari-mv3/licenses",
+              "target-membership": [
+                "Aloud Extension (iOS)/resources",
+                "Aloud Extension (macOS)/resources",
+              ],
+            }, {
+              "path": "../../../.output/safari-mv3/background.js",
+              "target-membership": [
+                "Aloud Extension (iOS)/resources",
+                "Aloud Extension (macOS)/resources",
+              ],
+            }, {
+              "path": "../../../.output/safari-mv3/synth-host.html",
+              "target-membership": [
+                "Aloud Extension (iOS)/resources",
+                "Aloud Extension (macOS)/resources",
+              ],
+            }, {
+              "path": "../../../.output/safari-mv3/reader-inject.js",
+              "target-membership": [
+                "Aloud Extension (iOS)/resources",
+                "Aloud Extension (macOS)/resources",
+              ],
+            }, {
+              "path": "../../../.output/safari-mv3/library.html",
+              "target-membership": [
+                "Aloud Extension (iOS)/resources",
+                "Aloud Extension (macOS)/resources",
+              ],
+            }, {
+              "path": "../../../.output/safari-mv3/pdf.html",
+              "target-membership": [
+                "Aloud Extension (iOS)/resources",
+                "Aloud Extension (macOS)/resources",
+              ],
+            }, {
+              "path": "../../../.output/safari-mv3/chunks",
+              "target-membership": [
+                "Aloud Extension (iOS)/resources",
+                "Aloud Extension (macOS)/resources",
+              ],
+            }, {
+              "path": "../../../.output/safari-mv3/portraits",
+              "target-membership": [
+                "Aloud Extension (iOS)/resources",
+                "Aloud Extension (macOS)/resources",
+              ],
+            }, {
+              "path": "../../../.output/safari-mv3/pdfjs-support",
+              "target-membership": [
+                "Aloud Extension (iOS)/resources",
+                "Aloud Extension (macOS)/resources",
+              ],
+            }, {
+              "path": "../../../.output/safari-mv3/tts-worker.js",
+              "target-membership": [
+                "Aloud Extension (iOS)/resources",
+                "Aloud Extension (macOS)/resources",
+              ],
+            }, {
+              "path": "../../../.output/safari-mv3/frame-ask.html",
+              "target-membership": [
+                "Aloud Extension (iOS)/resources",
+                "Aloud Extension (macOS)/resources",
+              ],
+            }, {
+              "path": "../../../.output/safari-mv3/welcome.html",
+              "target-membership": [
+                "Aloud Extension (iOS)/resources",
+                "Aloud Extension (macOS)/resources",
+              ],
+            }, {
+              "path": "../../../.output/safari-mv3/manifest.json",
+              "target-membership": [
+                "Aloud Extension (iOS)/resources",
+                "Aloud Extension (macOS)/resources",
+              ],
+            }, {
+              "path": "../../../.output/safari-mv3/options.html",
+              "target-membership": [
+                "Aloud Extension (iOS)/resources",
+                "Aloud Extension (macOS)/resources",
+              ],
+            }, {
+              "path": "../../../.output/safari-mv3/synth-host.js",
+              "target-membership": [
+                "Aloud Extension (iOS)/resources",
+                "Aloud Extension (macOS)/resources",
+              ],
+            }, {
+              "path": "../../../.output/safari-mv3/icon",
+              "target-membership": [
+                "Aloud Extension (iOS)/resources",
+                "Aloud Extension (macOS)/resources",
+              ],
+            }, {
+              "path": "../../../.output/safari-mv3/fonts",
+              "target-membership": [
+                "Aloud Extension (iOS)/resources",
+                "Aloud Extension (macOS)/resources",
+              ],
+            }, {
+              "path": "../../../.output/safari-mv3/assets",
+              "target-membership": [
+                "Aloud Extension (iOS)/resources",
+                "Aloud Extension (macOS)/resources",
+              ],
+            }, {
+              "path": "../../../.output/safari-mv3/annotate-inject.js",
+              "target-membership": [
+                "Aloud Extension (iOS)/resources",
+                "Aloud Extension (macOS)/resources",
+              ],
+            }, {
+              "path": "../../../.output/safari-mv3/vendor",
+              "target-membership": [
+                "Aloud Extension (iOS)/resources",
+                "Aloud Extension (macOS)/resources",
+              ],
+            },
+          ],
+        }, {
+          "path": "SafariWebExtensionHandler.swift",
+          "target-membership": [
+            "Aloud Extension (iOS)/compile-sources",
+            "Aloud Extension (macOS)/compile-sources",
+          ],
+        },
+      ],
+    }, {
+      "kind": "group",
+      "path": "iOS (App)",
+      "children": [
+        { "path": "AppDelegate.swift", "target-membership": [ "Aloud (iOS)/compile-sources" ] },
+        { "path": "SceneDelegate.swift", "target-membership": [ "Aloud (iOS)/compile-sources" ] },
+        {
+          "kind": "variant-group",
+          "name": "LaunchScreen.storyboard",
+          "target-membership": [
+            "Aloud (iOS)/resources",
+          ],
+          "children": [
+            {
+              "path": "Base.lproj/LaunchScreen.storyboard",
+            },
+          ],
+        }, {
+          "kind": "variant-group",
+          "name": "Main.storyboard",
+          "target-membership": [
+            "Aloud (iOS)/resources",
+          ],
+          "children": [
+            {
+              "path": "Base.lproj/Main.storyboard",
+            },
+          ],
+        },
+        { "path": "Info.plist" },
+      ],
+    }, {
+      "kind": "group",
+      "path": "macOS (App)",
+      "children": [
+        { "path": "AppDelegate.swift", "target-membership": [ "Aloud (macOS)/compile-sources" ] },
+        {
+          "kind": "variant-group",
+          "name": "Main.storyboard",
+          "target-membership": [
+            "Aloud (macOS)/resources",
+          ],
+          "children": [
+            {
+              "path": "Base.lproj/Main.storyboard",
+            },
+          ],
+        },
+        { "path": "Info.plist" },
+      ],
+    }, {
+      "kind": "group",
+      "path": "iOS (Extension)",
+      "children": [
+        { "path": "Info.plist" },
+      ],
+    }, {
+      "kind": "group",
+      "path": "macOS (Extension)",
+      "children": [
+        { "path": "Info.plist" },
+      ],
+    }, {
+      "kind": "group",
+      "name": "Products",
+      "children": [
+        { "path": "<PRODUCTS>/Aloud.app", "id": "6F4C06A830B32E2800D2EC45", "type": "wrapper.application", "index": false },
+        { "path": "<PRODUCTS>/Aloud.app", "id": "6F4C06BA30B32E2800D2EC45", "type": "wrapper.application", "index": false },
+        { "path": "<PRODUCTS>/Aloud Extension.appex", "id": "6F4C06C630B32E2800D2EC45", "type": "wrapper.app-extension", "index": false, "target-membership": [ { "build-phase": "Aloud (iOS)/copy/Embed Foundation Extensions", "header-preservation": "remove-on-copy" } ] },
+        { "path": "<PRODUCTS>/Aloud Extension.appex", "id": "6F4C06D030B32E2800D2EC45", "type": "wrapper.app-extension", "index": false, "target-membership": [ { "build-phase": "Aloud (macOS)/copy/Embed Foundation Extensions", "header-preservation": "remove-on-copy" } ] },
+      ],
+    },
+  ],
+  "targets": [
+    {
+      "name": "Aloud (iOS)",
+      "id": "6F4C06A730B32E2800D2EC45",
+      "product": "id:6F4C06A830B32E2800D2EC45",
+      "product-type": "application",
+      "dependencies": [
+        "Aloud Extension (iOS)",
+      ],
+      "build-phases": [
+        "compile-sources",
+        "frameworks",
+        "resources",
+        {
+          "kind": "copy",
+          "name": "Embed Foundation Extensions",
+          "bundle-base-path": "plugins-directory",
+        },
+      ],
+      "build-settings": {
+        "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
+        "ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME": "AccentColor",
+        "CODE_SIGN_STYLE": "Automatic",
+        "CURRENT_PROJECT_VERSION": "1",
+        "GENERATE_INFOPLIST_FILE": "YES",
+        "INFOPLIST_FILE": "iOS (App)/Info.plist",
+        "INFOPLIST_KEY_CFBundleDisplayName": "Aloud",
+        "INFOPLIST_KEY_LSApplicationCategoryType": "public.app-category.productivity",
+        "INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents": "YES",
+        "INFOPLIST_KEY_UILaunchStoryboardName": "LaunchScreen",
+        "INFOPLIST_KEY_UIMainStoryboardFile": "Main",
+        "INFOPLIST_KEY_UISupportedInterfaceOrientations": "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight",
+        "INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad": "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight",
+        "IPHONEOS_DEPLOYMENT_TARGET": "17.0",
+        "LD_RUNPATH_SEARCH_PATHS": [
+          "$(inherited)",
+          "@executable_path/Frameworks",
+        ],
+        "MARKETING_VERSION": "1.0.5",
+        "OTHER_LDFLAGS": [
+          "-framework",
+          "SafariServices",
+          "-framework",
+          "WebKit",
+        ],
+        "PRODUCT_BUNDLE_IDENTIFIER": "dev.souj.aloud",
+        "PRODUCT_NAME": "Aloud",
+        "SDKROOT": "iphoneos",
+        "STRING_CATALOG_GENERATE_SYMBOLS": "YES",
+        "SWIFT_APPROACHABLE_CONCURRENCY": "YES",
+        "SWIFT_DEFAULT_ACTOR_ISOLATION": "MainActor",
+        "SWIFT_EMIT_LOC_STRINGS": "YES",
+        "SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY": "YES",
+        "SWIFT_VERSION": "5.0",
+        "TARGETED_DEVICE_FAMILY": "1,2",
+        "VALIDATE_PRODUCT[config=Release]": "YES",
+      },
+    }, {
+      "name": "Aloud (macOS)",
+      "id": "6F4C06B930B32E2800D2EC45",
+      "product": "id:6F4C06BA30B32E2800D2EC45",
+      "product-type": "application",
+      "dependencies": [
+        "Aloud Extension (macOS)",
+      ],
+      "build-phases": [
+        "compile-sources",
+        "frameworks",
+        "resources",
+        {
+          "kind": "copy",
+          "name": "Embed Foundation Extensions",
+          "bundle-base-path": "plugins-directory",
+        },
+      ],
+      "build-settings": {
+        "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
+        "ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME": "AccentColor",
+        "CODE_SIGN_STYLE": "Automatic",
+        "CURRENT_PROJECT_VERSION": "1",
+        "ENABLE_APP_SANDBOX": "YES",
+        "ENABLE_HARDENED_RUNTIME": "YES",
+        "ENABLE_OUTGOING_NETWORK_CONNECTIONS": "YES",
+        "ENABLE_USER_SELECTED_FILES": "readonly",
+        "GENERATE_INFOPLIST_FILE": "YES",
+        "INFOPLIST_FILE": "macOS (App)/Info.plist",
+        "INFOPLIST_KEY_CFBundleDisplayName": "Aloud",
+        "INFOPLIST_KEY_LSApplicationCategoryType": "public.app-category.productivity",
+        "INFOPLIST_KEY_NSMainStoryboardFile": "Main",
+        "INFOPLIST_KEY_NSPrincipalClass": "NSApplication",
+        "LD_RUNPATH_SEARCH_PATHS": [
+          "$(inherited)",
+          "@executable_path/../Frameworks",
+        ],
+        "MACOSX_DEPLOYMENT_TARGET": "12.0",
+        "MARKETING_VERSION": "1.0.5",
+        "OTHER_LDFLAGS": [
+          "-framework",
+          "SafariServices",
+          "-framework",
+          "WebKit",
+        ],
+        "PRODUCT_BUNDLE_IDENTIFIER": "dev.souj.aloud",
+        "PRODUCT_NAME": "Aloud",
+        "REGISTER_APP_GROUPS": "YES",
+        "SDKROOT": "macosx",
+        "STRING_CATALOG_GENERATE_SYMBOLS": "YES",
+        "SWIFT_APPROACHABLE_CONCURRENCY": "YES",
+        "SWIFT_DEFAULT_ACTOR_ISOLATION": "MainActor",
+        "SWIFT_EMIT_LOC_STRINGS": "YES",
+        "SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY": "YES",
+        "SWIFT_VERSION": "5.0",
+      },
+    }, {
+      "name": "Aloud Extension (iOS)",
+      "id": "6F4C06C530B32E2800D2EC45",
+      "product": "id:6F4C06C630B32E2800D2EC45",
+      "product-type": "app-extension",
+      "build-phases": [
+        "compile-sources",
+        "frameworks",
+        "resources",
+      ],
+      "build-settings": {
+        "CODE_SIGN_STYLE": "Automatic",
+        "CURRENT_PROJECT_VERSION": "1",
+        "GENERATE_INFOPLIST_FILE": "YES",
+        "INFOPLIST_FILE": "iOS (Extension)/Info.plist",
+        "INFOPLIST_KEY_CFBundleDisplayName": "Aloud Extension",
+        "INFOPLIST_KEY_NSHumanReadableCopyright": "",
+        "IPHONEOS_DEPLOYMENT_TARGET": "17.0",
+        "LD_RUNPATH_SEARCH_PATHS": [
+          "$(inherited)",
+          "@executable_path/Frameworks",
+          "@executable_path/../../Frameworks",
+        ],
+        "MARKETING_VERSION": "1.0.5",
+        "OTHER_LDFLAGS": [
+          "-framework",
+          "SafariServices",
+        ],
+        "PRODUCT_BUNDLE_IDENTIFIER": "dev.souj.aloud.Extension",
+        "PRODUCT_NAME": "Aloud Extension",
+        "SDKROOT": "iphoneos",
+        "SKIP_INSTALL": "YES",
+        "STRING_CATALOG_GENERATE_SYMBOLS": "YES",
+        "SWIFT_APPROACHABLE_CONCURRENCY": "YES",
+        "SWIFT_EMIT_LOC_STRINGS": "YES",
+        "SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY": "YES",
+        "SWIFT_VERSION": "5.0",
+        "TARGETED_DEVICE_FAMILY": "1,2",
+        "VALIDATE_PRODUCT[config=Release]": "YES",
+      },
+    }, {
+      "name": "Aloud Extension (macOS)",
+      "id": "6F4C06CF30B32E2800D2EC45",
+      "product": "id:6F4C06D030B32E2800D2EC45",
+      "product-type": "app-extension",
+      "build-phases": [
+        "compile-sources",
+        "frameworks",
+        "resources",
+      ],
+      "build-settings": {
+        "CODE_SIGN_STYLE": "Automatic",
+        "CURRENT_PROJECT_VERSION": "1",
+        "ENABLE_APP_SANDBOX": "YES",
+        "ENABLE_HARDENED_RUNTIME": "YES",
+        "ENABLE_USER_SELECTED_FILES": "readonly",
+        "GENERATE_INFOPLIST_FILE": "YES",
+        "INFOPLIST_FILE": "macOS (Extension)/Info.plist",
+        "INFOPLIST_KEY_CFBundleDisplayName": "Aloud Extension",
+        "INFOPLIST_KEY_NSHumanReadableCopyright": "",
+        "LD_RUNPATH_SEARCH_PATHS": [
+          "$(inherited)",
+          "@executable_path/../Frameworks",
+          "@executable_path/../../../../Frameworks",
+        ],
+        "MACOSX_DEPLOYMENT_TARGET": "12.0",
+        "MARKETING_VERSION": "1.0.5",
+        "OTHER_LDFLAGS": [
+          "-framework",
+          "SafariServices",
+        ],
+        "PRODUCT_BUNDLE_IDENTIFIER": "dev.souj.aloud.Extension",
+        "PRODUCT_NAME": "Aloud Extension",
+        "SDKROOT": "macosx",
+        "SKIP_INSTALL": "YES",
+        "STRING_CATALOG_GENERATE_SYMBOLS": "YES",
+        "SWIFT_APPROACHABLE_CONCURRENCY": "YES",
+        "SWIFT_EMIT_LOC_STRINGS": "YES",
+        "SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY": "YES",
+        "SWIFT_VERSION": "5.0",
+      },
+    },
+  ],
+  "build-settings": {
+    "ALWAYS_SEARCH_USER_PATHS": "NO",
+    "ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS": "YES",
+    "CLANG_ANALYZER_NONNULL": "YES",
+    "CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION": "YES_AGGRESSIVE",
+    "CLANG_CXX_LANGUAGE_STANDARD": "gnu++20",
+    "CLANG_ENABLE_MODULES": "YES",
+    "CLANG_ENABLE_OBJC_ARC": "YES",
+    "CLANG_ENABLE_OBJC_WEAK": "YES",
+    "CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING": "YES",
+    "CLANG_WARN_BOOL_CONVERSION": "YES",
+    "CLANG_WARN_COMMA": "YES",
+    "CLANG_WARN_CONSTANT_CONVERSION": "YES",
+    "CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS": "YES",
+    "CLANG_WARN_DIRECT_OBJC_ISA_USAGE": "YES_ERROR",
+    "CLANG_WARN_DOCUMENTATION_COMMENTS": "YES",
+    "CLANG_WARN_EMPTY_BODY": "YES",
+    "CLANG_WARN_ENUM_CONVERSION": "YES",
+    "CLANG_WARN_INFINITE_RECURSION": "YES",
+    "CLANG_WARN_INT_CONVERSION": "YES",
+    "CLANG_WARN_NON_LITERAL_NULL_CONVERSION": "YES",
+    "CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF": "YES",
+    "CLANG_WARN_OBJC_LITERAL_CONVERSION": "YES",
+    "CLANG_WARN_OBJC_ROOT_CLASS": "YES_ERROR",
+    "CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER": "YES",
+    "CLANG_WARN_RANGE_LOOP_ANALYSIS": "YES",
+    "CLANG_WARN_STRICT_PROTOTYPES": "YES",
+    "CLANG_WARN_SUSPICIOUS_MOVE": "YES",
+    "CLANG_WARN_UNGUARDED_AVAILABILITY": "YES_AGGRESSIVE",
+    "CLANG_WARN_UNREACHABLE_CODE": "YES",
+    "CLANG_WARN__DUPLICATE_METHOD_MATCH": "YES",
+    "COPY_PHASE_STRIP": "NO",
+    "DEBUG_INFORMATION_FORMAT[config=Debug]": "dwarf",
+    "DEBUG_INFORMATION_FORMAT[config=Release]": "dwarf-with-dsym",
+    "ENABLE_NS_ASSERTIONS[config=Release]": "NO",
+    "ENABLE_STRICT_OBJC_MSGSEND": "YES",
+    "ENABLE_TESTABILITY[config=Debug]": "YES",
+    "ENABLE_USER_SCRIPT_SANDBOXING": "YES",
+    "GCC_C_LANGUAGE_STANDARD": "gnu17",
+    "GCC_DYNAMIC_NO_PIC[config=Debug]": "NO",
+    "GCC_NO_COMMON_BLOCKS": "YES",
+    "GCC_OPTIMIZATION_LEVEL[config=Debug]": "0",
+    "GCC_PREPROCESSOR_DEFINITIONS[config=Debug]": [
+      "DEBUG=1",
+      "$(inherited)",
+    ],
+    "GCC_WARN_64_TO_32_BIT_CONVERSION": "YES",
+    "GCC_WARN_ABOUT_RETURN_TYPE": "YES_ERROR",
+    "GCC_WARN_UNDECLARED_SELECTOR": "YES",
+    "GCC_WARN_UNINITIALIZED_AUTOS": "YES_AGGRESSIVE",
+    "GCC_WARN_UNUSED_FUNCTION": "YES",
+    "GCC_WARN_UNUSED_VARIABLE": "YES",
+    "LOCALIZATION_PREFERS_STRING_CATALOGS": "YES",
+    "MTL_ENABLE_DEBUG_INFO[config=Debug]": "INCLUDE_SOURCE",
+    "MTL_ENABLE_DEBUG_INFO[config=Release]": "NO",
+    "MTL_FAST_MATH": "YES",
+    "ONLY_ACTIVE_ARCH[config=Debug]": "YES",
+    "SWIFT_ACTIVE_COMPILATION_CONDITIONS[config=Debug]": "DEBUG $(inherited)",
+    "SWIFT_COMPILATION_MODE[config=Release]": "wholemodule",
+    "SWIFT_OPTIMIZATION_LEVEL[config=Debug]": "-Onone",
+  },
+  "last-upgrade": "27.2",
+  "last-swift-update": "27.2",
+}

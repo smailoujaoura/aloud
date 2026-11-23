@@ -360,6 +360,12 @@ function wire(): void {
 
 // ---- entry -----------------------------------------------------------------
 
+// Aloud for Safari has neither eSpeak-NG nor the voices that read through it (docs/SAFARI.md):
+// where the page names them, it says what that edition has instead.
+if (import.meta.env.BROWSER === 'safari') {
+  for (const node of document.querySelectorAll<HTMLElement>('[data-safari]')) node.textContent = node.dataset.safari ?? '';
+}
+
 void (async () => {
   const settings = await getSettings().catch(() => null);
   theme = settings?.theme ?? 'system';

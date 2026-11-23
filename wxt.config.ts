@@ -1,4 +1,6 @@
 import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'wxt';
 
@@ -239,6 +241,12 @@ export default defineConfig({
       if (wxt.config.browser !== 'safari') return;
       const espeak = /^vendor\/piper\//;
       for (let i = files.length - 1; i >= 0; i--) if (espeak.test(files[i]!.relativeDest.replace(/\\/g, '/'))) files.splice(i, 1);
+      // And its notices are its own: the others' name eSpeak-NG as part of the package
+      // (scripts/notices.mjs writes this one beside them, for this build).
+      const notices = files.find((f) => f.relativeDest.replace(/\\/g, '/') === 'licenses/THIRD_PARTY_NOTICES.txt');
+      const own = resolve(rootDir, '.gen/licenses-safari/THIRD_PARTY_NOTICES.txt');
+      if (!notices || !existsSync(own)) throw new Error('The Safari build has no notices of its own (scripts/notices.mjs): refusing to ship the others’');
+      (notices as { absoluteSrc: string }).absoluteSrc = own;
     },
   },
 

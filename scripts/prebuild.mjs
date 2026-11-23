@@ -15,7 +15,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // release build needs nothing beyond `npm ci` — a store reviewer rebuilding the source gets the
 // same catalogue, whatever the remote says that day.
 syncAssets();
-writeNotices();
+writeNotices({ browser: process.argv[2] });
 // Not minified, for the same reason as the extension's own code (wxt.config.ts): reviewable diffs.
 // The browser decides one thing in the worker: whether transformers.js is bundled as published
 // (Firefox) or with its dead CDN line taken out (Chrome) — see build-worker.mjs.

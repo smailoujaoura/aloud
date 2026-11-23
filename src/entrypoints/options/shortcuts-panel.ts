@@ -138,6 +138,9 @@ export async function renderShortcutsPanel(host: HTMLElement, opts: ShortcutsPan
       void renderShortcutsPanel(host, opts);
     });
     foot.push(reset);
+  } else if (capabilities().engine === 'webkit') {
+    // Safari has no page for an extension's shortcuts, and lets no extension change them.
+    foot.push(el(document, 'p', { class: 'row-hint' }, 'Safari sets these itself; they cannot be changed. The single keys below can.'));
   } else {
     const open = el(document, 'button', { type: 'button', class: 'btn-sm' }, 'Change them in the browser');
     open.addEventListener('click', () => void browser.tabs.create({ url: 'chrome://extensions/shortcuts' }).catch(() => undefined));

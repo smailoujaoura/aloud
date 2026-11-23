@@ -129,7 +129,11 @@ function redeemSynthTicket(ticket: unknown): boolean {
 }
 
 export default defineBackground({
-  type: 'module',
+  // A module in Firefox and Chromium, sharing its chunks with the pages. One file of its own in
+  // Safari: whether Safari loads a module as an extension's service worker depends on its version
+  // (Apple's converter says it does not support `background.type`), and a background that does
+  // not load is an extension whose button does nothing.
+  type: { firefox: 'module', chrome: 'module' },
   main() {
     // First run: open the walkthrough. An extension whose entire UI is a toolbar button and a
     // bar that appears on top of someone else's page has nowhere to explain itself in place, so

@@ -1,8 +1,9 @@
 /**
  * Which browser are we running in, and what can it actually do?
  *
- * Aloud runs the same code on Gecko (Firefox desktop + Android) and Chromium (Chrome, Edge,
- * Brave, Opera). The two differ in ways that change *behaviour*, not just packaging — most
+ * Aloud runs the same code on Gecko (Firefox desktop + Android), Chromium (Chrome, Edge, Brave,
+ * Opera) and WebKit (Safari on the Mac, iPhone and iPad). They differ in ways that change
+ * *behaviour*, not just packaging — most
  * importantly whether a Worker can reach the GPU, which is the difference between Kokoro being
  * the best voice available and being unusably slow.
  *
@@ -16,10 +17,13 @@
  */
 
 /** Rendering/extension engine, which is what actually determines the capabilities below. */
-export type BrowserEngine = 'gecko' | 'chromium' | 'unknown';
+export type BrowserEngine = 'gecko' | 'chromium' | 'webkit' | 'unknown';
 
-/** Rough form factor. Only Android matters today: it is the one mobile target that runs extensions. */
-export type FormFactor = 'desktop' | 'android';
+/**
+ * Rough form factor: a computer, or one of the two kinds of phone and tablet that run extensions
+ * (Firefox for Android; Safari on iPhone and iPad).
+ */
+export type FormFactor = 'desktop' | 'android' | 'ios';
 
 export interface BrowserCapabilities {
   engine: BrowserEngine;
@@ -63,7 +67,7 @@ export interface BrowserCapabilities {
   menusTargetElement: boolean;
 
   /**
-   * Is the background context a service worker (Chromium) rather than an event page (Gecko)?
+   * Is the background context a service worker (Chromium, Safari) rather than an event page (Gecko)?
    *
    * A service worker has no DOM and is evicted more eagerly, so background state must stay
    * reconstructible. Aloud's background is already a thin router, but this flags the constraint.
@@ -111,21 +115,36 @@ function detectEngine(): BrowserEngine {
   })();
   if (protocol === 'moz-extension:') return 'gecko';
   if (protocol === 'chrome-extension:') return 'chromium';
+  if (protocol === 'safari-web-extension:') return 'webkit';
 
   // 2. Content scripts run at the *page's* origin, so ask the extension API for our own URL.
   const origin = extensionOrigin();
   if (origin.startsWith('moz-extension:')) return 'gecko';
   if (origin.startsWith('chrome-extension:')) return 'chromium';
+  if (origin.startsWith('safari-web-extension:')) return 'webkit';
 
   // 3. Last resort — unit tests and anything embedding us outside an extension.
   const ua = readUserAgent();
   if (/firefox\/|gecko\//i.test(ua)) return 'gecko';
   if (/chrome\/|chromium\/|edg\//i.test(ua)) return 'chromium';
+  // Every browser on an iPhone is WebKit, whatever it calls itself; elsewhere Safari names only itself.
+  if (/iphone|ipad|ipod/i.test(ua) || /safari\//i.test(ua)) return 'webkit';
   return 'unknown';
 }
 
 function detectFormFactor(): FormFactor {
-  return /android/i.test(readUserAgent()) ? 'android' : 'desktop';
+  const ua = readUserAgent();
+  if (/android/i.test(ua)) return 'android';
+  if (/iphone|ipad|ipod/i.test(ua)) return 'ios';
+  // An iPad asks for desktop sites by default, and then calls itself a Mac: the touch screen tells
+  // them apart (no Mac has one). A worker cannot see it, and takes the answer from the page that
+  // started it where it matters (synth-host/entry.ts sizes the pool).
+  try {
+    if (/macintosh/i.test(ua) && (globalThis.navigator?.maxTouchPoints ?? 0) > 1) return 'ios';
+  } catch {
+    /* no navigator here */
+  }
+  return 'desktop';
 }
 
 function computeCapabilities(): BrowserCapabilities {
@@ -137,12 +156,14 @@ function computeCapabilities(): BrowserCapabilities {
     formFactor,
     // Chromium ships WebGPU in dedicated workers; Gecko keeps it behind about:config prefs that
     // are off by default (a worker probe can correct this — see applyWorkerGpuProbe).
-    // Android GPUs are also excluded: Firefox is the only Android extension host today.
+    // Android GPUs are also excluded: Firefox is the only Android extension host today. Safari
+    // is not expected to either: Phonon reads on the processor everywhere, and Supertonic asks the
+    // worker itself, whose answer replaces this.
     workerWebGPU: chromium && formFactor === 'desktop',
     contentScriptCanSpawnExtensionWorker: chromium,
     menusTargetElement: engine === 'gecko',
-    backgroundIsServiceWorker: chromium,
-    touchFirst: formFactor === 'android',
+    backgroundIsServiceWorker: chromium || engine === 'webkit',
+    touchFirst: formFactor !== 'desktop',
   };
 }
 
