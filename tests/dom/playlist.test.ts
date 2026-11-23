@@ -1,19 +1,25 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach } from 'vitest';
 import { buildTextIndex } from '@/extract/text-index';
+import type { TextIndex } from '@/extract/text-index';
 import {
   buildArticlePlaylist,
   buildSelectionPlaylist,
+  itemRange,
+  itemStartNode,
   leadSilenceSec,
   type PlaylistItem,
 } from '@/content/playlist';
 
 const identity = (t: string): string => t;
 
+/** The index the last `articlePlaylist` was planned over: what its items' places are in. */
+let index: TextIndex;
+
 function articlePlaylist(html: string, opts: { title?: string; maxChars?: number } = {}): PlaylistItem[] {
   document.body.innerHTML = html;
   const root = document.querySelector('article') ?? document.body;
-  const index = buildTextIndex(root);
+  index = buildTextIndex(root);
   return buildArticlePlaylist({
     index,
     lang: 'en',
@@ -48,7 +54,41 @@ describe('buildArticlePlaylist (happy-dom)', () => {
     );
 
     expect(items).not.toHaveLength(0);
-    for (const item of items) expect(item.range).not.toBeNull();
+    for (const item of items) {
+      expect(itemRange(index, item)).not.toBeNull();
+      // The Range is the sentence itself, made from its place in the text.
+      expect(itemRange(index, item)!.toString()).toBe(index.fullText.slice(item.span!.start, item.span!.end));
+    }
+  });
+
+  it('keeps places, not Ranges: one Range serves every sentence in turn', () => {
+    // A Range per sentence, alive for the whole article, slowed every change the page made
+    // (Firefox updates each live Range on each change): 2,500 of them, 75 times the cost.
+    const items = articlePlaylist(
+      `<article><h1>Present Title</h1><p>One sentence here. Another sentence here.</p><p>A third one.</p></article>`,
+      { title: 'Present Title' },
+    );
+    for (const item of items) {
+      for (const value of Object.values(item)) expect(value).not.toBeInstanceOf(Range);
+    }
+    const one = document.createRange();
+    const seen = items.map((item) => {
+      expect(itemRange(index, item, one)).toBe(one);
+      return one.toString();
+    });
+    expect(seen).toEqual(items.map((item) => index.fullText.slice(item.span!.start, item.span!.end)));
+    expect(itemStartNode(index, items[1]!)).toBe(document.querySelector('p')!.firstChild);
+  });
+
+  it('gives no Range, and leaves the one passed in alone, for text the page has since cut', () => {
+    const items = articlePlaylist(`<article><p>One sentence here. Another sentence here.</p></article>`).filter((i) => i.span);
+    expect(items.map((i) => i.sourceText)).toEqual(['One sentence here.', 'Another sentence here.']);
+    const one = document.createRange();
+    itemRange(index, items[0]!, one);
+    (document.querySelector('p')!.firstChild as Text).data = 'One sentence here.';
+    // Neither the sentence nor its block is all there now.
+    expect(itemRange(index, items[1]!, one)).toBeNull();
+    expect(one.toString()).toBe('One sentence here.');
   });
 
   it('still speaks a title that is absent from the DOM, with nothing to highlight', () => {
@@ -58,7 +98,7 @@ describe('buildArticlePlaylist (happy-dom)', () => {
       title: 'A Title That Is Not In The Body',
     });
 
-    const spokenOnly = items.filter((i) => i.range === null);
+    const spokenOnly = items.filter((i) => itemRange(index, i) === null);
     expect(spokenOnly).toHaveLength(1);
     expect(spokenOnly[0]?.spokenText).toBe('A Title That Is Not In The Body');
     expect(spokenOnly[0]?.isHeading).toBe(true);
@@ -90,7 +130,10 @@ describe('buildArticlePlaylist (happy-dom)', () => {
 
     // Every sentence that belongs to a real block has something to highlight, so the reader's
     // eye is never left stranded mid-article.
-    for (const item of items) expect(item.range ?? item.blockRange).not.toBeNull();
+    for (const item of items) {
+      expect(itemRange(index, item)).not.toBeNull();
+      expect(item.blockSpan).not.toBeNull();
+    }
   });
 
   it('splits over-long text so a single chunk cannot stall playback', () => {
@@ -120,12 +163,12 @@ describe('buildSelectionPlaylist (happy-dom)', () => {
     expect(items.map((i) => i.playId)).toEqual(items.map((_, n) => n));
     expect(items.length).toBe(2);
     // Selection mode has no block structure to fall back on.
-    expect(items.every((i) => i.blockRange === null)).toBe(true);
+    expect(items.every((i) => i.blockSpan === null)).toBe(true);
   });
 });
 
 describe('leadSilenceSec', () => {
-  const base = { playId: 1, spokenText: 'x', sourceText: 'x', range: null, sourceAt: null, blockRange: null, span: null, eligible: true, role: 'paragraph' as const };
+  const base = { playId: 1, spokenText: 'x', sourceText: 'x', sourceAt: null, span: null, blockSpan: null, eligible: true, role: 'paragraph' as const };
 
   it('is zero when both pause settings are off', () => {
     const item: PlaylistItem = { ...base, startsBlock: true, isHeading: false };
@@ -179,7 +222,7 @@ describe('prose wrapped across source lines (happy-dom)', () => {
       { title: 'Aloud' },
     );
 
-    const spoken = items.filter((i) => i.range).map((i) => i.spokenText.replace(/\s+/g, ' ').trim());
+    const spoken = items.filter((i) => itemRange(index, i)).map((i) => i.spokenText.replace(/\s+/g, ' ').trim());
     expect(spoken).toEqual([
       'This is Aloud.',
       'It reads the page you are on with a voice that runs entirely on your own computer, ' +
@@ -203,7 +246,7 @@ describe('prose wrapped across source lines (happy-dom)', () => {
       { title: 'Two paragraphs' },
     );
 
-    const spoken = items.filter((i) => i.range).map((i) => i.spokenText.replace(/\s+/g, ' ').trim());
+    const spoken = items.filter((i) => itemRange(index, i)).map((i) => i.spokenText.replace(/\s+/g, ' ').trim());
     expect(spoken).toEqual([
       'A first paragraph that wraps across two lines',
       'A second paragraph that also wraps across two lines',

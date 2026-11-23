@@ -7,7 +7,21 @@
  * has `menus.getTargetElement`). They read layout but change nothing, so they live apart from
  * the session that acts on their answers.
  */
-import type { PlaylistItem } from './playlist';
+import { itemRange, itemStartNode, type PlaylistItem } from './playlist';
+import type { TextIndex } from '@/extract/text-index';
+
+/**
+ * One Range per document for every question asked here, set to each sentence in turn. A Range
+ * made per sentence of a long page stayed alive until the browser next collected garbage, and
+ * each one alive is work added to every change the page makes (text-index.ts: rangeForSpan).
+ */
+const scratch = new WeakMap<Document, Range>();
+function scratchRange(index: TextIndex): Range {
+  const doc = index.root.ownerDocument;
+  let range = scratch.get(doc);
+  if (!range) scratch.set(doc, (range = doc.createRange()));
+  return range;
+}
 
 /** Pixels of slop at the top of the viewport before a sentence counts as "scrolled past". */
 const ABOVE_FOLD_SLOP_PX = 8;
@@ -17,12 +31,14 @@ const ABOVE_FOLD_SLOP_PX = 8;
  * click target is available. Falls back to the last sentence scrolled past, so a reader who has
  * scrolled beyond the end of the article resumes near where they were rather than at the top.
  */
-export function firstSentenceInViewport(playlist: PlaylistItem[], win: Window = window): number {
+export function firstSentenceInViewport(playlist: PlaylistItem[], index: TextIndex | null, win: Window = window): number {
   const viewportHeight = win.innerHeight || win.document.documentElement.clientHeight;
   let lastAbove = 0;
+  if (!index) return lastAbove;
+  const range = scratchRange(index);
 
   for (const item of playlist) {
-    const rect = item.range?.getBoundingClientRect();
+    const rect = itemRange(index, item, range)?.getBoundingClientRect();
     if (!rect || (rect.width === 0 && rect.height === 0)) continue; // not rendered
     if (rect.bottom > ABOVE_FOLD_SLOP_PX && rect.top < viewportHeight) return item.playId;
     if (rect.bottom <= ABOVE_FOLD_SLOP_PX) lastAbove = item.playId;
@@ -36,11 +52,11 @@ export function firstSentenceInViewport(playlist: PlaylistItem[], win: Window = 
  * the browser did tell us which element was right-clicked. Falls back to the last sentence
  * before `el`, so clicking a figure or an ad between paragraphs resumes at the nearest text.
  */
-export function indexNearElement(playlist: PlaylistItem[], el: Element): number {
+export function indexNearElement(playlist: PlaylistItem[], index: TextIndex | null, el: Element): number {
   let lastBefore = 0;
 
   for (const item of playlist) {
-    const node = item.range?.startContainer;
+    const node = itemStartNode(index, item);
     if (!node) continue;
     const relation = el.compareDocumentPosition(node);
     const atOrInside =
@@ -58,17 +74,18 @@ export function indexNearElement(playlist: PlaylistItem[], el: Element): number 
  * The sentence holding a text position: where "Read from here" starts once the spot of the
  * right-click is known. Between sentences, the next one in document order.
  */
-export function indexAtPosition(playlist: PlaylistItem[], node: Node, offset: number): number | null {
-  if (!node.isConnected) return null;
+export function indexAtPosition(playlist: PlaylistItem[], index: TextIndex | null, node: Node, offset: number): number | null {
+  if (!node.isConnected || !index) return null;
+  const range = scratchRange(index);
   for (const item of playlist) {
     try {
-      if (item.range?.isPointInRange(node, offset)) return item.playId;
+      if (itemRange(index, item, range)?.isPointInRange(node, offset)) return item.playId;
     } catch {
       /* a range in another tree */
     }
   }
   const el = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
-  return el ? indexNearElement(playlist, el) : null;
+  return el ? indexNearElement(playlist, index, el) : null;
 }
 
 /**
@@ -77,12 +94,13 @@ export function indexAtPosition(playlist: PlaylistItem[], node: Node, offset: nu
  */
 export function indexAtPoint(
   playlist: PlaylistItem[],
+  index: TextIndex | null,
   x: number,
   y: number,
   doc: Document = document,
 ): number | null {
   const caret = caretAt(doc, x, y);
-  if (!caret) return null;
+  if (!caret || !index) return null;
   // On the text itself, not merely near it: the caret APIs return the nearest position to *any*
   // point, so a click on blank space — a margin, the gap between paragraphs — used to land in
   // some sentence and move the reading, often far from where the reader was.
@@ -91,29 +109,31 @@ export function indexAtPoint(
   // a tap there landed in the English, or in its padding and nowhere. The visible sentence under
   // the point wins.
   const at = caret.node.nodeType === Node.ELEMENT_NODE ? (caret.node as Element) : caret.node.parentElement;
-  if (at && at.checkVisibility?.({ opacityProperty: true, visibilityProperty: true }) === false) return visibleAt(playlist, x, y);
+  if (at && at.checkVisibility?.({ opacityProperty: true, visibilityProperty: true }) === false) return visibleAt(playlist, index, x, y);
   if (!onGlyph(doc, caret, x, y)) return null;
 
+  const range = scratchRange(index);
   for (const item of playlist) {
     try {
-      if (!item.range?.isPointInRange(caret.node, caret.offset)) continue;
+      if (!itemRange(index, item, range)?.isPointInRange(caret.node, caret.offset)) continue;
     } catch {
       continue; // the caret node is in a different tree than this range — not a match
     }
-    if (item.eligible === false) return visibleAt(playlist, x, y);
+    if (item.eligible === false) return visibleAt(playlist, index, x, y);
     return item.playId;
   }
 
   // Between two sentences (a margin, a caption, a list bullet): snap by document order.
   const el = caret.node.nodeType === Node.ELEMENT_NODE ? (caret.node as Element) : caret.node.parentElement;
-  return el ? indexNearElement(playlist, el) : null;
+  return el ? indexNearElement(playlist, index, el) : null;
 }
 
 /** The read sentence drawn at (x, y), by its boxes. Only for the rare tap that hit hidden text. */
-function visibleAt(playlist: PlaylistItem[], x: number, y: number): number | null {
+function visibleAt(playlist: PlaylistItem[], index: TextIndex, x: number, y: number): number | null {
+  const range = scratchRange(index);
   for (const item of playlist) {
-    if (item.eligible === false || !item.range) continue;
-    for (const r of item.range.getClientRects()) {
+    if (item.eligible === false || !itemRange(index, item, range)) continue;
+    for (const r of range.getClientRects()) {
       if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return item.playId;
     }
   }

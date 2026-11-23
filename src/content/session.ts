@@ -19,7 +19,7 @@ import { browser } from 'wxt/browser';
 
 import { extractArticle, type ExtractedArticle } from '@/extract/readability';
 import { resolveLiveRoot } from '@/extract/live-container';
-import { buildTextIndex, changedEligibility, nearestBlock, rangeForSpan, visibleTextOf, type TextIndex } from '@/extract/text-index';
+import { buildTextIndex, changedEligibility, nearestBlock, placeForSpan, setRangeTo, visibleTextOf, type SpanPlace, type TextIndex } from '@/extract/text-index';
 import { spokenToSource } from '@/highlight/word-map';
 import { isSpeakable, normalizeForSpeech } from '@/segment/normalize';
 import { applyPronunciations } from '@/segment/pronunciations';
@@ -61,7 +61,6 @@ import { log } from '@/shared/log';
 import { capabilities } from '@/shared/browser-env';
 import { isTypingEvent } from '@/media-speed/keys';
 import { typingInOwnField } from '@/ui/contain-typing';
-import { estimatedWordTimings } from '@/audio/estimate-words';
 import { ruleRoot, rulesFor, savedRules, skipSelector } from '@/extract/site-rules';
 import { GPU_GUIDE_URL } from '@/shared/links';
 
@@ -70,6 +69,8 @@ import { loadLastBackend, saveLastBackend, saveWorkerGpu } from '@/shared/backen
 import {
   buildArticlePlaylist,
   buildSelectionPlaylist,
+  itemRange,
+  itemStartNode,
   leadSilenceSec,
   type PlaylistItem,
 } from './playlist';
@@ -226,7 +227,17 @@ export class ReaderSession {
   /** Sentences already handed to the worker, so we never request one twice. */
   private readonly requested = new Set<number>();
   /** Last highlight range actually shown — reused when a sentence has no range of its own. */
-  private lastShownRange: Range | null = null;
+  /**
+   * The three Ranges the reader works with, each moved from place to place rather than made anew:
+   * the sentence highlight's, the word mark's, and one for questions about a sentence's place
+   * (is it on screen?). Every Range that exists is work added to each change the page makes
+   * (extract/text-index.ts: rangeForSpan), so there is never one per sentence.
+   */
+  private shownRange: Range | null = null;
+  /** The sentence `shownRange` is on: -1 before any, and then it is "what was last shown". */
+  private shownFor = -1;
+  private wordRange: Range | null = null;
+  private probeRange: Range | null = null;
 
   private engineReady = false;
   private wantsPlayback = false;
@@ -285,7 +296,7 @@ export class ReaderSession {
   private listening = { pendingSeconds: 0, spokenChars: 0, spokenSeconds: 0, lastWrite: 0, pace1xSeconds: 0 };
   private charsBefore: number[] | null = null;
   /** The sentence playing now, as page ranges for its words, and the word last marked. */
-  private words: { playId: number; spans: Array<{ start: number; range: Range }>; shown: number } | null = null;
+  private words: { playId: number; spans: Array<{ start: number; place: SpanPlace }>; shown: number } | null = null;
   private wordTimer = 0;
   private finishedHook: (() => void) | null = null;
   private keepHook: ((range: Range) => boolean) | null = null;
@@ -450,7 +461,7 @@ export class ReaderSession {
       onReady: ({ sampleRate, executionProvider }) => this.onEngineReady(executionProvider, sampleRate),
       onProgress: ({ progress }) => {
         this.state.modelProgress = progress;
-        if (this.state.status === 'loading-model') this.pushState();
+        if (this.state.status === 'loading-model') this.pushProgressSoon();
       },
       onAudio: (playId, pcm, sr, words) => {
         this.failures = 0;
@@ -463,10 +474,9 @@ export class ReaderSession {
         if (sr > 0) {
           this.audioSeconds.set(playId, pcm.length / sr);
         }
-        // Supertonic reports no word times (and an alignment can miss): an estimate from the
-        // audio itself keeps the word mark moving rather than leaving only the sentence lit.
-        const timed = words?.length ? words : sr > 0 && this.playlist[playId] ? estimatedWordTimings(this.playlist[playId]!.spokenText, pcm, sr) : [];
-        if (timed.length) this.wordTimings.set(playId, timed);
+        // The engine's word times, or the worker's estimate of them from the audio. Nothing here
+        // reads the samples: this is the page's own thread (see engine/worker-main.ts).
+        if (words?.length) this.wordTimings.set(playId, words);
         else this.wordTimings.delete(playId);
         this.scheduler.provide(playId, pcm, sr, leadSilenceSec(this.playlist[playId], this.settings));
       },
@@ -504,7 +514,7 @@ export class ReaderSession {
         void this.reroute();
       },
     }, {
-      maxLanes: capabilities().formFactor === 'android' ? 2 : MAX_LANES,
+      maxLanes: capabilities().touchFirst ? 2 : MAX_LANES,
       // A server voice chosen for a language reads beside the main voice: its own address.
       server: () => (this.settings.server.url ? { url: this.settings.server.url, model: this.settings.server.model } : undefined),
     });
@@ -553,7 +563,7 @@ export class ReaderSession {
     });
 
     this.tapToSeek = new TapToSeek(document, {
-      hitTest: (x, y) => indexAtPoint(this.playlist, x, y),
+      hitTest: (x, y) => indexAtPoint(this.playlist, this.textIndex, x, y),
       canSeek: () =>
         this.playlist.length > 0 && this.state.status !== 'error' && this.state.status !== 'extracting',
       onSeek: (playId) => {
@@ -801,17 +811,17 @@ export class ReaderSession {
   private startFromCursor(): void {
     // The spot right-clicked when it is known (this page's script saw the click), else the
     // element (Firefox says which), else the first sentence on screen (Chrome, the first time).
-    const atPoint = this.startPoint ? indexAtPosition(this.playlist, this.startPoint.node, this.startPoint.offset) : null;
-    const startAt = atPoint ?? (this.startTarget ? indexNearElement(this.playlist, this.startTarget) : firstSentenceInViewport(this.playlist));
+    const atPoint = this.startPoint ? indexAtPosition(this.playlist, this.textIndex, this.startPoint.node, this.startPoint.offset) : null;
+    const startAt = atPoint ?? (this.startTarget ? indexNearElement(this.playlist, this.textIndex, this.startTarget) : firstSentenceInViewport(this.playlist, this.textIndex));
     if (atPoint == null && !this.startTarget) this.bar?.flash('Reading from the top of the screen', 'info');
     if (startAt <= 0) return;
     this.currentPlayId = startAt;
     this.state.currentIndex = startAt;
-    this.highlighter?.show(this.playlist[startAt]?.range ?? null);
+    this.showSentence(startAt);
   }
 
   private logPlan(): void {
-    const located = this.playlist.filter((p) => p.range).length;
+    const located = this.playlist.filter((p) => itemStartNode(this.textIndex, p)).length;
     const missing = this.playlist.length - located;
     const hidden = this.playlist.filter((p) => !p.eligible).length;
     log.info(
@@ -866,7 +876,7 @@ export class ReaderSession {
       this.worker.cancelFrom(this.currentPlayId, 0);
       this.scheduler.seek(this.currentPlayId);
       this.state.currentIndex = this.currentPlayId;
-      this.highlighter?.show(this.playlist[this.currentPlayId]?.range ?? null);
+      this.showSentence(this.currentPlayId);
     }
     if (this.exporter) {
       this.bar?.flash('Reading carries on once the MP3 is made', 'info');
@@ -984,7 +994,7 @@ export class ReaderSession {
     this.finishedAtEnd = false;
     this.currentPlayId = target;
     this.state.currentIndex = target;
-    this.highlighter?.show(this.playlist[target]?.range ?? null);
+    this.showSentence(target);
 
     // The worker drops its whole queue on cancel; clear our matching bookkeeping so ensureSynth
     // actually re-requests the sentences around the new position (even if we've been here before).
@@ -1029,9 +1039,15 @@ export class ReaderSession {
     if (!this.textIndex?.forReader || typeof MutationObserver === 'undefined') return;
     const root = this.textIndex.root;
     this.eligibilityObserver = new MutationObserver((records) => {
-      // Only changes that can touch the text being read: inside it, or on something around it (a
-      // class on <body>). A video's progress bar or a parallax header elsewhere says nothing.
-      if (!records.some((r) => root.contains(r.target) || (r.target as Node).contains(root) || r.target.getRootNode() !== document)) return;
+      // Only changes that can touch the text being read: inside it, on something around it (a
+      // class on <body>), or inside a web component. A video's progress bar or a parallax header
+      // elsewhere says nothing; nor does a node the page has since removed, which is in no
+      // document at all and so passed for one in a web component: a page that adds and removes
+      // nodes without pause (a ticker, a feed) had the whole article looked at again five times
+      // a second.
+      const touches = (target: Node): boolean =>
+        target.isConnected && (root.contains(target) || target.contains(root) || target.getRootNode() !== document);
+      if (!records.some((r) => touches(r.target))) return;
       // A throttle, not a debounce: a page that animates without pause reset a debounce forever,
       // and a translation revealed meanwhile was never looked at.
       if (this.eligibilityTimer) return;
@@ -1599,7 +1615,7 @@ export class ReaderSession {
     const shown: string[] = [];
     let prevBlock: Element | null = null;
     for (const item of this.playlist) {
-      const node = item.range?.startContainer ?? null;
+      const node = itemStartNode(index, item);
       const block = node && index ? nearestBlock(node, index.root) : null;
       if (passages.length === 0 || item.startsBlock || !block || block !== prevBlock) {
         passages.push({ text: '', markup: markupLanguage(node, index?.root ?? null) });
@@ -2084,9 +2100,7 @@ export class ReaderSession {
     if (this.settings.highlight) {
       // Never blank the highlight while audio is playing: fall back to the enclosing block, then
       // to whatever was last shown, so the reader's eye is never left stranded.
-      const item = this.playlist[playId];
-      const range = item?.range ?? item?.blockRange ?? this.lastShownRange;
-      if (range) this.lastShownRange = range;
+      const range = this.placeShown(playId) ?? this.lastShown();
       // Following rested while you looked elsewhere; a few quiet seconds later it picks the
       // reading up again, at this sentence — rather than staying off until you press Follow.
       if (this.followPaused && Date.now() - this.userScrollIntent > FOLLOW_RESUME_MS) this.setFollowPaused(false);
@@ -2125,14 +2139,15 @@ export class ReaderSession {
     if (!item || !timings || item.sourceAt == null || !index) return;
 
     const toSource = spokenToSource(item.spokenText, item.sourceText);
-    const spans: Array<{ start: number; range: Range }> = [];
+    // Each word's place, not a Range for each: one Range is moved from word to word (`markWord`).
+    const spans: Array<{ start: number; place: SpanPlace }> = [];
     for (const word of timings) {
       const span = toSource(word.from, word.to);
-      const range = span && rangeForSpan(index, item.sourceAt + span[0], item.sourceAt + span[1]);
+      const place = span && placeForSpan(index, item.sourceAt + span[0], item.sourceAt + span[1]);
       // Two spoken words on one page word ("e.g." said as "for example") keep the first start.
       const previous = spans[spans.length - 1];
-      if (range && !(previous && sameRange(previous.range, range))) {
-        spans.push({ start: word.start, range });
+      if (place && !(previous && samePlace(previous.place, place))) {
+        spans.push({ start: word.start, place });
       }
     }
     if (spans.length === 0) return;
@@ -2166,7 +2181,7 @@ export class ReaderSession {
         while (index + 1 < words.spans.length && words.spans[index + 1]!.start <= t) index++;
         if (index !== words.shown) {
           words.shown = index;
-          this.highlighter?.showWord(index >= 0 ? words.spans[index]!.range : null);
+          this.markWord(index >= 0 ? words.spans[index]!.place : null);
         }
         const next = words.spans[index + 1];
         wait = next ? next.start - t : 0.25;
@@ -2176,6 +2191,16 @@ export class ReaderSession {
       }
     };
     tick();
+  }
+
+  /** Move the word mark to `place`; nothing marked when it is null or no longer in the page. */
+  private markWord(place: SpanPlace | null): void {
+    if (!place) {
+      this.highlighter?.showWord(null);
+      return;
+    }
+    this.wordRange ??= document.createRange();
+    this.highlighter?.showWord(setRangeTo(this.wordRange, place) ? this.wordRange : null);
   }
 
   private stopFollowingWords(clear: boolean): void {
@@ -2423,14 +2448,15 @@ export class ReaderSession {
       passage = range.cloneRange();
       const node = range.startContainer;
       const element = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
-      if (element) index = indexNearElement(this.playlist, element);
+      if (element) index = indexNearElement(this.playlist, this.textIndex, element);
     } else {
       // The sentence highlighted as being read, always. A sentence only just begun used to give
       // way to the one before (pressed late, after hearing it): N then highlighted the sentence
       // before the one in front of the reader, and pressed again said "Already in your notes".
       const item = this.playlist[index];
       text = item?.sourceText.replace(/\s+/g, ' ').trim() ?? '';
-      passage = item?.range ?? null;
+      // A Range of its own: it is kept by whoever marks the passage on the page.
+      passage = itemRange(this.textIndex, item);
       if (item && item.sourceAt != null && this.textIndex) {
         anchor = createAnchor(this.textIndex.fullText, item.sourceAt, item.sourceAt + item.sourceText.length);
       }
@@ -2526,7 +2552,7 @@ export class ReaderSession {
     this.currentPlayId = at;
     this.state.currentIndex = at;
     this.lastSavedIndex = at;
-    this.highlighter?.show(this.rangeOf(at));
+    this.showSentence(at);
     this.bar?.flash(`Picking up where you left off: sentence ${at + 1} of ${this.playlist.length}`, 'info', {
       label: 'Start over',
       run: () => this.seekTo(0),
@@ -2760,10 +2786,35 @@ export class ReaderSession {
 
   // ---- following the reader ------------------------------------------------
 
-  /** The DOM range of one playlist item: its own, or the block it sits in. */
+  /**
+   * The DOM range of one playlist item: its own, or the block it sits in. For asking where it is,
+   * there and then: it is the one probe Range, set to the next item asked about.
+   */
   private rangeOf(index: number): Range | null {
-    const item = this.playlist[index];
-    return item?.range ?? item?.blockRange ?? null;
+    this.probeRange ??= document.createRange();
+    return itemRange(this.textIndex, this.playlist[index], this.probeRange);
+  }
+
+  /**
+   * The highlight's own Range, set to sentence `playId` (or its block). Null, with the Range left
+   * on what it last showed, when the sentence has no place in the page.
+   */
+  private placeShown(playId: number): Range | null {
+    this.shownRange ??= document.createRange();
+    this.highlighter?.settle();
+    if (!itemRange(this.textIndex, this.playlist[playId], this.shownRange)) return null;
+    this.shownFor = playId;
+    return this.shownRange;
+  }
+
+  /** What the highlight last showed, if anything yet. */
+  private lastShown(): Range | null {
+    return this.shownFor >= 0 ? this.shownRange : null;
+  }
+
+  /** Light sentence `playId`; nothing lit when it has no place in the page. */
+  private showSentence(playId: number): void {
+    this.highlighter?.show(this.placeShown(playId));
   }
 
   /**
@@ -2780,6 +2831,9 @@ export class ReaderSession {
   private currentRange(): Range | null {
     const own = this.rangeOf(this.currentPlayId);
     if (own) return own;
+    // Lit already: where the highlight is, is where it is (a browser that marks the sentence by
+    // wrapping it has cut its text node meanwhile, and its offsets wait for the node to be whole).
+    if (this.shownFor === this.currentPlayId) return this.shownRange;
     for (let step = 1; step <= NEARBY_RANGE_SEARCH; step++) {
       // Forward first: that is where the reading is heading.
       const ahead = this.rangeOf(this.currentPlayId + step);
@@ -2787,7 +2841,7 @@ export class ReaderSession {
       const behind = this.rangeOf(this.currentPlayId - step);
       if (behind) return behind;
     }
-    return this.lastShownRange;
+    return this.lastShown();
   }
 
   /**
@@ -2811,7 +2865,7 @@ export class ReaderSession {
     // Only re-paint the highlight when the range really is this sentence's. When it is a
     // neighbour standing in for a sentence with no place in the DOM, moving the highlight there
     // would point at text that is not being spoken.
-    if (this.rangeOf(this.currentPlayId)) this.highlighter.show(range);
+    if (this.rangeOf(this.currentPlayId)) this.showSentence(this.currentPlayId);
     this.bar?.flash(`Sentence ${this.currentPlayId + 1} of ${this.playlist.length}`, 'ok');
     // The scroll is smooth, so the sentence is not on screen yet; re-check once it lands.
     setTimeout(() => this.refreshOffScreen(), 600);
@@ -3012,6 +3066,22 @@ export class ReaderSession {
     return (chars * perChar) / Math.max(0.25, this.settings.speed);
   }
 
+  private progressTimer = 0;
+
+  /**
+   * The download's progress, shown ten times a second at most. A voice arriving sends a message
+   * for every piece of it, hundreds a second on a fast line, and each one redrew the bar, worked
+   * out the time left over the whole article and wrote to the background: the page being read ran
+   * at half its frame rate for as long as the voice loaded.
+   */
+  private pushProgressSoon(): void {
+    if (this.progressTimer) return;
+    this.progressTimer = window.setTimeout(() => {
+      this.progressTimer = 0;
+      if (this.state.status === 'loading-model') this.pushState();
+    }, 100);
+  }
+
   private pushState(): void {
     if (this.disposed) return;
     this.state.secondsLeft = this.secondsLeft();
@@ -3061,6 +3131,7 @@ export class ReaderSession {
     this.eligibilityObserver?.disconnect();
     this.eligibilityObserver = null;
     clearTimeout(this.eligibilityTimer);
+    clearTimeout(this.progressTimer);
     clearTimeout(this.retryTimer);
     this.stopFollowingWords(false);
     this.tapToSeek?.dispose();
@@ -3155,11 +3226,11 @@ function engineIdentity(config: EngineConfig): string {
   return JSON.stringify(identity);
 }
 
-function sameRange(a: Range, b: Range): boolean {
+function samePlace(a: SpanPlace, b: SpanPlace): boolean {
   return (
-    a.startContainer === b.startContainer &&
+    a.startNode === b.startNode &&
     a.startOffset === b.startOffset &&
-    a.endContainer === b.endContainer &&
+    a.endNode === b.endNode &&
     a.endOffset === b.endOffset
   );
 }

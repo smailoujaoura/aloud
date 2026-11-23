@@ -38,6 +38,8 @@ const BADGE_MS = 1400;
 const SETTLE_MS = 1200;
 /** How soon after a click or key a rate change must come to be that input's doing. */
 const INPUT_MS = 120;
+/** How often, at most, the whole page is looked through again for players (see `start`). */
+const RESCAN_MS = 500;
 /** How often to put a chosen rate back before letting an insistent player keep its own. */
 const MAX_OVERRIDES = 3;
 
@@ -75,6 +77,7 @@ export class MediaSpeedController {
   /** How to unhook each tracked element, so a removed one can be let go of entirely. */
   private readonly listeners = new Map<Media, () => void>();
   private observer: MutationObserver | null = null;
+  private rescanTimer = 0;
   private badge: { host: HTMLElement; text: HTMLElement; timer: number } | null = null;
   private touch: TouchSpeedButton | null = null;
   private readonly cleanups: Array<() => void> = [];
@@ -90,10 +93,18 @@ export class MediaSpeedController {
       for (const record of records) {
         for (const node of record.addedNodes) if (node instanceof Element) this.scanFrom(node);
       }
-      // A node moved into an existing player is just as common as a fresh one.
-      if (records.length) {
-        this.scan();
-        this.prune();
+      // What was added has been looked through above. The whole page again, for what no record
+      // names (a player inside a web component attached afterwards), and to let go of players
+      // that have left: twice a second at most. Done for every change, on a page that never
+      // stops changing (a feed, a ticker, an animation that edits the page), it walked every
+      // element of the page dozens of times a second.
+      if (records.length && !this.rescanTimer) {
+        this.rescanTimer = window.setTimeout(() => {
+          this.rescanTimer = 0;
+          if (!this.observer) return;
+          this.scan();
+          this.prune();
+        }, RESCAN_MS);
       }
     });
     // `document`, not its root element: started with the page, there may not be one yet.
@@ -131,6 +142,8 @@ export class MediaSpeedController {
     if (farewell) this.showBadge(farewell, undefined, true);
     this.observer?.disconnect();
     this.observer = null;
+    clearTimeout(this.rescanTimer);
+    this.rescanTimer = 0;
     for (const off of this.cleanups) off();
     this.cleanups.length = 0;
     for (const release of this.listeners.values()) release();

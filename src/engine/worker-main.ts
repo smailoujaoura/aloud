@@ -13,6 +13,7 @@
  * `kokoro-js` graph, and a failure while evaluating it is catchable rather than fatal-at-load.
  */
 import { splitSpeed, timeStretch } from '@/audio/time-stretch';
+import { estimatedWordTimings } from '@/audio/estimate-words';
 import type { EngineConfig, WorkerRequest, WorkerResponse } from './protocol';
 import type { SynthEngine, InitContext, ModelManifest } from './engines/types';
 import { assetUrl } from './runtime-env';
@@ -301,6 +302,11 @@ async function drainQueue(): Promise<void> {
         const result = await synthesizeOrFallBack(job);
         if (job.gen !== generation || disposed) continue; // a seek landed mid-synthesis
         const pcm = result.pcm.slice();
+        // Phonon and Supertonic report no word times (and an alignment can miss): an estimate
+        // from the audio keeps the word mark moving. Made here, where the samples are: the page's
+        // thread took 90 ms a sentence to look through them in Firefox, which reads an array from
+        // another context one guarded element at a time, and the page stopped for as long.
+        const words = result.words?.length ? result.words : estimatedWordTimings(job.text, pcm, result.sampleRate);
         post(
           {
             kind: 'audio',
@@ -308,7 +314,7 @@ async function drainQueue(): Promise<void> {
             chunkIndex: job.chunkIndex,
             pcm: pcm.buffer,
             sampleRate: result.sampleRate,
-            words: result.words,
+            words: words.length ? words : undefined,
           },
           [pcm.buffer],
         );

@@ -120,7 +120,10 @@ export type WorkerResponse =
       /** Interleaved not applicable — mono. */
       pcm: ArrayBuffer;
       sampleRate: number;
-      /** When each word is spoken, for engines that can say (Piper). */
+      /**
+       * When each word is spoken: as the engine reports it (Piper, Kokoro), or estimated from the
+       * audio by the worker (audio/estimate-words.ts). Absent when there is no speech to place.
+       */
       words?: WordTiming[];
     }
   | { kind: 'cancelled'; id: number; fromChunkIndex: number }

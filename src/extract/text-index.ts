@@ -255,12 +255,21 @@ function pieceIndexAt(pieces: Piece[], offset: number): number {
   return ans;
 }
 
+/** Where a span of `fullText` lies in the page: the two ends, as text nodes and offsets. */
+export interface SpanPlace {
+  startNode: Text;
+  startOffset: number;
+  endNode: Text;
+  endOffset: number;
+}
+
 /**
- * Build a DOM Range for `[start, end)` of `fullText`. Offsets that land in a synthetic "\n"
- * gap are snapped inward to the nearest real text.
+ * Where `[start, end)` of `fullText` lies in the page, without making a Range. Offsets that land
+ * in a synthetic "\n" gap are snapped inward to the nearest real text. Null when the text is not
+ * there (any more): a node the page has since shortened cannot hold the offset.
  */
-export function rangeForSpan(index: TextIndex, start: number, end: number): Range | null {
-  const { pieces, root } = index;
+export function placeForSpan(index: TextIndex, start: number, end: number): SpanPlace | null {
+  const { pieces } = index;
   if (pieces.length === 0 || end <= start) return null;
 
   const si = pieceIndexAt(pieces, start);
@@ -271,7 +280,7 @@ export function rangeForSpan(index: TextIndex, start: number, end: number): Rang
   let endPiece = pieces[Math.min(ei, pieces.length - 1)]!;
   // A range cannot span two web components (its ends must share a root, or it collapses): one that
   // would, ends with the last text of the component it starts in.
-  if (endPiece.node.getRootNode() !== startPiece.node.getRootNode()) {
+  if (endPiece.node !== startPiece.node && endPiece.node.getRootNode() !== startPiece.node.getRootNode()) {
     const home = startPiece.node.getRootNode();
     let last = si;
     for (let i = si + 1; i <= ei && i < pieces.length; i++) if (pieces[i]!.node.getRootNode() === home) last = i;
@@ -279,18 +288,39 @@ export function rangeForSpan(index: TextIndex, start: number, end: number): Rang
     end = endPiece.at + endPiece.len;
   }
 
-  const range = root.ownerDocument.createRange();
   const startOffset = Math.max(0, Math.min(start - startPiece.at, startPiece.len));
-  const endOffset = Math.max(0, Math.min(end - endPiece.at, endPiece.len));
+  let endOffset = Math.max(0, Math.min(end - endPiece.at, endPiece.len));
+  // Never empty: a span snapped to nothing still marks one character.
+  if (startPiece === endPiece && endOffset <= startOffset) endOffset = Math.min(startOffset + 1, endPiece.len);
+  if (startOffset > startPiece.node.length || endOffset > endPiece.node.length) return null;
+  return { startNode: startPiece.node, startOffset, endNode: endPiece.node, endOffset };
+}
 
+/** Set `range` to `place`. False (and the range as it was) when the page no longer has it. */
+export function setRangeTo(range: Range, place: SpanPlace): boolean {
+  if (place.startOffset > place.startNode.length || place.endOffset > place.endNode.length) return false;
   try {
-    range.setStart(startPiece.node, startOffset);
-    range.setEnd(endPiece.node, endOffset);
-    if (range.collapsed && startPiece === endPiece) {
-      range.setEnd(endPiece.node, Math.min(startOffset + 1, endPiece.len));
-    }
-    return range;
+    range.setStart(place.startNode, place.startOffset);
+    range.setEnd(place.endNode, place.endOffset);
+    return true;
   } catch {
-    return null;
+    return false;
   }
+}
+
+/**
+ * A DOM Range for `[start, end)` of `fullText`: a new one, or `into` set to it and returned.
+ *
+ * Pass `into` wherever this is asked often (each sentence, each word, each item of a search). A
+ * Range is live: the browser moves its ends as the page changes, so every one that exists is work
+ * added to every change the page makes, and Firefox does that work for each of them. A Range per
+ * sentence, kept for the whole article, made a page that updates itself run at a few frames a
+ * second while it was read (2,500 sentences: 75 times the cost per change). So places are kept as
+ * offsets (`PlaylistItem.span`), and the few Ranges in use at once are reused.
+ */
+export function rangeForSpan(index: TextIndex, start: number, end: number, into?: Range): Range | null {
+  const place = placeForSpan(index, start, end);
+  if (!place) return null;
+  const range = into ?? index.root.ownerDocument.createRange();
+  return setRangeTo(range, place) ? range : null;
 }

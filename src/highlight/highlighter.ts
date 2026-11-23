@@ -66,6 +66,8 @@ export class Highlighter {
   private highlight: Highlight | null = null;
   private wordHighlight: Highlight | null = null;
   private currentSpan: HTMLElement | null = null;
+  /** The text nodes the span cut in two, and how long each was: put back whole when it goes. */
+  private cut: Array<{ node: Text; length: number; from: 'start' | 'end'; neighbour: Node | null }> = [];
   private styleEl: HTMLStyleElement | null = null;
   /**
    * The same rules inside each web component holding text being read (MSN): a page's stylesheet
@@ -198,6 +200,16 @@ export class Highlighter {
   }
 
   /**
+   * Undo what the highlight has changed in the page's text, before a place in it is looked up.
+   * Nothing to do where highlights are painted without touching the page; where the sentence is
+   * wrapped in a span, its text node is cut until the span goes, and the next sentence's offsets
+   * are in the whole node. `show` follows at once, so nothing is seen to blink.
+   */
+  settle(): void {
+    if (!this.supportsCSSHighlight) this.unwrapSpan();
+  }
+
+  /**
    * Fallback highlight: wrap the range in a `<span>`.
    *
    * `surroundContents` throws when the range partially selects a non-Text node (a sentence that
@@ -209,13 +221,19 @@ export class Highlighter {
    */
   private showWithSpan(range: Range): void {
     this.unwrapSpan();
+    const cut: typeof this.cut = [];
+    const { startContainer: start, endContainer: end } = range;
+    if (start.nodeType === Node.TEXT_NODE) cut.push({ node: start as Text, length: (start as Text).length, from: 'start', neighbour: start.nextSibling });
+    if (end !== start && end.nodeType === Node.TEXT_NODE) cut.push({ node: end as Text, length: (end as Text).length, from: 'end', neighbour: end.previousSibling });
     try {
       const span = this.doc.createElement('span');
       span.className = SPAN_CLASS;
       range.surroundContents(span);
       this.currentSpan = span;
+      this.cut = cut;
     } catch {
       this.currentSpan = null;
+      this.cut = [];
     }
   }
 
@@ -228,9 +246,30 @@ export class Highlighter {
     const parent = span.parentNode;
     while (span.firstChild) parent.insertBefore(span.firstChild, span);
     parent.removeChild(span);
-    // Deliberately no `parent.normalize()`: merging the text nodes back together would shift the
-    // offsets that the playlist's cached Ranges are built on, and drift the highlight from the
-    // audio for the rest of the article. A few extra adjacent text nodes are harmless.
+    // The text nodes the span cut are joined again, exactly as they were. Sentences are found by
+    // their offsets in the nodes the page had when it was read (text-index.ts), so a node left
+    // cut short lost the highlight of every later sentence in it. Only those nodes, never
+    // `parent.normalize()`: that would also join text nodes the page itself keeps apart, and
+    // move every offset after them.
+    // Up to the neighbour each had before: a cut at a node's very end leaves an empty text node
+    // behind, which goes too, while one the page put there itself (a framework's anchor) stays.
+    const ours = (node: Node | null, neighbour: Node | null, short: boolean): node is Text =>
+      !!node && node !== neighbour && node.nodeType === Node.TEXT_NODE && (short || (node as Text).length === 0);
+    for (const { node, length, from, neighbour } of this.cut) {
+      // The node that began the sentence kept what came before it; the rest follows it.
+      while (from === 'start' && ours(node.nextSibling, neighbour, node.length < length)) {
+        const next = node.nextSibling as Text;
+        node.appendData(next.data);
+        next.remove();
+      }
+      // The node that ended it kept what came after; the sentence's part is in front of it.
+      while (from === 'end' && ours(node.previousSibling, neighbour, node.length < length)) {
+        const previous = node.previousSibling as Text;
+        node.insertData(0, previous.data);
+        previous.remove();
+      }
+    }
+    this.cut = [];
     this.currentSpan = null;
   }
 

@@ -1,8 +1,10 @@
 /**
  * Turning a page into an ordered list of things to say.
  *
- * A playlist item pairs the *spoken* text (normalised: numbers expanded, URLs skipped) with the
- * live-DOM `Range` to highlight while it plays. Those are two different text domains — see
+ * A playlist item pairs the *spoken* text (normalised: numbers expanded, URLs skipped) with its
+ * place in the page's text index, from which the `Range` to highlight is made while it plays
+ * (`itemRange`): never a Range kept per sentence, which slows every change the page makes for as
+ * long as it exists (extract/text-index.ts: rangeForSpan). Those are two different text domains — see
  * docs/DESIGN.md §1.6 — and keeping the mapping here, away from playback and UI concerns, is
  * what makes it testable without an AudioContext.
  *
@@ -13,7 +15,7 @@
  *    arbitrary nodes), so it segments the selected string and fuzzy-locates each sentence.
  */
 import { buildBlockModel, type BlockRole } from '@/extract/block-model';
-import { rangeForSpan, visibleTextOf, type TextIndex } from '@/extract/text-index';
+import { placeForSpan, rangeForSpan, visibleTextOf, type TextIndex } from '@/extract/text-index';
 import type { Route } from './voice-routing';
 import { segmentSentences } from '@/segment/sentences';
 import { isSpeakable } from '@/segment/normalize';
@@ -32,18 +34,16 @@ export interface PlaylistItem {
    * rebuilt mid-read when a pronunciation rule or a speech setting changes.
    */
   sourceText: string;
-  /** Highlight range for this exact sentence, or null if it could not be located. */
-  range: Range | null;
   /**
    * Where `sourceText` starts in the text index, when it is there exactly — what word
    * highlighting needs to find a word's place on the page. Null when the sentence was located
    * only approximately, or not at all.
    */
   sourceAt: number | null;
-  /** Highlight range for the whole enclosing block — the fallback when `range` is null. */
-  blockRange: Range | null;
-  /** Where the sentence lies in the text index, when it was located there. */
+  /** Where the sentence lies in the text index, when it was located there: what is highlighted. */
   span: { start: number; end: number } | null;
+  /** Where its whole block lies there — highlighted instead when the sentence has no place of its own. */
+  blockSpan: { start: number; end: number } | null;
   /**
    * Whether it is read *now*: its text is rendered and not hidden (a collapsed translation).
    * Re-evaluated when the page changes while reading (session.ts), so it is not fixed at planning.
@@ -118,10 +118,9 @@ export function buildArticlePlaylist(
         push({
           spokenText: spoken,
           sourceText: title,
-          range: null,
           sourceAt: null,
-          blockRange: null,
           span: null,
+          blockSpan: null,
           eligible: true,
           role: block.role,
           startsBlock: true,
@@ -131,7 +130,7 @@ export function buildArticlePlaylist(
       continue;
     }
 
-    const blockRange = rangeForSpan(index, block.start, block.end);
+    const blockSpan = placeForSpan(index, block.start, block.end) ? { start: block.start, end: block.end } : null;
     const blockText = index.fullText.slice(block.start, block.end);
     const isHeading = block.role === 'heading' || block.role === 'title';
     let first = true;
@@ -140,17 +139,16 @@ export function buildArticlePlaylist(
       // Planned whether or not it shows now, so a translation revealed later can be read.
       if (!isSpeakable(normalize(chunk.text))) continue;
       const at = block.start + chunk.start;
-      const range = rangeForSpan(index, at, block.start + chunk.end);
+      const located = placeForSpan(index, at, block.start + chunk.end) !== null;
       const visible = visibleTextOf(index, at, block.start + chunk.end);
       const shown = isSpeakable(visible);
       push({
         spokenText: normalize(shown ? visible : chunk.text),
         sourceText: chunk.text,
         visibleSource: visible,
-        range: range ?? blockRange,
-        sourceAt: range && index.fullText.startsWith(chunk.text, at) ? at : null,
-        blockRange,
+        sourceAt: located && index.fullText.startsWith(chunk.text, at) ? at : null,
         span: { start: at, end: block.start + chunk.end },
+        blockSpan,
         eligible: shown,
         role: block.role,
         startsBlock: first,
@@ -182,10 +180,9 @@ export function buildSelectionPlaylist(opts: PlanOptions & { sourceText: string 
       spokenText: normalize(shown ? visible : chunk.text),
       sourceText: chunk.text,
       visibleSource: visible,
-      range: found ? rangeForSpan(index, found.start, found.end) : null,
       sourceAt: found && index.fullText.startsWith(chunk.text, found.start) ? found.start : null,
-      blockRange: null,
       span: found ? { start: found.start, end: found.end } : null,
+      blockSpan: null,
       eligible: shown,
       role: 'paragraph',
       startsBlock: false,
@@ -194,6 +191,30 @@ export function buildSelectionPlaylist(opts: PlanOptions & { sourceText: string 
   }
 
   return playlist;
+}
+
+/**
+ * The page Range of an item: its own sentence, or the block it sits in when the sentence has no
+ * place of its own. A new Range, or `into` set to it (see rangeForSpan on why to pass one). Null
+ * when it is nowhere in the page: a title read from the page's metadata, text the page has removed.
+ */
+export function itemRange(index: TextIndex | null | undefined, item: PlaylistItem | null | undefined, into?: Range): Range | null {
+  if (!index || !item) return null;
+  return (
+    (item.span && rangeForSpan(index, item.span.start, item.span.end, into)) ||
+    (item.blockSpan && rangeForSpan(index, item.blockSpan.start, item.blockSpan.end, into)) ||
+    null
+  );
+}
+
+/** The text node an item starts in (its Range's start container), without making the Range. */
+export function itemStartNode(index: TextIndex | null | undefined, item: PlaylistItem | null | undefined): Text | null {
+  if (!index || !item) return null;
+  const place =
+    (item.span && placeForSpan(index, item.span.start, item.span.end)) ||
+    (item.blockSpan && placeForSpan(index, item.blockSpan.start, item.blockSpan.end)) ||
+    null;
+  return place ? place.startNode : null;
 }
 
 /** Leading silence (seconds) to prepend to a chunk's audio. */
