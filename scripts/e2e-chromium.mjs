@@ -26,14 +26,14 @@
 
 process.env.PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS = '1'; // route the background's fetches
 import { createServer } from 'node:http';
-import { mkdtempSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const { chromium } = await import('playwright');
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const EXT = join(ROOT, '.output/chrome-mv3');
+let EXT = join(ROOT, '.output/chrome-mv3');
 const FIXTURES = join(ROOT, 'tests/fixtures');
 if (!existsSync(join(EXT, 'manifest.json'))) throw new Error('No Chromium build: npm run build:chrome first.');
 if (process.env.E2E_LD_LIBRARY_PATH) process.env.LD_LIBRARY_PATH = [process.env.E2E_LD_LIBRARY_PATH, process.env.LD_LIBRARY_PATH].filter(Boolean).join(':');
@@ -56,7 +56,7 @@ await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const ORIGIN = `http://127.0.0.1:${server.address().port}`;
 
 // ---- a profile in which the extension may run on 127.0.0.1 -------------------------------------
-const PROFILE = mkdtempSync(join(tmpdir(), 'aloud-e2e-chromium-'));
+let PROFILE = mkdtempSync(join(tmpdir(), 'aloud-e2e-chromium-'));
 const launch = () =>
   chromium.launchPersistentContext(PROFILE, {
     channel: 'chromium',
@@ -66,18 +66,33 @@ const launch = () =>
   });
 let ctx = await launch();
 let sw = ctx.serviceWorkers()[0] ?? (await ctx.waitForEvent('serviceworker'));
-const ID = new URL(sw.url()).host;
+let ID = new URL(sw.url()).host;
 await ctx.close();
 {
   const file = join(PROFILE, 'Default/Preferences');
-  const prefs = JSON.parse(readFileSync(file, 'utf8'));
+  const prefs = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
   const ext = prefs.extensions?.settings?.[ID];
-  if (!ext) throw new Error(`no settings for ${ID} in the profile`);
-  for (const key of ['active_permissions', 'granted_permissions', 'runtime_granted_permissions']) {
-    const perms = (ext[key] ??= {});
-    for (const kind of ['explicit_host', 'scriptable_host']) perms[kind] = [...new Set([...(perms[kind] ?? []), 'http://127.0.0.1/*'])];
+  if (ext) {
+    // Linux: the permission a click on the toolbar button would give, written into the profile.
+    for (const key of ['active_permissions', 'granted_permissions', 'runtime_granted_permissions']) {
+      const perms = (ext[key] ??= {});
+      for (const kind of ['explicit_host', 'scriptable_host']) perms[kind] = [...new Set([...(perms[kind] ?? []), 'http://127.0.0.1/*'])];
+    }
+    writeFileSync(file, JSON.stringify(prefs));
+  } else {
+    // A Mac, and Windows: Chromium keeps an extension's permissions in Secure Preferences there,
+    // signed, and takes an edited one for tampering and forgets it. So the build is copied, and
+    // the copy's manifest asks for the test server's address itself. Everything else is the build.
+    const copy = mkdtempSync(join(tmpdir(), 'aloud-e2e-build-'));
+    cpSync(EXT, copy, { recursive: true });
+    const manifestFile = join(copy, 'manifest.json');
+    const manifest = JSON.parse(readFileSync(manifestFile, 'utf8'));
+    manifest.host_permissions = [...new Set([...(manifest.host_permissions ?? []), 'http://127.0.0.1/*'])];
+    writeFileSync(manifestFile, JSON.stringify(manifest, null, 2));
+    EXT = copy;
+    PROFILE = mkdtempSync(join(tmpdir(), 'aloud-e2e-chromium-'));
+    console.log('(permissions from a copy of the build: this system keeps them where they cannot be written)');
   }
-  writeFileSync(file, JSON.stringify(prefs));
 }
 ctx = await launch();
 // Offline: no voice is downloaded (nothing here needs speech), and a request that tried would show.
@@ -87,6 +102,7 @@ await ctx.route(/huggingface\.co|hf\.co/, (route) => {
   return route.abort();
 });
 sw = ctx.serviceWorkers()[0] ?? (await ctx.waitForEvent('serviceworker'));
+ID = new URL(sw.url()).host;
 const inSw = (fn, arg) => sw.evaluate(fn, arg);
 await inSw(async () => {
   const { settings } = await chrome.storage.local.get('settings');
