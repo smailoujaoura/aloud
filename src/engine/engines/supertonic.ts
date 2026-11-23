@@ -20,7 +20,7 @@ import type * as Ort from 'onnxruntime-web';
 import { fetchModelFile } from '@/engine/model-cache';
 import { loadOrt } from '@/engine/ort-loader';
 import { chooseExecutionProviders } from '@/engine/runtime-env';
-import { GPU_TEST_TEXT, notSound, seededRandom, similarity } from '@/engine/gpu-check';
+import { GPU_ALIKE, GPU_TEST_TEXT, envelopeSimilarity, notSound, seededRandom } from '@/engine/gpu-check';
 import type { SynthEngine, SynthResult, InitContext, ModelManifest } from './types';
 import { parseSupertonicVoice } from '@/shared/supertonic-voices';
 
@@ -212,8 +212,9 @@ export class SupertonicEngine implements SynthEngine {
     [this.dp, this.textEnc, this.vectorEst, this.vocoder] = [cdp!, cte!, cve!, cvo!];
     const cpuPcm = (await this.synthesize(GPU_TEST_TEXT, 1, undefined, fixed())).pcm;
     const bad = notSound(gpuPcm, this.sampleRate);
-    const alike = bad ? 0 : similarity(gpuPcm, cpuPcm);
-    const rejected = bad ? `its sound was ${bad}` : alike < 0.8 ? `it did not sound like the CPU (similarity ${alike.toFixed(2)})` : null;
+    // Loudness over time, not the samples: see envelopeSimilarity on why the samples failed working GPUs.
+    const alike = bad ? 0 : envelopeSimilarity(gpuPcm, cpuPcm, this.sampleRate);
+    const rejected = bad ? `its sound was ${bad}` : alike < GPU_ALIKE ? `it did not sound like the CPU (similarity ${alike.toFixed(2)})` : null;
     if (rejected) {
       await Promise.all(gpu.map((s) => s.release().catch(() => undefined)));
       this.executionProvider = 'wasm';

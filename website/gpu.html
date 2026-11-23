@@ -176,6 +176,16 @@ code { font: 0.86em var(--mono); background: var(--surface-2); border: 1px solid
     </div>
   </details>
 
+  <h2 id="trouble">If a voice is silent or says gibberish</h2>
+  <p>Some graphics drivers load a voice and then compute nonsense with it: Kokoro stays silent, Supertonic babbles. Since version 1.0.5, Aloud has a voice on the graphics card say a short test phrase before it reads. If that phrase is silent or wrong, the voice moves to the processor, and Aloud says <em>“This GPU could not run the voice, so it is running on the CPU”</em>. Your browser remembers that until it is updated, so it does not test again each time.</p>
+  <p>If a voice still goes wrong:</p>
+  <ol>
+    <li><strong>Turn the graphics card off for Aloud.</strong> Open Aloud's settings, go to <strong>Advanced</strong>, and untick <strong>Use WebGPU acceleration when available</strong>. Every voice then runs on the processor: slower to start, but it speaks.</li>
+    <li><strong>Tell a graphics problem from a sound problem.</strong> Preview Phonon, which always runs on the processor. If Phonon is silent too, the trouble is the sound itself: a muted tab, the system's output device, or the volume.</li>
+    <li><strong>Update your graphics driver</strong> from your card maker's website, not only Windows Update. Then tick the setting again, and press <strong>Check for a GPU again</strong> in the same place, so Aloud tests the card afresh.</li>
+    <li><strong>Tell me.</strong> <a href="feedback.html">Report it</a> with your browser and its version, and the graphics details: the <em>Graphics</em> section of <code>about:support</code> in Firefox, or the top of <code>chrome://gpu</code> in Chrome. Those name the card and driver, which is what decides it.</li>
+  </ol>
+
   <h2>Questions</h2>
   <p><strong>Will it drain my battery?</strong> For the same article, a graphics card usually does the work in less time and less energy than several processor cores running flat out. On a laptop on battery, your system may still choose its power-saving graphics; that is fine.</p>
   <p><strong>Does Aloud need it?</strong> No. Every voice works on the processor. The graphics card makes the most natural voices start sooner and keep well ahead of the reading.</p>
