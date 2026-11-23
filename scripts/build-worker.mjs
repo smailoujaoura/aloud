@@ -6,7 +6,8 @@
 // .wasm files. The transformers web bundle references ORT only through its own webpack runtime
 // string table, which Rollup does not follow.
 import { build } from 'vite';
-import { dirname, resolve } from 'node:path';
+import { readFileSync, readdirSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -84,7 +85,15 @@ export async function buildWorker(options) {
       chunkSizeWarningLimit: 20000,
       modulePreload: false,
       rollupOptions: {
-        input: resolve(root, 'src/worker/entry.ts'),
+        // Two entries: the worker's own file, and the worker proper, which the first loads by its
+        // address. Nothing may import the first (see src/worker/entry.ts, and the check below).
+        input: {
+          'tts-worker': resolve(root, 'src/worker/entry.ts'),
+          'worker-main': resolve(root, 'src/engine/worker-main.ts'),
+        },
+        // worker-main is imported by address, which the bundler cannot see: without this it takes
+        // its `startWorker` for unused and leaves a file with nothing in it.
+        preserveEntrySignatures: 'strict',
         // onnxruntime-web / -common are provided at run time as a real ESM module served from
         // the extension package. Keeping them external stops Vite inlining ORT's ~30 MB of
         // .wasm. `output.paths` rewrites the bare specifier to that URL, because module workers
@@ -93,7 +102,7 @@ export async function buildWorker(options) {
         external: ['onnxruntime-web', 'onnxruntime-common'],
         output: {
           format: 'es',
-          entryFileNames: 'tts-worker.js',
+          entryFileNames: (chunk) => (chunk.name === 'tts-worker' ? 'tts-worker.js' : 'vendor/rt/[name].js'),
           // Stable names, so one release compares with the next file by file (see wxt.config.ts).
           chunkFileNames: 'vendor/rt/[name].js',
           assetFileNames: 'vendor/rt/[name][extname]',
@@ -131,7 +140,32 @@ export async function buildWorker(options) {
       },
     },
   });
+  assertEntryImportedByNothing(resolve(root, '.gen/worker'));
   console.log('[build-worker] .gen/worker/tts-worker.js built');
+}
+
+/**
+ * No file of the worker may import its entry file, tts-worker.js.
+ *
+ * WebKit runs a module worker's entry file again when another module imports it (it is not among
+ * the modules it counts as loaded), and the second copy takes the worker over with no voice in it:
+ * Safari then fails every sentence with "engine not initialised" (src/worker/entry.ts). The entry
+ * file imports the rest with import(), so nothing has reason to; this is what notices if a
+ * change to the bundling brings shared code back into it.
+ */
+function assertEntryImportedByNothing(dir) {
+  const offenders = [];
+  const walk = (at) => {
+    for (const entry of readdirSync(at, { withFileTypes: true })) {
+      const path = join(at, entry.name);
+      if (entry.isDirectory()) walk(path);
+      else if (/\.m?js$/.test(entry.name) && /\bfrom\s*["'][^"']*tts-worker\.js["']|\bimport\s*\(\s*["'][^"']*tts-worker\.js["']/.test(readFileSync(path, 'utf8'))) offenders.push(path.slice(dir.length + 1));
+    }
+  };
+  walk(dir);
+  if (offenders.length) {
+    throw new Error(`[build-worker] ${offenders.join(', ')} import${offenders.length === 1 ? 's' : ''} tts-worker.js, the worker's entry file: Safari would run it twice and never speak (see src/worker/entry.ts)`);
+  }
 }
 
 /**
