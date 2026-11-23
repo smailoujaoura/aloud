@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GPU_ALIKE, envelopeSimilarity, notSound, seededRandom, similarity } from '@/engine/gpu-check';
+import { GPU_ALIKE, NOISE_FLATNESS, envelopeSimilarity, notSound, seededRandom, similarity, soundStats, spectralFlatness, tooNoisy } from '@/engine/gpu-check';
 
 const RATE = 24000;
 const tone = (seconds: number, amp = 0.3, f = 220) => Float32Array.from({ length: Math.round(seconds * RATE) }, (_, i) => amp * Math.sin((2 * Math.PI * f * i) / RATE));
@@ -16,6 +16,39 @@ describe('does the GPU really speak', () => {
     expect(notSound(nan, RATE)).toBe('not numbers');
     expect(notSound(tone(0.05), RATE)).toBe('too short');
     expect(notSound(Float32Array.from({ length: RATE }, (_, i) => (i % 2 ? 1 : -1)), RATE)).toBe('clipped noise');
+  });
+
+  it('noise does not pass for a voice: a GPU computing wrongly is loud, finite and unclipped (#10)', () => {
+    // Voiced, like speech: a 140 Hz voice with falling harmonics, in syllables.
+    const voice = Float32Array.from({ length: RATE * 2 }, (_, i) => {
+      const t = i / RATE;
+      const on = Math.floor(t / 0.18) % 3 !== 2 ? 1 : 0.01;
+      let x = 0;
+      for (let h = 1; h <= 25; h++) x += Math.sin(2 * Math.PI * 140 * h * t) / h;
+      return 0.1 * on * x;
+    });
+    expect(notSound(voice, RATE)).toBeNull();
+    expect(tooNoisy(voice, RATE)).toBeNull();
+    expect(spectralFlatness(voice, RATE)).toBeLessThan(NOISE_FLATNESS);
+
+    const r = seededRandom(5);
+    const white = Float32Array.from({ length: RATE * 2 }, () => 0.3 * (r() - 0.5));
+    // Loud, finite, unclipped: notSound lets it through, which is why tooNoisy exists.
+    expect(notSound(white, RATE)).toBeNull();
+    expect(tooNoisy(white, RATE)).toBe('noise');
+    let low = 0;
+    const brownish = Float32Array.from({ length: RATE * 2 }, () => (low = 0.98 * low + 0.1 * (r() - 0.5)));
+    expect(tooNoisy(brownish, RATE)).toBe('noise');
+    // In syllables or not, noise is noise.
+    const bursts = white.map((x, i) => (Math.floor(i / 3000) % 2 ? x : x * 0.02));
+    expect(tooNoisy(bursts, RATE)).toBe('noise');
+
+    // Against the processor's take: a breathy voice, flat on both, passes; noise in its place does not.
+    const breathy = voice.map((x, i) => x + 0.05 * (r() - 0.5) * (Math.floor(i / 4320) % 3 !== 2 ? 1 : 0.01));
+    expect(tooNoisy(breathy, RATE, breathy.map((x) => x * 0.98))).toBeNull();
+    expect(tooNoisy(white, RATE, breathy)).toBe('noise');
+
+    expect(soundStats(white, RATE)).toMatch(/^2\.00 s, level 0\.\d{4}, clipped 0\.0%, flatness 0\.\d{4}$/);
   });
 
   it('the same sound is alike; another is not (Supertonic said gibberish there)', () => {

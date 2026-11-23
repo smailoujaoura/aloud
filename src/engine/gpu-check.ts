@@ -10,7 +10,112 @@
 
 export const GPU_TEST_TEXT = 'Hello there. This is a short test of the voice.';
 
-/** Why `pcm` is not speech at all (not numbers, silent, clipped noise), or null when it could be. */
+/**
+ * How noise-like the loud part of a clip is: the spectral flatness of each 1024-sample frame within
+ * 30 dB of the loudest, up to 8 kHz, median. 0 is a pure tone, about 0.56 white noise.
+ *
+ * Speech is far from flat: its energy sits in harmonics and formants. Measured on a Mac's GPU,
+ * all 28 English Kokoro voices, two sentences each: 0.0002 to 0.0127. Supertonic's breathier
+ * voices are flatter (M2: 0.04, on the GPU and the processor alike), which is why its test compares
+ * with the processor's take rather than with a fixed bar. White, pink and brown noise: 0.565,
+ * 0.055, 0.034. A voice a graphics card computes wrongly comes out as noise of that kind (Kokoro's
+ * small model on a GPU did; issue #10 on Windows Firefox was garbled), which `notSound` lets
+ * through: it is loud, finite and not clipped.
+ */
+export function spectralFlatness(pcm: Float32Array, sampleRate: number): number {
+  const N = 1024;
+  if (pcm.length < N) return 0;
+  const energy: number[] = [];
+  for (let at = 0; at + N <= pcm.length; at += N / 2) {
+    let e = 0;
+    for (let i = at; i < at + N; i++) e += pcm[i]! * pcm[i]!;
+    energy.push(e);
+  }
+  const loudest = Math.max(...energy);
+  if (!(loudest > 0)) return 0;
+  const top = Math.max(2, Math.min(N / 2, Math.floor(8000 / (sampleRate / N))));
+  const re = new Float64Array(N);
+  const im = new Float64Array(N);
+  const flat: number[] = [];
+  energy.forEach((e, f) => {
+    if (e < loudest * 1e-3) return;
+    const at = (f * N) / 2;
+    for (let i = 0; i < N; i++) {
+      re[i] = pcm[at + i]! * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / N));
+      im[i] = 0;
+    }
+    fft(re, im);
+    let logSum = 0;
+    let sum = 0;
+    for (let k = 1; k <= top; k++) {
+      const power = re[k]! * re[k]! + im[k]! * im[k]! + 1e-12;
+      logSum += Math.log(power);
+      sum += power;
+    }
+    flat.push(Math.exp(logSum / top) / (sum / top));
+  });
+  flat.sort((a, b) => a - b);
+  return flat.length ? flat[Math.floor(flat.length / 2)]! : 0;
+}
+
+/** Flatter than this is noise, not a Kokoro voice: over twice its flattest voice measured (see above). */
+export const NOISE_FLATNESS = 0.03;
+
+/**
+ * 'noise' when `pcm` is noise rather than a voice, or null. With `reference` (the same phrase made
+ * on the processor), only when it is also far flatter than that: a breathy voice is flat on both.
+ */
+export function tooNoisy(pcm: Float32Array, sampleRate: number, reference?: Float32Array): string | null {
+  const flat = spectralFlatness(pcm, sampleRate);
+  const bar = reference ? Math.max(NOISE_FLATNESS, 3 * spectralFlatness(reference, sampleRate)) : NOISE_FLATNESS;
+  return flat > bar ? 'noise' : null;
+}
+
+/** In-place radix-2 FFT; `re.length` a power of two. */
+function fft(re: Float64Array, im: Float64Array): void {
+  const n = re.length;
+  for (let i = 1, j = 0; i < n; i++) {
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) {
+      [re[i], re[j]] = [re[j]!, re[i]!];
+      [im[i], im[j]] = [im[j]!, im[i]!];
+    }
+  }
+  for (let len = 2; len <= n; len <<= 1) {
+    const step = (-2 * Math.PI) / len;
+    for (let i = 0; i < n; i += len) {
+      for (let k = 0; k < len / 2; k++) {
+        const c = Math.cos(step * k);
+        const s = Math.sin(step * k);
+        const a = i + k;
+        const b = a + len / 2;
+        const xr = re[b]! * c - im[b]! * s;
+        const xi = re[b]! * s + im[b]! * c;
+        re[b] = re[a]! - xr;
+        im[b] = im[a]! - xi;
+        re[a] = re[a]! + xr;
+        im[a] = im[a]! + xi;
+      }
+    }
+  }
+}
+
+/** What the GPU test measured of a phrase, for the console: the numbers behind its verdict. */
+export function soundStats(pcm: Float32Array, sampleRate: number): string {
+  let sum = 0;
+  let clipped = 0;
+  for (let i = 0; i < pcm.length; i++) {
+    const x = pcm[i]!;
+    if (Number.isFinite(x)) sum += x * x;
+    if (Math.abs(x) >= 0.999) clipped++;
+  }
+  const rms = pcm.length ? Math.sqrt(sum / pcm.length) : 0;
+  return `${(pcm.length / sampleRate).toFixed(2)} s, level ${rms.toFixed(4)}, clipped ${((100 * clipped) / Math.max(1, pcm.length)).toFixed(1)}%, flatness ${spectralFlatness(pcm, sampleRate).toFixed(4)}`;
+}
+
+/** Why `pcm` is not speech at all (not numbers, silent, clipped noise), or null when it could be. See also `tooNoisy`. */
 export function notSound(pcm: Float32Array, sampleRate: number): string | null {
   if (pcm.length < sampleRate * 0.15) return 'too short';
   let sum = 0;

@@ -11,7 +11,7 @@
  * those (a few hundred KB each) are the one exception to "everything in IndexedDB".
  */
 // Types only: the libraries themselves load in configureTransformersEnv, after ONNX Runtime.
-import { GPU_TEST_TEXT, notSound } from '@/engine/gpu-check';
+import { GPU_TEST_TEXT, notSound, soundStats, tooNoisy } from '@/engine/gpu-check';
 import type { KokoroTTS } from 'kokoro-js';
 
 import { TransformersCache, cacheDelete, cacheHas, fetchModelFile, setCachedFileTransform } from '@/engine/model-cache';
@@ -183,8 +183,12 @@ export class KokoroEngine implements SynthEngine {
         log.info(`[kokoro] loaded ${this.executionProvider} in ${ms(tLoad)} ms`);
         if (device === 'webgpu' && !ctx.gpuChecked) {
           // Loaded is not speaking: on Firefox for Windows it loaded and was silent (issue #10).
+          // Silence was #10's Kokoro; noise is how a GPU's wrong arithmetic usually sounds.
           const bad = await this.synthesize(GPU_TEST_TEXT, 1)
-            .then((r) => notSound(r.pcm, r.sampleRate))
+            .then((r) => {
+              log.info(`[kokoro] GPU test phrase: ${soundStats(r.pcm, r.sampleRate)}`);
+              return notSound(r.pcm, r.sampleRate) ?? tooNoisy(r.pcm, r.sampleRate);
+            })
             .catch((err: unknown) => `it failed (${String(err)})`);
           if (bad) {
             this.gpuRejected = `its sound was ${bad}`;
