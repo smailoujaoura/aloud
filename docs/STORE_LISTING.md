@@ -54,7 +54,8 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 > • A page being read no longer slows down. On a long article, a page that keeps changing (a feed, a ticker, an animation) ran at a few frames a second while Aloud read it, in Firefox most of all. It now stays smooth, also while a voice downloads.
 > • The reading bar shows the speed it reads at, whatever it is: a speed set in Settings, Voice that is not one of the bar's own (1.3×, 2.75×) left its speed list empty. Faster and slower (D and S) step from it to the usual speed beside it.
 > • Settings, Video speed says what it is for (videos and audio on websites, not the reading voice) and which shortcut starts it.
-> • Kokoro and Supertonic speak on Windows Firefox with a graphics card: a voice that loads there but does not make real sound runs on the processor instead, and says so.
+> • Kokoro and Supertonic speak on Windows Firefox with a graphics card: a voice that loads there but comes out silent or as noise runs on the processor instead, and says so.
+> • On a phone, the speed button on a video can be dragged out of the way, and stays where you put it on each site.
 > • Scanned PDFs show their pages (they were read over a blank or black page).
 
 ## Release notes for 1.0.4 (AMO's version notes; plain text)

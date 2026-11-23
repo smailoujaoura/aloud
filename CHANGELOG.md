@@ -34,12 +34,16 @@ Website-only and documentation changes are not listed: they never reach the exte
   started there: the page now says both, with the shortcut that starts it (#12).
 - The video speed control looks through a page for new players twice a second at most, not on
   every change the page makes.
-- **Kokoro and Supertonic speak on Windows Firefox with a graphics card** (#10). Firefox on Windows
-  now gives Aloud WebGPU, and there Kokoro was silent and Supertonic said gibberish, with nothing
-  failing. A voice that loads on the graphics card now says a short test phrase first; if that is
-  not real sound (or, for Supertonic, not the sound the processor makes), it runs on the processor
-  and says so, and that browser remembers until it is updated. Settings, Advanced, "Check for a GPU
-  again" tries the graphics card again.
+- **On a phone, the speed button on a video can be moved.** Drag it with a finger (or the mouse)
+  anywhere on the video, off the player's own buttons it covered; it stays there on that site, in
+  full screen and when the phone turns too.
+- **Kokoro and Supertonic speak on Windows Firefox with a graphics card** (#10). Firefox on
+  Windows gives Aloud WebGPU, and on some graphics cards Kokoro was silent and Supertonic made
+  noise, with nothing failing. A voice that loads on the graphics card now says a short test phrase
+  first; if that is silent, noise, or (for Supertonic) not the sound the processor makes, the voice
+  runs on the processor and says so, and that browser remembers until it is updated. Settings,
+  Advanced, "Check for a GPU again" tries the graphics card again; unticking "Use WebGPU
+  acceleration when available" there keeps every voice on the processor.
 - **Scanned PDFs show their pages.** A scan with a text layer was read aloud over a blank page, or
   a black block: its images (CCITT fax and JBIG2, what most scanners make, and JPEG 2000) were
   never decoded, because pdf.js's decoders were not in the package. They are now, with its colour
