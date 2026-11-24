@@ -65,7 +65,8 @@ Website-only and documentation changes are not listed: they never reach the exte
   for when the button is turned off.
 - **The reading bar can sit at the top.** Drag it by its edge (anywhere that is not a button) to
   the top or the bottom of the window; its messages and menus follow, and the sentence being read
-  is kept clear of it at either edge. Settings, Appearance has the same choice.
+  is kept clear of it at either edge. Settings, Appearance has the same choice. It sits right
+  against that edge, as part of it, with no gap.
 - **The notes panel can be moved.** Drag it by its title to wherever it covers least; it opens
   there from then on, on every site. A double-click on its title puts it back.
 - **Kokoro and Supertonic speak on Windows Firefox with a graphics card** (#10). Firefox on

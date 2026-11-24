@@ -25,10 +25,10 @@ function makeBar(opts: Partial<ControlBarOptions> = {}) {
   const dock = root.querySelector<HTMLElement>('.dock')!;
   const bar = root.querySelector<HTMLElement>('.bar')!;
   const peek = root.querySelector<HTMLElement>('.peek')!;
-  // Resting 20 px from its edge, moved by whatever the drag's transform says.
+  // Resting at its edge, moved by whatever the drag's transform says.
   bar.getBoundingClientRect = () => {
     const shift = Number(/translate\(-50%, (-?\d+)px\)/.exec(dock.style.transform)?.[1] ?? 0);
-    const top = (dock.classList.contains('at-top') ? 20 : window.innerHeight - 20 - BAR_HEIGHT) + shift;
+    const top = (dock.classList.contains('at-top') ? 0 : window.innerHeight - BAR_HEIGHT) + shift;
     return new DOMRect(100, top, 600, BAR_HEIGHT);
   };
   return { b, root, dock, bar, peek, onDock, onPlay };
@@ -74,8 +74,8 @@ describe('the bar sits at the edge it was put at', () => {
   it('keeps the sentence clear of it at its own edge', () => {
     const t = makeBar({ dock: 'top' });
     open = t.b;
-    // Its foot (20 + 52) and a little air.
-    expect(t.b.insets()).toEqual({ top: 84, bottom: 0 });
+    // Its foot (52, right at the edge) and a little air.
+    expect(t.b.insets()).toEqual({ top: 64, bottom: 0 });
     t.b.setDock('bottom');
     expect(t.b.insets().top).toBe(0);
     expect(t.b.insets().bottom).toBeGreaterThan(0);

@@ -87,7 +87,7 @@ export const CONTROL_BAR_CSS = `
  * (.at-top, settings: barDock) the column is turned over: it grows downwards from the bar.
  */
 .dock {
-  position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  position: fixed; left: 50%; bottom: env(safe-area-inset-bottom, 0px);
   transform: translateX(-50%);
   z-index: 2147483647;
   box-sizing: border-box;
@@ -100,8 +100,17 @@ export const CONTROL_BAR_CSS = `
 }
 .dock > * { pointer-events: auto; }
 .dock.at-top {
-  bottom: auto; top: calc(20px + env(safe-area-inset-top, 0px));
+  bottom: auto; top: env(safe-area-inset-top, 0px);
   flex-direction: column-reverse;
+}
+/* Right against the edge it sits at, as close as it goes: and so drawn as part of that edge,
+   square on that side with no border there, rather than a pill stuck to it. Held in a drag, it is
+   a whole bar again. */
+.dock:not(.at-top) .bar:not(.dragging) {
+  border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom-color: transparent;
+}
+.dock.at-top .bar:not(.dragging) {
+  border-top-left-radius: 0; border-top-right-radius: 0; border-top-color: transparent;
 }
 /* Slid out of the window while you scroll down the page (control-bar.ts: watchScrolling): below
    it from the bottom, above it from the top. */
@@ -501,10 +510,8 @@ select optgroup { color: var(--bar-muted); font-weight: 600; }
 @media (max-width: ${NARROW_BREAKPOINT_PX}px) {
   .dock {
     width: calc(100vw - 12px);
-    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
     gap: 6px;
   }
-  .dock.at-top { bottom: auto; top: calc(10px + env(safe-area-inset-top, 0px)); }
   .bar {
     flex-wrap: wrap;
     gap: 6px 6px;
