@@ -1,248 +1,96 @@
-# Aloud: Natural Text to Speech Reader, Offline
+# Aloud
 
-Read any article aloud with a **fully local** neural voice. No servers, no accounts: synthesis,
-your notes, your highlights and your reading positions never leave this device.
+**Reads any web page or PDF aloud in a natural voice that runs on your own computer.**
+No account, no cloud, nothing sent anywhere: once a voice is downloaded, it works offline.
 
-What *does* go over the network, once each and only when you ask for it: downloading a voice
-model, previewing a Piper voice you have not downloaded (a short hosted clip), and fetching a page or PDF you told Aloud
-to read or queue. A saved article's images stay unfetched until you press "Load images", so
-reopening one tells nobody you are reading it.
+**[Firefox](https://addons.mozilla.org/firefox/addon/aloud-natural-text-to-speech/)** (desktop and Android) ·
+**[Chrome](https://chromewebstore.google.com/detail/ilnojbdjpnnlkjbmldpgbgckkkifheeo)** (and Edge, Brave, Opera) ·
+**[Website](https://aloud.souj.dev)**
 
-Runs on **Firefox** (desktop and Android) and **Chromium** (Chrome, Edge, Brave, Opera).
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="website/assets/shots/reading-dark.webp">
+  <img src="website/assets/shots/reading-light.webp" alt="An article being read aloud: the sentence being spoken is highlighted, the word being spoken is darker, and a reading bar sits at the bottom of the page">
+</picture>
 
-**Install:** [Chrome Web Store](https://chromewebstore.google.com/detail/ilnojbdjpnnlkjbmldpgbgckkkifheeo) · [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/aloud-natural-text-to-speech/) (desktop and Android) · [Website](https://aloud.souj.dev)
+## What it does
 
-- **Extraction** — [Mozilla Readability](https://github.com/mozilla/readability) strips nav / ads
-  and grabs the article text.
-- **Voices** — [Phonon](https://huggingface.co/gradium/phonon-40m-multilingual) by Gradium, the default
-  (~101 MB with all 102 voices; English, French, German, Spanish and Portuguese, about twice as fast as real time on
-  one processor thread, no graphics card needed; licensed for non-commercial use only), run by Gradium's own
-  WebAssembly runtime,
-  [Piper](https://github.com/rhasspy/piper) (fast, ~21–137 MB per voice: `medium` around 60 MB, `high` around 110; the default on phones),
-  [Supertonic 3](https://huggingface.co/Supertone/supertonic-3) (~402 MB; 10 voices, each in 31 languages; two to
-  three times faster than Kokoro on a processor) and [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (~347 MB
-  with a graphics card, ~114 MB without; the richest English on a GPU). Inference runs on [ONNX Runtime Web](https://onnxruntime.ai/):
-  WebGPU where the browser allows it, WebAssembly everywhere else.
-- **Gapless playback** — sentences are synthesised a few ahead of the playhead and scheduled
-  sample-accurately through the Web Audio API, so there is no pause between them. Where the GPU
-  is out of reach a pool of workers synthesises several sentences at once, which is what keeps
-  the slower voices ahead of the playhead.
-- **PDFs, still looking like PDFs** — a PDF in a tab has no text an extension can reach, so
-  Aloud opens it in a reader of its own, draws the real pages with
-  [pdf.js](https://mozilla.github.io/pdf.js/) and highlights each sentence **on the page itself**
-  — figures, tables and columns intact. A reflowed-text view is one setting away for small
-  screens. A PDF on a website needs one click to grant Aloud access to that site; local
-  `file://` PDFs work on Chromium once *Allow access to file URLs* is enabled; Firefox never
-  grants add-ons file access, so drop the file onto the reader page instead.
-- **In-place highlighting** — the sentence being spoken is highlighted with the CSS Custom
-  Highlight API (zero DOM mutation, cannot break page layout), with a `<span>` fallback. Lost
-  your place? The bar's **↧** button scrolls back to the sentence being read, and lights up by
-  itself once that sentence leaves the screen.
-- **A bar that never moves, and never goes quiet** — the control bar's size depends on the
-  viewport and nothing else. Everything it has to say — loading a voice and how far along it is,
-  buffering, a confirmation of what you just changed, an error — appears in a pill *above* the
-  bar, so no button ever shifts under the pointer. Every control reports back: change the speed
-  and it says so, jump and it names the sentence you landed on.
-- **Light, dark, or whatever your system says** — one setting, applied to the reading bar, the
-  settings page, the PDF reader and the walkthrough alike.
-- **A walkthrough on first run** — six short steps, one of them Aloud reading the walkthrough
-  itself aloud, so the bar is familiar before it appears over something you actually wanted to
-  read. Reopen it any time from the settings page; a one-time card above the bar names the
-  controls the first time you read a real page.
-- **Picks up where you left off** — close a long article halfway and reopening it lands on the
-  sentence you stopped at, with a one-click "Start over". The position is checked against the
-  sentence's text, so an edited page never resumes in the wrong place; it is stored on this
-  device only and can be cleared from the settings page.
-- **Readable on someone else's page** — a highlight is a wash over text Aloud does not control.
-  On a dark page the wash becomes paler and fainter (yellow at full strength over black is mud),
-  so the page's own light text stays readable; a sentence that would still be hard to read gets
-  black or white letters, and everything else keeps the page's colours. While Aloud reads, your
-  saved highlights turn into underlines, so the only wash is the sentence being read, and the
-  reading bar slides out of the way when you scroll down and keeps the sentence clear of itself.
-- **Reads what you see** — only the prose the page shows: a translation collapsed out of sight, a
-  styled "Translate?" button or a closed `<details>` is not read, and a passage you reveal while
-  listening is read when it is reached — hidden again, it is passed over.
-- **Each language in its own voice** — the language of every paragraph is told apart (the page's
-  own `lang` markup, the browser's language detector, and the paragraphs around a short reply or
-  a name), and each is read by a downloaded voice that speaks it: an Italian story with English
-  translations switches between an Italian and an English voice. When your voice does not speak a
-  passage's language, Auto picks Supertonic first, then Kokoro, then Piper — Supertonic is two
-  to three times faster than Kokoro on a processor and reads 31 languages. Pick a voice on the bar during
-  a passage to make it that language's voice on every page, lock a page to one voice, or correct
-  a passage's language, from the language button on the bar. A language with no voice is read in
-  English, and the bar says so, with a link to its voices; Settings can have such languages skipped
-  instead. Settings → *Voice* shows it all on one board: each language wired to the voice that reads
-  it, each voice a click to choose and ▶ to hear in its own language.
-- **Said the way people say it** — a reply and its attribution (*"No!" he said.*), a run of short
-  exclamations, a French reply with its closing guillemet, are each spoken as one utterance, and
-  abbreviations such as *Sig.*, *Sra.* or *z. B.* no longer end a sentence.
-- **Live words a minute** — beside the speed, the pace of the passage being heard: its words over
-  its audio, set as each passage starts and held until the next, so the figure is steady. A speed
-  change shows when the first passage made at the new speed begins.
-- **Every speed is the real one, up to 4×** — the voice models themselves barely get faster past
-  2× (each sound keeps at least one audio frame: asked for 4×, Piper and Kokoro read about 2.2×), so
-  past 1.5× the model reads at 1.5× and Aloud speeds its audio up the rest of the way at the same
-  pitch (WSOLA). 2× reads at 2×, word for word clear; 4× is 4×.
-- **Word by word** — with Piper and Kokoro voices the word being spoken is marked inside the
-  sentence, timed from the voice model's own phoneme durations rather than estimated. It is shown
-  as a darker shade by default; Settings switches it to an underline, or off.
-- **Highlights and notes on any page** — select text and press <kbd>K</kbd> (on a page Aloud is
-  running on) or <kbd>Alt</kbd>+<kbd>K</kbd>
-  (or right-click → *Highlight and keep in Notes*): kept at once, in your default colour and
-  style — highlight or underline — with nothing to answer. Click a mark to recolour it, switch
-  its style, or write its note by just typing; <kbd>Delete</kbd> removes it. The colours are
-  yours to rename and change, and passages kept with a note get their own colour. The passage is
-  marked again whenever you come back — anchored by its text, so it survives the page being
-  edited around it. While Aloud reads, the same key (or the bookmark on the bar) keeps the
-  sentence being read.
-- **Your notes, on the page** — <kbd>Alt</kbd>+<kbd>N</kbd>, <kbd>Alt</kbd>+<kbd>K</kbd> with
-  nothing selected, or right-click → *Show my notes*: a panel listing this page's notes or all of
-  them, searchable, each one a click from its place.
-- **Your keys** — the shortcuts deliberately avoid <kbd>Alt</kbd>+<kbd>Shift</kbd>+letter, which
-  is the chord Firefox gives web pages for their own access keys. Settings → *Shortcuts* shows
-  what each key is set to and, on Firefox, sets it to whatever you press.
-- **Drifted off?** <kbd>Alt</kbd>+<kbd>,</kbd> on Firefox (or <kbd>Z</kbd> on the bar)
-  plays the sentence again, or the one before if it has only just begun, and shows you where that
-  is; each press goes back one more. Chromium allows an add-on only four
-  default shortcuts, so there you choose this one's key yourself, in `chrome://extensions/shortcuts`.
-- **One page for everything** — the Library (*Continue*, *Up next*, *Notes*, *History*, *Statistics*) and every
-  setting sit side by side in Aloud's page, one click apart. *Continue* lists what you stopped
-  part-way through with how much is left, *Up next* is the reading queue with listening times,
-  *Notes* filters by site and tag, exports as Markdown or JSON and imports a notes file back
-  (merging, never doubling), *History* keeps how far you got in everything, and *Statistics* shows
-  words and time heard, documents finished, by day, site and language — only audio you actually
-  heard, never a saved MP3 — all on this device.
-- **Backup & restore** — one file with every setting, voice choice, key, colour, note, the queue,
-  history, statistics, video speeds and PDF marks. Restoring merges rather than overwrites, then offers to
-  download the voices the backup had and to allow the sites that were allowed.
-- **Save as MP3** — the whole page or PDF as one audio file, in the voice and speed you chose.
-- **Mark up PDFs** — highlight, underline, strike through and comment on the page itself, and
-  save the marks into the PDF file.
-- **Speed control for every player** — the same keyboard control for any `<video>` or `<audio>` on
-  the web, not just Aloud's own reading: <kbd>D</kbd> / <kbd>S</kbd> step the speed, <kbd>G</kbd>
-  jumps to your preferred speed, <kbd>R</kbd> goes back to 1×, <kbd>Shift</kbd> with D or S
-  steps through your presets, and <kbd>Z</kbd> / <kbd>X</kbd> rewind and skip forward 10 seconds —
-  even on players with no seek bar, like YouTube Shorts. All rebindable. The speed is remembered per site, re-applied when a
-  player resets it between videos, and shown briefly on the video. It starts with
-  <kbd>Alt</kbd>+<kbd>M</kbd> and asks for no permissions; sites you list in
-  settings start it by themselves, one granted site at a time.
-  On those sites it can also stop video and audio from playing by themselves (off until you
-  switch it on): anything you start — a click, a tap, <kbd>Space</kbd> — plays as usual.
-- **Offline & private** — models download once from Hugging Face and are cached on the device.
+- **Reads the article, not the page.** Menus, ads and buttons are left out. It reads what you can
+  see, and follows along with a highlight on the sentence and the word being spoken.
+- **Natural voices, on your device.** Four families of neural voices in up to 49 languages. A page
+  in two languages is read by two voices, each in its own.
+- **PDFs too,** shown as real pages, with the sentence highlighted on the page itself. You can
+  mark them up and save the marks into the file.
+- **Up to 4× speed,** and every speed is the real one, at the same pitch.
+- **Picks up where you stopped,** on this device or, if you connect your own Dropbox, on your others.
+- **Highlights and notes on any page,** kept and shown again when you come back.
+- **Save as MP3:** the whole page in the voice and speed you chose.
+- **A speed control for every video and audio player** on the web, YouTube Shorts included: faster,
+  slower, rewind and skip from the keyboard, or with a button you can drag on a phone.
 
-## Which voice to use
+## Voices
 
-What decides it is not the browser but whether the extension's Worker can reach the GPU through
-WebGPU. With it, Chromium and Firefox perform the same:
+| | Languages | Download | Best for |
+|---|---|---|---|
+| **Phonon** (the default) | English, French, German, Spanish, Portuguese · 102 voices | about 100 MB | Fast on any computer, no graphics card needed |
+| **Piper** | 49 languages · 171 voices | 20–140 MB per voice | Phones, and languages the others lack |
+| **Supertonic 3** | 31 languages · 10 voices | about 400 MB | Many languages in one download |
+| **Kokoro** | English, plus Spanish, French, Hindi, Italian, Portuguese · 41 voices | 114 MB, or 347 MB with a graphics card | The richest English, on a graphics card |
 
-| | Phonon | Piper | Supertonic 3 | Kokoro-82M |
-|---|---|---|---|---|
-| **Chromium or Firefox, with WebGPU** | fast, in 5 languages | fast | good, in 31 languages | **best English, faster than Piper** |
-| **Chromium or Firefox, CPU only** | **the default: about 2× real time, in 5 languages** | fast | ~1.2× real time per worker; two keep up | works, ~3× slower than real time |
-| **Firefox Android** | **the default** (CPU only, one worker) | smallest and quickest, about real time | works, slower than speech on older phones (pauses to catch up) | far too slow |
+Kokoro and Supertonic are much faster when the browser lets Aloud use your graphics card.
+[Using your graphics card](https://aloud.souj.dev/gpu.html) explains how, and what to do if a voice
+comes out silent or garbled. Settings → Advanced tells you which applies to your machine.
 
-Chromium has WebGPU on by default; Firefox turns it on for pages on Windows but not for the
-workers Aloud synthesises in (see below). [Using your graphics card](https://aloud.souj.dev/gpu.html)
-explains, for readers rather than developers, why turning it on is safe and how to do it in each
-browser; Settings → Advanced links to it, and the reader mentions it once when Kokoro or
-Supertonic is running on the CPU.
+## Your privacy
 
-Firefox ships WebGPU switched off, and extensions get no `SharedArrayBuffer`
-([bug 1673477](https://bugzilla.mozilla.org/show_bug.cgi?id=1673477)), so ONNX Runtime is stuck
-on a single WASM thread there by default. Aloud compensates with a pool of synthesis workers, and
-Piper is the comfortable default. With WebGPU, in either browser, Kokoro is both the best
-sounding option and a fast one.
+There is no Aloud server. What you read, your notes and your history stay in your browser. Aloud
+only goes online when you ask it to: to download a voice (from Hugging Face), to fetch a page or
+PDF you asked it to read, or to sync through a Dropbox you connected yourself.
+[The privacy policy](https://aloud.souj.dev/privacy.html) has every detail.
 
-**Firefox users can have the GPU path too.** In `about:config`, set
-`dom.webgpu.enabled` and `dom.webgpu.workers.enabled` to `true` (the second one is the one that
-matters — synthesis runs in a worker), plus `gfx.webrender.all` if hardware acceleration is off
-on your machine, then restart. Kokoro then runs on the GPU.
-These are experimental settings; set them back to `false` if Firefox misbehaves, and Aloud
-returns to the CPU path on its own. The settings page spells the prefs out, copies them for you,
-and re-checks — it asks a real synthesis worker whether it has a GPU rather than assuming from
-the browser name, so what it tells you is what your machine actually does. The GPU path reads
-Kokoro's full-precision build, so the first read on a GPU fetches it once: the quantised build
-loads on WebGPU but produces noise rather than speech, so the two paths cannot share a file.
+## Keys
 
-The options page tells you which of these applies to your machine; you never have to remember
-this table.
+| | Firefox | Chrome |
+|---|---|---|
+| Read this page, or stop | <kbd>Alt</kbd>+<kbd>R</kbd> | <kbd>Alt</kbd>+<kbd>R</kbd> |
+| Read the selection / read from here | <kbd>Alt</kbd>+<kbd>L</kbd> / <kbd>Alt</kbd>+<kbd>G</kbd> | choose in `chrome://extensions/shortcuts` |
+| Highlight the selection and keep it | <kbd>Alt</kbd>+<kbd>K</kbd> | <kbd>Alt</kbd>+<kbd>K</kbd> |
+| Show your notes on this page | <kbd>Alt</kbd>+<kbd>N</kbd> | <kbd>Alt</kbd>+<kbd>N</kbd> |
+| Video speed control on or off | <kbd>Alt</kbd>+<kbd>M</kbd> | <kbd>Alt</kbd>+<kbd>M</kbd> |
 
-## Install (temporary, for testing)
+While a page is being read: <kbd>P</kbd> play or pause, <kbd>S</kbd> / <kbd>D</kbd> slower or
+faster, <kbd>R</kbd> normal speed, <kbd>Z</kbd> / <kbd>X</kbd> back or forward a sentence,
+<kbd>N</kbd> keep the sentence in your notes, <kbd>F</kbd> scroll back to it.
+
+On a video: <kbd>S</kbd> / <kbd>D</kbd> slower or faster, <kbd>G</kbd> your speed,
+<kbd>R</kbd> normal, <kbd>Z</kbd> / <kbd>X</kbd> back or forward 10 seconds, <kbd>M</kbd> mute.
+
+Every key can be changed in Settings → Shortcuts.
+
+## Build it yourself
+
+You need Node 22.12 or later.
 
 ```bash
-npm install
-npm run build          # builds BOTH .output/firefox-mv3 and .output/chrome-mv3
+npm ci
+npm run build      # .output/firefox-mv3 and .output/chrome-mv3
 ```
 
-**Firefox** — `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on** →
-`.output/firefox-mv3/manifest.json`
+Load `.output/firefox-mv3/manifest.json` in Firefox (`about:debugging` → This Firefox → Load
+Temporary Add-on), or the `.output/chrome-mv3` folder in Chrome (`chrome://extensions` → Developer
+mode → Load unpacked). Each browser needs its own folder.
 
-**Chrome / Edge / Brave** — `chrome://extensions` → enable **Developer mode** →
-**Load unpacked** → select the `.output/chrome-mv3` **folder**
+[BUILD.md](BUILD.md) covers the tests, the release checks and the Safari build;
+[docs/DESIGN.md](docs/DESIGN.md) explains how it works and why.
 
-> Load the folder that matches the browser. The two manifests are not interchangeable: Firefox
-> MV3 uses a background *event page* (`background.scripts`) and Chromium uses a *service worker*
-> (`background.service_worker`). Loading the Firefox build in Chrome fails with
-> `'background.scripts' requires manifest version of 2 or lower`, and because the background then
-> never runs, the toolbar icon appears but does nothing.
+## Help and feedback
 
-Installing opens the **walkthrough** — six steps, including a live demo that reads the page
-itself aloud. Then open an article and click the **Aloud** toolbar button (or press
-`Alt+R`, which you can change). The first run downloads the voice; after that it works offline. Right-click gives
-**Read selection aloud** and **Read from here** (keys too: `Alt+L` and `Alt+G` in Firefox; in
-Chromium you pick them yourself in `chrome://extensions/shortcuts`), and `Alt+K` highlights the
-selected text and keeps it in Notes. Settings — theme, engine, voice, speed,
-highlight colour, cached-model management — are on the extension's options page, which also
-reopens the walkthrough.
-
-## Checking that it speaks
-
-```bash
-npm run build:chrome
-npm run say -- --engine kokoro --voice af_heart          # writes kokoro-af_heart-cpu.wav
-npm run say -- --engine kokoro --voice af_heart --gpu    # the WebGPU path
-```
-
-`scripts/say.mjs` captures what a voice actually says into a WAV. It exists because every cheaper
-check — the worker replied, audio came back, the right number of samples at the right rate —
-passes happily on audio that is not speech: Kokoro's quantised weights load on WebGPU and return
-audio of the right length, but what comes out is Mandarin-sounding noise rather than the sentence.
-Play the file, or run it through any speech-to-text and see whether the sentence comes back.
-
-## How it works
-
-The synthesis engine runs in a **Web Worker at the extension origin**, not in the content script.
-That is the load-bearing decision: the Worker gets the extension's CSP (`wasm-unsafe-eval`)
-regardless of what the host page's CSP allows, and a lifetime tied to the tab rather than the
-~30 s idle eviction that both browsers apply to background contexts.
-
-The Worker is created by a hidden `synth-host.html` iframe rather than directly by the content
-script, because Firefox forbids a content script from constructing a `moz-extension://` Worker.
-Chromium would allow it, but routing both through the iframe keeps one code path.
-
-The iframe owns a **pool** of those Workers, fed from a single queue: one sentence per idle
-worker, so the reader's opening burst of requests spreads across the pool instead of queueing up
-behind worker 0. How many workers there are is decided by *probing* for a GPU adapter rather than
-by which browser this is — Chromium exposes `navigator.gpu` on machines that then hand back no
-adapter at all, and treating those as GPU machines is what used to leave Kokoro running on one
-worker there.
-
-The content script keeps all the DOM work — extraction, sentence planning, highlighting, audio
-scheduling — and the background is a thin coordinator that injects on `activeTab`, enforces one
-active session at a time, and hands PDF bytes to the reader page.
-
-Everything that genuinely differs between browsers is a named capability in
-[`src/shared/browser-env.ts`](src/shared/browser-env.ts), so the rest of the code reads
-`if (caps.workerWebGPU)` rather than `if (Firefox)`.
-
-Full rationale: [`docs/DESIGN.md`](docs/DESIGN.md). Build details: [`BUILD.md`](BUILD.md).
+Found a bug, or a page it reads wrongly? [Open an issue](https://github.com/smailoujaoura/aloud/issues)
+or use the [feedback page](https://aloud.souj.dev/feedback.html).
 
 ## Licence
 
-**GPL-3.0-or-later** — because eSpeak-NG (the phonemizer) is GPLv3. See
-[`THIRD_PARTY.md`](THIRD_PARTY.md) for every bundled component, and
-[`PIPER_VOICE_LICENCES.md`](PIPER_VOICE_LICENCES.md) for what each Piper voice was trained on and
-under what licence — they differ, and some are for non-commercial use only. Voices are never
-bundled: each is downloaded from Hugging Face when you choose it.
+GPL-3.0-or-later. [THIRD_PARTY.md](THIRD_PARTY.md) lists everything Aloud is built from. Voices
+are not included: each is downloaded when you choose it, under its own licence
+([PIPER_VOICE_LICENCES.md](PIPER_VOICE_LICENCES.md) for Piper's; Phonon's is for non-commercial use).
 
-Made by Smail Oujaoura, with [Claude Code](https://claude.com/product/claude-code).
+Made by Smail Oujaoura with [Claude Code](https://claude.com/product/claude-code).

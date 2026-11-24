@@ -27,7 +27,10 @@ const server = createServer((req, res) => {
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const origin = `http://127.0.0.1:${server.address().port}`;
 
-const browser = await pw[kind].launch();
+// Chromium's new headless mode (channel 'chromium'): no window, and, unlike the old headless shell,
+// the machine's real GPU, so a voice on the GPU path is checked too (the old one has none, or a
+// software one). WebKit's headless mode has the GPU already.
+const browser = await (kind === 'chromium' ? pw.chromium.launch({ channel: 'chromium', headless: true }) : pw[kind].launch());
 const page = await browser.newPage();
 page.on('console', (m) => { const t = m.text(); if (/error|fail|warn/i.test(m.type()) || /\[aloud\]/.test(t)) console.log(`  [${m.type()}] ${t.slice(0, 300)}`); });
 page.on('pageerror', (e) => console.log('  [pageerror]', String(e).slice(0, 300)));
