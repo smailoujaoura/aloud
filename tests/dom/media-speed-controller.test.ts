@@ -421,3 +421,68 @@ describe('the keys, on a page with nothing to control', () => {
     controller.stop();
   });
 });
+
+describe('Video & audio speed settings at work on a playing video (#12)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    document.body.innerHTML = '';
+  });
+  afterEach(() => vi.useRealTimers());
+
+  /** The settings the report tried: a step of 0.5, presets with 2.75 added and 4 taken out, your speed 1.75. */
+  const settings = { ...DEFAULT_MEDIA_SPEED, step: 0.5, presets: [1, 2, 2.75], preferred: 1.75 };
+  const press = (key: string, shiftKey = false) => {
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: shiftKey ? key.toUpperCase() : key, code: `Key${key.toUpperCase()}`, shiftKey, bubbles: true, cancelable: true }));
+    document.body.dispatchEvent(new KeyboardEvent('keyup', { key: shiftKey ? key.toUpperCase() : key, code: `Key${key.toUpperCase()}`, shiftKey, bubbles: true, cancelable: true }));
+    vi.advanceTimersByTime(50);
+  };
+  const begin = () => {
+    const el = player();
+    const controller = new MediaSpeedController({ settings, initialRate: null, onRate: () => undefined });
+    controller.start();
+    return { el, controller };
+  };
+
+  it('D and S move the speed by Step', () => {
+    const { el, controller } = begin();
+    press('d');
+    expect(el.playbackRate).toBe(1.5);
+    press('d');
+    expect(el.playbackRate).toBe(2);
+    press('s');
+    expect(el.playbackRate).toBe(1.5);
+    controller.stop();
+  });
+
+  it('Shift+D and Shift+S walk the presets: 2.75 added, 4 gone', () => {
+    const { el, controller } = begin();
+    press('d', true);
+    expect(el.playbackRate).toBe(2);
+    press('d', true);
+    expect(el.playbackRate).toBe(2.75);
+    press('d', true);
+    expect(el.playbackRate).toBe(2.75); // the end of the list: no 4 any more
+    press('s', true);
+    expect(el.playbackRate).toBe(2);
+    controller.stop();
+  });
+
+  it('G jumps to Your speed, and back to 1', () => {
+    const { el, controller } = begin();
+    press('g');
+    expect(el.playbackRate).toBe(1.75);
+    press('g');
+    expect(el.playbackRate).toBe(1);
+    controller.stop();
+  });
+
+  it('a change in Settings applies to a page already open', () => {
+    const { el, controller } = begin();
+    controller.setSettings({ ...settings, step: 0.25, preferred: 2.5 });
+    press('d');
+    expect(el.playbackRate).toBe(1.25);
+    press('g');
+    expect(el.playbackRate).toBe(2.5);
+    controller.stop();
+  });
+});
