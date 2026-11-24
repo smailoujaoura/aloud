@@ -850,7 +850,8 @@ function wire(): void {
         // Also forgets which voices' GPU did not really speak in this browser (synth-host/entry.ts):
         // the next voice tries the GPU again, and tests it again.
         await browser.storage.local.remove('gpuVerdicts').catch(() => undefined);
-        await checkWorkerGpu();
+        // Its answer is what the button says when done: dropped, the check looked like a dead button.
+        return checkWorkerGpu();
       },
       undefined,
     ),

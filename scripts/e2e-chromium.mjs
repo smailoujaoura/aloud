@@ -134,6 +134,19 @@ try {
     });
     await page.waitForTimeout(1200);
     check(errors.length === 0, 'Settings: every view opens and redraws without an error', errors.join(' | '));
+    // "Check for a GPU again" must answer, found or not: an answer dropped once left it saying
+    // "Checking…" and then nothing, like a dead button.
+    await page.goto(`chrome-extension://${ID}/options.html#advanced`);
+    await page.waitForTimeout(600);
+    await page.click('#gpuRecheck');
+    const answer = await page
+      .waitForFunction(() => {
+        const t = document.getElementById('toast');
+        return t && !t.hidden && /graphics card/i.test(t.textContent ?? '') ? t.textContent : null;
+      }, null, { timeout: 15000 })
+      .then((h) => h.jsonValue())
+      .catch(() => null);
+    check(!!answer, 'Settings: "Check for a GPU again" says what it found', String(answer ?? 'no answer shown'));
     await page.close();
   }
 
