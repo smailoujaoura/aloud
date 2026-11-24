@@ -275,6 +275,9 @@ function gpuHintText(): string {
 
   if (page?.status === 'unsupported') return 'Voices run on the processor: this browser has no WebGPU.';
 
+  // Safari has no chrome://gpu, and nothing a reader can switch on.
+  if (caps.engine === 'webkit') return 'Voices run on the processor: Safari gives Aloud’s worker no graphics card.';
+
   return 'Voices run on the processor: the browser found no usable graphics card. Check chrome://gpu.';
 }
 

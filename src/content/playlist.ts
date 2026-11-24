@@ -214,7 +214,9 @@ export function itemStartNode(index: TextIndex | null | undefined, item: Playlis
     (item.span && placeForSpan(index, item.span.start, item.span.end)) ||
     (item.blockSpan && placeForSpan(index, item.blockSpan.start, item.blockSpan.end)) ||
     null;
-  return place ? place.startNode : null;
+  // Not a node the page has removed since: compared with the page, its position is arbitrary, and
+  // "read from here" by an element could start at text a live feed had already thrown away.
+  return place && place.startNode.isConnected ? place.startNode : null;
 }
 
 /** Leading silence (seconds) to prepend to a chunk's audio. */
