@@ -55,6 +55,7 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 > • The reading bar shows the speed it reads at, whatever it is: a speed set in Settings, Voice that is not one of the bar's own (1.3×, 2.75×) left its speed list empty. Faster and slower (D and S) step from it to the usual speed beside it.
 > • Settings, Video speed says what it is for (videos and audio on websites, not the reading voice) and which shortcut starts it.
 > • Kokoro and Supertonic speak on Windows Firefox with a graphics card: a voice that loads there but comes out silent or as noise runs on the processor instead, and says so.
+> • Moving within a video no longer changes its speed: on some sites a click on the progress bar dropped it to 1× and remembered that.
 > • On a phone, the speed button on a video can be dragged out of the way, and stays where you put it on each site.
 > • Scanned PDFs show their pages (they were read over a blank or black page).
 
@@ -241,10 +242,10 @@ compatibility functions it needs are in pdfjs-support/polyfills.mjs, plain and c
 - **Data collection:** the manifest declares `data_collection_permissions: { required: ["none"], optional: ["websiteContent", "browsingActivity"] }`:
   websiteContent is asked for when a reader sets up their own speech server (see above), and both
   when they connect their Dropbox (1.0.4).
-- **Source code:** upload `.output/tts-reader-1.0.4-sources.zip` with this note for the reviewer
+- **Source code:** upload `.output/tts-reader-1.0.5-sources.zip` with this note for the reviewer
   (AMO's field takes at most 3,000 characters; keep it under 2,900):
 
-  > Build: Node 22.23, npm 10.9, Linux: npm ci && npm run build:firefox (the archive's .npmrc sets legacy-peer-deps, which the lockfile needs). Output: .output/firefox-mv3/, byte-identical to the uploaded package (all 470 files' SHA-256 compared after a clean build of the source archive). Nothing is minified.
+  > Build: Node 22.23, npm 10.9, Linux: npm ci && npm run build:firefox (the archive's .npmrc sets legacy-peer-deps, which the lockfile needs). Output: .output/firefox-mv3/, byte-identical to the uploaded package (all 487 files' SHA-256 compared after a clean build of the source archive). Nothing is minified.
   >
   > Vendored, unmodified npm files (ONNX Runtime Web, pdf.js's modern build, piper-phonemize WASM, phonon-tts 0.4.2, Gradium's Phonon runtime built from https://github.com/gradium-ai/xn-ptts) are copied from node_modules by scripts/sync-assets.mjs, pinned by the lockfile; versions in THIRD_PARTY.md. pdfjs-support/ is Aloud's own: the few built-ins pdf.js's modern build needs that older browsers lack. phonon-tts gets its model as blob: URLs of files Aloud downloaded and checked, so its Hugging Face lookup never runs.
   >
@@ -266,8 +267,9 @@ compatibility functions it needs are in pdfjs-support/polyfills.mjs, plain and c
 
 ## Before pressing submit
 
-- [ ] The privacy policy deployed (website/privacy.html, in effect from 12 November 2026, for
-      1.0.2 to 1.0.4: 1.0.4 adds sync through the reader's own Dropbox, off until they connect it)
+- [ ] The privacy policy deployed (website/privacy.html, in effect from 12 November 2026, updated
+      24 November 2026, for 1.0.2 to 1.0.5: 1.0.4 adds sync through the reader's own Dropbox, off until
+      they connect it; 1.0.5 lists the phone speed button's place per site and the GPU test result)
 - [ ] Chrome, Privacy practices: the identity and alarms justifications (table above) pasted, and
       **Web history** ticked as well as Website content (1.0.4)
 - [ ] Dropbox console: the redirect addresses saved, "Enable additional users" pressed

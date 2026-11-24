@@ -45,14 +45,18 @@ settings that no script can make, so the extension has not yet run in Safari on 
   Firefox and Chromium only): whether Safari loads a module as an extension's service worker
   depends on its version, and Apple's converter says it does not support `background.type`.
 - **Safari is its own browser in the code** (shared/browser-env.ts: `webkit`), and an iPhone or
-  iPad is a phone (`touchFirst`): one voice loaded at a time, one synthesis worker, the speed button
+  iPad is a phone (`touchFirst`): at most two voices loaded at once (the page's and one other), one synthesis worker, the speed button
   on videos, no Shortcuts page. An iPad that calls itself a Mac is told by its touch screen.
 - **No `identity` permission.** Safari has no identity API, so Dropbox sign-in uses the code Dropbox
   shows, as on Firefox for Android (options/dropbox-panel.ts already does this when
   `browser.identity` is missing).
-- **Safari 17 and later** (`vite.build.target`, and iOS 17 in the Xcode project). The CSS Custom
-  Highlight API arrived in 17.2; on 17.0 and 17.1 the sentence is marked by wrapping it in a span
-  (highlight/highlighter.ts), and words are not marked.
+- **Safari 17.2 and later.** The build targets Safari 17 (`vite.build.target`), and the CSS Custom
+  Highlight API arrived in 17.2. The Xcode project requires iOS 17.2 on iPhone and iPad. On the Mac
+  it cannot require a Safari version: the app needs macOS 12, and Safari 17 runs on macOS 12 to 14
+  as well as on 15 and later, so a Mac whose Safari was never updated past 16 can install it. On
+  Safari 17.0 and 17.1 the sentence is marked by wrapping it in a span (highlight/highlighter.ts),
+  words are not marked, and tapping a sentence or N on the one being read can land on the wrong
+  sentence (the span cuts the text node the reader finds sentences in).
 - **Aloud's own code is GPL-3.0.** Before an App Store submission, its author adds an App Store
   exception to Aloud's own licence: `licenses/LICENSE.txt` in the package is that licence as it
   stands in the repository. The third-party code left in the package (ONNX Runtime, pdf.js,

@@ -69,7 +69,7 @@ describe('which browser, and what kind of device', () => {
     expect(mac).toMatchObject({ engine: 'webkit', formFactor: 'desktop', touchFirst: false, backgroundIsServiceWorker: true, workerWebGPU: false });
   });
 
-  it('an iPhone is a phone: one voice loaded at a time, the speed button on the video', () => {
+  it('an iPhone is a phone: at most two voices loaded at once, the speed button on the video', () => {
     const phone = as('Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1');
     expect(phone).toMatchObject({ engine: 'webkit', formFactor: 'ios', touchFirst: true });
   });

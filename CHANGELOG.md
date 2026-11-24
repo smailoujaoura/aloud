@@ -6,14 +6,15 @@ Website-only and documentation changes are not listed: they never reach the exte
 
 ## Unreleased
 
-## 1.0.5 (2026-11-22)
-
 ### Added
-- **Aloud for Safari, on the Mac, iPhone and iPad**, as an app from the App Store. It reads with
-  Phonon and Supertonic, or a speech server of your own; Piper and Kokoro are not in it (they read
-  through eSpeak-NG, whose licence the App Store's terms do not allow). On an iPhone or iPad it
-  behaves as on a phone: one voice loaded at a time, and the speed button on videos. Dropbox
-  sign-in there uses the code Dropbox shows.
+- **Aloud for Safari, on the Mac, iPhone and iPad**, as an app from the App Store (not yet
+  submitted: it has not run inside Safari; see docs/SAFARI.md). It reads with Phonon and
+  Supertonic, or a speech server of your own; Piper and Kokoro are not in it (they read through
+  eSpeak-NG, whose licence the App Store's terms do not allow). On an iPhone or iPad it behaves as
+  on a phone: at most two voices loaded at once, and the speed button on videos. Dropbox sign-in
+  there uses the code Dropbox shows.
+
+## 1.0.5 (unreleased: dated on release)
 
 ### Fixed
 - **A page being read no longer slows down, in Firefox most of all.** On a long article, a page
@@ -32,11 +33,16 @@ Website-only and documentation changes are not listed: they never reach the exte
 - **Settings, Video speed says what it is for.** Its speeds, steps and keys are for videos and
   audio on websites, not for Aloud's reading voice, and do nothing on a page until the control is
   started there: the page now says both, with the shortcut that starts it (#12).
+- **Moving within a video no longer changes its speed.** On some sites, a click on the progress
+  bar dropped the speed to 1×, and stored 1× as the site's speed: players that reset the speed in
+  the same click, on the release of a drag, by loading the video again at the new position, or by
+  swapping in a second video. Each is now told from a speed you chose.
 - The video speed control looks through a page for new players twice a second at most, not on
   every change the page makes.
 - **On a phone, the speed button on a video can be moved.** Drag it with a finger (or the mouse)
-  anywhere on the video, off the player's own buttons it covered; it stays there on that site, in
-  full screen and when the phone turns too.
+  anywhere on the video, off the player's own buttons it covered; it stays there on that site (for
+  a player embedded from another site, such as YouTube's, wherever that player is), in full screen
+  and when the phone turns too.
 - **Kokoro and Supertonic speak on Windows Firefox with a graphics card** (#10). Firefox on
   Windows gives Aloud WebGPU, and on some graphics cards Kokoro was silent and Supertonic made
   noise, with nothing failing. A voice that loads on the graphics card now says a short test phrase
