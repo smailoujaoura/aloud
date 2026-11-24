@@ -548,7 +548,25 @@ code {
 }
 .key-button:hover { border-color: var(--accent-solid); }
 .key-button.listening { border-color: var(--accent-solid); background: var(--accent-soft); color: var(--fg); }
-.speed-forget { margin: 0 0 16px; }
+.speed-forget { margin: 0 0 16px; display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Video speed: each key in a line with the value it uses, read as what it does. */
+.speed-acts { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 6px; }
+.speed-act {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 10px 12px; border-radius: 10px;
+  background: var(--surface); border: 1px solid var(--border);
+}
+.speed-act-title { font-size: 12px; font-weight: 600; color: var(--fg-muted); }
+.speed-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+.speed-line .key-button { min-width: 2.75rem; padding: 7px 10px; }
+.speed-line select { flex: 0 1 auto; width: auto; min-width: 0; max-width: 100%; }
+.speed-word { white-space: normal; }
+.preset-chips { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
+.preset-chip { padding-top: 3px; padding-bottom: 3px; }
+.preset-chip:not(:has(.chip-x)) { padding-right: 11px; }
+.preset-add { width: 5rem; font: inherit; font-size: 13px; padding: 4px 8px; }
+.speed-keys-hint { margin: 2px 0 16px; }
 
 /* Why this page opened: the toolbar button was pressed somewhere Aloud cannot read. */
 .cant-read {

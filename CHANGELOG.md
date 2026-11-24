@@ -34,7 +34,11 @@ Website-only and documentation changes are not listed: they never reach the exte
   from 1.3× used to go down to 1.25×.
 - **Settings, Video speed says what it is for.** Its speeds, steps and keys are for videos and
   audio on websites, not for Aloud's reading voice, and do nothing on a page until the control is
-  started there: the page now says both, with the shortcut that starts it (#12).
+  started there: the page now says both, with the shortcut that starts it (#12). Each key now
+  sits beside the value it uses, in a line that says what it does ("S slower, D faster, by
+  0.25×", "G jumps to 1.5× and back to 1×"), instead of the values above and the keys below.
+  Preset speeds are chips to remove or add, Your speed can be any quarter step (1.75× was
+  missing), and at 1× it says why G does nothing. On a phone, only the step its button uses.
 - **Moving within a video no longer changes its speed.** On some sites, a click on the progress
   bar dropped the speed to 1×, and stored 1× as the site's speed: players that reset the speed in
   the same click, on the release of a drag, by loading the video again at the new position, or by

@@ -22,8 +22,11 @@ describe('video speed settings on a phone', () => {
     env.touchFirst = true;
     const { host } = render();
     expect(host.querySelector('.row.check')!.textContent).toContain('Show the speed button on every video');
-    expect(host.textContent).not.toContain('Keys, while a page has a video');
+    expect(host.textContent).not.toContain('While a page has a video or audio');
     expect(host.textContent).toContain('one tap of − or +');
+    // Only what the button uses: the keys' own speeds are set on a computer.
+    expect(host.querySelector('[aria-label="Your speed"]')).toBeNull();
+    expect(host.querySelector('.preset-chips')).toBeNull();
   });
 
   it('the switch asks for every site, from the tap, and then saves it', async () => {
@@ -46,10 +49,10 @@ describe('video speed settings on a phone', () => {
     expect(save).not.toHaveBeenCalled();
   });
 
-  it('on a computer: the keys as before, no phone switch', () => {
+  it('on a computer: the keys, no phone switch', () => {
     env.touchFirst = false;
     const { host } = render();
-    expect(host.textContent).toContain('Keys, while a page has a video');
+    expect(host.textContent).toContain('While a page has a video or audio');
     expect(host.textContent).not.toContain('Show the speed button on every video');
   });
 
@@ -68,5 +71,61 @@ describe('video speed settings on a phone', () => {
     env.touchFirst = true;
     const { host } = render();
     expect(host.textContent).not.toContain('Show a speed button on videos');
+  });
+});
+
+describe('video speed settings on a computer: each key beside what it uses (#12)', () => {
+  const draw = (over: Partial<typeof DEFAULT_MEDIA_SPEED> = {}) => {
+    env.touchFirst = false;
+    const host = document.createElement('div');
+    const save = vi.fn(async () => {});
+    renderMediaSpeedPanel(host, { settings: { ...DEFAULT_MEDIA_SPEED, ...over }, save, toast: vi.fn() });
+    const card = (title: string) => [...host.querySelectorAll<HTMLElement>('.speed-act')].find((c) => c.querySelector('.speed-act-title')!.textContent === title)!;
+    return { host, save, card };
+  };
+  const keysIn = (card: HTMLElement) => [...card.querySelectorAll('.key-button')].map((b) => b.textContent);
+
+  it('a key and its value share a line: G with Your speed, D and S with the step, Shift+D and Shift+S with the presets', () => {
+    const { card } = draw({ preferred: 1.5 });
+    expect(keysIn(card('Your speed'))).toEqual(['G']);
+    expect(card('Your speed').querySelector<HTMLSelectElement>('select')!.value).toBe('1.5');
+    expect(keysIn(card('Faster and slower'))).toEqual(['S', 'D']);
+    expect(card('Faster and slower').querySelector<HTMLSelectElement>('select')!.value).toBe('0.25');
+    expect(keysIn(card('Preset speeds'))).toEqual(['Shift + S', 'Shift + D']);
+    expect(keysIn(card('Rewind and skip'))).toEqual(['Z', 'X']);
+  });
+
+  it('Your speed can be 1.75×, and at 1× says why G does nothing', () => {
+    const { card, save } = draw({ preferred: 1 });
+    const picker = card('Your speed').querySelector<HTMLSelectElement>('select')!;
+    expect([...picker.options].map((o) => o.value)).toContain('1.75');
+    expect(card('Your speed').textContent).toContain('At 1× it has nowhere to go');
+    picker.value = '1.75';
+    picker.dispatchEvent(new Event('change'));
+    expect(save).toHaveBeenCalledWith({ preferred: 1.75 });
+    expect(draw({ preferred: 1.75 }).card('Your speed').textContent).toContain('and back to 1×');
+  });
+
+  it('presets are chips: ✕ takes one out, a typed speed adds one, and the last one stays', () => {
+    const { card, save } = draw({ presets: [1, 2, 4] });
+    const presets = card('Preset speeds');
+    presets.querySelector<HTMLButtonElement>('[aria-label="Remove 4×"]')!.click();
+    expect(save).toHaveBeenLastCalledWith({ presets: [1, 2] });
+    const add = presets.querySelector<HTMLInputElement>('.preset-add')!;
+    add.value = '2,75';
+    add.dispatchEvent(new Event('change'));
+    add.dispatchEvent(new Event('blur')); // leaving the field after Enter: no second save
+    expect(save).toHaveBeenLastCalledWith({ presets: [1, 2, 2.75, 4] });
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(draw({ presets: [1.5] }).card('Preset speeds').querySelector('.chip-x')).toBeNull();
+  });
+
+  it('a key is changed by clicking it and pressing the new one', () => {
+    const { card, save } = draw();
+    const g = card('Your speed').querySelector<HTMLButtonElement>('.key-button')!;
+    g.click();
+    expect(g.textContent).toBe('Press a key…'); // what holds the page's redraws meanwhile (main.ts)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', code: 'KeyH', bubbles: true, cancelable: true }));
+    expect(save).toHaveBeenCalledWith({ keys: { ...DEFAULT_MEDIA_SPEED.keys, preferred: 'h' } });
   });
 });

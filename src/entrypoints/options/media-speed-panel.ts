@@ -1,10 +1,13 @@
 /**
  * The settings page's video & audio speed section.
  *
- * Three parts: where the control runs (its shortcut, and the sites it starts on by itself), how
- * it behaves (step, presets, preferred and opening speed, memory, badge, the button on the video),
- * and the keys — each one set by pressing the key you want, since that is the only way to say
- * "the key left of L" on a keyboard that is not the author's.
+ * Three parts: where the control runs (its shortcut, and the sites it starts on by itself), what
+ * each key does, and how it behaves (opening speed, memory, badge, the button on the video).
+ *
+ * Each key sits beside the value it uses, in a line that reads as what it does: "S slower, D
+ * faster, by 0.25×", "G jumps to 1.5× and back to 1×". The values above and the keys below, apart,
+ * read as settings of the reading voice, and as broken (#12). A key is set by pressing the key you
+ * want, since that is the only way to say "the key left of L" on a keyboard that is not the author's.
  */
 import { el } from '@/shared/dom';
 import { clampRate, formatRate } from '@/media-speed/rate';
@@ -22,17 +25,7 @@ export interface MediaSpeedPanelOptions {
   toast(message: string): void;
 }
 
-const KEY_ROWS: Array<{ key: keyof MediaSpeedSettings['keys']; label: string; hint: string }> = [
-  { key: 'faster', label: 'Faster', hint: 'One step up' },
-  { key: 'slower', label: 'Slower', hint: 'One step down' },
-  { key: 'reset', label: 'Normal speed', hint: 'Back to 1×' },
-  { key: 'preferred', label: 'Your speed', hint: 'Jump to your preferred speed, and back' },
-  { key: 'nextPreset', label: 'Next preset', hint: 'Up through the preset speeds' },
-  { key: 'previousPreset', label: 'Previous preset', hint: 'Down through the preset speeds' },
-  { key: 'rewind', label: 'Rewind', hint: 'Back a few seconds, even without a seek bar' },
-  { key: 'advance', label: 'Skip forward', hint: 'Forward a few seconds' },
-  { key: 'mute', label: 'Mute', hint: 'Sound off, and on again' },
-];
+type KeyName = keyof MediaSpeedSettings['keys'];
 
 export function renderMediaSpeedPanel(host: HTMLElement, opts: MediaSpeedPanelOptions): void {
   const s = opts.settings;
@@ -69,29 +62,19 @@ export function renderMediaSpeedPanel(host: HTMLElement, opts: MediaSpeedPanelOp
     rows.push(never);
   }
 
+  // ---- what it does ----
+  // A phone's only control is the button's − and +: its step is all it uses. Your speed, the
+  // presets and rewinding are keys, set on a computer (they travel to it with Dropbox sync).
+  if (phone) rows.push(labelledRow('Step', 'How much one tap of − or + moves the speed', stepPicker(s, opts)));
+  else rows.push(...keysAndSpeeds(s, opts));
+
   // ---- how it behaves ----
   rows.push(
-    labelledRow('Step', phone ? 'How much one tap of − or + moves the speed' : 'How much one press of faster or slower moves the speed', select(
-      [0.05, 0.1, 0.25, 0.5].map((v) => ({ value: String(v), label: `${v}×` })),
-      String(s.step),
-      (value) => void opts.save({ step: Number(value) }),
-    )),
-    labelledRow('Your speed', 'The speed the “your speed” key jumps to', select(
-      rateOptions(s.presets, s.preferred),
-      String(s.preferred),
-      (value) => void opts.save({ preferred: clampRate(Number(value)) }),
-    )),
     labelledRow('Start videos at', 'Applied when a page’s video first appears', select(
       [{ value: '0', label: 'Whatever the site chose' }, ...rateOptions(s.presets, s.startAt)],
       String(s.startAt),
       (value) => void opts.save({ startAt: Number(value) }),
     )),
-    labelledRow('Rewind and skip by', 'How far one press of rewind or skip forward moves', select(
-      [5, 10, 15, 30].map((v) => ({ value: String(v), label: `${v} seconds` })),
-      String(s.seekSeconds),
-      (value) => void opts.save({ seekSeconds: Number(value) }),
-    )),
-    presetsRow(s, opts),
     checkboxRow('Remember the speed of each site', s.rememberPerSite, (on) => void opts.save({ rememberPerSite: on })),
     checkboxRow('Show the speed on the video when it changes', s.showBadge, (on) => void opts.save({ showBadge: on })),
   );
@@ -113,6 +96,7 @@ export function renderMediaSpeedPanel(host: HTMLElement, opts: MediaSpeedPanelOp
     ),
   );
 
+  const actions = el(document, 'div', { class: 'speed-forget' });
   const forget = el(document, 'button', { type: 'button', class: 'ghost btn-sm' }, 'Forget remembered site speeds');
   forget.addEventListener('click', async () => {
     // And where the speed button was moved on each site: both are "what Aloud remembers
@@ -120,29 +104,75 @@ export function renderMediaSpeedPanel(host: HTMLElement, opts: MediaSpeedPanelOp
     await Promise.all([clearSiteSpeeds(), clearTouchSpots()]);
     opts.toast('Site speeds forgotten');
   });
-  const forgetRow = el(document, 'div', { class: 'speed-forget' });
-  forgetRow.append(forget);
-  rows.push(forgetRow);
-
-  // ---- the keys ---- (none on a phone)
-  if (phone) {
-    host.replaceChildren(...rows);
-    host.classList.toggle('is-off', !s.enabled);
-    return;
+  actions.append(forget);
+  if (!phone) {
+    const reset = el(document, 'button', { type: 'button', class: 'ghost btn-sm' }, 'Reset keys to defaults');
+    reset.addEventListener('click', () => void opts.save({ keys: { ...DEFAULT_MEDIA_SPEED.keys } }));
+    actions.append(reset);
   }
-  rows.push(el(document, 'p', { class: 'sub-label' }, 'Keys, while a page has a video or audio'));
-  const keys = el(document, 'div', { class: 'speed-keys' });
-  for (const row of KEY_ROWS) keys.append(keyRow(row, s, opts));
-  rows.push(keys);
-
-  const reset = el(document, 'button', { type: 'button', class: 'ghost btn-sm' }, 'Reset keys to defaults');
-  reset.addEventListener('click', () => void opts.save({ keys: { ...DEFAULT_MEDIA_SPEED.keys } }));
-  const resetRow = el(document, 'div', { class: 'speed-forget' });
-  resetRow.append(reset);
-  rows.push(resetRow);
+  rows.push(actions);
 
   host.replaceChildren(...rows);
   host.classList.toggle('is-off', !s.enabled);
+}
+
+/**
+ * Every key, in a line with the value it uses, read as a sentence: the key is a button (click it,
+ * press the new key) and the value a picker, side by side.
+ */
+function keysAndSpeeds(s: MediaSpeedSettings, opts: MediaSpeedPanelOptions): HTMLElement[] {
+  const key = (name: KeyName, what: string): HTMLButtonElement => keyButton(name, what, s, opts);
+  const say = (text: string): HTMLElement => el(document, 'span', { class: 'speed-word' }, text);
+  const preferred = select(
+    rateOptions(s.presets, s.preferred),
+    String(s.preferred),
+    (value) => void opts.save({ preferred: clampRate(Number(value)) }),
+    'Your speed',
+  );
+  const seek = select(
+    [5, 10, 15, 30].map((v) => ({ value: String(v), label: `${v} seconds` })),
+    String(s.seekSeconds),
+    (value) => void opts.save({ seekSeconds: Number(value) }),
+    'Rewind and skip by',
+  );
+  const list = el(document, 'div', { class: 'speed-acts' });
+  list.append(
+    action('Faster and slower', key('slower', 'Slower'), say('slower'), key('faster', 'Faster'), say('faster, by'), stepPicker(s, opts)),
+    action(
+      'Your speed',
+      key('preferred', 'Your speed'),
+      say('jumps to'),
+      preferred,
+      // At 1× it has nowhere to jump: said here, or it looks like a dead key (#12).
+      say(s.preferred === 1 ? 'and back. At 1× it has nowhere to go: choose another speed.' : 'and back to 1×'),
+    ),
+    action('Preset speeds', key('previousPreset', 'Previous preset'), say('down'), key('nextPreset', 'Next preset'), say('up, through'), presetChips(s, opts)),
+    action('Normal speed', key('reset', 'Normal speed'), say('back to 1×')),
+    action('Rewind and skip', key('rewind', 'Rewind'), say('back'), key('advance', 'Skip forward'), say('forward, by'), seek),
+    action('Mute', key('mute', 'Mute'), say('sound off, and on again')),
+  );
+  return [
+    el(document, 'p', { class: 'sub-label' }, 'While a page has a video or audio'),
+    list,
+    el(document, 'p', { class: 'muted small speed-keys-hint' }, 'To change a key, click it and press the new one. Esc keeps it as it is; Backspace leaves that action without a key.'),
+  ];
+}
+
+function action(title: string, ...parts: HTMLElement[]): HTMLElement {
+  const card = el(document, 'div', { class: 'speed-act' });
+  const line = el(document, 'div', { class: 'speed-line' });
+  line.append(...parts);
+  card.append(el(document, 'span', { class: 'speed-act-title' }, title), line);
+  return card;
+}
+
+function stepPicker(s: MediaSpeedSettings, opts: MediaSpeedPanelOptions): HTMLSelectElement {
+  return select(
+    [0.05, 0.1, 0.25, 0.5].map((v) => ({ value: String(v), label: `${v}×` })),
+    String(s.step),
+    (value) => void opts.save({ step: Number(value) }),
+    'Step',
+  );
 }
 
 /**
@@ -166,29 +196,24 @@ function startHint(): HTMLElement {
   return hint;
 }
 
-function keyRow(
-  row: { key: keyof MediaSpeedSettings['keys']; label: string; hint: string },
-  s: MediaSpeedSettings,
-  opts: MediaSpeedPanelOptions,
-): HTMLElement {
-  const wrap = el(document, 'div', { class: 'key-row' });
-  const text = el(document, 'div', { class: 'key-text' });
-  text.append(el(document, 'span', {}, row.label), el(document, 'span', { class: 'muted small' }, row.hint));
-
-  const button = el(document, 'button', { type: 'button', class: 'key-button' }, formatBinding(s.keys[row.key])) as HTMLButtonElement;
-  button.title = 'Click, then press the key you want. Esc keeps it as it is; Backspace clears it.';
+/** One key, as a button showing it: clicked, the next key pressed becomes it. */
+function keyButton(name: KeyName, what: string, s: MediaSpeedSettings, opts: MediaSpeedPanelOptions): HTMLButtonElement {
+  const shown = formatBinding(s.keys[name]);
+  const button = el(document, 'button', { type: 'button', class: 'key-button', 'aria-label': `${what} key: ${shown}` }, shown) as HTMLButtonElement;
+  button.title = `${what}. Click, then press the key you want. Esc keeps it as it is; Backspace clears it.`;
   button.addEventListener('click', () => {
     button.classList.add('listening');
+    // This text is also how the page knows a key is being recorded, and holds its redraws (main.ts).
     button.textContent = 'Press a key…';
     const done = (binding: string | null): void => {
       window.removeEventListener('keydown', onKey, true);
       button.classList.remove('listening');
       if (binding == null) {
-        button.textContent = formatBinding(s.keys[row.key]);
+        button.textContent = shown;
         return;
       }
       button.textContent = formatBinding(binding);
-      void opts.save({ keys: { ...s.keys, [row.key]: binding } });
+      void opts.save({ keys: { ...s.keys, [name]: binding } });
     };
     const onKey = (e: KeyboardEvent): void => {
       e.preventDefault();
@@ -200,39 +225,56 @@ function keyRow(
     };
     window.addEventListener('keydown', onKey, true);
   });
+  return button;
+}
 
-  wrap.append(text, button);
+/**
+ * The preset speeds as chips, each with its ✕ (the last one stays: the keys need one to go to),
+ * and a field to add one: typed, since any speed from 0.25× to 5× can be a preset.
+ */
+function presetChips(s: MediaSpeedSettings, opts: MediaSpeedPanelOptions): HTMLElement {
+  const wrap = el(document, 'span', { class: 'preset-chips' });
+  const save = (presets: number[]): void => void opts.save({ presets: [...new Set(presets.map(clampRate))].sort((a, b) => a - b) });
+  for (const rate of s.presets) {
+    const chip = el(document, 'span', { class: 'site-chip preset-chip' }, formatRate(rate));
+    if (s.presets.length > 1) {
+      const remove = el(document, 'button', { type: 'button', class: 'chip-x', title: `Remove ${formatRate(rate)}`, 'aria-label': `Remove ${formatRate(rate)}` }, '✕');
+      remove.addEventListener('click', () => save(s.presets.filter((p) => p !== rate)));
+      chip.append(remove);
+    }
+    wrap.append(chip);
+  }
+  const add = el(document, 'input', {
+    type: 'text',
+    inputmode: 'decimal',
+    class: 'preset-add',
+    placeholder: '+ add',
+    'aria-label': 'Add a preset speed',
+    title: 'Type a speed, such as 1.75, and press Enter',
+  }) as HTMLInputElement;
+  // Enter fires "change" and leaving fires "blur": the first takes it, the second finds it empty.
+  const commit = (): void => {
+    const typed = add.value.trim().replace(',', '.').replace(/\s*[×x]$/i, '');
+    add.value = '';
+    const rate = Number(typed);
+    if (!typed || !Number.isFinite(rate) || rate <= 0) return;
+    if (s.presets.includes(clampRate(rate))) return;
+    save([...s.presets, rate]);
+  };
+  add.addEventListener('change', commit);
+  add.addEventListener('blur', commit);
+  wrap.append(add);
   return wrap;
 }
 
-function presetsRow(s: MediaSpeedSettings, opts: MediaSpeedPanelOptions): HTMLElement {
-  const input = el(document, 'input', {
-    type: 'text',
-    class: 'presets-input',
-    'aria-label': 'Preset speeds',
-    value: s.presets.map((p) => String(p)).join(', '),
-  }) as HTMLInputElement;
-  // Enter fires "change" and leaving fires "blur": one edit, one save.
-  let saved = s.presets.join(',');
-  const commit = (): void => {
-    const presets = [...new Set(input.value.split(/[,\s]+/).map(Number).filter((n) => Number.isFinite(n) && n > 0).map(clampRate))].sort((a, b) => a - b);
-    if (presets.length === 0) {
-      input.value = s.presets.join(', ');
-      return;
-    }
-    input.value = presets.join(', ');
-    if (presets.join(',') === saved) return;
-    saved = presets.join(',');
-    void opts.save({ presets });
-  };
-  input.addEventListener('change', commit);
-  input.addEventListener('blur', commit);
-  return labelledRow('Preset speeds', 'The speeds the preset keys step through', input);
-}
-
-/** The presets, the usual rates, and `current` — a picker that lacks the saved value shows its first option instead. */
+/**
+ * Every quarter from 0.25× to 3×, then 3.5× to 5×, with the presets and `current` — a picker that
+ * lacks the saved value shows its first option instead. (The presets and 1×, 1.5×, 2× alone left
+ * out speeds such as 1.75×, which then could not be chosen.)
+ */
 function rateOptions(presets: readonly number[], current: number): Array<{ value: string; label: string }> {
-  const rates = [...new Set([...presets, 1, 1.5, 2, ...(current > 0 ? [current] : [])])].sort((a, b) => a - b);
+  const quarters = Array.from({ length: 12 }, (_, i) => (i + 1) * 0.25);
+  const rates = [...new Set([...quarters, 3.5, 4, 4.5, 5, ...presets, ...(current > 0 ? [current] : [])].map(clampRate))].sort((a, b) => a - b);
   return rates.map((r) => ({ value: String(r), label: formatRate(r) }));
 }
 
@@ -289,13 +331,11 @@ function checkboxRow(label: string, checked: boolean, onChange: (on: boolean) =>
   return row;
 }
 
-function select(options: Array<{ value: string; label: string }>, current: string, onChange: (value: string) => void): HTMLSelectElement {
-  const picker = el(document, 'select', {}) as HTMLSelectElement;
-  for (const option of options) {
-    const node = el(document, 'option', { value: option.value }, option.label);
-    if (option.value === current) node.selected = true;
-    picker.append(node);
-  }
+function select(options: Array<{ value: string; label: string }>, current: string, onChange: (value: string) => void, label?: string): HTMLSelectElement {
+  const picker = el(document, 'select', label ? { 'aria-label': label } : {}) as HTMLSelectElement;
+  for (const option of options) picker.append(el(document, 'option', { value: option.value }, option.label));
+  // Chosen once every option is in: marked on one before, some engines (happy-dom) pick another.
+  if (options.some((o) => o.value === current)) picker.value = current;
   picker.addEventListener('change', () => onChange(picker.value));
   return picker;
 }
