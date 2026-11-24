@@ -259,6 +259,10 @@ export class ControlBar {
   private edge: BarDock;
   /** Held and dragged, or on its way to an edge: where it is drawn is not where it stays. */
   private moving = false;
+  /** A finger or the mouse is down on the bar's surface (a drag may follow): it is never hidden then. */
+  private pressed = false;
+  /** Stops a slide to an edge that is still running (see `settleAt`), when the bar closes. */
+  private settling: (() => void) | null = null;
   /** A drag ends in a click on whatever it ended over: not a click on the bar, so not acted on. */
   private ignoreClicksUntil = 0;
 
@@ -633,7 +637,9 @@ export class ControlBar {
     this.dock.addEventListener('focusout', () => this.hideLater());
     // A touch on the bar keeps it a while longer: there is no pointer to stay near it with.
     this.dock.addEventListener('pointerdown', (e) => {
-      if (e.pointerType !== 'mouse') this.hideLater(4000);
+      // Not while it is held: a finger resting on the bar's surface (about to drag it) hid it after
+      // four seconds, and the drag then moved a bar no one could see. The release arms it again.
+      if (e.pointerType !== 'mouse' && !this.pressed) this.hideLater(4000);
     });
   }
 
@@ -650,7 +656,9 @@ export class ControlBar {
     clearTimeout(this.hideTimer);
     if (!this.autoHide) return;
     this.hideTimer = this.doc.defaultView?.setTimeout(() => {
-      // Kept while the keyboard is in it; a button just clicked keeps focus too, and must not.
+      // Kept while the keyboard is in it, or a finger or the mouse holds it; a button just clicked
+      // keeps focus too, and must not.
+      if (this.pressed || this.moving) return;
       if (!this.pointerNear && !this.dock.querySelector(':focus-visible')) this.setTucked(true);
     }, ms) ?? 0;
   }
@@ -756,6 +764,7 @@ export class ControlBar {
       if (!drag || e.pointerId !== drag.id) return;
       const picked = drag.picked;
       drag = null;
+      this.pressed = false;
       unlisten();
       // Its moment before hiding starts again from the release (it was held while pressed).
       this.hideLater(e.pointerType === 'mouse' ? HIDE_DELAY_MS : 4000);
@@ -780,6 +789,7 @@ export class ControlBar {
       drag = { id: e.pointerId, x: e.clientX, y: e.clientY, top: box.top, bottom: box.bottom, picked: false };
       // Not hidden under the hand: a press held still outlasted the moment the bar stays once the
       // pointer leaves it, and it slid away mid-drag.
+      this.pressed = true;
       clearTimeout(this.hideTimer);
       view.addEventListener('pointermove', move, true);
       view.addEventListener('pointerup', up, true);
@@ -831,16 +841,27 @@ export class ControlBar {
     dock.style.transition = `transform ${SETTLE_MS}ms ease-out`;
     dock.style.transform = '';
     let over = false;
-    const end = (): void => {
+    const end = (e?: Event): void => {
+      // The dock's own slide only: a button's hover colour fading under a still pointer ends its
+      // own transition, which bubbles here, and cut the slide short with a jump.
+      if (e && (e.target !== dock || (e as TransitionEvent).propertyName !== 'transform')) return;
       if (over) return;
       over = true;
       clearTimeout(timer);
       dock.removeEventListener('transitionend', end);
+      this.settling = null;
       done();
     };
     dock.addEventListener('transitionend', end);
     // Not every slide ends in a transitionend (a tab in the background, a page that forces styles).
     const timer = view.setTimeout(end, SETTLE_MS + 120);
+    // Closed mid-slide, nothing of it may run after: its end makes room, and room made then was a
+    // block left in the page with no bar.
+    this.settling = () => {
+      over = true;
+      clearTimeout(timer);
+      dock.removeEventListener('transitionend', end);
+    };
   }
 
   /** The stylesheet's half of the edge: where the dock and the handle sit, and which way the column runs. */
@@ -1199,6 +1220,8 @@ export class ControlBar {
   }
 
   dispose(): void {
+    this.settling?.();
+    this.settling = null;
     clearTimeout(this.hideTimer);
     for (const off of this.offWindow) off();
     this.offWindow.length = 0;

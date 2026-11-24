@@ -18,6 +18,7 @@
 }
 #steps { flex: 1 0 auto; }
 body.demo-bar-on .shell { padding-bottom: var(--demo-bar-space); }
+body.demo-bar-top .shell { padding-top: var(--demo-bar-space); }
 
 /* ---- header -------------------------------------------------------------- */
 

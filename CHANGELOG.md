@@ -39,10 +39,16 @@ Website-only and documentation changes are not listed: they never reach the exte
   swapping in a second video. Each is now told from a speed you chose.
 - The video speed control looks through a page for new players twice a second at most, not on
   every change the page makes.
-- **On a phone, the speed button on a video can be moved.** Drag it with a finger (or the mouse)
-  anywhere on the video, off the player's own buttons it covered; it stays there on that site (for
-  a player embedded from another site, such as YouTube's, wherever that player is), in full screen
-  and when the phone turns too.
+- **The speed button on a video can be moved, and is on computers too.** Drag it with a finger
+  or the mouse anywhere on the video, off the player's own buttons it covered; it stays there on
+  that site (for a player embedded from another site, such as YouTube's, wherever that player is),
+  in full screen and when the phone turns too. On a computer it shows when the mouse moves over a
+  video, as a player's own controls do; Settings, Video speed turns it off.
+- **The reading bar can sit at the top.** Drag it by its edge (anywhere that is not a button) to
+  the top or the bottom of the window; its messages and menus follow, and the sentence being read
+  is kept clear of it at either edge. Settings, Appearance has the same choice.
+- **The notes panel can be moved.** Drag it by its title to wherever it covers least; it opens
+  there from then on, on every site. A double-click on its title puts it back.
 - **Kokoro and Supertonic speak on Windows Firefox with a graphics card** (#10). Firefox on
   Windows gives Aloud WebGPU, and on some graphics cards Kokoro was silent and Supertonic made
   noise, with nothing failing. A voice that loads on the graphics card now says a short test phrase

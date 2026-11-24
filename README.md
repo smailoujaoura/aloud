@@ -25,7 +25,9 @@ No account, no cloud, nothing sent anywhere: once a voice is downloaded, it work
 - **Highlights and notes on any page,** kept and shown again when you come back.
 - **Save as MP3:** the whole page in the voice and speed you chose.
 - **A speed control for every video and audio player** on the web, YouTube Shorts included: faster,
-  slower, rewind and skip from the keyboard, or with a button you can drag on a phone.
+  slower, rewind and skip from the keyboard, or with a button on the video you can drag anywhere.
+- **Out of your way.** Drag the reading bar to the top or the bottom of the window, and the notes
+  panel wherever it covers least.
 
 ## Voices
 

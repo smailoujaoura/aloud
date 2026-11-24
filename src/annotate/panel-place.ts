@@ -36,8 +36,9 @@ export const MOVED_HEIGHT = 560;
 /** Below this the list shows a note or two at most: better left under the bar than squashed. */
 const MIN_HEIGHT = 160;
 /**
- * At this width and below the panel already fills the window from side to side, so there is
- * nowhere to drag it: it stays the sheet it opens as (the reading bar's own phone width, too).
+ * At this width and below the panel stays the sheet it opens as. It is 360 px wide (and fills the
+ * window from side to side below 384 px), so there is little room to move it; this is also the
+ * reading bar's own phone width.
  */
 export const NARROW_WIDTH = 560;
 

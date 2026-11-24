@@ -33,6 +33,12 @@ export interface TouchSpeedTarget {
   stepFrom(rate: number, direction: 1 | -1): number;
   /** The player the viewer means, if one is on screen. */
   player(): HTMLMediaElement | null;
+  /**
+   * The video under the mouse: the largest one big enough for the button there. The player the
+   * viewer "means" is the one playing, which on a computer is not the one the mouse is on: a paused
+   * film got no button while a small preview playing elsewhere did.
+   */
+  playerAt(x: number, y: number): HTMLMediaElement | null;
 }
 
 const HOST_ID = 'aloud-speed-touch';
@@ -166,6 +172,12 @@ export class TouchSpeedButton {
   private hovered = false;
   /** When the mouse moving over the page was last looked at (HOVER_MS). */
   private lastHover = -Infinity;
+  /** The video it was shown for (under the mouse, or the one that started): where it sits. */
+  private media: HTMLMediaElement | null = null;
+  /** The keyboard is in it: it stays up, or the focus fell to the page as it faded. */
+  private focused = false;
+  /** When it last opened to "− 1× +": the second click of a double-click is not a press of "−". */
+  private openedAt = -Infinity;
   private readonly site = location.hostname;
 
   constructor(private readonly target: TouchSpeedTarget) {}
@@ -196,10 +208,15 @@ export class TouchSpeedButton {
     // mouse that came onto the video and stopped there at once showed nothing.
     const hoverAt = (x: number, y: number): void => {
       this.lastHover = performance.now();
-      const box = this.videoBox();
-      if (!box || x < box.left || x > box.right || y < box.top || y > box.bottom) return;
-      if (this.shown) {
-        this.arm();
+      const media = this.target.playerAt(x, y);
+      if (!media) return;
+      const moved = media !== this.media;
+      this.media = media;
+      if (this.shown && !moved) {
+        // Placed again, not only kept up: a reading bar that appeared or slid back since it was
+        // placed would otherwise stay under it, its clicks caught by the button.
+        if (this.place()) this.arm();
+        else this.hide();
       } else {
         this.open = false;
         this.show();
@@ -244,8 +261,9 @@ export class TouchSpeedButton {
     this.shown = false;
   }
 
-  /** A video started: show its speed for a moment. */
-  wake(): void {
+  /** A video started: show its speed for a moment, on that video. */
+  wake(media?: HTMLMediaElement): void {
+    this.media = media ?? null;
     this.open = false;
     this.show();
   }
@@ -288,8 +306,8 @@ export class TouchSpeedButton {
 
   private arm(): void {
     clearTimeout(this.timer);
-    // Its few seconds start once it is let go of, or the mouse leaves it.
-    if (this.pressed || this.hovered) return;
+    // Its few seconds start once it is let go of, or the mouse or the keyboard leaves it.
+    if (this.pressed || this.hovered || this.focused) return;
     this.timer = window.setTimeout(() => this.hide(), this.open ? OPEN_MS : SHOW_MS);
   }
 
@@ -346,7 +364,7 @@ export class TouchSpeedButton {
 
   /** The video it sits on, when there is one big enough and on screen. */
   private videoBox(): DOMRect | null {
-    const media = this.target.player();
+    const media = (this.media?.isConnected ? this.media : null) ?? this.target.player();
     if (!media) return null;
     const box = media.getBoundingClientRect();
     if (box.width < MIN_WIDTH || box.height < MIN_HEIGHT || box.bottom < 40 || box.top > window.innerHeight - 40) return null;
@@ -412,7 +430,7 @@ export class TouchSpeedButton {
         button:hover { background: rgba(255, 255, 255, 0.12); }
         .pill.dragging button:hover { background: none; }
       }
-      button:active { background: rgba(255, 255, 255, 0.18); }
+      button:active, button.down { background: rgba(255, 255, 255, 0.18); }
       button:focus-visible { outline: 2px solid #ffd60a; outline-offset: 1px; }
       .step { font-size: 22px; font-weight: 500; }
       .pill:not(.open) .step { display: none; }
@@ -432,17 +450,31 @@ export class TouchSpeedButton {
     const slower = button('step', '−', 'Slower');
     const value = button('value', '1×', '');
     const faster = button('step', '+', 'Faster');
-    slower.addEventListener('click', () => this.choose(this.target.stepFrom(this.target.rate(), -1)));
-    faster.addEventListener('click', () => this.choose(this.target.stepFrom(this.target.rate(), 1)));
-    value.addEventListener('click', () => {
+    // A double-click on "1×" opened it with the first click and pressed what then lay under the
+    // pointer with the second ("−", or "1×" again): the speed changed with no one asking.
+    const secondOfDouble = (e: MouseEvent): boolean => e.detail > 1 && performance.now() - this.openedAt < 500;
+    slower.addEventListener('click', (e) => {
+      if (!secondOfDouble(e)) this.choose(this.target.stepFrom(this.target.rate(), -1));
+    });
+    faster.addEventListener('click', (e) => {
+      if (!secondOfDouble(e)) this.choose(this.target.stepFrom(this.target.rate(), 1));
+    });
+    value.addEventListener('click', (e) => {
       if (!this.open) {
         this.open = true;
+        this.openedAt = performance.now();
         this.render();
         this.arm();
         return;
       }
-      this.choose(1);
+      if (!secondOfDouble(e)) this.choose(1);
     });
+    // Pressed, drawn pressed. `:active` is not: the mousedown below is cancelled (to keep the
+    // focus off it), and Firefox then never marks the button active.
+    for (const b of [slower, value, faster]) {
+      b.addEventListener('pointerdown', () => b.classList.add('down'));
+      for (const type of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(type, () => b.classList.remove('down'));
+    }
     pill.append(slower, value, faster);
     root.append(style, pill);
     this.draggable(pill);
@@ -456,6 +488,16 @@ export class TouchSpeedButton {
     pill.addEventListener('pointerleave', (e) => {
       if (e.pointerType === 'touch' || !this.hovered) return;
       this.hovered = false;
+      if (this.shown) this.arm();
+    });
+    // Held up while the keyboard is in it (Tab reaches it while it shows): faded with the focus
+    // inside, it dropped the focus to the page, and the reader lost their place in it.
+    pill.addEventListener('focusin', () => {
+      this.focused = true;
+      clearTimeout(this.timer);
+    });
+    pill.addEventListener('focusout', () => {
+      this.focused = false;
       if (this.shown) this.arm();
     });
     // A click leaves the focus where it was. Left on the button, the page's Space (pause) and

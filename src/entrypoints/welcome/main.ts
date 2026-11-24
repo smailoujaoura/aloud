@@ -281,12 +281,15 @@ function setAway(button: HTMLButtonElement, away: boolean): void {
 /**
  * The demo's reading bar sits at the bottom of the window, where the nav is pinned: lift the nav
  * above it for as long as it is there — however it went away (Stop, its own ✕, the next step).
- * Docked at the top (settings: barDock), it is nowhere near the nav, which stays put.
+ * Docked at the top (settings: barDock), it would cover the walkthrough's header instead: the
+ * page makes room for it there.
  */
 function watchDemoBar(): void {
   const sync = (): void => {
-    const atBottom = document.documentElement.getAttribute(READING_ATTR) !== 'top';
-    document.body.classList.toggle('demo-bar-on', atBottom && !!document.getElementById('aloud-control-host'));
+    const shown = !!document.getElementById('aloud-control-host');
+    const atTop = document.documentElement.getAttribute(READING_ATTR) === 'top';
+    document.body.classList.toggle('demo-bar-on', shown && !atTop);
+    document.body.classList.toggle('demo-bar-top', shown && atTop);
   };
   // The bar attaches itself to <html>, not <body> (see ui/control-bar.ts); its edge is on <html> too.
   new MutationObserver(sync).observe(document.documentElement, { childList: true, attributes: true, attributeFilter: [READING_ATTR] });

@@ -8,8 +8,8 @@
  *
  * It can be moved: dragged by its header, with the mouse or a finger, anywhere in the window, and
  * it opens there from then on, on every site (panel-place.ts has the arithmetic). A double-click
- * on the header puts it back at the side. On a phone-width window it fills the window from side to
- * side already, so there it stays the sheet it opens as.
+ * on the header puts it back at the side. On a window as narrow as a phone (NARROW_WIDTH) it stays
+ * the sheet it opens as: it is nearly as wide as the window there, with little room to move it.
  */
 import { browser } from 'wxt/browser';
 import { storage } from 'wxt/utils/storage';
@@ -115,9 +115,11 @@ export class PageNotesPanel {
     if (!this.spotRead) sheet?.classList.add('placing');
     void loadSpot().then((spot) => {
       this.spotRead = true;
-      if (this.sheet !== sheet || this.dragging) return;
-      this.spot = spot;
+      if (this.sheet !== sheet) return;
+      // Shown whatever happens next: a drag begun before the read finished left it unseen for good.
       sheet?.classList.remove('placing');
+      if (this.dragging) return;
+      this.spot = spot;
       this.layout();
     });
   }
@@ -332,7 +334,10 @@ export class PageNotesPanel {
       // The small handle left at the edge while the bar is hidden is not the bar.
       if (found && found.height >= 32) this.barSeen = found;
     }
-    return this.barSeen ?? (reading ? { left: 0, top: view.height - 84, width: view.width, height: 84 } : null);
+    if (this.barSeen || !reading) return this.barSeen;
+    // Never seen: where it opens, at the edge it is docked at (the reader marks which, settings: barDock).
+    const atTop = document.documentElement.getAttribute(READING_ATTR) === 'top';
+    return { left: 0, top: atTop ? 0 : view.height - 84, width: view.width, height: 84 };
   }
 
   /**
@@ -505,7 +510,15 @@ export class PageNotesPanel {
   }
 }
 
-const viewSize = (): Size => ({ width: window.innerWidth, height: window.innerHeight });
+/**
+ * The window as a fixed panel is placed in it: without its scrollbars. The window's own size counts
+ * them, and a panel dragged to the right sat partly under a scrollbar that is always shown
+ * (Windows, Linux, or a Mac set to show them), its edge and shadow cut off.
+ */
+const viewSize = (): Size => {
+  const root = document.documentElement;
+  return { width: root.clientWidth || window.innerWidth, height: root.clientHeight || window.innerHeight };
+};
 
 function mkButton(label: string, title: string, run: () => void): HTMLButtonElement {
   const b = document.createElement('button');

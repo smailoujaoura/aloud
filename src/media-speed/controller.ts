@@ -162,6 +162,7 @@ export class MediaSpeedController {
         this.prune();
         return activeMedia(this.known);
       },
+      playerAt: (x, y) => videoAt(this.known, x, y),
     });
     touch.start();
     this.touch = touch;
@@ -309,7 +310,12 @@ export class MediaSpeedController {
     };
     const off: Array<() => void> = [];
     // A video starting shows its speed button for a moment, where there is one.
-    const wake = (): void => this.touch?.wake();
+    // A video starting shows its button for a moment, on that video. On a computer not for a muted
+    // one: a muted video starting by itself is a preview under the mouse or one in the background,
+    // and the button popped up over thumbnails all down the page.
+    const wake = (): void => {
+      if (this.host.touchButton || !media.muted) this.touch?.wake(media);
+    };
     media.addEventListener('play', wake);
     off.push(() => media.removeEventListener('play', wake));
     for (const event of ['loadstart', 'loadeddata', 'canplay', 'play', 'playing', 'durationchange']) {
@@ -723,6 +729,23 @@ function largestBox(media: Iterable<Media>): DOMRect | null {
  */
 /** How long after the key comes up the page has had to answer it itself, before Aloud does. */
 const MUTE_AFTER_PAGE_MS = 120;
+
+/** The largest video big enough for the speed button that is under (x, y), if any. */
+function videoAt(media: Iterable<Media>, x: number, y: number): Media | null {
+  let best: Media | null = null;
+  let bestArea = 0;
+  for (const el of media) {
+    if (!(el instanceof HTMLVideoElement) || !el.isConnected) continue;
+    const box = el.getBoundingClientRect();
+    if (x < box.left || x > box.right || y < box.top || y > box.bottom) continue;
+    const area = box.width * box.height;
+    if (box.width >= 160 && box.height >= 90 && area > bestArea) {
+      best = el;
+      bestArea = area;
+    }
+  }
+  return best;
+}
 
 function activeMedia(media: Iterable<Media>): Media | null {
   let best: Media | null = null;

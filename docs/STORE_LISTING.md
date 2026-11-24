@@ -56,7 +56,8 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 > • Settings, Video speed says what it is for (videos and audio on websites, not the reading voice) and which shortcut starts it.
 > • Kokoro and Supertonic speak on Windows Firefox with a graphics card: a voice that loads there but comes out silent or as noise runs on the processor instead, and says so.
 > • Moving within a video no longer changes its speed: on some sites a click on the progress bar dropped it to 1× and remembered that.
-> • On a phone, the speed button on a video can be dragged out of the way, and stays where you put it on each site.
+> • The speed button on a video can be dragged out of the way, and stays where you put it on each site; on a computer it now shows when the mouse moves over a video (Settings, Video speed turns it off).
+> • The reading bar can be dragged to the top of the window, and the notes panel anywhere.
 > • Scanned PDFs show their pages (they were read over a blank or black page).
 
 ## Release notes for 1.0.4 (AMO's version notes; plain text)
