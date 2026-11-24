@@ -57,6 +57,15 @@ describe('who reads what', () => {
     expect(host.querySelector('#matchPageLanguage')).toBeNull();
   });
 
+  it('a save redraws the board without sending a scrolled strip of faces back to its start', () => {
+    const host = render(ctx());
+    const strip = (code: string) => host.querySelector<HTMLElement>(`.vb-faces[data-strip="${code}"]`)!;
+    strip('it').scrollLeft = 120;
+    renderVoiceBoard(host, ctx({ languageVoices: { it: { engine: 'kokoro', voice: 'im_nicola' } } }), vi.fn());
+    expect(strip('it').scrollLeft).toBe(120);
+    expect(strip('en').scrollLeft).toBe(0);
+  });
+
   it('a pick chooses for that language; Auto gives it back', () => {
     const c = ctx({ languageVoices: { it: { engine: 'kokoro', voice: 'im_nicola' } } });
     const italian = rows(render(c))[1]!;

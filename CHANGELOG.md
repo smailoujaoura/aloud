@@ -17,6 +17,8 @@ Website-only and documentation changes are not listed: they never reach the exte
 ## 1.0.5 (unreleased: dated on release)
 
 ### Fixed
+- In Settings, Voice, a row of voices scrolled sideways stays where it was when a voice is picked
+  or anything else is saved, instead of jumping back to its start.
 - **A page being read no longer slows down, in Firefox most of all.** On a long article, a page
   that keeps changing (a feed, a ticker, an animation) ran at a few frames a second while Aloud
   read it, as if in slow motion. Aloud kept a marker in the page for every sentence, and Firefox

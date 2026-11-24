@@ -254,7 +254,7 @@ export function renderVoiceBoard(
     line.append(named, remove);
     lang.append(line, el(document, 'span', {}, chosen && reading ? 'Chosen by you' : reading ? 'Auto' : 'No voice yet'), auto, node);
 
-    const faces = el(document, 'div', { class: 'vb-faces' });
+    const faces = el(document, 'div', { class: 'vb-faces', 'data-strip': code });
     let target: HTMLElement | null = null;
     for (const v of speakers) {
       const on = isReading(v);
@@ -340,7 +340,7 @@ export function renderVoiceBoard(
       }
       lang.append(back);
     }
-    const faces = el(document, 'div', { class: `vb-faces${skipping ? ' is-off' : ''}` });
+    const faces = el(document, 'div', { class: `vb-faces${skipping ? ' is-off' : ''}`, 'data-strip': 'others' });
     const isOther = (v: CandidateVoice): boolean => !skipping && others.engine === v.engine && others.id === v.id;
     // A language read by this row has no voice of its own, and is read in English: of Supertonic's
     // voices, only the English ones (each of the other 310 speaks one language, which Auto gives it).
@@ -373,7 +373,17 @@ export function renderVoiceBoard(
   const foot = el(document, 'div', { class: 'vb-foot' });
   foot.append(add);
 
+  // Each strip of faces scrolls sideways, and is drawn new with every save: put each back where it
+  // was, or a voice picked at the far end of a long strip sent it back to the start.
+  const scrolled = new Map<string, number>();
+  for (const strip of host.querySelectorAll<HTMLElement>('.vb-faces[data-strip]')) {
+    if (strip.scrollLeft > 0) scrolled.set(strip.dataset.strip!, strip.scrollLeft);
+  }
   host.replaceChildren(head, board, foot);
+  for (const strip of board.querySelectorAll<HTMLElement>('.vb-faces[data-strip]')) {
+    const left = scrolled.get(strip.dataset.strip!);
+    if (left) strip.scrollLeft = left;
+  }
   drawWires(board, wires, links);
   for (const strip of board.querySelectorAll('.vb-faces')) strip.addEventListener('scroll', () => drawWires(board, wires, links), { passive: true });
   // Wires follow the layout: a narrower window moves the faces.
