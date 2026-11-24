@@ -24,3 +24,7 @@ xcuserdata/
 DerivedData/
 *.xcuserstate
 .DS_Store
+
+# A test build's release files (scripts/test-build-release.mjs), made on GitHub.
+/aloud-*-rc.*.zip
+/release-notes.md

@@ -12,6 +12,10 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    env:
+      # onnxruntime-node (for the speech scripts, never in the extension) downloads its GPU library
+      # on install, from outside npm: a large download the checks have no use for, and one that fails.
+      ONNXRUNTIME_NODE_INSTALL_CUDA: skip
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -1,0 +1,36 @@
+# A test build on the releases page, made from a pushed tag such as v1.0.5-rc.3: built here, from
+# the tagged code, with the Firefox and Chrome zips attached, so every device downloads the same
+# build and nothing is uploaded by hand. Only tags with "-rc." in them: a store release (v1.0.5)
+# is uploaded to the stores, from the zips checked on the computer that made them.
+name: test build
+
+on:
+  push:
+    tags: ['v*-rc.*']
+
+permissions:
+  contents: write # to publish the release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      # onnxruntime-node (for the speech scripts, never in the extension) downloads its GPU library
+      # on install, from outside npm: a large download the build has no use for, and one that fails.
+      ONNXRUNTIME_NODE_INSTALL_CUDA: skip
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.12'
+          cache: npm
+      - run: npm ci
+      - name: Types
+        run: npm run compile
+      - name: Zips
+        run: npm run zip
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: node scripts/test-build-release.mjs
