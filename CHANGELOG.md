@@ -17,6 +17,11 @@ Website-only and documentation changes are not listed: they never reach the exte
 ## 1.0.5 (unreleased: dated on release)
 
 ### Fixed
+- **Muting a video no longer costs its speed, and sound turned on stays on.** On players that set
+  their own speed again when the sound changes (Facebook), muting or unmuting with M dropped the
+  speed to 1× and stored 1× for the site. And sound turned on with M went off again on the next
+  video, on players that never heard of it: M now gives the next videos the same sound, until you
+  use the site's own mute button.
 - In Settings, Voice, a row of voices scrolled sideways stays where it was when a voice is picked
   or anything else is saved, instead of jumping back to its start.
 - **A page being read no longer slows down, in Firefox most of all.** On a long article, a page

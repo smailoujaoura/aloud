@@ -42,6 +42,8 @@ const INPUT_MS = 120;
 const RESCAN_MS = 500;
 /** How often to put a chosen rate back before letting an insistent player keep its own. */
 const MAX_OVERRIDES = 3;
+/** How long after a click or key a playing video's sound going off or on is still the viewer's. */
+const SOUND_INPUT_MS = 1000;
 
 export interface ControllerHost {
   settings: MediaSpeedSettings;
@@ -81,6 +83,21 @@ export class MediaSpeedController {
   private pressing = false;
   /** When each player last began to seek (its `seeking` event). */
   private seekStarted = new WeakMap<Media, number>();
+  /** When each player's sound last went off or on (its `volumechange`): see `onRateChange`. */
+  private soundAt = new WeakMap<Media, number>();
+  /** Whether each player was silent when last heard from: a change not yet announced shows. */
+  private heard = new WeakMap<Media, boolean>();
+  /**
+   * The sound the viewer chose with the mute key where Aloud had to switch it itself (true:
+   * silent). The player never heard of that choice, and gave the next video its own sound again:
+   * sound turned on, then muted on every new video. Null: the site's own sound rules, as when the
+   * site answered the key itself (YouTube) or its own mute button was used since.
+   */
+  private wantSilent: boolean | null = null;
+  /** The sound Aloud set on each player last, to tell its own `volumechange` from the player's. */
+  private soundSetTo = new WeakMap<Media, boolean>();
+  /** How often the chosen sound has been put back on this video: see `keepSound`. */
+  private soundTries = new WeakMap<Media, number>();
   /** Players whose `seeking` event has come and whose `seeked` has not yet. */
   private inSeek = new WeakSet<Media>();
   /** Each player's video address, less what only says where to start (see `addressOf`). */
@@ -299,6 +316,7 @@ export class MediaSpeedController {
     if (this.known.has(media)) return;
     this.known.add(media);
     this.native.set(media, media.playbackRate);
+    this.heard.set(media, silent(media));
     // A player just found is one the page is still setting up: a player that swaps in a second
     // `<video>`, already loaded at the new position, to move within the video gave it its own 1×
     // a moment later, with no seek or load on it to show it was busy. Read as the viewer's choice,
@@ -358,6 +376,19 @@ export class MediaSpeedController {
       media.addEventListener(event, newSource);
       off.push(() => media.removeEventListener(event, newSource));
     }
+    // The sound: a change of it is no choice of speed (see `onRateChange`), and the sound chosen
+    // with the mute key goes on to the next video (see `wantSilent`).
+    const onSound = (): void => this.onSound(media);
+    const newVideo = (): void => void this.soundTries.delete(media);
+    const started = (): void => this.keepSound(media);
+    media.addEventListener('volumechange', onSound);
+    media.addEventListener('loadstart', newVideo);
+    media.addEventListener('playing', started);
+    off.push(() => {
+      media.removeEventListener('volumechange', onSound);
+      media.removeEventListener('loadstart', newVideo);
+      media.removeEventListener('playing', started);
+    });
     for (const event of ['seeking', 'seeked', 'loadstart', 'loadeddata', 'canplay', 'playing', 'emptied', 'durationchange']) {
       media.addEventListener(event, settle);
       off.push(() => media.removeEventListener(event, settle));
@@ -399,8 +430,15 @@ export class MediaSpeedController {
       // seconds later) did both in one gesture: a change during the press that moved the video is
       // the player's, however long the press lasted.
       const seekGesture = recentInput && this.gestureAt <= (this.seekStarted.get(media) ?? -Infinity);
-      const chosenSince = this.lastInput > settledAt && recentInput && !seekPending && !seekGesture;
-      const settling = !chosenSince && (media.seeking || media.readyState < 2 || since < SETTLE_MS || seekGesture);
+      // Nor a change that comes with the sound going off or on: a player that sets its whole state
+      // again on a mute (Facebook) put its own 1× back, and a mute cost the speed and stored 1× for
+      // the site. Its `volumechange` may not have come yet: the sound is already other than heard.
+      const soundAt = this.soundAt.get(media) ?? -Infinity;
+      const withSound =
+        silent(media) !== (this.heard.get(media) ?? silent(media)) ||
+        (Date.now() - soundAt <= SETTLE_MS && this.lastInput <= soundAt);
+      const chosenSince = this.lastInput > settledAt && recentInput && !seekPending && !seekGesture && !withSound;
+      const settling = !chosenSince && (media.seeking || media.readyState < 2 || since < SETTLE_MS || seekGesture || withSound);
       // What a player resets to: the rate it had before ours, its default, or plain 1×. Any other
       // value is somebody choosing a speed, however soon after a seek it comes.
       const now = media.playbackRate;
@@ -537,7 +575,6 @@ export class MediaSpeedController {
     this.prune();
     const media = activeMedia([...this.known].filter(controllable));
     if (!media) return;
-    const silent = (m: Media): boolean => m.muted || m.volume === 0;
     const before = silent(media);
     let decided = false;
     const onUp = (up: KeyboardEvent): void => {
@@ -553,15 +590,69 @@ export class MediaSpeedController {
       window.clearTimeout(fallback);
       if (!media.isConnected) return;
       if (silent(media) === before) {
-        if (before) {
-          media.muted = false;
-          if (media.volume === 0) media.volume = 1; // a player that mutes by turning the volume down
-        } else {
-          media.muted = true;
-        }
+        // Switched here, behind the player's back: kept for the videos after this one too.
+        this.wantSilent = !before;
+        this.setSilent(media, !before);
+      } else {
+        this.wantSilent = null; // the page answered the key itself, and knows
       }
       this.showBadge(silent(media) ? 'Muted' : 'Sound on', media);
     };
+  }
+
+  /** Sound off or on, as Aloud's own doing (its `volumechange` is then not news). */
+  private setSilent(media: Media, off: boolean): void {
+    this.soundSetTo.set(media, off);
+    if (off) {
+      media.muted = true;
+      return;
+    }
+    media.muted = false;
+    if (media.volume === 0) media.volume = 1; // a player that mutes by turning the volume down
+  }
+
+  /**
+   * A player's sound went off or on. Aloud's own doing is no news. After a click or key, it is the
+   * viewer, with the site's own button or key: the site knows the sound they want now, and Aloud's
+   * choice is dropped. A site may take a moment to act on its button, so a second, for a video
+   * already playing; on one just started, a change after the swipe or key that brought it is the
+   * player setting it up. That, or a change with no input at all, is the player's: the sound
+   * chosen with the mute key is put back.
+   */
+  private onSound(media: Media): void {
+    const now = silent(media);
+    const changed = this.heard.get(media) !== now;
+    this.heard.set(media, now);
+    if (!changed) return; // the volume moved, the sound stayed on
+    this.soundAt.set(media, Date.now());
+    // Each change of sound starts afresh, as a seek does: a player that resets the speed on every
+    // mute must not use up the speed's tries in three presses of M.
+    this.overrides.delete(media);
+    const ours = this.soundSetTo.get(media);
+    this.soundSetTo.delete(media);
+    if (ours === now) return;
+    const sinceInput = Date.now() - this.lastInput;
+    const starting = Date.now() - (this.settled.get(media) ?? -Infinity) < SETTLE_MS;
+    if (sinceInput <= INPUT_MS || (!starting && sinceInput <= SOUND_INPUT_MS)) {
+      this.wantSilent = null;
+      return;
+    }
+    this.keepSound(media);
+  }
+
+  /**
+   * The sound chosen with the mute key, on a video the player gave another: playing, and one the
+   * keys are for (a small muted preview elsewhere on the page is not given sound). A few times per
+   * video at most, so a player that insists is not fought for as long as it plays.
+   */
+  private keepSound(media: Media): void {
+    const want = this.wantSilent;
+    if (want == null || !media.isConnected || media.paused || silent(media) === want) return;
+    if (!controllable(media)) return;
+    const tries = (this.soundTries.get(media) ?? 0) + 1;
+    this.soundTries.set(media, tries);
+    if (tries > MAX_OVERRIDES) return;
+    this.setSilent(media, want);
   }
 
   // ---- seeking --------------------------------------------------------------------------
@@ -791,6 +882,11 @@ export function controllable(media: Media): boolean {
   // A recording, not a sound effect: it has a source, and is not known to be a few seconds long.
   const source = !!(media.currentSrc || media.getAttribute('src') || media.querySelector('source[src]'));
   return source && !(Number.isFinite(media.duration) && media.duration < 30);
+}
+
+/** No sound from it: muted, or its volume all the way down. */
+function silent(media: Media): boolean {
+  return media.muted || media.volume === 0;
 }
 
 /** 83 → "1:23"; 3723 → "1:02:03". */

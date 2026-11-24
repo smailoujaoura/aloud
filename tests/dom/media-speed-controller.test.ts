@@ -486,3 +486,208 @@ describe('Video & audio speed settings at work on a playing video (#12)', () => 
     controller.stop();
   });
 });
+
+describe('mute and the speed, on a player that keeps its own state (Facebook)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    document.body.innerHTML = '';
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const key = (type: string, k: string) =>
+    document.body.dispatchEvent(new KeyboardEvent(type, { key: k, code: `Key${k.toUpperCase()}`, bubbles: true, cancelable: true }));
+  const press = (k: string) => {
+    key('keydown', k);
+    vi.advanceTimersByTime(80);
+    key('keyup', k);
+    vi.advanceTimersByTime(400);
+  };
+
+  /**
+   * A player as a browser runs it: setting `muted` or `playbackRate` fires its event a moment
+   * later. `onSound` is the player's own handler for a change of sound.
+   */
+  function livePlayer(el: HTMLMediaElement, onSound?: () => void): HTMLMediaElement {
+    let muted = el.muted;
+    let rate = 1;
+    Object.defineProperty(el, 'muted', {
+      configurable: true,
+      get: () => muted,
+      set: (v: boolean) => {
+        if (v === muted) return;
+        muted = v;
+        setTimeout(() => el.dispatchEvent(new Event('volumechange')), 0);
+      },
+    });
+    Object.defineProperty(el, 'playbackRate', {
+      configurable: true,
+      get: () => rate,
+      set: (v: number) => {
+        if (v === rate) return;
+        rate = v;
+        setTimeout(() => el.dispatchEvent(new Event('ratechange')), 0);
+      },
+    });
+    if (onSound) el.addEventListener('volumechange', onSound);
+    return el;
+  }
+
+  it('a mute does not cost the speed when the player sets its own speed again on a change of sound', () => {
+    const el = livePlayer(player(), () => (el.playbackRate = 1));
+    const { controller, remembered } = start(null);
+    press('d');
+    press('d');
+    expect(el.playbackRate).toBe(1.5);
+    vi.advanceTimersByTime(3000); // watching for a while
+    press('m');
+    vi.advanceTimersByTime(3000);
+    expect(el.muted).toBe(true);
+    expect(el.playbackRate).toBe(1.5);
+    press('m');
+    vi.advanceTimersByTime(3000);
+    expect(el.muted).toBe(false);
+    expect(el.playbackRate).toBe(1.5);
+    // 1× was never the viewer's: never remembered for the site.
+    expect(remembered).toEqual([1.25, 1.5]);
+    controller.stop();
+  });
+
+  it('nor when the player mutes on M itself and resets the speed first', () => {
+    const el = livePlayer(player());
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'm') return;
+      el.playbackRate = 1;
+      el.muted = !el.muted;
+    });
+    const { controller, remembered } = start(null);
+    press('d');
+    vi.advanceTimersByTime(3000);
+    press('m');
+    vi.advanceTimersByTime(3000);
+    expect(el.muted).toBe(true);
+    expect(el.playbackRate).toBe(1.25);
+    expect(remembered).toEqual([1.25]);
+    controller.stop();
+  });
+
+  it('sound turned on with M stays on for the next video, when the player never heard of it', async () => {
+    let playerMuted = true; // the player's own idea of the sound, which Aloud's key does not change
+    const el = livePlayer(player());
+    el.muted = true;
+    vi.advanceTimersByTime(10);
+    const { controller } = start(null);
+    vi.advanceTimersByTime(3000);
+    press('m');
+    expect(el.muted).toBe(false);
+    // Scrolled to the next video: the same element, a new source, muted again by the player.
+    vi.advanceTimersByTime(5000);
+    el.dispatchEvent(new Event('emptied'));
+    el.dispatchEvent(new Event('loadstart'));
+    el.muted = playerMuted;
+    vi.advanceTimersByTime(50);
+    el.dispatchEvent(new Event('playing'));
+    vi.advanceTimersByTime(500);
+    expect(el.muted).toBe(false);
+    // And a video in a new element, made muted.
+    const next = livePlayer(player());
+    next.muted = true;
+    el.remove();
+    await vi.advanceTimersByTimeAsync(600); // found by the page's watch (a MutationObserver: async)
+    next.dispatchEvent(new Event('playing'));
+    vi.advanceTimersByTime(500);
+    expect(next.muted).toBe(false);
+    playerMuted = false;
+    controller.stop();
+  });
+
+  it("the site's own mute button takes over again: what it chose stays", () => {
+    const el = livePlayer(player());
+    el.muted = true;
+    vi.advanceTimersByTime(10);
+    const { controller } = start(null);
+    vi.advanceTimersByTime(3000);
+    press('m'); // sound on, by Aloud
+    expect(el.muted).toBe(false);
+    vi.advanceTimersByTime(3000);
+    // A click on the player's own mute button.
+    document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    el.muted = true;
+    vi.advanceTimersByTime(500);
+    expect(el.muted).toBe(true);
+    // The next video, muted by the player as the viewer last asked it: left muted.
+    vi.advanceTimersByTime(5000);
+    el.dispatchEvent(new Event('loadstart'));
+    el.dispatchEvent(new Event('playing'));
+    vi.advanceTimersByTime(500);
+    expect(el.muted).toBe(true);
+    controller.stop();
+  });
+
+  it('a site slow to act on its own mute button is not undone, and the next video keeps its choice', () => {
+    const el = livePlayer(player());
+    el.muted = true;
+    vi.advanceTimersByTime(10);
+    const { controller } = start(null);
+    vi.advanceTimersByTime(3000);
+    press('m');
+    expect(el.muted).toBe(false);
+    vi.advanceTimersByTime(3000);
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    vi.advanceTimersByTime(300); // a page that renders before it mutes
+    el.muted = true;
+    vi.advanceTimersByTime(500);
+    expect(el.muted).toBe(true);
+    vi.advanceTimersByTime(5000);
+    el.dispatchEvent(new Event('loadstart'));
+    el.dispatchEvent(new Event('playing'));
+    vi.advanceTimersByTime(500);
+    expect(el.muted).toBe(true);
+    controller.stop();
+  });
+
+  it('a swipe to the next video, muted by the player as it starts, gets the sound chosen with M', () => {
+    const el = livePlayer(player());
+    el.muted = true;
+    vi.advanceTimersByTime(10);
+    const { controller } = start(null);
+    vi.advanceTimersByTime(3000);
+    press('m');
+    expect(el.muted).toBe(false);
+    vi.advanceTimersByTime(3000);
+    document.body.dispatchEvent(new TouchEvent('touchstart', { bubbles: true }));
+    vi.advanceTimersByTime(150);
+    document.body.dispatchEvent(new TouchEvent('touchend', { bubbles: true }));
+    vi.advanceTimersByTime(100);
+    el.dispatchEvent(new Event('emptied'));
+    el.dispatchEvent(new Event('loadstart'));
+    vi.advanceTimersByTime(200);
+    el.muted = true; // the player's own idea of the sound, 300 ms after the swipe
+    vi.advanceTimersByTime(50);
+    el.dispatchEvent(new Event('playing'));
+    vi.advanceTimersByTime(500);
+    expect(el.muted).toBe(false);
+    controller.stop();
+  });
+
+  it('a small muted preview elsewhere on the page is not given sound', async () => {
+    const main = livePlayer(player());
+    main.muted = true;
+    vi.advanceTimersByTime(10);
+    const { controller } = start(null);
+    vi.advanceTimersByTime(3000);
+    press('m');
+    expect(main.muted).toBe(false);
+    const preview = livePlayer(document.createElement('video'));
+    Object.defineProperty(preview, 'paused', { value: false, configurable: true });
+    Object.defineProperty(preview, 'readyState', { value: 4, configurable: true });
+    preview.muted = true;
+    document.body.append(preview); // no box: out of sight, or too small to watch
+    await vi.advanceTimersByTimeAsync(600);
+    expect((controller as unknown as { known: Set<unknown> }).known.has(preview)).toBe(true); // seen, and left alone
+    preview.dispatchEvent(new Event('playing'));
+    vi.advanceTimersByTime(500);
+    expect(preview.muted).toBe(true);
+    controller.stop();
+  });
+});
