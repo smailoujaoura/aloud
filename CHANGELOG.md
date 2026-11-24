@@ -43,7 +43,9 @@ Website-only and documentation changes are not listed: they never reach the exte
   or the mouse anywhere on the video, off the player's own buttons it covered; it stays there on
   that site (for a player embedded from another site, such as YouTube's, wherever that player is),
   in full screen and when the phone turns too. On a computer it shows when the mouse moves over a
-  video, as a player's own controls do; Settings, Video speed turns it off.
+  video, as a player's own controls do; Settings, Video speed turns it off. A speed changed with the
+  keys shows on it, where you put it, instead of on a second badge of its own; the badge is left
+  for when the button is turned off.
 - **The reading bar can sit at the top.** Drag it by its edge (anywhere that is not a button) to
   the top or the bottom of the window; its messages and menus follow, and the sentence being read
   is kept clear of it at either edge. Settings, Appearance has the same choice.

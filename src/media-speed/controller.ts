@@ -246,7 +246,13 @@ export class MediaSpeedController {
     // A fresh choice: this player has not overridden *this* one yet.
     this.overrides = new WeakMap();
     for (const media of this.known) this.apply(media);
-    if (show) this.showBadge(formatRate(this.rate));
+    // One speed on the video, not two: the speed button, where the viewer dragged it, when it is
+    // on (touch-button.ts); the fixed badge only when it is off. Both follow "Show the speed on the
+    // video when it changes".
+    if (show && this.settings.showBadge) {
+      if (this.touch) this.touch.wake();
+      else this.showBadge(formatRate(this.rate));
+    }
     this.touch?.refresh();
     this.host.onRate(this.rate);
   }

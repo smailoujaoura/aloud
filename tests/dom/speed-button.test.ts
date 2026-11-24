@@ -217,3 +217,54 @@ describe('the speed button on a computer', () => {
     controller.stop();
   });
 });
+
+describe('one speed on the video, not two', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'] });
+    document.body.replaceChildren();
+    roots.clear();
+    vi.spyOn(HTMLElement.prototype, 'attachShadow').mockImplementation(function (this: HTMLElement, init: ShadowRootInit) {
+      const root = attach.call(this, init);
+      roots.set(this, root);
+      return root;
+    });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  const pressD = () => {
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'd', code: 'KeyD', bubbles: true, cancelable: true }));
+    document.body.dispatchEvent(new KeyboardEvent('keyup', { key: 'd', code: 'KeyD', bubbles: true, cancelable: true }));
+  };
+  const badgeShown = (): boolean => document.getElementById('aloud-speed-badge')?.style.display === 'block';
+
+  it('a key that changes the speed shows it on the draggable button, and no badge', () => {
+    video();
+    const controller = start();
+    pressD();
+    expect(shown()).toBe(true);
+    expect(part('.value').textContent).toContain('1.25');
+    expect(badgeShown()).toBe(false);
+    controller.stop();
+  });
+
+  it('with the button turned off, the badge says it instead', () => {
+    video();
+    const controller = start({ showButton: false });
+    pressD();
+    expect(shown()).toBe(false);
+    expect(badgeShown()).toBe(true);
+    controller.stop();
+  });
+
+  it('"Show the speed on the video when it changes" off: neither', () => {
+    video();
+    const controller = start({ showBadge: false });
+    pressD();
+    expect(shown()).toBe(false);
+    expect(badgeShown()).toBe(false);
+    controller.stop();
+  });
+});
