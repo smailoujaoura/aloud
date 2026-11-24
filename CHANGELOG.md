@@ -26,6 +26,8 @@ Website-only and documentation changes are not listed: they never reach the exte
   speed it remembered (3×) over a video playing at 1×, until D or S was pressed: loading a video
   sets its speed back, and a remembered speed was only offered to the players there before. Every
   video now gets it as it loads, the next one in a feed too.
+- **Settings stay where you scrolled them** when something is saved, a voice's speed or anything
+  else: the page moved as it redrew.
 - In Settings, Voice, a row of voices scrolled sideways stays where it was when a voice is picked
   or anything else is saved, instead of jumping back to its start.
 - **A page being read no longer slows down, in Firefox most of all.** On a long article, a page

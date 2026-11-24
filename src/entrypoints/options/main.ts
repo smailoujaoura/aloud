@@ -58,7 +58,7 @@ import { renderShortcutsPanel } from './shortcuts-panel';
 import { renderSiteList } from './site-list';
 import { renderPronunciationEditor } from './pronunciation-editor';
 import { renderVoiceSection, type PanelContext } from './voice-panels';
-import { initNav, onViewChange, setNavCount, showView } from './app-nav';
+import { currentView, initNav, onViewChange, setNavCount, showView } from './app-nav';
 import { initLibrary, refitNotes } from '@/library/app';
 import { answerTabQueries } from '@/shared/own-tab';
 import { downloads } from './download-queue';
@@ -419,11 +419,51 @@ export function setBusy(on: boolean): void {
 
 async function render(): Promise<void> {
   setBusy(true);
+  const keepPlace = holdScroll();
   try {
     await renderNow();
   } finally {
     setBusy(false);
+    keepPlace();
   }
+}
+
+/**
+ * The page stays where it is while it redraws, as it does after every save. A redraw rebuilds
+ * whole sections; anything a moment shorter, or anything that scrolls on its way in, moved the
+ * page under the reader (a change of voice speed sent it up). The page's height is held while the
+ * redraw runs, and the scroll put back after it, and again a moment later for what settles
+ * late. Not if the viewer scrolled meanwhile, or went to another view. Returns the release.
+ */
+/** Redraws running at once: the page's height is held from the first and let go after the last. */
+let scrollHolds = 0;
+function holdScroll(): () => void {
+  const root = document.documentElement;
+  const top = window.scrollY;
+  const view = currentView();
+  let theirs = false;
+  const scrolled = (e: Event): void => {
+    // Keys only when they scroll the page: the arrows on a slider are the change being saved.
+    if (e instanceof KeyboardEvent && !(e.target === document.body || e.target === root)) return;
+    theirs = true;
+  };
+  const events = ['wheel', 'touchmove', 'keydown'] as const;
+  for (const type of events) window.addEventListener(type, scrolled, { capture: true, passive: true });
+  if (scrollHolds++ === 0) root.style.minHeight = `${root.scrollHeight}px`;
+  const putBack = (): void => {
+    if (!theirs && currentView() === view && Math.abs(window.scrollY - top) >= 1) window.scrollTo({ top, behavior: 'instant' });
+  };
+  // Timers, not animation frames: a page in a background tab gets frames late or not at all, and
+  // its height stayed held for as long.
+  return () => {
+    putBack();
+    window.setTimeout(putBack, 60);
+    window.setTimeout(() => {
+      putBack();
+      if (--scrollHolds === 0) root.style.minHeight = '';
+      for (const type of events) window.removeEventListener(type, scrolled, { capture: true });
+    }, 250);
+  };
 }
 
 /** Supertonic 2's and Phonon 31M's files, from before their successors, are deleted once per page (forgetRemovedEngines). */

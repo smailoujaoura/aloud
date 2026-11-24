@@ -253,8 +253,19 @@ function engineTab(info: EngineInfo, open: EngineId, ctx: PanelContext, onPick: 
   tab.setAttribute('aria-label', tab.title);
   tab.append(label);
   tab.addEventListener('click', onPick);
-  // On a phone the strip scrolls: the open tab is brought into it.
-  if (selected) requestAnimationFrame(() => tab.scrollIntoView({ block: 'nearest', inline: 'nearest' }));
+  // On a phone the strip scrolls: the open tab is brought into it, sideways only. scrollIntoView
+  // scrolls the page too, and in Firefox to where the sticky strip sits in the page, not where it
+  // shows: every save moved the page.
+  if (selected) {
+    requestAnimationFrame(() => {
+      const strip = tab.parentElement;
+      if (!strip || strip.scrollWidth <= strip.clientWidth) return;
+      const box = strip.getBoundingClientRect();
+      const at = tab.getBoundingClientRect();
+      if (at.left < box.left) strip.scrollLeft -= box.left - at.left;
+      else if (at.right > box.right) strip.scrollLeft += at.right - box.right;
+    });
+  }
   return tab;
 }
 
