@@ -69,6 +69,23 @@ export class MediaSpeedController {
   private overrides = new WeakMap<Media, number>();
   /** When the viewer last clicked, tapped or pressed a key. */
   private lastInput = -Infinity;
+  /**
+   * When the press behind that input began: the `pointerdown` of a click, not its `click`. A player
+   * that seeks on the press and puts its own rate back on the release did both in one gesture.
+   */
+  private gestureAt = -Infinity;
+  /** A pointer or finger is down, and its release belongs to the press that began `gestureAt`. */
+  private pressing = false;
+  /** When each player last began to seek (its `seeking` event). */
+  private seekStarted = new WeakMap<Media, number>();
+  /** Players whose `seeking` event has come and whose `seeked` has not yet. */
+  private inSeek = new WeakSet<Media>();
+  /** Each player's video address, less what only says where to start (see `addressOf`). */
+  private address = new WeakMap<Media, string>();
+  /** Players that loaded the same video again, to move within it: the rate goes back on once. */
+  private reloaded = new WeakSet<Media>();
+  /** Shadow roots that hold a player, watched like the document itself (see `watchRoots`). */
+  private readonly watchedRoots = new WeakSet<ShadowRoot>();
   /** The rate each player had of its own before we first set ours — what it resets *to*. */
   private native = new WeakMap<Media, number>();
   /** Players that have loaded a *different* video since the rate was last applied to them. */
@@ -88,7 +105,6 @@ export class MediaSpeedController {
   }
 
   start(): void {
-    this.scan();
     this.observer = new MutationObserver((records) => {
       for (const record of records) {
         for (const node of record.addedNodes) if (node instanceof Element) this.scanFrom(node);
@@ -109,12 +125,14 @@ export class MediaSpeedController {
     });
     // `document`, not its root element: started with the page, there may not be one yet.
     this.observer.observe(document, { childList: true, subtree: true });
+    // After the observer exists: a player found inside a shadow root has that root watched too.
+    this.scan();
     this.listen(window, 'keydown', (e) => this.onKey(e as KeyboardEvent), true);
     // The viewer's own input, seen before the page handles it (capture): a rate change that
     // follows a click or key at once is a choice, even straight after a seek (see `onRateChange`).
     // `click` and `pointerup` too: a site's speed menu acts on the click, not the press.
     for (const type of ['pointerdown', 'pointerup', 'click', 'keydown', 'touchstart', 'touchend']) {
-      this.listen(window, type, () => void (this.lastInput = Date.now()), true);
+      this.listen(window, type, () => this.onInput(type), true);
     }
     if (this.host.touchButton) {
       const touch = new TouchSpeedButton({
@@ -134,6 +152,23 @@ export class MediaSpeedController {
         touch.stop();
         this.touch = null;
       });
+    }
+  }
+
+  /** A click, tap or key: when it happened, and when the press it belongs to began. */
+  private onInput(type: string): void {
+    const now = Date.now();
+    this.lastInput = now;
+    if (type === 'pointerdown' || type === 'touchstart') {
+      this.pressing = true;
+      this.gestureAt = now;
+    } else if (type === 'keydown') {
+      this.pressing = false;
+      this.gestureAt = now;
+    } else {
+      // A release or a click with no press before it (a click from the keyboard) begins its own.
+      if (!this.pressing) this.gestureAt = now;
+      if (type === 'click') this.pressing = false;
     }
   }
 
@@ -204,6 +239,7 @@ export class MediaSpeedController {
     try {
       this.applied.set(media, this.rate);
       this.freshSource.delete(media);
+      this.reloaded.delete(media);
       if (media.playbackRate !== this.rate) media.playbackRate = this.rate;
     } catch {
       // Some players throw on a rate they consider out of range; the others still get it.
@@ -240,12 +276,20 @@ export class MediaSpeedController {
     if (this.known.has(media)) return;
     this.known.add(media);
     this.native.set(media, media.playbackRate);
+    // A player just found is one the page is still setting up: a player that swaps in a second
+    // `<video>`, already loaded at the new position, to move within the video gave it its own 1×
+    // a moment later, with no seek or load on it to show it was busy. Read as the viewer's choice,
+    // one click on the progress bar dropped the speed and stored 1× as the site's speed.
+    this.settled.set(media, Date.now());
+    this.address.set(media, addressOf(media));
+    this.watchRoots(media);
 
     // A new source resets the rate to 1; put ours back. `ratechange` tells the site's own speed
     // menu from our own writes, and follows the site when it was not us.
     // Only a chosen rate survives a new source; see the note at the top of the file.
+    // A remembered rate goes back on too when the player only loaded the same video again.
     const reapply = (): void => {
-      if (this.chosen) this.apply(media);
+      if (this.chosen || this.reloaded.has(media)) this.apply(media);
     };
     const off: Array<() => void> = [];
     // On a phone, a video starting shows its speed button for a moment.
@@ -264,7 +308,24 @@ export class MediaSpeedController {
       this.overrides.delete(media);
     };
     // A different video, as opposed to a move within this one: see `onRateChange`.
-    const newSource = (): void => void this.freshSource.add(media);
+    // Some players move within a video by loading it again from the new position
+    // (`clip.mp4?start=120`). Taken for another video, a speed that came from memory was left
+    // behind, and every click on the progress bar dropped it to 1×. The same address, less where
+    // it starts, is the same video. It is compared with the address of the load before, which
+    // only `loadstart` replaces: stored on `emptied`, which comes first, a new video would already
+    // look like the same one again by its own `loadstart`.
+    const newSource = (e: Event): void => {
+      const now = addressOf(media);
+      const before = this.address.get(media);
+      if (e.type === 'loadstart' && now) this.address.set(media, now);
+      if (now && now === before) {
+        this.freshSource.delete(media);
+        this.reloaded.add(media);
+      } else {
+        this.freshSource.add(media);
+        this.reloaded.delete(media);
+      }
+    };
     for (const event of ['emptied', 'loadstart']) {
       media.addEventListener(event, newSource);
       off.push(() => media.removeEventListener(event, newSource));
@@ -272,6 +333,18 @@ export class MediaSpeedController {
     for (const event of ['seeking', 'seeked', 'loadstart', 'loadeddata', 'canplay', 'playing', 'emptied', 'durationchange']) {
       media.addEventListener(event, settle);
       off.push(() => media.removeEventListener(event, settle));
+    }
+    // Which seek, and whether its `seeking` has arrived yet: see `onRateChange`.
+    const seekBegins = (): void => {
+      this.seekStarted.set(media, Date.now());
+      this.inSeek.add(media);
+    };
+    const seekEnds = (): void => void this.inSeek.delete(media);
+    media.addEventListener('seeking', seekBegins);
+    off.push(() => media.removeEventListener('seeking', seekBegins));
+    for (const event of ['seeked', 'emptied']) {
+      media.addEventListener(event, seekEnds);
+      off.push(() => media.removeEventListener(event, seekEnds));
     }
     const onRateChange = (): void => {
       if (this.rate == null) return;
@@ -287,8 +360,19 @@ export class MediaSpeedController {
       // or key handler, so the change lands within milliseconds of it. Any input after the seek
       // was not enough — a stray click 150 ms after a seek let a reset arriving 400 ms after it
       // pass for a choice, and Facebook's 1× was taken and remembered again.
-      const chosenSince = this.lastInput > settledAt && Date.now() - this.lastInput <= INPUT_MS;
-      const settling = !chosenSince && (media.seeking || media.readyState < 2 || since < SETTLE_MS);
+      const recentInput = Date.now() - this.lastInput <= INPUT_MS;
+      // Nor when the input is the seek itself. A player that resets the rate in the same click
+      // handler that sets the position, the reset first, has its `ratechange` queued ahead of its
+      // `seeking`: the change came before any sign of a seek, straight after a click, and the
+      // player's 1× was followed and remembered. `seeking` is already true then, though its event
+      // has not come: a seek begun in the same moment as the change.
+      const seekPending = media.seeking && !this.inSeek.has(media);
+      // And a player that seeks on the press and resets on the release (or after a long drag, two
+      // seconds later) did both in one gesture: a change during the press that moved the video is
+      // the player's, however long the press lasted.
+      const seekGesture = recentInput && this.gestureAt <= (this.seekStarted.get(media) ?? -Infinity);
+      const chosenSince = this.lastInput > settledAt && recentInput && !seekPending && !seekGesture;
+      const settling = !chosenSince && (media.seeking || media.readyState < 2 || since < SETTLE_MS || seekGesture);
       // What a player resets to: the rate it had before ours, its default, or plain 1×. Any other
       // value is somebody choosing a speed, however soon after a seek it comes.
       const now = media.playbackRate;
@@ -323,6 +407,10 @@ export class MediaSpeedController {
       this.rate = clampRate(media.playbackRate);
       this.touch?.refresh();
       this.applied.set(media, this.rate); // ours now too: the player restoring it later is no news
+      // And it is the player's own setting now, what it puts back after a seek. A player that
+      // restores its menu's speed (1.25×, chosen there earlier) after every seek, once the viewer
+      // had gone on to 1.5× with Aloud's keys, had that 1.25× taken for a new choice and stored.
+      this.native.set(media, this.rate);
       for (const other of this.known) if (other !== media) this.apply(other);
       this.host.onRate(this.rate);
     };
@@ -342,6 +430,23 @@ export class MediaSpeedController {
       this.rate = clampRate(this.host.initialRate);
     }
     this.apply(media);
+  }
+
+  /**
+   * Watch the shadow roots a player sits in, as the document is watched. Changes inside a shadow
+   * root are not reported to an observer of the document: a player that replaced its `<video>`
+   * inside its own shadow root, on a page where nothing else changed, left the new one at 1×,
+   * and the keys did nothing, as there was no longer anything here to control.
+   */
+  private watchRoots(media: Media): void {
+    let root = media.getRootNode();
+    while (root instanceof ShadowRoot) {
+      if (!this.watchedRoots.has(root)) {
+        this.watchedRoots.add(root);
+        this.observer?.observe(root, { childList: true, subtree: true });
+      }
+      root = root.host.getRootNode();
+    }
   }
 
   // ---- keys -------------------------------------------------------------------------
@@ -534,6 +639,25 @@ export class MediaSpeedController {
   private listen(target: EventTarget, type: string, fn: (e: Event) => void, capture = false): void {
     target.addEventListener(type, fn, capture);
     this.cleanups.push(() => target.removeEventListener(type, fn, capture));
+  }
+}
+
+/**
+ * Where a player's video comes from, for telling a reload of the same video from another one:
+ * its address without the fragment (`#t=120`) or a query parameter that only says where to start.
+ */
+const START_PARAMS = /^(t|start|starttime|start_time|begin|from|offset|time|pos|position|seek|ss)$/i;
+
+function addressOf(media: Media): string {
+  const raw = media.getAttribute('src') != null ? media.src : media.currentSrc;
+  if (!raw) return '';
+  try {
+    const url = new URL(raw);
+    url.hash = '';
+    for (const name of [...url.searchParams.keys()]) if (START_PARAMS.test(name)) url.searchParams.delete(name);
+    return url.href;
+  } catch {
+    return raw;
   }
 }
 
