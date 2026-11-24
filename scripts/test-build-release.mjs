@@ -32,7 +32,7 @@ const notes = [
   `Test build ${build} of Aloud ${version}, for trying on other devices before it goes to the stores.`,
   '',
   `- Firefox, including Firefox Nightly on a phone: install aloud-${version}-rc.${build}-firefox.zip from file, over the Aloud you have (removing it first deletes your voices).`,
-  `- Chrome or Edge: unzip aloud-${version}-rc.${build}-chrome.zip, then Load unpacked, with any other Aloud turned off.`,
+  `- Chrome or Edge: unzip aloud-${version}-rc.${build}-chrome.zip, then Load unpacked, with any other Aloud turned off. Every test build has the same ID in Chrome (aohniplneehjbofhejfigaddegojimph), apart from the store's: it keeps its own voices and settings, and Dropbox sign-in works in it.`,
   '',
   '## In this version so far',
   '',

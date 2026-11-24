@@ -28,6 +28,9 @@ jobs:
       - name: Types
         run: npm run compile
       - name: Zips
+        # Chrome's with the test builds' fixed ID, the one registered with Dropbox (wxt.config.ts).
+        env:
+          ALOUD_TEST_BUILD: '1'
         run: npm run zip
       - name: Release
         env:

@@ -6,6 +6,17 @@ import { defineConfig } from 'wxt';
 
 const rootDir = fileURLToPath(new URL('.', import.meta.url));
 
+/**
+ * Chrome test builds only (ALOUD_TEST_BUILD=1: .github/workflows/test-build.yml): a fixed extension
+ * ID, aohniplneehjbofhejfigaddegojimph. An unpacked extension's ID otherwise comes from the folder it was loaded
+ * from, and Dropbox refuses a sign-in from any ID not registered with the app
+ * (https://aohniplneehjbofhejfigaddegojimph.chromiumapp.org/ is). A public key, and only for test builds: the
+ * store build has the store's own ID, and the store does not take a key. Its private half was
+ * never kept; loading unpacked needs none.
+ */
+const TEST_BUILD_KEY =
+  'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmzSS0W8SMRNGSHLOAkqFXqIIbxeZlMRzFwpzGxdI9amu4Jzz7ieg6QWti2V5iFub8fRSZ3ZZsgVdSELF+0diksciKBeLbX5w8Alt3PJ0tY535/JHmEYXnY5zo65Tk51+W309e31Mlhgos1PIvFeBg5C76NWsJ212BNC46Vpmyv0u64fohgyMAy4H7T6WPiD/MJvhJe2nXKkI0x8aOSVRlYPhg0B4CQeVIQXAiu0AckAYn7G8C3oEAU9x+g8jDorUWQq0xfk9Krkn5PY/bg6kK1DcKTrnQTwtpQSeGDGMiLmbuzP6oxgJNLhSt7vYtPG6N4PSUQ9XYsMeZwNlkWR5MwIDAQAB';
+
 // Cross-browser Manifest V3 build (Firefox / Chromium).
 //
 // Pick the target with `--browser firefox` or `--browser chrome`; the npm scripts wrap both.
@@ -47,6 +58,7 @@ export default defineConfig({
   },
 
   manifest: ({ browser }) => ({
+    ...(browser === 'chrome' && process.env.ALOUD_TEST_BUILD === '1' ? { key: TEST_BUILD_KEY } : {}),
     // "Reader" since 1.0.3: "text to speech reader" is how the stores are searched. AMO allows 50
     // characters, Chrome 75; this is 45.
     name: 'Aloud: Natural Text to Speech Reader, Offline',
