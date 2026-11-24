@@ -9,10 +9,13 @@
  * A rate changed by the *site's own* speed menu is respected and becomes the current rate — the
  * alternative is two controls fighting over one video, which no one wins.
  *
- * Only a rate you actually asked for here is re-applied like that. A rate that merely came from
- * memory ("this site was last watched at 1.75×") is offered once and then left alone: re-applying
- * it on every `play`/`canplay` meant that dragging Facebook's progress bar — which fires those —
- * silently sped the video up again after the player had reset it to 1×.
+ * The speed shown is the speed the videos play at, whether it was asked for here or remembered
+ * for the site ("this site was last watched at 1.75×"). Each new video gets it once it loads: a
+ * load sets the speed back to the default, often with no `ratechange` to say so, and a remembered
+ * speed offered only to what was on the page at first was undone by the video's own load after a
+ * reload — the speed button said 3× over a video playing at 1×. A rate asked for here is also put
+ * back on every `play`/`canplay`; a remembered one only per new video, so that a player firing
+ * those as its progress bar is dragged is left to the seek handling below.
  *
  * And a rate the *player* sets for its own reasons is not the viewer's choice at all. Facebook
  * puts its own rate back after every seek, so one click on the progress bar was read as "the
@@ -42,8 +45,6 @@ const INPUT_MS = 120;
 const RESCAN_MS = 500;
 /** How often to put a chosen rate back before letting an insistent player keep its own. */
 const MAX_OVERRIDES = 3;
-/** How long after a click or key a playing video's sound going off or on is still the viewer's. */
-const SOUND_INPUT_MS = 1000;
 
 export interface ControllerHost {
   settings: MediaSpeedSettings;
@@ -91,9 +92,13 @@ export class MediaSpeedController {
    * The sound the viewer chose with the mute key where Aloud had to switch it itself (true:
    * silent). The player never heard of that choice, and gave the next video its own sound again:
    * sound turned on, then muted on every new video. Null: the site's own sound rules, as when the
-   * site answered the key itself (YouTube) or its own mute button was used since.
+   * site answered the key itself (YouTube). The site's own mute button, used on a playing video,
+   * changes it (see `onSound`).
    */
   private wantSilent: boolean | null = null;
+  /** Players that have begun playing what they hold now, and when: see `onSound`. */
+  private begun = new WeakSet<Media>();
+  private startedAt = new WeakMap<Media, number>();
   /** The sound Aloud set on each player last, to tell its own `volumechange` from the player's. */
   private soundSetTo = new WeakMap<Media, boolean>();
   /** How often the chosen sound has been put back on this video: see `keepSound`. */
@@ -317,6 +322,8 @@ export class MediaSpeedController {
     this.known.add(media);
     this.native.set(media, media.playbackRate);
     this.heard.set(media, silent(media));
+    this.startedAt.set(media, Date.now());
+    if (!media.paused) this.begun.add(media);
     // A player just found is one the page is still setting up: a player that swaps in a second
     // `<video>`, already loaded at the new position, to move within the video gave it its own 1×
     // a moment later, with no seek or load on it to show it was busy. Read as the viewer's choice,
@@ -327,10 +334,10 @@ export class MediaSpeedController {
 
     // A new source resets the rate to 1; put ours back. `ratechange` tells the site's own speed
     // menu from our own writes, and follows the site when it was not us.
-    // Only a chosen rate survives a new source; see the note at the top of the file.
-    // A remembered rate goes back on too when the player only loaded the same video again.
+    // A new video, or the same one loaded again, gets the speed once it loads: see the note at the
+    // top of the file. A speed chosen here goes back on at every one of these events.
     const reapply = (): void => {
-      if (this.chosen || this.reloaded.has(media)) this.apply(media);
+      if (this.chosen || this.reloaded.has(media) || this.freshSource.has(media)) this.apply(media);
     };
     const off: Array<() => void> = [];
     // A video starting shows its speed button for a moment, where there is one.
@@ -379,16 +386,28 @@ export class MediaSpeedController {
     // The sound: a change of it is no choice of speed (see `onRateChange`), and the sound chosen
     // with the mute key goes on to the next video (see `wantSilent`).
     const onSound = (): void => this.onSound(media);
-    const newVideo = (): void => void this.soundTries.delete(media);
-    const started = (): void => this.keepSound(media);
+    const newVideo = (): void => {
+      this.soundTries.delete(media);
+      this.begun.delete(media);
+      this.startedAt.set(media, Date.now());
+    };
+    const started = (): void => {
+      if (!this.begun.has(media)) {
+        this.begun.add(media);
+        this.startedAt.set(media, Date.now());
+      }
+      this.keepSound(media);
+    };
     media.addEventListener('volumechange', onSound);
-    media.addEventListener('loadstart', newVideo);
     media.addEventListener('playing', started);
     off.push(() => {
       media.removeEventListener('volumechange', onSound);
-      media.removeEventListener('loadstart', newVideo);
       media.removeEventListener('playing', started);
     });
+    for (const event of ['emptied', 'loadstart']) {
+      media.addEventListener(event, newVideo);
+      off.push(() => media.removeEventListener(event, newVideo));
+    }
     for (const event of ['seeking', 'seeked', 'loadstart', 'loadeddata', 'canplay', 'playing', 'emptied', 'durationchange']) {
       media.addEventListener(event, settle);
       off.push(() => media.removeEventListener(event, settle));
@@ -445,18 +464,16 @@ export class MediaSpeedController {
       const reset =
         now === 1 || now === media.defaultPlaybackRate || now === this.native.get(media);
       if (settling && reset) {
-        // Put our speed back when this is still the same video — the viewer moved within it and
-        // the player reset the rate behind them. On a *different* video only a speed chosen here
-        // follows along; one that merely came from memory is offered once (see the top of file).
-        if (this.chosen || !this.freshSource.has(media)) {
-          const tries = (this.overrides.get(media) ?? 0) + 1;
-          this.overrides.set(media, tries);
-          // Put the chosen speed back — unless this player keeps taking it, in which case the two
-          // would flicker turn by turn for as long as the video ran.
-          if (tries <= MAX_OVERRIDES) {
-            this.apply(media);
-            return;
-          }
+        // Put our speed back: the viewer moved within the video, or a new one loaded, and the
+        // player reset the rate behind them. A remembered speed as much as a chosen one: the
+        // speed shown is the one the video plays at (see the top of the file).
+        const tries = (this.overrides.get(media) ?? 0) + 1;
+        this.overrides.set(media, tries);
+        // Put it back — unless this player keeps taking it, in which case the two would flicker
+        // turn by turn for as long as the video ran.
+        if (tries <= MAX_OVERRIDES) {
+          this.apply(media);
+          return;
         }
         // Follow it on screen, but never remember it: a click must not rewrite the site's speed.
         this.rate = clampRate(media.playbackRate);
@@ -612,12 +629,15 @@ export class MediaSpeedController {
   }
 
   /**
-   * A player's sound went off or on. Aloud's own doing is no news. After a click or key, it is the
-   * viewer, with the site's own button or key: the site knows the sound they want now, and Aloud's
-   * choice is dropped. A site may take a moment to act on its button, so a second, for a video
-   * already playing; on one just started, a change after the swipe or key that brought it is the
-   * player setting it up. That, or a change with no input at all, is the player's: the sound
-   * chosen with the mute key is put back.
+   * A player's sound went off or on. Aloud's own doing is no news.
+   *
+   * On a video starting (not yet playing what it holds, or only just), it is the player setting it
+   * up: the sound chosen with the mute key is put back. On a video already playing, it is the
+   * viewer, with the site's own button or key, if it stays: the same video still playing, with
+   * that sound, a moment later, and that sound becomes the one the next videos get. A player
+   * moving to its next video mutes the one it leaves first (Facebook): that is no choice, and was
+   * taken for one when a key or click had come just before, so M's sound was dropped for good.
+   * Nothing here asks what was clicked or pressed.
    */
   private onSound(media: Media): void {
     const now = silent(media);
@@ -631,13 +651,18 @@ export class MediaSpeedController {
     const ours = this.soundSetTo.get(media);
     this.soundSetTo.delete(media);
     if (ours === now) return;
-    const sinceInput = Date.now() - this.lastInput;
-    const starting = Date.now() - (this.settled.get(media) ?? -Infinity) < SETTLE_MS;
-    if (sinceInput <= INPUT_MS || (!starting && sinceInput <= SOUND_INPUT_MS)) {
-      this.wantSilent = null;
+    const since = this.startedAt.get(media) ?? -Infinity;
+    if (!this.begun.has(media) || Date.now() - since < SETTLE_MS) {
+      this.keepSound(media);
       return;
     }
-    this.keepSound(media);
+    if (this.wantSilent == null) return; // the site's own sound rules here: nothing to follow
+    window.setTimeout(() => {
+      if (this.wantSilent == null || !media.isConnected || media.paused) return;
+      if (this.startedAt.get(media) !== since || silent(media) !== now) return; // it moved on
+      if (activeMedia([...this.known].filter(controllable)) !== media) return;
+      this.wantSilent = now;
+    }, SETTLE_MS);
   }
 
   /**

@@ -92,14 +92,32 @@ describe('a rate change from the player, not the viewer', () => {
     controller.stop();
   });
 
-  it('leaves a different video to the site, when the speed only came from memory', () => {
+  it('a remembered speed goes on to the next video too, as one chosen here does', () => {
     const el = player();
-    const { controller } = start(1.5);
+    const { controller, remembered } = start(1.5);
     el.dispatchEvent(new Event('emptied')); // the next reel in the feed
     el.dispatchEvent(new Event('loadstart'));
     el.playbackRate = 1;
     el.dispatchEvent(new Event('ratechange'));
-    expect(el.playbackRate).toBe(1);
+    expect(el.playbackRate).toBe(1.5);
+    expect(controller.currentRate).toBe(1.5);
+    expect(remembered).toEqual([1.5]); // the site's 1× taken for nothing
+    controller.stop();
+  });
+
+  it('a page opened again plays at the speed it shows: loading a video resets it with no event', () => {
+    // As after a reload: the player is found before its video loads, and the browser's load sets
+    // the speed back to the default without a "ratechange".
+    const el = player();
+    const { controller } = start(3);
+    expect(el.playbackRate).toBe(3);
+    el.setAttribute('src', 'https://video.example/clip.mp4');
+    el.playbackRate = 1; // the load's own reset, unannounced
+    el.dispatchEvent(new Event('loadstart'));
+    el.dispatchEvent(new Event('loadeddata'));
+    el.dispatchEvent(new Event('canplay'));
+    expect(el.playbackRate).toBe(3);
+    expect(controller.currentRate).toBe(3);
     controller.stop();
   });
 
@@ -666,6 +684,75 @@ describe('mute and the speed, on a player that keeps its own state (Facebook)', 
     vi.advanceTimersByTime(50);
     el.dispatchEvent(new Event('playing'));
     vi.advanceTimersByTime(500);
+    expect(el.muted).toBe(false);
+    controller.stop();
+  });
+
+  it('the player muting this video just before it loads the next one in it: the next one gets the sound', () => {
+    const el = livePlayer(player());
+    el.muted = true;
+    vi.advanceTimersByTime(10);
+    const { controller } = start(null);
+    vi.advanceTimersByTime(3000);
+    press('m');
+    expect(el.muted).toBe(false);
+    vi.advanceTimersByTime(5000);
+    // The arrow key for the next video; the player mutes first, then loads it, 300 ms on.
+    key('keydown', 'ArrowDown');
+    key('keyup', 'ArrowDown');
+    el.muted = true;
+    vi.advanceTimersByTime(300);
+    el.dispatchEvent(new Event('emptied'));
+    el.dispatchEvent(new Event('loadstart'));
+    vi.advanceTimersByTime(400);
+    el.dispatchEvent(new Event('playing'));
+    vi.advanceTimersByTime(2000);
+    expect(el.muted).toBe(false);
+    // And the one after that, the same way.
+    vi.advanceTimersByTime(5000);
+    el.muted = true;
+    vi.advanceTimersByTime(200);
+    el.dispatchEvent(new Event('loadstart'));
+    el.dispatchEvent(new Event('playing'));
+    vi.advanceTimersByTime(2000);
+    expect(el.muted).toBe(false);
+    controller.stop();
+  });
+
+  it('the video left behind muted and paused does not count: the next one, made muted, gets the sound', async () => {
+    const el = livePlayer(player());
+    el.muted = true;
+    vi.advanceTimersByTime(10);
+    const { controller } = start(null);
+    vi.advanceTimersByTime(3000);
+    press('m');
+    expect(el.muted).toBe(false);
+    vi.advanceTimersByTime(5000);
+    el.muted = true; // the player silencing the one it leaves
+    Object.defineProperty(el, 'paused', { value: true, configurable: true });
+    const next = livePlayer(player());
+    next.muted = true;
+    await vi.advanceTimersByTimeAsync(600);
+    next.dispatchEvent(new Event('playing'));
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(next.muted).toBe(false);
+    controller.stop();
+  });
+
+  it('where the page answers M itself (YouTube), its next videos are left to it', () => {
+    const el = livePlayer(player());
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'm') el.muted = !el.muted;
+    });
+    const { controller } = start(null);
+    vi.advanceTimersByTime(3000);
+    press('m');
+    expect(el.muted).toBe(true);
+    vi.advanceTimersByTime(5000);
+    el.dispatchEvent(new Event('loadstart'));
+    el.muted = false; // the site's own choice for its next video
+    el.dispatchEvent(new Event('playing'));
+    vi.advanceTimersByTime(2000);
     expect(el.muted).toBe(false);
     controller.stop();
   });

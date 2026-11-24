@@ -22,6 +22,10 @@ Website-only and documentation changes are not listed: they never reach the exte
   speed to 1× and stored 1× for the site. And sound turned on with M went off again on the next
   video, on players that never heard of it: M now gives the next videos the same sound, until you
   use the site's own mute button.
+- **A site's remembered speed is the speed its videos play at.** Opened again, a page showed the
+  speed it remembered (3×) over a video playing at 1×, until D or S was pressed: loading a video
+  sets its speed back, and a remembered speed was only offered to the players there before. Every
+  video now gets it as it loads, the next one in a feed too.
 - In Settings, Voice, a row of voices scrolled sideways stays where it was when a voice is picked
   or anything else is saved, instead of jumping back to its start.
 - **A page being read no longer slows down, in Firefox most of all.** On a long article, a page

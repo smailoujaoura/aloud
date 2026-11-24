@@ -348,10 +348,10 @@ describe('a seek leaves the speed alone', () => {
       expect(el.playbackRate).toBe(1.5);
     });
 
-    // By design: another address is another video, and a speed that only came from memory is not
-    // forced onto it. A player that reloads through a new `blob:` address on a seek (a media
-    // server transcoding from the new position) looks exactly like that.
-    it('by design: a new address with a remembered speed goes back to the site’s own, silently too', () => {
+    // Another address is another video, and it plays at the speed shown, remembered or chosen. A
+    // player that reloads through a new `blob:` address on a seek (a media server transcoding
+    // from the new position) keeps the speed that way too.
+    it('a new address with a remembered speed keeps it, the load resetting it silently', () => {
       const el = video('https://cdn.example.org/one.mp4');
       document.body.append(el);
       const bar = progressBar();
@@ -359,11 +359,11 @@ describe('a seek leaves the speed alone', () => {
       const { remembered } = start(1.5);
       click(bar);
       vi.advanceTimersByTime(2000);
-      expect(el.playbackRate).toBe(1);
+      expect(el.playbackRate).toBe(1.5);
       expect(remembered).toEqual([1.5]);
     });
 
-    it('by design: a new address with a remembered speed goes back to the site’s own', () => {
+    it('a new address with a remembered speed keeps it', () => {
       const el = video('blob:https://site.example/1');
       document.body.append(el);
       const bar = progressBar();
@@ -371,7 +371,7 @@ describe('a seek leaves the speed alone', () => {
       const { remembered } = start(1.5);
       click(bar);
       vi.advanceTimersByTime(2000);
-      expect(el.playbackRate).toBe(1);
+      expect(el.playbackRate).toBe(1.5);
       expect(remembered).toEqual([1.5]); // shown, never stored
     });
   });

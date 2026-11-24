@@ -72,14 +72,14 @@ describe('MediaSpeedController', () => {
     expect(controller.currentRate).toBe(1.75);
   });
 
-  it('leaves the next video in the feed to the site, when the speed only came from memory', () => {
+  it('gives the next video in the feed the remembered speed too, and stores nothing new', () => {
     const { controller, video, rates } = setup(1.75);
     controller.setInitialRate(1.75);
     video.dispatchEvent(new Event('emptied')); // a different video, not a move within this one
     video.dispatchEvent(new Event('loadstart'));
     video.playbackRate = 1;
     video.dispatchEvent(new Event('ratechange'));
-    expect(video.playbackRate).toBe(1);
+    expect(video.playbackRate).toBe(1.75);
     expect(rates).toEqual([1.75]);
     controller.stop();
   });
