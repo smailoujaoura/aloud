@@ -10,6 +10,7 @@ import { el } from '@/shared/dom';
 import { clampRate, formatRate } from '@/media-speed/rate';
 import { comboFromEvent, formatBinding } from '@/media-speed/keys';
 import { clearSiteSpeeds, loadSiteSpeeds } from '@/media-speed/site-speeds';
+import { clearTouchSpots } from '@/media-speed/touch-button';
 import { DEFAULT_MEDIA_SPEED, type MediaSpeedSettings } from '@/shared/settings';
 import { renderSiteList } from './site-list';
 import { capabilities } from '@/shared/browser-env';
@@ -103,7 +104,9 @@ export function renderMediaSpeedPanel(host: HTMLElement, opts: MediaSpeedPanelOp
 
   const forget = el(document, 'button', { type: 'button', class: 'ghost btn-sm' }, 'Forget remembered site speeds');
   forget.addEventListener('click', async () => {
-    await clearSiteSpeeds();
+    // And where the phone's speed button was moved on each site: both are "what Aloud remembers
+    // about each site's videos", which the privacy policy says this clears.
+    await Promise.all([clearSiteSpeeds(), clearTouchSpots()]);
     opts.toast('Site speeds forgotten');
   });
   const forgetRow = el(document, 'div', { class: 'speed-forget' });

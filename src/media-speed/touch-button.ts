@@ -96,6 +96,11 @@ async function loadSpot(site: string): Promise<TouchSpot | null> {
   }
 }
 
+/** Forget where the button was moved, on every site (Settings: "Forget remembered site speeds"). */
+export async function clearTouchSpots(): Promise<void> {
+  await withStorageLock('touch-spots', () => spots.setValue({}));
+}
+
 async function saveSpot(site: string, spot: TouchSpot): Promise<void> {
   try {
     await withStorageLock('touch-spots', async () => {
@@ -348,8 +353,8 @@ export class TouchSpeedButton {
           /* the pointer is already gone */
         }
       }
+      // No timer while it is held (see pointerdown): a drag that pauses keeps it on screen.
       this.moveTo(drag.left + dx, drag.top + dy);
-      this.arm();
     };
     const end = (ev: Event): void => {
       const e = ev as PointerEvent;
@@ -358,6 +363,8 @@ export class TouchSpeedButton {
       drag = null;
       for (const type of ['pointermove', 'pointerup', 'pointercancel']) window.removeEventListener(type, type === 'pointermove' ? move : end, true);
       pill.classList.remove('dragging');
+      // Its few seconds start again from the release (they were held while the finger was on it).
+      this.arm();
       if (!moved) return;
       this.ignoreClicksUntil = performance.now() + 400;
       void saveSpot(this.site, this.spot);
@@ -366,6 +373,9 @@ export class TouchSpeedButton {
       if (!e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0) || !this.host) return;
       const r = this.host.getBoundingClientRect();
       drag = { id: e.pointerId, x: e.clientX, y: e.clientY, left: r.left, top: r.top, moving: false };
+      // Not hidden under the finger: a press held still, as one does to pick an icon up on a phone,
+      // outlasted the few seconds it shows for, and it vanished mid-drag.
+      clearTimeout(this.timer);
       window.addEventListener('pointermove', move, true);
       window.addEventListener('pointerup', end, true);
       window.addEventListener('pointercancel', end, true);
