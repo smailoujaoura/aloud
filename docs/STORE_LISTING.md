@@ -53,11 +53,14 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 > Fixed
 > • A page being read no longer slows down. On a long article, a page that keeps changing (a feed, a ticker, an animation) ran at a few frames a second while Aloud read it, in Firefox most of all. It now stays smooth, also while a voice downloads.
 > • The reading bar shows the speed it reads at, whatever it is: a speed set in Settings, Voice that is not one of the bar's own (1.3×, 2.75×) left its speed list empty. Faster and slower (D and S) step from it to the usual speed beside it.
-> • Settings, Video speed says what it is for (videos and audio on websites, not the reading voice) and which shortcut starts it.
+> • Settings, Video speed says what it is for (videos and audio on websites, not the reading voice) and which shortcut starts it, and shows each key beside the speed it uses, with your preset speeds on one line.
+> • A site's remembered video speed is the speed its videos play at when you come back: it showed 3× over a video playing at 1× until a key was pressed.
+> • Muting a video with M no longer drops its speed to 1× (Facebook), and sound turned on with M stays on for the next videos.
+> • Settings stay where you scrolled them when something is saved.
 > • Kokoro and Supertonic speak on Windows Firefox with a graphics card: a voice that loads there but comes out silent or as noise runs on the processor instead, and says so.
 > • Moving within a video no longer changes its speed: on some sites a click on the progress bar dropped it to 1× and remembered that.
 > • The speed button on a video can be dragged out of the way, and stays where you put it on each site; on a computer it now shows when the mouse moves over a video (Settings, Video speed turns it off).
-> • The reading bar can be dragged to the top of the window, and the notes panel anywhere.
+> • The reading bar can be dragged to the top of the window, right against the edge, and the notes panel anywhere.
 > • Scanned PDFs show their pages (they were read over a blank or black page).
 
 ## Release notes for 1.0.4 (AMO's version notes; plain text)
