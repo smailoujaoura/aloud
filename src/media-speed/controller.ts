@@ -26,7 +26,7 @@
  * Both conditions, not just the timing: a viewer who seeks with an arrow key and then presses
  * YouTube's Shift+> picks a *new* rate within the same second, and that is theirs to keep.
  */
-import { clampRate, formatRate, nextPreset, stepRate } from './rate';
+import { MIN_RATE, clampRate, formatRate, nextPreset, stepRate } from './rate';
 import { isTypingEvent, matchesBinding } from './keys';
 import type { MediaSpeedSettings } from '@/shared/settings';
 import { readerOwnsKey } from '@/shared/reader-keys';
@@ -281,6 +281,9 @@ export class MediaSpeedController {
 
   private apply(media: Media): void {
     if (this.rate == null) return;
+    // Held still by the player (a drag on its progress bar): not fought over; the speed goes back
+    // when the player lets go (see `onRateChange`).
+    if (media.playbackRate < MIN_RATE) return;
     try {
       this.applied.set(media, this.rate);
       this.freshSource.delete(media);
@@ -398,11 +401,20 @@ export class MediaSpeedController {
       }
       this.keepSound(media);
     };
+    // A seek is the player's business, sound included (Facebook mutes while its bar is dragged):
+    // each starts the tries afresh, and a moment after it ends, the sound chosen with the mute key
+    // goes back if the player left another.
+    const seekStarts = (): void => void this.soundTries.delete(media);
+    const seekEnded = (): void => void window.setTimeout(() => this.keepSound(media), 300);
     media.addEventListener('volumechange', onSound);
     media.addEventListener('playing', started);
+    media.addEventListener('seeking', seekStarts);
+    media.addEventListener('seeked', seekEnded);
     off.push(() => {
       media.removeEventListener('volumechange', onSound);
       media.removeEventListener('playing', started);
+      media.removeEventListener('seeking', seekStarts);
+      media.removeEventListener('seeked', seekEnded);
     });
     for (const event of ['emptied', 'loadstart']) {
       media.addEventListener(event, newVideo);
@@ -428,6 +440,11 @@ export class MediaSpeedController {
       if (this.rate == null) return;
       const ours = this.applied.get(media);
       if (media.playbackRate === ours) return;
+      // A player holding the video still while its progress bar is dragged (Facebook sets 0): no
+      // speed anyone chose. Taken for one, it came out as 0.25× (the lowest), was stored for the
+      // site, and was put back over the player's own speed after the drag. Left alone; what the
+      // player sets after it is judged as usual.
+      if (media.playbackRate < MIN_RATE) return;
 
       // The player's own doing — it is mid-seek or mid-load, or has just finished one. Facebook
       // restores its rate on every `seeked`, which read as a viewer asking for 1×.
@@ -606,15 +623,38 @@ export class MediaSpeedController {
       window.removeEventListener('keyup', onUp, true);
       window.clearTimeout(fallback);
       if (!media.isConnected) return;
-      if (silent(media) === before) {
-        // Switched here, behind the player's back: kept for the videos after this one too.
-        this.wantSilent = !before;
-        this.setSilent(media, !before);
-      } else {
+      const say = (): void => this.showBadge(silent(media) ? 'Muted' : 'Sound on', media);
+      if (silent(media) !== before) {
         this.wantSilent = null; // the page answered the key itself, and knows
+        say();
+        return;
       }
-      this.showBadge(silent(media) ? 'Muted' : 'Sound on', media);
+      // The player's own mute button, pressed: then there is one sound, the player's, which its
+      // icon shows and its next video keeps. Switched behind its back instead, Facebook showed one
+      // sound and played another, and gave its next video its own again.
+      const button = playerMuteButton(media);
+      if (button) {
+        this.wantSilent = null;
+        button.click();
+        window.setTimeout(() => {
+          if (!media.isConnected) return;
+          if (silent(media) === before) this.switchSound(media, before);
+          say();
+        }, MUTE_BUTTON_MS);
+        return;
+      }
+      this.switchSound(media, before);
+      say();
     };
+  }
+
+  /**
+   * Sound off or on by Aloud itself, where the player has no key or button for it that works:
+   * kept for the videos after this one too, which the player never heard of (see `wantSilent`).
+   */
+  private switchSound(media: Media, wasSilent: boolean): void {
+    this.wantSilent = !wasSilent;
+    this.setSilent(media, !wasSilent);
   }
 
   /** Sound off or on, as Aloud's own doing (its `volumechange` is then not news). */
@@ -657,9 +697,15 @@ export class MediaSpeedController {
       return;
     }
     if (this.wantSilent == null) return; // the site's own sound rules here: nothing to follow
+    // Nor while the player is busy moving within the video: a drag on its progress bar is muted
+    // while it lasts (Facebook), and that mute, taken for the viewer's, was put on what came after.
+    const settledAt = this.settled.get(media);
+    const busy = media.seeking || this.pressing || media.playbackRate < MIN_RATE || Date.now() - (settledAt ?? -Infinity) < SETTLE_MS;
+    if (busy) return;
     window.setTimeout(() => {
-      if (this.wantSilent == null || !media.isConnected || media.paused) return;
+      if (this.wantSilent == null || !media.isConnected || media.paused || media.playbackRate < MIN_RATE) return;
       if (this.startedAt.get(media) !== since || silent(media) !== now) return; // it moved on
+      if (this.settled.get(media) !== settledAt) return; // it moved within the video meanwhile
       if (activeMedia([...this.known].filter(controllable)) !== media) return;
       this.wantSilent = now;
     }, SETTLE_MS);
@@ -907,6 +953,37 @@ export function controllable(media: Media): boolean {
   // A recording, not a sound effect: it has a source, and is not known to be a few seconds long.
   const source = !!(media.currentSrc || media.getAttribute('src') || media.querySelector('source[src]'));
   return source && !(Number.isFinite(media.duration) && media.duration < 30);
+}
+
+/** How long a player's own mute button is given to act before Aloud switches the sound itself. */
+const MUTE_BUTTON_MS = 200;
+
+/** What a player calls its mute button, in the languages its label may be in. */
+const MUTE_LABEL = /\b(un)?mute\b|\bsound\b|\bvolume\b|\baudio\b|\bson\b|stumm|\bton\b|silenc|sonido|suono|geluid|\bsom\b|звук|كتم|الصوت/i;
+/** Labels that mention sound but are something else: a menu or settings, captions. */
+const NOT_MUTE = /setting|réglage|option|menu|caption|subtit|sous-titre|track|piste/i;
+
+/**
+ * The mute button of the player `media` sits in, if it has one: a button inside the player (no
+ * further up than a box about the video's size: not the page's, a feed's, another video's) whose
+ * label says sound or mute, and that is drawn.
+ */
+export function playerMuteButton(media: Media): HTMLElement | null {
+  const video = media.getBoundingClientRect();
+  const area = video.width * video.height;
+  if (!area) return null;
+  let node: Element | null = media.parentElement;
+  for (let depth = 0; node && depth < 8; depth++, node = node.parentElement) {
+    const box = node.getBoundingClientRect();
+    if (box.width * box.height > area * 2.5) break;
+    for (const button of node.querySelectorAll<HTMLElement>('button, [role="button"]')) {
+      const label = `${button.getAttribute('aria-label') ?? ''} ${button.getAttribute('title') ?? ''}`.trim();
+      if (!label || !MUTE_LABEL.test(label) || NOT_MUTE.test(label)) continue;
+      const drawn = button.getBoundingClientRect();
+      if (drawn.width && drawn.height) return button;
+    }
+  }
+  return null;
 }
 
 /** No sound from it: muted, or its volume all the way down. */

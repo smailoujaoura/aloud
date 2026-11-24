@@ -20,8 +20,12 @@ Website-only and documentation changes are not listed: they never reach the exte
 - **Muting a video no longer costs its speed, and sound turned on stays on.** On players that set
   their own speed again when the sound changes (Facebook), muting or unmuting with M dropped the
   speed to 1× and stored 1× for the site. And sound turned on with M went off again on the next
-  video, on players that never heard of it: M now gives the next videos the same sound, until you
-  use the site's own mute button.
+  video, on players that never heard of it. M now presses the player's own mute button where it
+  has one, so the player and Aloud agree on the sound, its icon included; where it has none, M
+  gives the next videos the same sound, until you use the site's own mute button.
+- **Dragging Facebook's progress bar no longer sets the speed to 0.25× or loses the sound.** The
+  player holds the video still and silent while its bar is dragged; Aloud took that for a choice
+  of the slowest speed, stored it for the site, and put the silence on what came after.
 - **A site's remembered speed is the speed its videos play at.** Opened again, a page showed the
   speed it remembered (3×) over a video playing at 1×, until D or S was pressed: loading a video
   sets its speed back, and a remembered speed was only offered to the players there before. Every

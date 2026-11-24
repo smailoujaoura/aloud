@@ -778,3 +778,132 @@ describe('mute and the speed, on a player that keeps its own state (Facebook)', 
     controller.stop();
   });
 });
+
+describe('Facebook: its seek bar, and its own mute button', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    document.body.innerHTML = '';
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const key = (type: string, k: string) =>
+    document.body.dispatchEvent(new KeyboardEvent(type, { key: k, code: `Key${k.toUpperCase()}`, bubbles: true, cancelable: true }));
+  const press = (k: string) => {
+    key('keydown', k);
+    vi.advanceTimersByTime(80);
+    key('keyup', k);
+    vi.advanceTimersByTime(600);
+  };
+  /** As in a browser: muted and playbackRate fire their events a moment after they are set. */
+  function live(el: HTMLMediaElement): HTMLMediaElement {
+    let muted = el.muted;
+    let rate = 1;
+    Object.defineProperty(el, 'muted', { configurable: true, get: () => muted, set: (v: boolean) => { if (v !== muted) { muted = v; setTimeout(() => el.dispatchEvent(new Event('volumechange')), 0); } } });
+    Object.defineProperty(el, 'playbackRate', { configurable: true, get: () => rate, set: (v: number) => { if (v !== rate) { rate = v; setTimeout(() => el.dispatchEvent(new Event('ratechange')), 0); } } });
+    return el;
+  }
+  /** A drag on the seek bar: the player holds the video still (rate 0) and silent, then restores both. */
+  function drag(el: HTMLMediaElement, ms = 2000, restoreSound = true): void {
+    document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    el.playbackRate = 0;
+    el.muted = true;
+    Object.defineProperty(el, 'seeking', { value: true, writable: true, configurable: true });
+    el.dispatchEvent(new Event('seeking'));
+    for (let t = 0; t < ms; t += 250) vi.advanceTimersByTime(250);
+    document.body.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    Object.defineProperty(el, 'seeking', { value: false, writable: true, configurable: true });
+    el.dispatchEvent(new Event('seeked'));
+    el.playbackRate = 1; // the player's own speed again
+    if (restoreSound) el.muted = false;
+    vi.advanceTimersByTime(50);
+    el.dispatchEvent(new Event('playing'));
+    vi.advanceTimersByTime(3000);
+  }
+
+  it('a drag on the seek bar holding the video still is no choice of speed: 1.5× stays, nothing stored', () => {
+    const el = live(player());
+    const { controller, remembered } = start(null);
+    press('d');
+    press('d');
+    expect(el.playbackRate).toBe(1.5);
+    vi.advanceTimersByTime(3000);
+    drag(el);
+    expect(el.playbackRate).toBe(1.5);
+    expect(controller.currentRate).toBe(1.5);
+    expect(remembered).toEqual([1.25, 1.5]);
+    controller.stop();
+  });
+
+  it('nor is the sound it turns off while dragging: sound chosen with M is on after the drag', () => {
+    const el = live(player());
+    el.muted = true;
+    vi.advanceTimersByTime(10);
+    const { controller } = start(null);
+    vi.advanceTimersByTime(3000);
+    press('m'); // no mute button here: Aloud switches it
+    expect(el.muted).toBe(false);
+    vi.advanceTimersByTime(3000);
+    drag(el, 2500, false); // the player leaves it muted after the drag
+    expect(el.muted).toBe(false);
+    // And the next video still gets the sound.
+    vi.advanceTimersByTime(3000);
+    el.dispatchEvent(new Event('loadstart'));
+    el.muted = true;
+    vi.advanceTimersByTime(50);
+    el.dispatchEvent(new Event('playing'));
+    vi.advanceTimersByTime(2000);
+    expect(el.muted).toBe(false);
+    controller.stop();
+  });
+
+  it("M presses the player's own mute button, so the player and Aloud agree on the sound", () => {
+    // A player as Facebook builds one: its own sound state, a button showing it, the video set from it.
+    const frame = document.createElement('div');
+    const el = live(player());
+    let playerMuted = true;
+    el.muted = true;
+    const button = document.createElement('button');
+    const label = () => button.setAttribute('aria-label', playerMuted ? 'Unmute' : 'Mute');
+    label();
+    button.addEventListener('click', () => {
+      playerMuted = !playerMuted;
+      el.muted = playerMuted;
+      label();
+    });
+    frame.append(el, button);
+    document.body.append(frame);
+    const box = (x: number, y: number, w: number, h: number) => () => new DOMRect(x, y, w, h);
+    el.getBoundingClientRect = box(0, 0, 400, 700);
+    frame.getBoundingClientRect = box(0, 0, 400, 760);
+    button.getBoundingClientRect = box(350, 650, 32, 32);
+    vi.advanceTimersByTime(10);
+    const { controller } = start(null);
+    vi.advanceTimersByTime(3000);
+    press('m');
+    expect(el.muted).toBe(false);
+    expect(playerMuted).toBe(false); // the player knows
+    expect(button.getAttribute('aria-label')).toBe('Mute');
+    press('m');
+    expect(el.muted).toBe(true);
+    expect(playerMuted).toBe(true);
+    controller.stop();
+  });
+
+  it('a mute button that does nothing when pressed: Aloud switches the sound itself', () => {
+    const frame = document.createElement('div');
+    const el = live(player());
+    const button = document.createElement('button');
+    button.setAttribute('aria-label', 'Mute');
+    frame.append(el, button);
+    document.body.append(frame);
+    el.getBoundingClientRect = () => new DOMRect(0, 0, 400, 700);
+    frame.getBoundingClientRect = () => new DOMRect(0, 0, 400, 760);
+    button.getBoundingClientRect = () => new DOMRect(350, 650, 32, 32);
+    const { controller } = start(null);
+    vi.advanceTimersByTime(3000);
+    press('m');
+    expect(el.muted).toBe(true);
+    controller.stop();
+  });
+});

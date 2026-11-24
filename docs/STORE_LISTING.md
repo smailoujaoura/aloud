@@ -55,7 +55,8 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 > • The reading bar shows the speed it reads at, whatever it is: a speed set in Settings, Voice that is not one of the bar's own (1.3×, 2.75×) left its speed list empty. Faster and slower (D and S) step from it to the usual speed beside it.
 > • Settings, Video speed says what it is for (videos and audio on websites, not the reading voice) and which shortcut starts it, and shows each key beside the speed it uses, with your preset speeds on one line.
 > • A site's remembered video speed is the speed its videos play at when you come back: it showed 3× over a video playing at 1× until a key was pressed.
-> • Muting a video with M no longer drops its speed to 1× (Facebook), and sound turned on with M stays on for the next videos.
+> • Muting a video with M no longer drops its speed to 1× (Facebook): M presses the player's own mute button, so the two agree on the sound, and sound turned on stays on for the next videos.
+> • Dragging Facebook's progress bar no longer sets the speed to 0.25× or loses the sound.
 > • Settings stay where you scrolled them when something is saved.
 > • Kokoro and Supertonic speak on Windows Firefox with a graphics card: a voice that loads there but comes out silent or as noise runs on the processor instead, and says so.
 > • Moving within a video no longer changes its speed: on some sites a click on the progress bar dropped it to 1× and remembered that.
