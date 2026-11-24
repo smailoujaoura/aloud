@@ -74,80 +74,117 @@ describe('video speed settings on a phone', () => {
   });
 });
 
-describe('video speed settings on a computer: each key beside what it uses (#12)', () => {
+describe('video speed settings on a computer: each key in a tile with what it uses (#12)', () => {
   const draw = (over: Partial<typeof DEFAULT_MEDIA_SPEED> = {}) => {
     env.touchFirst = false;
     const host = document.createElement('div');
+    document.body.replaceChildren(host);
     const save = vi.fn(async () => {});
     renderMediaSpeedPanel(host, { settings: { ...DEFAULT_MEDIA_SPEED, ...over }, save, toast: vi.fn() });
-    const ids: Record<string, string> = {
-      'Faster and slower': 'step',
-      'Your speed': 'your-speed',
-      'Preset speeds': 'presets',
-      'Rewind and skip': 'seek',
-    };
-    const card = (title: string) => host.querySelector<HTMLElement>(`.km-row[data-act="${ids[title]}"]`)!;
-    return { host, save, card };
+    const tile = (act: string) => host.querySelector<HTMLElement>(`.km-tile[data-act="${act}"]`)!;
+    return { host, save, tile };
   };
-  const keysIn = (card: HTMLElement) => [...card.querySelectorAll('.key-button')].map((b) => b.textContent);
+  const keysIn = (tile: HTMLElement) => [...tile.querySelectorAll('.key-button')].map((b) => b.textContent);
+  const press = (key: string) => window.dispatchEvent(new KeyboardEvent('keydown', { key, code: `Key${key.toUpperCase()}`, bubbles: true, cancelable: true }));
 
-  it('a key and its value share a line: G with Your speed, D and S with the step, Shift+D and Shift+S with the presets', () => {
-    const { card } = draw({ preferred: 1.5 });
-    expect(keysIn(card('Your speed'))).toEqual(['G']);
-    expect(card('Your speed').querySelector<HTMLSelectElement>('select')!.value).toBe('1.5');
-    expect(keysIn(card('Faster and slower'))).toEqual(['S', 'D']);
-    expect(card('Faster and slower').querySelector<HTMLSelectElement>('select')!.value).toBe('0.25');
-    expect(keysIn(card('Preset speeds'))).toEqual(['⇧ S', '⇧ D']);
-    expect(card('Preset speeds').querySelector('.key-button')!.getAttribute('aria-label')).toBe('Previous preset key: Shift + S');
-    expect(keysIn(card('Rewind and skip'))).toEqual(['Z', 'X']);
+  it('each tile holds its keys and the value they use: G with Your speed, S and D with the step', () => {
+    const { tile } = draw({ preferred: 1.5 });
+    expect(keysIn(tile('your-speed'))).toEqual(['G']);
+    expect(tile('your-speed').querySelector<HTMLSelectElement>('select')!.value).toBe('1.5');
+    expect(keysIn(tile('step'))).toEqual(['S', 'D']);
+    expect(tile('step').querySelector<HTMLSelectElement>('select')!.value).toBe('0.25');
+    expect(keysIn(tile('presets'))).toEqual(['⇧ S', '⇧ D']);
+    expect(tile('presets').querySelector('.key-button')!.getAttribute('aria-label')).toBe('Previous preset key: Shift + S');
+    expect(keysIn(tile('seek'))).toEqual(['Z', 'X']);
+    expect(keysIn(tile('mute'))).toEqual(['M']);
+    expect(tile('mute').querySelector('svg.km-icon')).not.toBeNull();
   });
 
-  it('Your speed can be 1.75×, and at 1× says why G does nothing', () => {
-    const { card, save } = draw({ preferred: 1 });
-    const picker = card('Your speed').querySelector<HTMLSelectElement>('select')!;
+  it('Your speed can be 1.75×, and at 1× says G does nothing', () => {
+    const { tile, save } = draw({ preferred: 1 });
+    const picker = tile('your-speed').querySelector<HTMLSelectElement>('select')!;
     expect([...picker.options].map((o) => o.value)).toContain('1.75');
-    expect(card('Your speed').textContent).toContain('At 1× it has nowhere to go');
+    expect(tile('your-speed').textContent).toContain('Does nothing at 1×');
     picker.value = '1.75';
     picker.dispatchEvent(new Event('change'));
     expect(save).toHaveBeenCalledWith({ preferred: 1.75 });
-    expect(draw({ preferred: 1.75 }).card('Your speed').textContent).not.toContain('nowhere to go');
+    expect(draw({ preferred: 1.75 }).tile('your-speed').textContent).not.toContain('Does nothing');
   });
 
-  it('presets are chips: ✕ takes one out, a typed speed adds one, and the last one stays', () => {
-    const { card, save } = draw({ presets: [1, 2, 4] });
-    const presets = card('Preset speeds');
-    presets.querySelector<HTMLButtonElement>('[aria-label="Remove 4×"]')!.click();
-    expect(save).toHaveBeenLastCalledWith({ presets: [1, 2] });
-    const add = presets.querySelector<HTMLInputElement>('.preset-add')!;
-    add.value = '2,75';
-    add.dispatchEvent(new Event('change'));
-    add.dispatchEvent(new Event('blur')); // leaving the field after Enter: no second save
-    expect(save).toHaveBeenLastCalledWith({ presets: [1, 2, 2.75, 4] });
-    expect(save).toHaveBeenCalledTimes(2);
-    expect(draw({ presets: [1.5] }).card('Preset speeds').querySelector('.chip-x')).toBeNull();
-  });
-
-  it('the speed line shows the presets as dots, 1×, and ★ at your speed', () => {
+  it('the line shows the presets as dots, 1×, and ★ at your speed', () => {
     const { host } = draw({ presets: [1, 1.5, 2], preferred: 1.75 });
-    const marks = [...host.querySelectorAll<HTMLElement>('.km-ruler .km-mark')];
-    expect(marks.map((m) => m.title)).toEqual(['1×', '1.5×', '2×']);
+    const marks = [...host.querySelectorAll<HTMLElement>('.km-ruler .km-mark:not(.km-ghost)')];
+    expect(marks.map((m) => m.querySelector('b')!.textContent)).toEqual(['1×', '1.5×', '2×']);
     expect(marks.every((m) => m.classList.contains('is-preset'))).toBe(true);
     const left = (el: HTMLElement) => parseFloat(el.style.left);
     const star = host.querySelector<HTMLElement>('.km-ruler .km-star')!;
     expect(star.title).toBe('Your speed: 1.75×');
     expect(left(star)).toBeGreaterThan(left(marks[1]!)); // between 1.5× and 2×
     expect(left(star)).toBeLessThan(left(marks[2]!));
-    // 1× is on the line even when it is not a preset.
-    const without = draw({ presets: [1.5, 2] }).host.querySelectorAll('.km-ruler .km-mark.is-one:not(.is-preset)');
-    expect(without.length).toBe(1);
+    // 1× is on the line even when it is not a preset, and cannot be clicked away.
+    const one = draw({ presets: [1.5, 2] }).host.querySelector('.km-ruler .km-mark.is-one')!;
+    expect(one.tagName).toBe('SPAN');
   });
 
-  it('a key is changed by clicking it and pressing the new one', () => {
-    const { card, save } = draw();
-    const g = card('Your speed').querySelector<HTMLButtonElement>('.key-button')!;
+  it('the line sets the presets: a dot clicked goes, the line clicked adds the speed there, "+" a typed one', () => {
+    const { host, save } = draw({ presets: [1, 2, 4], preferred: 1.5 });
+    host.querySelector<HTMLButtonElement>('[aria-label="Remove 4× from the presets"]')!.click();
+    expect(save).toHaveBeenLastCalledWith({ presets: [1, 2] });
+    // The line from 0.25× to 4× is 400 px: 1.75× is 70% along, on the doubling scale.
+    const hit = host.querySelector<HTMLElement>('.km-hit')!;
+    hit.getBoundingClientRect = () => new DOMRect(0, 0, 400, 32);
+    hit.dispatchEvent(new MouseEvent('click', { clientX: 281, bubbles: true }));
+    expect(save).toHaveBeenLastCalledWith({ presets: [1, 1.75, 2, 4] });
+    const add = host.querySelector<HTMLInputElement>('.km-ruler .preset-add')!;
+    add.value = '2,5x';
+    add.dispatchEvent(new Event('change'));
+    add.dispatchEvent(new Event('blur')); // leaving the field after Enter: no second save
+    expect(save).toHaveBeenLastCalledWith({ presets: [1, 2, 2.5, 4] });
+    expect(save).toHaveBeenCalledTimes(3);
+  });
+
+  it('the last preset stays', () => {
+    const { host, save } = draw({ presets: [1.5] });
+    const dot = host.querySelector<HTMLButtonElement>('[aria-label="Remove 1.5× from the presets"]')!;
+    expect(dot.disabled).toBe(true);
+    dot.click();
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it('a key is changed by clicking it and pressing the new one; the cap keeps its size, the tile asks', () => {
+    const { tile, save } = draw();
+    const g = tile('your-speed').querySelector<HTMLButtonElement>('.key-button')!;
     g.click();
-    expect(g.textContent).toBe('Press a key…'); // what holds the page's redraws meanwhile (main.ts)
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', code: 'KeyH', bubbles: true, cancelable: true }));
+    expect(g.textContent).toBe('G'); // the same cap, waiting: nothing spills over the tile
+    expect(g.hasAttribute('data-recording')).toBe(true); // what holds the page's redraws (main.ts)
+    expect(tile('your-speed').classList.contains('is-recording')).toBe(true);
+    press('h');
     expect(save).toHaveBeenCalledWith({ keys: { ...DEFAULT_MEDIA_SPEED.keys, preferred: 'h' } });
+    expect(g.hasAttribute('data-recording')).toBe(false);
+  });
+
+  it('one key waits at a time: another clicked stops the first, which keeps its key', () => {
+    const { tile, save } = draw();
+    const [s, d] = [...tile('step').querySelectorAll<HTMLButtonElement>('.key-button')];
+    s!.click();
+    d!.click();
+    expect(s!.hasAttribute('data-recording')).toBe(false);
+    expect(s!.textContent).toBe('S');
+    press('k');
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(save).toHaveBeenCalledWith({ keys: { ...DEFAULT_MEDIA_SPEED.keys, faster: 'k' } });
+  });
+
+  it('a click elsewhere, or the same key again, stops the wait unchanged', () => {
+    const { host, tile, save } = draw();
+    const m = tile('mute').querySelector<HTMLButtonElement>('.key-button')!;
+    m.click();
+    host.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    expect(m.hasAttribute('data-recording')).toBe(false);
+    m.click();
+    m.click();
+    expect(m.hasAttribute('data-recording')).toBe(false);
+    press('q');
+    expect(save).not.toHaveBeenCalled();
   });
 });

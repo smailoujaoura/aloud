@@ -15,6 +15,7 @@ import { capabilities } from '@/shared/browser-env';
 import { el } from '@/shared/dom';
 import { DEFAULT_MEDIA_SPEED, DEFAULT_READER_KEYS, type AnnotateSettings, type ReaderKeys } from '@/shared/settings';
 import { reservedUse } from './reserved-keys';
+import { beginRecording, stopIfRecording } from './key-recorder';
 
 export interface ShortcutsPanelOptions {
   toast(message: string, kind?: 'info' | 'ok' | 'error'): void;
@@ -218,9 +219,12 @@ function singleKeyRow(
   const button = el(document, 'button', { type: 'button', class: 'key-button' }, keyLabel(current())) as HTMLButtonElement;
   button.title = 'Click, then press one key. Esc keeps it; Backspace clears it.';
   button.addEventListener('click', () => {
+    if (stopIfRecording(button)) return;
     button.classList.add('listening');
     button.textContent = 'Press a key…';
+    let end = (): void => undefined;
     const done = (next: string | null): void => {
+      end();
       window.removeEventListener('keydown', onKey, true);
       button.classList.remove('listening');
       if (next != null && set(next)) button.textContent = keyLabel(next);
@@ -237,6 +241,7 @@ function singleKeyRow(
       }
       if (e.key.length === 1 && e.key.trim()) done(e.key.toLowerCase());
     };
+    end = beginRecording(button, () => void done(null));
     window.addEventListener('keydown', onKey, true);
   });
   wrap.append(text, button);
@@ -257,9 +262,12 @@ function pageKeyRows(opts: ShortcutsPanelOptions): HTMLElement {
     const button = el(document, 'button', { type: 'button', class: 'key-button' }, keyLabel(keys[field])) as HTMLButtonElement;
     button.title = 'Click, then press one key. Esc keeps it; Backspace clears it.';
     button.addEventListener('click', () => {
+      if (stopIfRecording(button)) return;
       button.classList.add('listening');
       button.textContent = 'Press a key…';
+      let end = (): void => undefined;
       const done = (next: string | null): void => {
+        end();
         window.removeEventListener('keydown', onKey, true);
         button.classList.remove('listening');
         if (next == null) {
@@ -293,6 +301,7 @@ function pageKeyRows(opts: ShortcutsPanelOptions): HTMLElement {
         }
         if (e.key.length === 1 && e.key.trim()) done(e.key.toLowerCase());
       };
+      end = beginRecording(button, () => void done(null));
       window.addEventListener('keydown', onKey, true);
     });
     wrap.append(text, button);
@@ -330,9 +339,12 @@ function row(
   }
   button.title = 'Click, then press the keys you want. Esc keeps it; Backspace clears it.';
   button.addEventListener('click', () => {
+    if (stopIfRecording(button)) return;
     button.classList.add('listening');
     button.textContent = 'Press keys…';
+    let end = (): void => undefined;
     const done = async (next: string | null): Promise<void> => {
+      end();
       window.removeEventListener('keydown', onKey, true);
       button.classList.remove('listening');
       if (next == null) {
@@ -373,6 +385,7 @@ function row(
       const next = commandShortcutFor(e);
       if (next) void done(next);
     };
+    end = beginRecording(button, () => void done(null));
     window.addEventListener('keydown', onKey, true);
   });
 

@@ -17,6 +17,7 @@ import { clearTouchSpots } from '@/media-speed/touch-button';
 import { DEFAULT_MEDIA_SPEED, type MediaSpeedSettings } from '@/shared/settings';
 import { renderSiteList } from './site-list';
 import { capabilities } from '@/shared/browser-env';
+import { beginRecording, stopIfRecording } from './key-recorder';
 import { browser } from 'wxt/browser';
 
 export interface MediaSpeedPanelOptions {
@@ -117,10 +118,10 @@ export function renderMediaSpeedPanel(host: HTMLElement, opts: MediaSpeedPanelOp
 }
 
 /**
- * The keys, in one panel of three groups: the speed, moving through the video, the sound. Each row
- * is the key or keys, what they do, and the value they use, in columns that line up, so a key is
- * never read apart from its value (#12). Above the speed keys, the speeds on one line: the presets
- * the preset keys step through (dots), 1×, and your speed (★), where G goes.
+ * The keys, as tiles of a remote: an icon, a word or two, the key or keys, and the value they use.
+ * Above them the speeds on one line, which is also where the presets are set: the presets as dots
+ * (what the preset keys step through), 1×, and ★ at your speed (where G goes). Click the line to
+ * add the speed under the pointer, a dot to take it out, or type one in "+".
  */
 function keysAndSpeeds(s: MediaSpeedSettings, opts: MediaSpeedPanelOptions): HTMLElement[] {
   const cap = (name: KeyName, what: string): HTMLButtonElement => keyButton(name, what, s, opts);
@@ -131,106 +132,171 @@ function keysAndSpeeds(s: MediaSpeedSettings, opts: MediaSpeedPanelOptions): HTM
     'Your speed',
   );
   const seek = select(
-    [5, 10, 15, 30].map((v) => ({ value: String(v), label: `${v} seconds` })),
+    [5, 10, 15, 30].map((v) => ({ value: String(v), label: `${v} s` })),
     String(s.seekSeconds),
     (value) => void opts.save({ seekSeconds: Number(value) }),
     'Rewind and skip by',
   );
-  const panel = el(document, 'div', { class: 'keymap' });
-  panel.append(
-    keyGroup(
-      'Speed',
-      speedRuler(s),
-      keyRow('step', [cap('slower', 'Slower'), cap('faster', 'Faster')], 'Slower, faster', 'One step each press', stepPicker(s, opts)),
-      keyRow('presets', [cap('previousPreset', 'Previous preset'), cap('nextPreset', 'Next preset')], 'Down, up the presets', 'The dots on the line above', null, presetChips(s, opts)),
-      keyRow(
-        'your-speed',
-        [cap('preferred', 'Your speed')],
-        'Your speed, and back to 1×',
-        // At 1× it has nowhere to jump: said here, or it looks like a dead key (#12).
-        s.preferred === 1 ? 'At 1× it has nowhere to go: choose another speed' : 'The ★ on the line above',
-        preferred,
-      ),
-      keyRow('normal', [cap('reset', 'Normal speed')], 'Normal speed', 'Back to 1×'),
+  const tiles = el(document, 'div', { class: 'km-tiles' });
+  tiles.append(
+    tile('step', ICONS.step(), 'Slower · faster', 'S and D: one step slower or faster', [cap('slower', 'Slower'), cap('faster', 'Faster')], stepPicker(s, opts)),
+    tile('presets', ICONS.presets(), 'Presets', 'Down and up the dots on the line', [cap('previousPreset', 'Previous preset'), cap('nextPreset', 'Next preset')]),
+    tile(
+      'your-speed',
+      ICONS.star(),
+      'Your speed',
+      'To ★, and back to 1×',
+      [cap('preferred', 'Your speed')],
+      preferred,
+      // At 1× it has nowhere to jump: said here, or it looks like a dead key (#12).
+      s.preferred === 1 ? 'Does nothing at 1×' : null,
     ),
-    keyGroup(
-      'Moving through the video',
-      null,
-      keyRow('seek', [cap('rewind', 'Rewind'), cap('advance', 'Skip forward')], 'Back, forward', 'Even where the player has no seek bar', seek),
-    ),
-    keyGroup('Sound', null, keyRow('mute', [cap('mute', 'Mute')], 'Mute', 'Sound off, and on again')),
+    tile('normal', ICONS.normal(), 'Normal', 'Back to 1×', [cap('reset', 'Normal speed')]),
+    tile('seek', ICONS.seek(), 'Back · forward', 'Even where the player has no seek bar', [cap('rewind', 'Rewind'), cap('advance', 'Skip forward')], seek),
+    tile('mute', ICONS.mute(), 'Mute', 'Sound off, and on again', [cap('mute', 'Mute')]),
   );
+  const panel = el(document, 'div', { class: 'keymap' });
+  panel.append(speedLine(s, opts), tiles);
   return [
     el(document, 'p', { class: 'sub-label' }, 'While a page has a video or audio'),
     panel,
-    el(document, 'p', { class: 'muted small speed-keys-hint' }, 'To change a key, click it and press the new one. Esc keeps it as it is; Backspace leaves that action without a key.'),
+    el(document, 'p', { class: 'muted small speed-keys-hint' }, 'Click a key to change it. Click the line to add a speed, a dot to remove it.'),
   ];
 }
 
-function keyGroup(title: string, top: HTMLElement | null, ...rows: HTMLElement[]): HTMLElement {
-  // Not a <section>: each one in a Settings view is drawn as a card of its own.
-  const group = el(document, 'div', { class: 'km-group', role: 'group', 'aria-label': title });
-  group.append(el(document, 'h4', { class: 'km-head' }, title));
-  if (top) group.append(top);
-  group.append(...rows);
-  return group;
-}
-
-/** Key(s) | what they do | the value they use; `below` spans what and value (the preset chips). */
-function keyRow(act: string, caps: HTMLElement[], title: string, hint: string, value: HTMLElement | null = null, below: HTMLElement | null = null): HTMLElement {
-  const row = el(document, 'div', { class: 'km-row', 'data-act': act });
+/** A tile: icon and name (or "Press a key" while one of its keys waits), its keys, its value. */
+function tile(act: string, icon: SVGSVGElement, name: string, tip: string, caps: HTMLButtonElement[], value: HTMLElement | null = null, note: string | null = null): HTMLElement {
+  const box = el(document, 'div', { class: 'km-tile', 'data-act': act, title: tip });
+  const head = el(document, 'div', { class: 'km-tile-head' });
+  head.append(icon, el(document, 'span', { class: 'km-name' }, name), el(document, 'span', { class: 'km-prompt' }, 'Press a key'));
   const keys = el(document, 'div', { class: 'km-keys' });
   keys.append(...caps);
-  const what = el(document, 'div', { class: 'km-what' });
-  what.append(el(document, 'span', { class: 'km-title' }, title), el(document, 'span', { class: 'km-hint' }, hint));
-  row.append(keys, what);
+  box.append(head, keys);
   if (value) {
-    const box = el(document, 'div', { class: 'km-value' });
-    box.append(value);
-    row.append(box);
+    const wrap = el(document, 'div', { class: 'km-tile-value' });
+    wrap.append(value);
+    box.append(wrap);
   }
-  if (below) {
-    const wide = el(document, 'div', { class: 'km-below' });
-    wide.append(below);
-    row.append(wide);
-  }
-  return row;
+  if (note) box.append(el(document, 'span', { class: 'km-note' }, note));
+  return box;
 }
 
+const SVG_NS = 'http://www.w3.org/2000/svg';
+type Shape = [tag: string, attrs: Record<string, string>, text?: string];
+function icon(...shapes: Shape[]): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.classList.add('km-icon');
+  for (const [tag, attrs, text] of shapes) {
+    const node = document.createElementNS(SVG_NS, tag);
+    for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+    if (text) node.textContent = text;
+    svg.append(node);
+  }
+  return svg;
+}
+const filled = { fill: 'currentColor', stroke: 'none' };
+const ICONS = {
+  step: () => icon(['path', { d: 'M4.5 16.5a7.5 7.5 0 1 1 15 0' }], ['path', { d: 'M12 16.5l4-4.8' }], ['circle', { cx: '12', cy: '16.5', r: '1.7', ...filled }]),
+  presets: () =>
+    icon(['path', { d: 'M2.5 12h19' }], ['circle', { cx: '6', cy: '12', r: '2.3', ...filled }], ['circle', { cx: '12', cy: '12', r: '2.3', ...filled }], ['circle', { cx: '18', cy: '12', r: '2.3', ...filled }]),
+  star: () => icon(['path', { d: 'M12 3.6l2.5 5.3 5.8.7-4.3 4 1.1 5.7L12 16.5l-5.1 2.8 1.1-5.7-4.3-4 5.8-.7z', ...filled }]),
+  normal: () => icon(['rect', { x: '2.5', y: '6', width: '19', height: '12', rx: '4' }], ['text', { x: '12', y: '15.4', 'text-anchor': 'middle', 'font-size': '8.5', 'font-weight': '700', ...filled }, '1×']),
+  seek: () => icon(['path', { d: 'M4 12a8 8 0 1 0 2.6-5.9' }], ['path', { d: 'M4 4.5v4h4' }]),
+  mute: () => icon(['path', { d: 'M4 9.5h3.5L12 5.8v12.4l-4.5-3.7H4z', ...filled }], ['path', { d: 'M15.5 9.5l5 5M20.5 9.5l-5 5' }]),
+};
+
 /**
- * The speeds on one line, as the keys move along it: the presets as dots (what the preset keys
- * step through), 1×, and ★ at your speed. On a doubling scale, so 0.5× to 1× is as long as 1× to
- * 2×. A label that would touch the one before it is hidden once laid out, and again as the width
- * changes (1×'s never: the others make way); the dot keeps it as its tooltip.
+ * The speeds on one line, on a doubling scale (0.5× to 1× as long as 1× to 2×), and the place the
+ * presets are set: each preset a dot that a click takes out (the last one stays), the line itself
+ * adding the speed under the pointer (a ghost dot shows which, to the nearest quarter), "+" a
+ * typed one. 1× is marked, and ★ is your speed. A label that would touch the one before it is
+ * hidden once laid out, and again as the width changes (1×'s stays); its dot keeps it as a tooltip.
  */
-function speedRuler(s: MediaSpeedSettings): HTMLElement {
+function speedLine(s: MediaSpeedSettings, opts: MediaSpeedPanelOptions): HTMLElement {
   const lo = 0.25;
   const hi = Math.max(4, ...s.presets, s.preferred);
-  const at = (rate: number): number => ((Math.log2(rate) - Math.log2(lo)) / (Math.log2(hi) - Math.log2(lo))) * 100;
-  const ruler = el(document, 'div', { class: 'km-ruler', 'aria-hidden': 'true' });
+  const span = Math.log2(hi) - Math.log2(lo);
+  const at = (rate: number): number => ((Math.log2(rate) - Math.log2(lo)) / span) * 100;
+  const rateAt = (percent: number): number => 2 ** (Math.log2(lo) + (percent / 100) * span);
+  const save = (presets: number[]): void => void opts.save({ presets: [...new Set(presets.map(clampRate))].sort((a, b) => a - b) });
+
+  const ruler = el(document, 'div', { class: 'km-ruler' });
   const line = el(document, 'div', { class: 'km-line' });
-  ruler.append(line);
-  const rates = [...new Set([...s.presets, 1])].sort((a, b) => a - b);
-  for (const rate of rates) {
-    const where = at(rate);
-    const mark = el(document, 'span', { class: 'km-mark', title: formatRate(rate) });
-    mark.classList.toggle('is-preset', s.presets.includes(rate));
+  const hit = el(document, 'div', { class: 'km-hit', title: 'Click to add this speed to the presets' });
+  const ghost = el(document, 'span', { class: 'km-mark km-ghost', 'aria-hidden': 'true' });
+  ghost.append(el(document, 'i', {}), el(document, 'b', {}));
+  ghost.hidden = true;
+  const under = (e: MouseEvent): number => {
+    const box = hit.getBoundingClientRect();
+    const percent = box.width > 0 ? Math.min(100, Math.max(0, ((e.clientX - box.left) / box.width) * 100)) : 50;
+    return clampRate(Math.round(rateAt(percent) * 4) / 4);
+  };
+  hit.addEventListener('pointermove', (e) => {
+    const rate = under(e);
+    ghost.hidden = s.presets.includes(rate);
+    ghost.style.left = `${at(rate)}%`;
+    ghost.querySelector('b')!.textContent = `+${formatRate(rate)}`;
+  });
+  hit.addEventListener('pointerleave', () => (ghost.hidden = true));
+  hit.addEventListener('click', (e) => {
+    const rate = under(e);
+    if (!s.presets.includes(rate)) save([...s.presets, rate]);
+  });
+  line.append(hit);
+
+  for (const rate of [...new Set([...s.presets, 1])].sort((a, b) => a - b)) {
+    const preset = s.presets.includes(rate);
+    const last = preset && s.presets.length === 1;
+    const mark = preset
+      ? (el(document, 'button', {
+          type: 'button',
+          class: 'km-mark is-preset',
+          title: last ? `${formatRate(rate)}: the last preset stays` : `${formatRate(rate)}: click to remove`,
+          'aria-label': `Remove ${formatRate(rate)} from the presets`,
+        }) as HTMLButtonElement)
+      : el(document, 'span', { class: 'km-mark', title: formatRate(rate), 'aria-hidden': 'true' });
     mark.classList.toggle('is-one', rate === 1);
-    mark.style.left = `${where}%`;
-    mark.append(el(document, 'i', {}));
-    mark.append(el(document, 'b', {}, formatRate(rate)));
+    mark.style.left = `${at(rate)}%`;
+    mark.append(el(document, 'i', {}), el(document, 'b', {}, formatRate(rate)));
+    if (mark instanceof HTMLButtonElement) {
+      if (last) mark.disabled = true;
+      else mark.addEventListener('click', () => save(s.presets.filter((p) => p !== rate)));
+    }
     line.append(mark);
   }
-  if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => thinLabels(line)).observe(line);
-  const star = el(document, 'span', { class: 'km-star', title: `Your speed: ${formatRate(s.preferred)}` }, '★');
+  const star = el(document, 'span', { class: 'km-star', title: `Your speed: ${formatRate(s.preferred)}`, 'aria-hidden': 'true' }, '★');
   star.style.left = `${at(s.preferred)}%`;
-  line.append(star);
+  line.append(star, ghost);
+
+  const add = el(document, 'input', {
+    type: 'text',
+    inputmode: 'decimal',
+    class: 'preset-add',
+    placeholder: '+',
+    'aria-label': 'Add a preset speed',
+    title: 'Type a speed, such as 1.75, and press Enter',
+  }) as HTMLInputElement;
+  // Enter fires "change" and leaving fires "blur": the first takes it, the second finds it empty.
+  const commit = (): void => {
+    const typed = add.value.trim().replace(',', '.').replace(/\s*[×x]$/i, '');
+    add.value = '';
+    const rate = Number(typed);
+    if (!typed || !Number.isFinite(rate) || rate <= 0 || s.presets.includes(clampRate(rate))) return;
+    save([...s.presets, rate]);
+  };
+  add.addEventListener('change', commit);
+  add.addEventListener('blur', commit);
+
+  ruler.append(line, add);
+  if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => thinLabels(line)).observe(line);
   return ruler;
 }
 
-/** Hides each ruler label that would touch the one shown before it; 1×'s is shown first. */
+/** Hides each label on the line that would touch one shown before it; 1×'s is shown first. */
 function thinLabels(line: HTMLElement): void {
-  const labels = [...line.querySelectorAll<HTMLElement>('.km-mark > b')];
+  const labels = [...line.querySelectorAll<HTMLElement>('.km-mark:not(.km-ghost) > b')];
   for (const label of labels) label.style.visibility = '';
   const one = line.querySelector<HTMLElement>('.km-mark.is-one > b');
   const kept: DOMRect[] = one ? [one.getBoundingClientRect()] : [];
@@ -244,7 +310,7 @@ function thinLabels(line: HTMLElement): void {
 
 function stepPicker(s: MediaSpeedSettings, opts: MediaSpeedPanelOptions): HTMLSelectElement {
   return select(
-    [0.05, 0.1, 0.25, 0.5].map((v) => ({ value: String(v), label: `${v}×` })),
+    [0.05, 0.1, 0.25, 0.5].map((v) => ({ value: String(v), label: `±${v}×` })),
     String(s.step),
     (value) => void opts.save({ step: Number(value) }),
     'Step',
@@ -277,18 +343,26 @@ function capLabel(binding: string): string {
   return formatBinding(binding).replace(/Shift \+ /g, '⇧ ').replace(/Cmd \+ /g, '⌘ ').replace(/ \+ /g, ' ');
 }
 
-/** One key, as a button showing it: clicked, the next key pressed becomes it. */
+/**
+ * One key, as a keycap: clicked, it waits for the next key, pulsing, the same size, while its tile
+ * says "Press a key". One waits at a time (key-recorder.ts): another key clicked, a click anywhere
+ * else, or Esc, and it stops as it was. Backspace leaves the action without a key.
+ */
 function keyButton(name: KeyName, what: string, s: MediaSpeedSettings, opts: MediaSpeedPanelOptions): HTMLButtonElement {
   const shown = capLabel(s.keys[name]);
   const button = el(document, 'button', { type: 'button', class: 'key-button km-cap', 'aria-label': `${what} key: ${formatBinding(s.keys[name])}` }, shown) as HTMLButtonElement;
-  button.title = `${what}. Click, then press the key you want. Esc keeps it as it is; Backspace clears it.`;
+  button.title = `${what}: click, then press the new key`;
   button.addEventListener('click', () => {
+    if (stopIfRecording(button)) return;
+    const box = button.closest('.km-tile');
     button.classList.add('listening');
-    // This text is also how the page knows a key is being recorded, and holds its redraws (main.ts).
-    button.textContent = 'Press a key…';
+    box?.classList.add('is-recording');
+    let end = (): void => undefined;
     const done = (binding: string | null): void => {
+      end();
       window.removeEventListener('keydown', onKey, true);
       button.classList.remove('listening');
+      box?.classList.remove('is-recording');
       if (binding == null) {
         button.textContent = shown;
         return;
@@ -304,48 +378,10 @@ function keyButton(name: KeyName, what: string, s: MediaSpeedSettings, opts: Med
       const combo = comboFromEvent(e);
       if (combo) done(combo);
     };
+    end = beginRecording(button, () => done(null));
     window.addEventListener('keydown', onKey, true);
   });
   return button;
-}
-
-/**
- * The preset speeds as chips, each with its ✕ (the last one stays: the keys need one to go to),
- * and a field to add one: typed, since any speed from 0.25× to 5× can be a preset.
- */
-function presetChips(s: MediaSpeedSettings, opts: MediaSpeedPanelOptions): HTMLElement {
-  const wrap = el(document, 'span', { class: 'preset-chips' });
-  const save = (presets: number[]): void => void opts.save({ presets: [...new Set(presets.map(clampRate))].sort((a, b) => a - b) });
-  for (const rate of s.presets) {
-    const chip = el(document, 'span', { class: 'site-chip preset-chip' }, formatRate(rate));
-    if (s.presets.length > 1) {
-      const remove = el(document, 'button', { type: 'button', class: 'chip-x', title: `Remove ${formatRate(rate)}`, 'aria-label': `Remove ${formatRate(rate)}` }, '✕');
-      remove.addEventListener('click', () => save(s.presets.filter((p) => p !== rate)));
-      chip.append(remove);
-    }
-    wrap.append(chip);
-  }
-  const add = el(document, 'input', {
-    type: 'text',
-    inputmode: 'decimal',
-    class: 'preset-add',
-    placeholder: '+ add',
-    'aria-label': 'Add a preset speed',
-    title: 'Type a speed, such as 1.75, and press Enter',
-  }) as HTMLInputElement;
-  // Enter fires "change" and leaving fires "blur": the first takes it, the second finds it empty.
-  const commit = (): void => {
-    const typed = add.value.trim().replace(',', '.').replace(/\s*[×x]$/i, '');
-    add.value = '';
-    const rate = Number(typed);
-    if (!typed || !Number.isFinite(rate) || rate <= 0) return;
-    if (s.presets.includes(clampRate(rate))) return;
-    save([...s.presets, rate]);
-  };
-  add.addEventListener('change', commit);
-  add.addEventListener('blur', commit);
-  wrap.append(add);
-  return wrap;
 }
 
 /**

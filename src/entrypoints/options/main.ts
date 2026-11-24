@@ -980,7 +980,8 @@ function busyHere(): boolean {
     active.matches(
       'input:not([type]), input[type="text"], input[type="search"], input[type="url"], input[type="password"], input[type="email"], input[type="number"], input[type="tel"], textarea, [contenteditable="true"]',
     );
-  return typing || [...document.querySelectorAll('button')].some((b) => b.textContent === 'Press a key…');
+  // A key recorder waiting marks its button (key-recorder.ts).
+  return typing || document.querySelector('[data-recording]') != null;
 }
 /** Redrawn once nobody is typing or recording here: checked, not waited on (a field can go without a blur). */
 function redrawWhenFree(): void {
