@@ -6,7 +6,6 @@
 // comments, and the notices lived only in the repository. This puts them in the package, from
 // each production dependency's own LICENSE / NOTICE / COPYING files, with the source address
 // from package.json's `repository`.
-import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,12 +14,62 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 /** Where the Safari package's notices are written (wxt.config.ts reads this). */
 export const SAFARI_NOTICES_DIR = '.gen/licenses-safari';
 
-/** Every package in the production dependency tree, by its directory. */
+/** Development packages whose code is bundled into every package anyway (see `write`). */
+const BUNDLED_FROM_DEV = ['wxt', '@wxt-dev/browser', '@wxt-dev/storage', 'superlock'];
+
+/** The MIT licence's terms, for a package that ships none of its own (WXT's packages). */
+const MIT_TEXT = `Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute,
+sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or
+substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
+OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.`;
+
+/**
+ * Packages whose code is in a built extension (`outDir`) but which its notices do not name. The
+ * bundler marks where each module came from (`// node_modules/<package>/…`); every package so
+ * marked must have a section. Run after each build (wxt.config.ts), so a new bundled dependency,
+ * a development one included, cannot ship without its licence again.
+ */
+export function checkBundledNotices(outDir) {
+  const notices = readFileSync(join(outDir, 'licenses/THIRD_PARTY_NOTICES.txt'), 'utf8');
+  const bundled = new Set();
+  const walk = (at) => {
+    for (const entry of readdirSync(at, { withFileTypes: true })) {
+      const path = join(at, entry.name);
+      if (entry.isDirectory()) walk(path);
+      else if (/\.m?js$/.test(entry.name)) {
+        for (const m of readFileSync(path, 'utf8').matchAll(/^[ \t]*\/\/ node_modules\/((?:@[\w.-]+\/)?[\w.-]+)/gm)) bundled.add(m[1]);
+      }
+    }
+  };
+  walk(outDir);
+  const named = (name) => new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')} \\d`, 'm').test(notices);
+  return [...bundled].filter((name) => !named(name)).sort();
+}
+
+/**
+ * Every package in the production dependency tree, by its directory: what the lockfile does not
+ * mark as for development only. Read from the lockfile, which is what `npm ci` installs, rather
+ * than from `npm ls`: npm masks anything in its output that looks like a secret, and a build in a
+ * folder whose path held an ID got its paths back as "***" and wrote notices with no package in
+ * them at all.
+ */
 function productionPackages() {
-  const out = execFileSync('npm', ['ls', '--omit=dev', '--all', '--parseable'], { cwd: root, encoding: 'utf8' });
-  return [...new Set(out.split('\n').map((l) => l.trim()).filter((l) => l && l !== root))].sort((a, b) =>
-    relative(root, a).localeCompare(relative(root, b)),
-  );
+  const locked = JSON.parse(readFileSync(join(root, 'package-lock.json'), 'utf8')).packages ?? {};
+  return Object.entries(locked)
+    .filter(([key, entry]) => key.startsWith('node_modules/') && entry.dev !== true && entry.devOptional !== true)
+    .map(([key]) => join(root, key))
+    .filter((dir) => existsSync(join(dir, 'package.json')))
+    .sort((a, b) => relative(root, a).localeCompare(relative(root, b)));
 }
 
 // Also LICENSE-MIT / LICENSE-APACHE (dual-licensed packages such as phonon-tts) and THIRD_PARTY_LICENSES.md.
@@ -98,6 +147,22 @@ function write({ safari = false }) {
       [`${'='.repeat(78)}`, `${name} ${version}${license ? ` — ${typeof license === 'string' ? license : JSON.stringify(license)}` : ''}`, `${'='.repeat(78)}`, '', texts.length ? texts.join('\n\n') : '(no licence file in the package; see its "license" field above)']
         .join('\n'),
     );
+  }
+
+  // Bundled though installed as development tools: the framework's own runtime (browser API, storage)
+  // and the lock it uses. `npm ls --omit=dev` never lists them, and every package shipped their MIT
+  // code without its notice. `checkBundledNotices` (run after each build) finds any other such one.
+  for (const name of BUNDLED_FROM_DEV) {
+    const dir = join(root, 'node_modules', name);
+    const { version, license, author, repository } = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
+    const files = readdirSync(dir).filter((f) => LICENSE_FILE.test(f)).sort();
+    const holder = typeof author === 'string' ? author.replace(/\s*<.*$/, '') : author?.name;
+    const text = files.length
+      ? files.map((f) => readFileSync(join(dir, f), 'utf8').trim()).join('\n\n')
+      : license === 'MIT' && holder
+        ? `Copyright (c) ${holder} and contributors. Source: ${String(repository?.url ?? repository ?? '').replace(/^git\+/, '')}\n\n${MIT_TEXT}`
+        : '(no licence file in the package; see its "license" field above)';
+    sections.push([`${'='.repeat(78)}`, `${name} ${version}${license ? ` — ${license}` : ''}`, `${'='.repeat(78)}`, '', text].join('\n'));
   }
 
   // Files copied into the extension rather than installed as packages: their licence travels with them.

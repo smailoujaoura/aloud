@@ -27,7 +27,9 @@ import { join, resolve } from 'node:path';
 
 const ROOT = resolve(process.argv[2] ?? '.');
 const PARAGRAPHS = Number(process.argv[3] ?? 400);
-const MUTATIONS = Number(process.argv[4] ?? 0);
+// Changes by default: a page that never changes cannot show what each change costs, which is what
+// 1.0.4's slowdown was.
+const MUTATIONS = Number(process.argv[4] ?? 2000);
 const SECONDS = Number(process.argv[5] ?? 30);
 const ADDON_DIR = join(ROOT, process.env.ADDON_DIR ?? '.output/firefox-mv3');
 const ADDON_ID = JSON.parse(readFileSync(join(ADDON_DIR, 'manifest.json'), 'utf8')).browser_specific_settings.gecko.id;

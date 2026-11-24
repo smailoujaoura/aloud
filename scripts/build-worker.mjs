@@ -159,7 +159,9 @@ function assertEntryImportedByNothing(dir) {
     for (const entry of readdirSync(at, { withFileTypes: true })) {
       const path = join(at, entry.name);
       if (entry.isDirectory()) walk(path);
-      else if (/\.m?js$/.test(entry.name) && /\bfrom\s*["'][^"']*tts-worker\.js["']|\bimport\s*\(\s*["'][^"']*tts-worker\.js["']/.test(readFileSync(path, 'utf8'))) offenders.push(path.slice(dir.length + 1));
+      // Every way a module can name another: `import … from`, `export … from`, a bare `import "…"`
+      // (what the bundler writes when a chunk only needs another run first), and `import(…)`.
+      else if (/\.m?js$/.test(entry.name) && /\b(?:from|import)\s*\(?\s*["'][^"']*tts-worker\.js["']/.test(readFileSync(path, 'utf8'))) offenders.push(path.slice(dir.length + 1));
     }
   };
   walk(dir);

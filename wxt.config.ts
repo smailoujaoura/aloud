@@ -237,6 +237,13 @@ export default defineConfig({
     // Safari ships as an App Store app, whose terms the GPL does not allow: none of eSpeak-NG
     // (GPL-3.0, Piper's phonemizer and its data) goes into that package. Its worker is built without
     // Piper and Kokoro (scripts/build-worker.mjs), so no chunk of theirs is there to leave out.
+    // Every package whose code is in the build has its licence in the build's notices.
+    async 'build:done'(wxt) {
+      const script = './scripts/notices.mjs';
+      const { checkBundledNotices } = (await import(/* @vite-ignore */ script)) as { checkBundledNotices: (outDir: string) => string[] };
+      const missing = checkBundledNotices(wxt.config.outDir);
+      if (missing.length) throw new Error(`Bundled without a licence notice (scripts/notices.mjs): ${missing.join(', ')}`);
+    },
     'build:publicAssets'(wxt, files) {
       if (wxt.config.browser !== 'safari') return;
       const espeak = /^vendor\/piper\//;
