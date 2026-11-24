@@ -24,6 +24,7 @@
  * Built by scripts/build-worker.mjs as a plain IIFE so public/synth-host.html can load it with a
  * same-origin classic `<script src>`.
  */
+import { GPU_TEST_VERSION } from '@/engine/gpu-check';
 import type { EngineConfig, WorkerRequest, WorkerResponse } from '@/engine/protocol';
 import { capabilities } from '@/shared/browser-env';
 import { probeGpu } from '@/shared/gpu-probe';
@@ -706,17 +707,18 @@ const readServerKey = (): Promise<unknown> => readLocal('serverKey');
  * each worker of the pool would). For this browser version only: an update may change its WebGPU.
  */
 const GPU_VERDICTS = 'gpuVerdicts';
-type GpuVerdicts = Record<string, { browser: string; ok: boolean; why?: string; at: number }>;
+type GpuVerdicts = Record<string, { browser: string; test?: number; ok: boolean; why?: string; at: number }>;
 
+/** For this browser version and this build of the test only (GPU_TEST_VERSION). */
 async function gpuVerdictHere(engine: string): Promise<'ok' | 'bad' | null> {
   const verdict = ((await readLocal(GPU_VERDICTS)) as GpuVerdicts | null)?.[engine];
-  if (!verdict || verdict.browser !== navigator.userAgent) return null;
+  if (!verdict || verdict.browser !== navigator.userAgent || verdict.test !== GPU_TEST_VERSION) return null;
   return verdict.ok ? 'ok' : 'bad';
 }
 
 async function rememberGpuVerdict(engine: string, ok: boolean, why?: string): Promise<void> {
   const verdicts = ((await readLocal(GPU_VERDICTS)) as GpuVerdicts | null) ?? {};
-  await writeLocal({ [GPU_VERDICTS]: { ...verdicts, [engine]: { browser: navigator.userAgent, ok, ...(why ? { why } : {}), at: Date.now() } } });
+  await writeLocal({ [GPU_VERDICTS]: { ...verdicts, [engine]: { browser: navigator.userAgent, test: GPU_TEST_VERSION, ok, ...(why ? { why } : {}), at: Date.now() } } });
 }
 
 async function redeemTicket(ticket: unknown): Promise<boolean> {

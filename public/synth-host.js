@@ -283,6 +283,32 @@
 		return autoPoolSize(engine, provider.startsWith("webgpu"), env);
 	}
 	// src/synth-host/entry.ts
+	/**
+	* Synthesis-host page script (see public/synth-host.html).
+	*
+	* Why this page exists: Firefox does **not** let a content script create a `Worker` from a
+	* `moz-extension://` URL. This page *is* at the extension origin (and under the extension CSP,
+	* so `wasm-unsafe-eval` is allowed for ONNX Runtime Web), so it can. Chromium would let the
+	* content script construct the Worker directly, but routing both browsers through this page
+	* keeps one code path rather than two.
+	*
+	* What it does: it owns a **pool** of identical synthesis Workers and feeds them `synthesize`
+	* requests from a single queue (see job-queue.ts) — one sentence per idle worker at a time. On
+	* the CPU path the heavy neural engines run several times slower than real time — Firefox gives
+	* extension workers no `SharedArrayBuffer` (so ONNX Runtime is stuck on one WASM thread) and no
+	* `navigator.gpu` — so one worker cannot keep up with playback of a long article, while N
+	* workers each synthesising a different sentence bring the *effective* rate below real time.
+	* Where the GPU is reachable the pool collapses to one worker; see autoPoolSize().
+	*
+	* Start-up is progressive: worker 0 is spawned first and, the moment it is ready, `ready` is
+	* forwarded to the content script so playback can begin — the remaining workers are spawned in
+	* the background and pull from the queue as they come up. This is what stops "loading…" from
+	* hanging for a minute while 8 models compile at once, and the shared queue is what stops the
+	* reader's opening burst of requests from all landing on worker 0.
+	*
+	* Built by scripts/build-worker.mjs as a plain IIFE so public/synth-host.html can load it with a
+	* same-origin classic `<script src>`.
+	*/
 	var WORKER_URL = new URL("/tts-worker.js", location.href).href;
 	/** Whether to print what is being read. Set from the reader's `debug` setting on `init`. */
 	var verbose = false;
@@ -829,9 +855,10 @@
 	* each worker of the pool would). For this browser version only: an update may change its WebGPU.
 	*/
 	var GPU_VERDICTS = "gpuVerdicts";
+	/** For this browser version and this build of the test only (GPU_TEST_VERSION). */
 	async function gpuVerdictHere(engine) {
 		const verdict = (await readLocal(GPU_VERDICTS))?.[engine];
-		if (!verdict || verdict.browser !== navigator.userAgent) return null;
+		if (!verdict || verdict.browser !== navigator.userAgent || verdict.test !== 3) return null;
 		return verdict.ok ? "ok" : "bad";
 	}
 	async function rememberGpuVerdict(engine, ok, why) {
@@ -840,6 +867,7 @@
 			...verdicts,
 			[engine]: {
 				browser: navigator.userAgent,
+				test: 3,
 				ok,
 				...why ? { why } : {},
 				at: Date.now()

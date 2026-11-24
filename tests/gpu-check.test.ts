@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GPU_ALIKE, NOISE_FLATNESS, envelopeSimilarity, notSound, seededRandom, similarity, soundStats, spectralFlatness, tooNoisy } from '@/engine/gpu-check';
+import { GPU_ALIKE, NOISE_FLATNESS, NOISE_WHITENED, envelopeSimilarity, notSound, seededRandom, similarity, soundStats, spectralFlatness, tooNoisy, whitenedFlatness } from '@/engine/gpu-check';
 
 const RATE = 24000;
 const tone = (seconds: number, amp = 0.3, f = 220) => Float32Array.from({ length: Math.round(seconds * RATE) }, (_, i) => amp * Math.sin((2 * Math.PI * f * i) / RATE));
@@ -42,13 +42,22 @@ describe('does the GPU really speak', () => {
     // In syllables or not, noise is noise.
     const bursts = white.map((x, i) => (Math.floor(i / 3000) % 2 ? x : x * 0.02));
     expect(tooNoisy(bursts, RATE)).toBe('noise');
+    // Noise that falls with frequency, as speech does: rumble and brown noise score like speech on
+    // the spectrum as it is, and are caught on its first difference.
+    for (const pole of [0.99, 0.995, 0.999, 1]) {
+      let y = 0;
+      const rumble = Float32Array.from({ length: RATE * 2 }, () => (y = pole * y + (r() - 0.5)));
+      expect(spectralFlatness(rumble, RATE)).toBeLessThan(NOISE_FLATNESS);
+      expect(tooNoisy(rumble, RATE)).toBe('noise');
+    }
+    expect(whitenedFlatness(voice, RATE)).toBeLessThan(NOISE_WHITENED);
 
     // Against the processor's take: a breathy voice, flat on both, passes; noise in its place does not.
     const breathy = voice.map((x, i) => x + 0.05 * (r() - 0.5) * (Math.floor(i / 4320) % 3 !== 2 ? 1 : 0.01));
     expect(tooNoisy(breathy, RATE, breathy.map((x) => x * 0.98))).toBeNull();
     expect(tooNoisy(white, RATE, breathy)).toBe('noise');
 
-    expect(soundStats(white, RATE)).toMatch(/^2\.00 s, level 0\.\d{4}, clipped 0\.0%, flatness 0\.\d{4}$/);
+    expect(soundStats(white, RATE)).toMatch(/^2\.00 s, level 0\.\d{4}, clipped 0\.0%, flatness 0\.\d{4}, whitened 0\.\d{4}$/);
   });
 
   it('the same sound is alike; another is not (Supertonic said gibberish there)', () => {

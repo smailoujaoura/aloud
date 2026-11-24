@@ -11,18 +11,50 @@
 export const GPU_TEST_TEXT = 'Hello there. This is a short test of the voice.';
 
 /**
+ * Which build of this test a remembered verdict came from (synth-host/entry.ts: gpuVerdicts). Bump
+ * it whenever the test or an engine's `checkGpu` changes: a verdict from an earlier build is then
+ * tested again. Without it, a Mac whose working GPU the first build of Supertonic's test rejected
+ * kept Supertonic on the processor for good, and a GPU making noise that the first Kokoro test let
+ * through was never tested again.
+ */
+export const GPU_TEST_VERSION = 3;
+
+/**
  * How noise-like the loud part of a clip is: the spectral flatness of each 1024-sample frame within
  * 30 dB of the loudest, up to 8 kHz, median. 0 is a pure tone, about 0.56 white noise.
  *
  * Speech is far from flat: its energy sits in harmonics and formants. Measured on a Mac's GPU,
  * all 28 English Kokoro voices, two sentences each: 0.0002 to 0.0127. Supertonic's breathier
  * voices are flatter (M2: 0.04, on the GPU and the processor alike), which is why its test compares
- * with the processor's take rather than with a fixed bar. White, pink and brown noise: 0.565,
- * 0.055, 0.034. A voice a graphics card computes wrongly comes out as noise of that kind (Kokoro's
- * small model on a GPU did; issue #10 on Windows Firefox was garbled), which `notSound` lets
- * through: it is loud, finite and not clipped.
+ * with the processor's take rather than with a fixed bar. White noise scores 0.565, but noise that
+ * falls with frequency scores like speech: one-pole noise 0.033 down to 0.005, brown noise about 0,
+ * which is why `whitenedFlatness` measures too. A voice a graphics card computes wrongly comes out
+ * as noise of that kind (Kokoro's small model on a GPU did; issue #10 on Windows Firefox was
+ * garbled), which `notSound` lets through: it is loud, finite and not clipped.
  */
 export function spectralFlatness(pcm: Float32Array, sampleRate: number): number {
+  return flatness(pcm, pcm, sampleRate);
+}
+
+/**
+ * The same, of the clip's first difference: its spectrum tilted up 6 dB an octave. Speech, which
+ * falls about that fast, is barely flatter for it; noise that falls too (rumble, brown noise, what
+ * `spectralFlatness` scores like speech) comes out flat. Measured on a Mac's GPU, all 28 English
+ * Kokoro voices and all 10 Supertonic styles, two sentences each: 0.011 to 0.12. White noise 0.26;
+ * one-pole and brown (random-walk) noise 0.53 to 0.56.
+ *
+ * What no flatness catches: babble that is voiced, harmonic sounds in the wrong order (0.001).
+ * Supertonic's test compares with the processor's take for that; Kokoro's cannot.
+ */
+export function whitenedFlatness(pcm: Float32Array, sampleRate: number): number {
+  const diff = new Float32Array(pcm.length);
+  for (let i = 1; i < pcm.length; i++) diff[i] = pcm[i]! - pcm[i - 1]!;
+  return flatness(diff, pcm, sampleRate);
+}
+
+/** Median flatness of `x` over the frames where `level` is within 30 dB of its loudest. */
+function flatness(x: Float32Array, level: Float32Array, sampleRate: number): number {
+  const pcm = level;
   const N = 1024;
   if (pcm.length < N) return 0;
   const energy: number[] = [];
@@ -41,7 +73,7 @@ export function spectralFlatness(pcm: Float32Array, sampleRate: number): number 
     if (e < loudest * 1e-3) return;
     const at = (f * N) / 2;
     for (let i = 0; i < N; i++) {
-      re[i] = pcm[at + i]! * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / N));
+      re[i] = x[at + i]! * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / N));
       im[i] = 0;
     }
     fft(re, im);
@@ -60,15 +92,20 @@ export function spectralFlatness(pcm: Float32Array, sampleRate: number): number 
 
 /** Flatter than this is noise, not a Kokoro voice: over twice its flattest voice measured (see above). */
 export const NOISE_FLATNESS = 0.03;
+/** The same for `whitenedFlatness`: two thirds above the flattest voice measured, below every noise. */
+export const NOISE_WHITENED = 0.2;
 
 /**
- * 'noise' when `pcm` is noise rather than a voice, or null. With `reference` (the same phrase made
- * on the processor), only when it is also far flatter than that: a breathy voice is flat on both.
+ * 'noise' when `pcm` is noise rather than a voice, by either measure, or null. With `reference`
+ * (the same phrase made on the processor), only when it is also far flatter than that: a breathy
+ * voice is flat on both, and Supertonic's test phrase, squeezed into 1.6 s, is flatter than speech.
  */
 export function tooNoisy(pcm: Float32Array, sampleRate: number, reference?: Float32Array): string | null {
-  const flat = spectralFlatness(pcm, sampleRate);
-  const bar = reference ? Math.max(NOISE_FLATNESS, 3 * spectralFlatness(reference, sampleRate)) : NOISE_FLATNESS;
-  return flat > bar ? 'noise' : null;
+  const raw = spectralFlatness(pcm, sampleRate);
+  const whitened = whitenedFlatness(pcm, sampleRate);
+  const rawBar = reference ? Math.max(NOISE_FLATNESS, 3 * spectralFlatness(reference, sampleRate)) : NOISE_FLATNESS;
+  const whitenedBar = reference ? Math.max(NOISE_WHITENED, 3 * whitenedFlatness(reference, sampleRate)) : NOISE_WHITENED;
+  return raw > rawBar || whitened > whitenedBar ? 'noise' : null;
 }
 
 /** In-place radix-2 FFT; `re.length` a power of two. */
@@ -112,7 +149,7 @@ export function soundStats(pcm: Float32Array, sampleRate: number): string {
     if (Math.abs(x) >= 0.999) clipped++;
   }
   const rms = pcm.length ? Math.sqrt(sum / pcm.length) : 0;
-  return `${(pcm.length / sampleRate).toFixed(2)} s, level ${rms.toFixed(4)}, clipped ${((100 * clipped) / Math.max(1, pcm.length)).toFixed(1)}%, flatness ${spectralFlatness(pcm, sampleRate).toFixed(4)}`;
+  return `${(pcm.length / sampleRate).toFixed(2)} s, level ${rms.toFixed(4)}, clipped ${((100 * clipped) / Math.max(1, pcm.length)).toFixed(1)}%, flatness ${spectralFlatness(pcm, sampleRate).toFixed(4)}, whitened ${whitenedFlatness(pcm, sampleRate).toFixed(4)}`;
 }
 
 /** Why `pcm` is not speech at all (not numbers, silent, clipped noise), or null when it could be. See also `tooNoisy`. */

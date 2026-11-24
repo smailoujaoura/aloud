@@ -184,12 +184,27 @@ export class KokoroEngine implements SynthEngine {
         if (device === 'webgpu' && !ctx.gpuChecked) {
           // Loaded is not speaking: on Firefox for Windows it loaded and was silent (issue #10).
           // Silence was #10's Kokoro; noise is how a GPU's wrong arithmetic usually sounds.
+          // The voice's own file first, outside the test: the phrase is the first thing to need it,
+          // and a connection that dropped while it downloaded was taken for a GPU that cannot speak,
+          // remembered for this browser, and every reading after ran on the processor. A download
+          // that fails here fails the whole start as a download (the reader says so and tries
+          // again), with the GPU model let go and no verdict left behind.
+          const downloadFailed = async (err: unknown): Promise<never> => {
+            await this.disposeModel();
+            this.tts = null;
+            throw Object.assign(err instanceof Error ? err : new Error(String(err)), { downloadFailed: true });
+          };
+          await ensureKokoroVoice(this.usableVoice()).catch(downloadFailed);
           const bad = await this.synthesize(GPU_TEST_TEXT, 1)
             .then((r) => {
               log.info(`[kokoro] GPU test phrase: ${soundStats(r.pcm, r.sampleRate)}`);
               return notSound(r.pcm, r.sampleRate) ?? tooNoisy(r.pcm, r.sampleRate);
             })
-            .catch((err: unknown) => `it failed (${String(err)})`);
+            .catch((err: unknown) => {
+              // A download that failed mid-phrase (word timing's own files): not the GPU's fault.
+              if (isNetworkFailure(err)) return downloadFailed(err);
+              return `it failed (${String(err)})`;
+            });
           if (bad) {
             this.gpuRejected = `its sound was ${bad}`;
             await (this.tts as unknown as { model?: { dispose?: () => Promise<unknown> } }).model?.dispose?.().catch(() => undefined);
@@ -201,6 +216,7 @@ export class KokoroEngine implements SynthEngine {
         lastErr = undefined;
         break;
       } catch (err) {
+        if ((err as { downloadFailed?: boolean } | null)?.downloadFailed) throw err;
         lastErr = err;
         log.warn(`[kokoro] ${label} failed to load: ${String(err)}`);
         if (device === 'webgpu') gpuFailures.push({ label, err });

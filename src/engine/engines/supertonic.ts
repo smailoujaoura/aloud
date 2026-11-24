@@ -206,11 +206,31 @@ export class SupertonicEngine implements SynthEngine {
       gpuPcm = new Float32Array(0);
       console.warn('[aloud] [supertonic] the GPU failed its test phrase:', err);
     }
-    const [cdp, cte, cve, cvo] = await Promise.all(bytes.map((b) => this.ort.InferenceSession.create(b, cpuOpts)));
-    const cpu = [cdp!, cte!, cve!, cvo!];
     const gpu = [this.dp!, this.textEnc!, this.vectorEst!, this.vocoder!];
-    [this.dp, this.textEnc, this.vectorEst, this.vocoder] = [cdp!, cte!, cve!, cvo!];
-    const cpuPcm = (await this.synthesize(GPU_TEST_TEXT, 1, undefined, fixed())).pcm;
+    // The processor's take, from a second copy of the model. Building that copy can fail where
+    // memory is short (it is about 400 MB); then nothing is compared, the copy made so far is let
+    // go, and the GPU, which loaded and spoke, is kept unless its phrase was not sound at all.
+    // Thrown from here, every session of both copies stayed held while the fallback built a third.
+    let cpu: Ort.InferenceSession[] = [];
+    let cpuPcm: Float32Array;
+    try {
+      const made = await Promise.allSettled(bytes.map((b) => this.ort.InferenceSession.create(b, cpuOpts)));
+      cpu = made.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
+      const failed = made.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+      if (failed) throw failed.reason;
+      [this.dp, this.textEnc, this.vectorEst, this.vocoder] = [cpu[0]!, cpu[1]!, cpu[2]!, cpu[3]!];
+      cpuPcm = (await this.synthesize(GPU_TEST_TEXT, 1, undefined, fixed())).pcm;
+    } catch (err) {
+      console.warn('[aloud] [supertonic] no processor copy to compare the GPU with:', err);
+      await Promise.all(cpu.map((s) => s.release().catch(() => undefined)));
+      [this.dp, this.textEnc, this.vectorEst, this.vocoder] = [gpu[0]!, gpu[1]!, gpu[2]!, gpu[3]!];
+      const bad = notSound(gpuPcm, this.sampleRate);
+      if (!bad) return null;
+      // Not sound on the GPU either: let it go before the processor copy is built in its place.
+      await Promise.all(gpu.map((s) => s.release().catch(() => undefined)));
+      this.gpuRejected = `its sound was ${bad}`;
+      throw new Error(`the GPU did not really speak (${this.gpuRejected})`, { cause: err });
+    }
     console.info(`[aloud] [supertonic] GPU test phrase: ${soundStats(gpuPcm, this.sampleRate)}; the processor's: ${soundStats(cpuPcm, this.sampleRate)}`);
     const bad = notSound(gpuPcm, this.sampleRate) ?? tooNoisy(gpuPcm, this.sampleRate, cpuPcm);
     // Loudness over time, not the samples: see envelopeSimilarity on why the samples failed working GPUs.
