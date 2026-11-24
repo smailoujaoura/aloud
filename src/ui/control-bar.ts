@@ -9,6 +9,10 @@
  * The bar is a *view*: it renders `SessionState` and reports intent through callbacks. It holds
  * no playback state of its own beyond what it needs to avoid redundant DOM work.
  *
+ * It sits at the bottom of the window or at the top (settings: barDock). Pressed on its own surface
+ * and dragged, it follows the pointer up or down, and goes to the nearer edge when let go; what
+ * floats beside it (status, tips, menus) goes with it, on the side towards the middle of the window.
+ *
  * Two rules the layout obeys, everywhere:
  *  - the bar's own size is a function of the viewport, never of what it is saying, so nothing a
  *    message does can shift a button under the pointer. Status, the scrub preview and the
@@ -19,7 +23,7 @@
  */
 import { el, svgIcon } from '@/shared/dom';
 import type { SessionState } from '@/shared/messages';
-import type { ThemeChoice } from '@/shared/settings';
+import type { BarDock, ThemeChoice } from '@/shared/settings';
 import { CONTROL_BAR_CSS, NARROW_BREAKPOINT_PX } from './control-bar-styles';
 import { ICON_PATHS } from './icons';
 import { resolveTheme, watchSystemTheme } from './theme';
@@ -27,6 +31,7 @@ import type { SleepChoice, SleepState } from '@/content/sleep-timer';
 import { containTyping } from './contain-typing';
 import { genericAvatar } from './voice-avatar';
 import { BottomRoom } from './bottom-room';
+import { DRAG_PX, NOT_A_HANDLE, dragOffset, edgeAfterDrag } from './bar-dock';
 import { formatRate, nextPreset } from '@/media-speed/rate';
 
 /** Where "Save as MP3" is, as the bar shows it. */
@@ -125,14 +130,18 @@ export interface ControlBarCallbacks {
   onManageVoices?(): void;
   /** A portrait (path under the extension root) as a data: URL — pages cannot load it directly. */
   loadPortrait?(file: string): Promise<string | null>;
+  /** The bar was dragged to the other edge of the window, and is there now: remember it. */
+  onDock?(edge: BarDock): void;
 }
 
 export interface ControlBarOptions {
   speed: number;
   tapToSeek: boolean;
   theme: ThemeChoice;
-  /** Out of the way until the pointer comes near the bottom of the window (settings: barAutoHide). */
+  /** Out of the way until the pointer comes near its edge of the window (settings: barAutoHide). */
   autoHide?: boolean;
+  /** The edge of the window it sits at (settings: barDock); the bottom when not said. */
+  dock?: BarDock;
 }
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4];
@@ -151,10 +160,12 @@ export function speedChoices(current: number): number[] {
 const FLASH_MS = 1900;
 /** …and one that carries a button, which needs time to be read *and* reached. */
 const FLASH_ACTION_MS = 8000;
-/** A bar set to hide comes back while the pointer is this close to the bottom of the window. */
+/** A bar set to hide comes back while the pointer is this close to its edge of the window. */
 const REVEAL_BAND_PX = 96;
 /** …and goes this long after the pointer moves away. */
 const HIDE_DELAY_MS = 1200;
+/** How long a bar let go of takes to reach its edge. */
+const SETTLE_MS = 200;
 
 /** A one-click follow-up offered inside a flash, e.g. "Start over" after resuming. */
 export interface FlashAction {
@@ -244,15 +255,21 @@ export class ControlBar {
   private followBtn!: HTMLButtonElement;
   private followState: FollowState = 'on';
   private autoHide: boolean;
+  /** The edge of the window the bar sits at (settings: barDock). */
+  private edge: BarDock;
+  /** Held and dragged, or on its way to an edge: where it is drawn is not where it stays. */
+  private moving = false;
+  /** A drag ends in a click on whatever it ended over: not a click on the bar, so not acted on. */
+  private ignoreClicksUntil = 0;
 
   private playing = false;
   /** Slid out of the way (see `watchScrolling`, `setAutoHide`). */
   private tucked = false;
   private hideBtn!: HTMLButtonElement;
-  /** The handle left at the bottom edge while the bar is hidden. */
+  /** The handle left at the bar's edge of the window while it is hidden. */
   private peek!: HTMLButtonElement;
   private hideTimer = 0;
-  /** The pointer is over the bottom of the window, or on the bar: it stays. */
+  /** The pointer is near the bar's edge of the window, or on the bar: it stays. */
   private pointerNear = false;
   /** When the reader last did something that scrolls — so the page's own scrolling is ignored. */
   private userScrollAt = 0;
@@ -283,6 +300,7 @@ export class ControlBar {
     this.tapToSeek = opts.tapToSeek;
     this.theme = opts.theme;
     this.autoHide = opts.autoHide ?? false;
+    this.edge = opts.dock === 'top' ? 'top' : 'bottom';
     this.room = new BottomRoom(doc);
 
     this.host = doc.createElement('div');
@@ -294,6 +312,7 @@ export class ControlBar {
     (doc.documentElement ?? doc.body).appendChild(this.host);
 
     this.build(opts.speed);
+    this.applyEdge();
     this.setAutoHide(this.autoHide);
     this.applyTheme();
     // "Match the system" has to keep matching it: the OS can flip to dark while a page is open.
@@ -428,12 +447,14 @@ export class ControlBar {
       this.voiceBtn,
       side,
     );
-    // Column order is the stacking order on screen, bottom-up: the bar sits at the bottom, the
-    // status pill above it, the tips card above that. The scrub bubble belongs to the bar and is
-    // absolutely positioned inside it, so it can follow the pointer without moving anything.
+    // Column order is the stacking order on screen, from the bar's edge towards the middle of the
+    // window: the bar, the status pill beside it, the tips card beyond that (bottom-up at the
+    // bottom; the stylesheet turns the column over at the top, so they open downwards there). The
+    // scrub bubble belongs to the bar and is absolutely positioned inside it, so it can follow
+    // the pointer without moving anything.
     this.bar.appendChild(this.scrubEl);
     this.dock.append(this.toast, this.bar);
-    // What is left of the bar while it is hidden: a handle at the bottom edge, with how far the
+    // What is left of the bar while it is hidden: a handle at its edge of the window, with how far the
     // reading has got. A tap or a click brings the bar back — on a touch screen there is no
     // pointer to come near it with.
     this.peek = this.make('button', { class: 'peek', type: 'button', 'aria-label': 'Show the reading bar', title: 'Show the reading bar' });
@@ -459,6 +480,7 @@ export class ControlBar {
     closeBtn.addEventListener('click', () => this.cb.onClose());
 
     this.wireProgress();
+    this.wireDrag();
     this.bar.addEventListener('keydown', (e) => this.onKey(e));
     this.watchScrolling();
     if (typeof ResizeObserver !== 'undefined') {
@@ -590,7 +612,9 @@ export class ControlBar {
       true,
     );
     on(view, 'mousemove', (e) => {
-      const near = (e as MouseEvent).clientY > view.innerHeight - REVEAL_BAND_PX || this.overBar(e as MouseEvent);
+      const y = (e as MouseEvent).clientY;
+      const atEdge = this.edge === 'top' ? y < REVEAL_BAND_PX : y > view.innerHeight - REVEAL_BAND_PX;
+      const near = atEdge || this.overBar(e as MouseEvent);
       if (near === this.pointerNear) return;
       this.pointerNear = near;
       if (near) {
@@ -615,7 +639,10 @@ export class ControlBar {
 
   private overBar(e: MouseEvent): boolean {
     const r = this.dock.getBoundingClientRect();
-    return e.clientX >= r.left - 16 && e.clientX <= r.right + 16 && e.clientY >= r.top - 24 && e.clientY <= r.bottom + 16;
+    // A little more room on the side towards the middle of the window, where the pointer comes from.
+    const above = this.edge === 'top' ? 16 : 24;
+    const below = this.edge === 'top' ? 24 : 16;
+    return e.clientX >= r.left - 16 && e.clientX <= r.right + 16 && e.clientY >= r.top - above && e.clientY <= r.bottom + below;
   }
 
   /** With the bar set to hide: hide it after `ms` unless something brings it back first. */
@@ -632,8 +659,8 @@ export class ControlBar {
     if (tucked === this.tucked) return;
     // Measure while it is still in place; once tucked it reports where it went, not where it was.
     if (tucked) this.covered = this.measureCovered();
-    // Never while something needs the bar: an open menu, a message on screen.
-    if (tucked && (!this.autoHide || this.popover || this.flashing)) return;
+    // Never while something needs the bar: an open menu, a message on screen, a hand moving it.
+    if (tucked && (!this.autoHide || this.popover || this.flashing || this.moving)) return;
     this.tucked = tucked;
     this.dock.classList.toggle('is-tucked', tucked);
     this.peek.hidden = !tucked;
@@ -641,18 +668,24 @@ export class ControlBar {
 
   private measureCovered(): number {
     const view = this.doc.defaultView;
-    if (!view) return this.covered;
-    const top = this.bar.getBoundingClientRect().top;
-    return top > 0 ? Math.max(0, view.innerHeight - top + 12) : this.covered;
+    // Held, or on its way to an edge, it is drawn somewhere it is not staying.
+    if (!view || this.moving) return this.covered;
+    const box = this.bar.getBoundingClientRect();
+    if (this.edge === 'top') return box.bottom > 0 ? Math.max(0, box.bottom + 12) : this.covered;
+    return box.top > 0 ? Math.max(0, view.innerHeight - box.top + 12) : this.covered;
   }
 
   /**
    * Room at the end of the page as tall as the bar (bottom-room.ts), so the last lines can be
    * scrolled up above it. Measured when the bar is showing; tucked away, it keeps what it had.
+   *
+   * None with the bar at the top. What it covers there, scrolled to the top, is the start of the
+   * page, usually the site's own header; room before the article would move the page under the
+   * reader the moment the bar is dragged up, and every line below that scrolls clear of it anyway.
    */
   private makeRoom(): void {
     if (!this.tucked) this.covered = this.measureCovered();
-    this.room.setHeight(this.covered);
+    this.room.setHeight(this.edge === 'bottom' ? this.covered : 0);
   }
 
   /** The article being read: the room at the end goes after what scrolls it. */
@@ -661,9 +694,166 @@ export class ControlBar {
     this.makeRoom();
   }
 
-  /** Pixels at the bottom of the window the bar covers when showing — for following the reader. */
+  /** Pixels at its edge of the window the bar covers when showing. */
   coveredHeight(): number {
     return this.tucked ? this.covered : (this.covered = this.measureCovered());
+  }
+
+  /** What the bar covers of the window's top and bottom: for following the reader clear of it. */
+  insets(): { top: number; bottom: number } {
+    const covered = this.coveredHeight();
+    return this.edge === 'top' ? { top: covered, bottom: 0 } : { top: 0, bottom: covered };
+  }
+
+  /** The edge of the window the bar sits at. */
+  get dockedAt(): BarDock {
+    return this.edge;
+  }
+
+  /** Sit at the top or the bottom of the window: a change made in Settings, or on another tab. */
+  setDock(edge: BarDock): void {
+    if (edge === this.edge || this.moving) return;
+    this.settleAt(edge);
+  }
+
+  /**
+   * Picked up by its own surface and dragged, with the mouse or a finger. The pattern is the video
+   * speed button's (media-speed/touch-button.ts): followed on the whole window from the press, the
+   * pointer captured only once it has moved DRAG_PX, so a press that does not move is an ordinary
+   * click; and the click a drag ends in is not acted on.
+   */
+  private wireDrag(): void {
+    const view = this.doc.defaultView;
+    if (!view) return;
+    let drag: { id: number; x: number; y: number; top: number; bottom: number; picked: boolean } | null = null;
+    const unlisten = (): void => {
+      view.removeEventListener('pointermove', move, true);
+      view.removeEventListener('pointerup', up, true);
+      view.removeEventListener('pointercancel', cancel, true);
+    };
+    const move = (ev: Event): void => {
+      const e = ev as PointerEvent;
+      if (!drag || e.pointerId !== drag.id) return;
+      const dy = e.clientY - drag.y;
+      if (!drag.picked) {
+        if (Math.hypot(e.clientX - drag.x, dy) < DRAG_PX) return;
+        drag.picked = true;
+        this.moving = true;
+        this.bar.classList.add('dragging');
+        this.dock.style.transition = 'none';
+        // Only now: captured from the press, a press that slid onto a button lost its click.
+        try {
+          this.bar.setPointerCapture(e.pointerId);
+        } catch {
+          /* the pointer is already gone */
+        }
+      }
+      // Up and down only: it docks at an edge, it is not placed freely.
+      const shift = dragOffset(dy, drag.top, drag.bottom, view.innerHeight);
+      this.dock.style.transform = `translate(-50%, ${Math.round(shift)}px)`;
+    };
+    const finish = (e: PointerEvent, cancelled: boolean): void => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const picked = drag.picked;
+      drag = null;
+      unlisten();
+      // Its moment before hiding starts again from the release (it was held while pressed).
+      this.hideLater(e.pointerType === 'mouse' ? HIDE_DELAY_MS : 4000);
+      if (!picked) return;
+      this.bar.classList.remove('dragging');
+      this.ignoreClicksUntil = performance.now() + 400;
+      const box = this.bar.getBoundingClientRect();
+      const edge = cancelled ? this.edge : edgeAfterDrag(box.top, box.bottom, view.innerHeight);
+      const changed = edge !== this.edge;
+      this.settleAt(edge);
+      if (changed) this.cb.onDock?.(edge);
+    };
+    const up = (e: Event): void => finish(e as PointerEvent, false);
+    const cancel = (e: Event): void => finish(e as PointerEvent, true);
+
+    this.bar.addEventListener('pointerdown', (e) => {
+      if (drag || !e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      if (this.tucked || this.moving) return;
+      const target = e.composedPath()[0];
+      if (target instanceof Element && target.closest(NOT_A_HANDLE)) return;
+      const box = this.bar.getBoundingClientRect();
+      drag = { id: e.pointerId, x: e.clientX, y: e.clientY, top: box.top, bottom: box.bottom, picked: false };
+      // Not hidden under the hand: a press held still outlasted the moment the bar stays once the
+      // pointer leaves it, and it slid away mid-drag.
+      clearTimeout(this.hideTimer);
+      view.addEventListener('pointermove', move, true);
+      view.addEventListener('pointerup', up, true);
+      view.addEventListener('pointercancel', cancel, true);
+    });
+    this.offWindow.push(unlisten);
+    // Before anything in the bar hears it.
+    this.bar.addEventListener(
+      'click',
+      (e) => {
+        if (performance.now() >= this.ignoreClicksUntil) return;
+        e.stopPropagation();
+        e.preventDefault();
+      },
+      true,
+    );
+  }
+
+  /**
+   * Go to `edge` from wherever the bar is drawn now (held mid-window, or at the other edge) in a
+   * short slide rather than a jump, so the eye can follow where it went. The column of status,
+   * tips and menus turns over with it: they open towards the middle of the window.
+   */
+  private settleAt(edge: BarDock): void {
+    const dock = this.dock;
+    const view = this.doc.defaultView;
+    const from = this.bar.getBoundingClientRect().top;
+    this.edge = edge;
+    dock.style.transition = 'none';
+    dock.style.transform = '';
+    this.moving = false;
+    this.applyEdge();
+    const done = (): void => {
+      dock.style.transition = '';
+      dock.style.transform = '';
+      this.moving = false;
+      this.makeRoom();
+    };
+    const reduce = view?.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? true;
+    const shift = Math.round(from - this.bar.getBoundingClientRect().top);
+    if (!view || reduce || this.tucked || !shift) {
+      done();
+      return;
+    }
+    this.moving = true;
+    dock.style.transform = `translate(-50%, ${shift}px)`;
+    // The starting point is drawn once before the slide, or the browser goes straight to the end.
+    void dock.offsetHeight;
+    dock.style.transition = `transform ${SETTLE_MS}ms ease-out`;
+    dock.style.transform = '';
+    let over = false;
+    const end = (): void => {
+      if (over) return;
+      over = true;
+      clearTimeout(timer);
+      dock.removeEventListener('transitionend', end);
+      done();
+    };
+    dock.addEventListener('transitionend', end);
+    // Not every slide ends in a transitionend (a tab in the background, a page that forces styles).
+    const timer = view.setTimeout(end, SETTLE_MS + 120);
+  }
+
+  /** The stylesheet's half of the edge: where the dock and the handle sit, and which way the column runs. */
+  private applyEdge(): void {
+    const top = this.edge === 'top';
+    this.dock.classList.toggle('at-top', top);
+    this.peek.classList.toggle('at-top', top);
+    this.titleWithKey('hide', this.hideTitle());
+    this.makeRoom();
+  }
+
+  private hideTitle(): string {
+    return this.autoHide ? 'Keep the bar on screen' : `Hide the bar until you come near the ${this.edge}`;
   }
 
   /**
@@ -820,14 +1010,14 @@ export class ControlBar {
   }
 
   /**
-   * Out of the way until the pointer comes near the bottom of the window (true), or always on
+   * Out of the way until the pointer comes near its edge of the window (true), or always on
    * screen (false). Turned on from the bar itself, the pointer is on it: it goes once you move away.
    */
   setAutoHide(on: boolean): void {
     this.autoHide = on;
     this.hideBtn.setAttribute('aria-pressed', String(on));
     this.hideBtn.classList.toggle('on', on);
-    this.titleWithKey('hide', on ? 'Keep the bar on screen' : 'Hide the bar until you come near the bottom');
+    this.titleWithKey('hide', this.hideTitle());
     if (!on) {
       clearTimeout(this.hideTimer);
       this.setTucked(false);
@@ -1292,7 +1482,7 @@ export class ControlBar {
 
   // ---- popovers ------------------------------------------------------------
 
-  /** Show `menu` directly above the bar, below any status pill, until dismissed. */
+  /** Show `menu` directly beside the bar (above it, or below it at the top), until dismissed. */
   private openPopover(button: HTMLButtonElement, menu: HTMLElement): void {
     this.closePopover();
     menu.addEventListener('keydown', (e) => {
@@ -1337,7 +1527,7 @@ export class ControlBar {
   // ---- first-run tips ------------------------------------------------------
 
   /**
-   * The one-time card above the bar that explains the controls.
+   * The one-time card beside the bar (above it, or below it at the top) that explains the controls.
    *
    * It is shown once per profile, on the first page anyone reads, because the bar is a row of
    * unlabelled icons the first time you meet it: this says what they do, in place, at the moment
@@ -1384,7 +1574,7 @@ export class ControlBar {
     card.appendChild(actions);
 
     this.tips = card;
-    // The card is the top of the dock's column, above the status pill — which is hidden while
+    // The card is the far end of the dock's column, beyond the status pill — which is hidden while
     // the card is up, so the two never say different things in the same place.
     this.toast.hidden = true;
     this.dock.prepend(card);

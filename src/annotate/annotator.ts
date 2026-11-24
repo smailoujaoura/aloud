@@ -24,7 +24,7 @@ import type { TextIndex } from '@/extract/text-index';
 import { DEFAULT_ANNOTATE, getSettings, watchSettings, type AnnotateSettings, type NoteStyle } from '@/shared/settings';
 import { anchorForRange, pageIndex, rangeForAnchor } from './page-anchoring';
 import { isTypingEvent } from '@/media-speed/keys';
-import { NOTE_STYLES, colorFor, markCss, markName } from './palette';
+import { NOTE_STYLES, READING_ATTR, colorFor, markCss, markName } from './palette';
 import { backgroundUnder, toneOf, type PageTone } from '@/highlight/contrast';
 import { PANEL_CSS, PageNotesPanel } from './notes-panel';
 import { containTyping } from '@/ui/contain-typing';
@@ -621,13 +621,15 @@ function button(label: string, title: string, run: () => void): HTMLButtonElemen
 /**
  * On a phone, the selection's own menu (Copy, Share, Select all) floats next to the selection, and
  * a toolbar placed there covered it or was covered by it. Ours goes to the edge of the screen
- * instead: the top, or the bottom when the selection is up there, clear of the reader's bar.
+ * instead: the top, or the bottom when the selection is up there, clear of the reader's bar at
+ * whichever edge that is.
  */
 function dock(float: HTMLElement, box: DOMRect): void {
   float.classList.add('docked');
   const nearTop = box.top < window.innerHeight * 0.3;
-  float.style.top = nearTop ? '' : 'calc(env(safe-area-inset-top, 0px) + 8px)';
-  float.style.bottom = nearTop ? 'calc(env(safe-area-inset-bottom, 0px) + 132px)' : '';
+  const barAtTop = document.documentElement.getAttribute(READING_ATTR) === 'top';
+  float.style.top = nearTop ? '' : `calc(env(safe-area-inset-top, 0px) + ${barAtTop ? 132 : 8}px)`;
+  float.style.bottom = nearTop ? `calc(env(safe-area-inset-bottom, 0px) + ${barAtTop ? 8 : 132}px)` : '';
   float.style.left = '50%';
 }
 

@@ -64,6 +64,13 @@ export type PdfView = 'pages' | 'reflow';
  */
 export type ThemeChoice = 'system' | 'light' | 'dark';
 
+/**
+ * Which edge of the window the reading bar sits at. The bottom by default; the top for anyone the
+ * bottom gets in the way of (a site's own toolbar there, a phone held so the thumb rests on it).
+ * Dragging the bar to the other edge sets it, and so does Settings.
+ */
+export type BarDock = 'bottom' | 'top';
+
 /** Parts of an article to pass over when reading a whole page (see content/skip-rules.ts). */
 export interface SkipSettings {
   /** Code listings (`<pre>`). Inline `<code>` inside a sentence is always read. */
@@ -155,6 +162,11 @@ export interface MediaSpeedSettings {
   /** Show the speed briefly over the video when it changes. */
   showBadge: boolean;
   /**
+   * On a computer, a speed button on the video, shown as a player shows its own controls
+   * (media-speed/touch-button.ts). A phone always has it: there are no keys to press there.
+   */
+  showButton: boolean;
+  /**
    * Pause video and audio that start without being asked — on arrival, the next one in a feed —
    * wherever the speed control runs (media-speed/autoplay.ts).
    */
@@ -197,6 +209,7 @@ export const DEFAULT_MEDIA_SPEED: MediaSpeedSettings = {
   startAt: 0,
   rememberPerSite: true,
   showBadge: true,
+  showButton: true,
   blockAutoplay: false,
   seekSeconds: 10,
   alwaysOn: [],
@@ -374,6 +387,11 @@ export interface Settings {
   otherVoice: VoiceRef | null;
   /** The reading bar slides away while you scroll down the page, and comes back when you scroll up. */
   barAutoHide: boolean;
+  /**
+   * The edge the reading bar sits at, on every page, the PDF reader and the walkthrough. Kept on
+   * each device: a phone and a computer are held differently.
+   */
+  barDock: BarDock;
   /** Colour theme for every surface Aloud draws. */
   theme: ThemeChoice;
   /**
@@ -430,6 +448,7 @@ export const DEFAULT_SETTINGS: Settings = {
   removedLanguages: [],
   otherVoice: null,
   barAutoHide: false,
+  barDock: 'bottom',
   theme: 'system',
   tipsSeen: false,
   gpuTipSeen: false,
@@ -621,6 +640,7 @@ export function sanitizeSettings(raw: Settings): Settings {
     // taken off the board instead (removedLanguages). The old switch is not honoured.
     matchPageLanguage: true,
     barAutoHide: raw.barAutoHide === true,
+    barDock: oneOf(raw.barDock, ['bottom', 'top'] as const, DEFAULT_SETTINGS.barDock),
     pronunciations: Array.isArray(raw.pronunciations)
       ? raw.pronunciations
           .filter((r) => !!r && typeof r.from === 'string' && typeof r.to === 'string')
@@ -645,6 +665,7 @@ export function sanitizeSettings(raw: Settings): Settings {
       preferred: clamp(raw.mediaSpeed?.preferred, 0.25, 5, DEFAULT_MEDIA_SPEED.preferred),
       startAt: clamp(raw.mediaSpeed?.startAt, 0, 5, DEFAULT_MEDIA_SPEED.startAt),
       blockAutoplay: raw.mediaSpeed?.blockAutoplay === true,
+      showButton: raw.mediaSpeed?.showButton !== false,
       seekSeconds: Math.round(clamp(raw.mediaSpeed?.seekSeconds, 1, 120, DEFAULT_MEDIA_SPEED.seekSeconds)),
       presets: presets.length ? presets : [...DEFAULT_MEDIA_SPEED.presets],
       alwaysOn: hosts(raw.mediaSpeed?.alwaysOn),

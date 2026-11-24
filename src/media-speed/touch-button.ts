@@ -1,13 +1,18 @@
 /**
- * The video speed on a phone: a button on the video, where the keys (S, D, R) do it on a computer.
+ * The video speed as a button on the video. On a phone it is the only way to change the speed, as
+ * a phone has no keys to press; on a computer it sits beside the keys (S, D, R), for whoever would
+ * rather click (Settings: "Show a speed button on videos").
  *
- * A phone has no keys to press, so the speed control there was out of reach. This puts a small
- * "1.5×" chip at the top-left corner of the video being watched, as a player shows its own
- * controls: when a video starts, and when the video is tapped, fading after a few seconds. Tapped,
- * it opens to "− 1.5× +": a step slower or faster (the step set in Settings), and the number
- * itself back to 1×. It is drawn above a video in full screen too (top-layer.ts).
+ * A small "1.5×" chip at the top-left corner of the video being watched, shown as a player shows
+ * its own controls: when a video starts, when the video is tapped or clicked, and on a computer
+ * while the mouse moves over it, fading after a few seconds of stillness (not while the mouse is
+ * on the chip itself). Tapped or clicked, it opens to "− 1.5× +": a step slower or faster (the
+ * step set in Settings), and the number itself back to 1×. It is drawn above a video in full
+ * screen too (top-layer.ts), and never over Aloud's own reading bar.
  *
- * Its taps stay its own: they never reach the page, where a tap on the player pauses the video.
+ * Its taps and clicks stay its own: they never reach the page, where a click on the player pauses
+ * the video. Nor does it take the page's keys: a click leaves the focus where it was, so Space
+ * still pauses the video instead of pressing the button again.
  *
  * It can be moved: dragged with a finger or the mouse anywhere on the video, off whatever of the
  * player's own it covered (a back button, a title, the site's menu), and it stays there, on that
@@ -31,16 +36,23 @@ export interface TouchSpeedTarget {
 }
 
 const HOST_ID = 'aloud-speed-touch';
-/** Shown this long after the last touch: the chip, and a little longer once opened. */
+/** Aloud's reading bar (ui/control-bar.ts): the button is kept off it. */
+const READER_HOST_ID = 'aloud-control-host';
+/** Shown this long after the last touch or mouse move: the chip, and a little longer once opened. */
 const SHOW_MS = 3000;
 const OPEN_MS = 5000;
 /** Smaller players than this get no button: it would cover them. */
 const MIN_WIDTH = 160;
 const MIN_HEIGHT = 90;
-/** How far a finger must move before a touch is a drag rather than a tap. */
+/** How far a finger or the mouse must move before a press is a drag rather than a tap. */
 const DRAG_PX = 8;
 /** Kept this far inside the video's edges, and the window's. */
 const INSET = 10;
+/** The mouse moving over a video is looked at this often, at most. */
+const HOVER_MS = 200;
+/** Kept this far clear of the reading bar, and moved off it in steps this big. */
+const BAR_GAP = 6;
+const BAR_STEP = 12;
 
 /** Where the button sits on the video: 0 is its left (top) edge, 1 its right (bottom). */
 export interface TouchSpot {
@@ -77,6 +89,27 @@ export function spotAt(box: Box, size: Size, left: number, top: number): TouchSp
     x: width > 0 ? clamp01((left - box.left - INSET) / width) : 0,
     y: height > 0 ? clamp01((top - box.top - INSET) / height) : 0,
   };
+}
+
+/**
+ * The top nearest `top`, between `min` and `max`, at which `blocked` says nothing is in the way:
+ * looked for a `step` at a time, upwards first (the reading bar sits at the bottom of the window),
+ * then downwards, the ends of the range included. Null when the whole range is blocked.
+ */
+export function nearestClear(top: number, min: number, max: number, step: number, blocked: (top: number) => boolean): number | null {
+  if (!blocked(top)) return top;
+  if (!(step > 0) || !(max >= min)) return null;
+  const up: number[] = [];
+  const down: number[] = [];
+  for (let t = top - step; t > min; t -= step) up.push(t);
+  if (top > min) up.push(min);
+  for (let t = top + step; t < max; t += step) down.push(t);
+  if (top < max) down.push(max);
+  for (let i = 0; i < Math.max(up.length, down.length); i++) {
+    if (i < up.length && !blocked(up[i]!)) return up[i]!;
+    if (i < down.length && !blocked(down[i]!)) return down[i]!;
+  }
+  return null;
 }
 
 const clamp01 = (n: number): number => (Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0);
@@ -128,6 +161,11 @@ export class TouchSpeedButton {
   private spot: TouchSpot = { x: 0, y: 0 };
   /** A drag ends in a click on whatever it ended over: not a tap, so not acted on. */
   private ignoreClicksUntil = 0;
+  /** A finger or the mouse is down on it, or the mouse is over it: it stays up until it is not. */
+  private pressed = false;
+  private hovered = false;
+  /** When the mouse moving over the page was last looked at (HOVER_MS). */
+  private lastHover = -Infinity;
   private readonly site = location.hostname;
 
   constructor(private readonly target: TouchSpeedTarget) {}
@@ -138,8 +176,8 @@ export class TouchSpeedButton {
       this.spot = spot;
       if (this.shown && !this.place()) this.hide();
     });
-    // A tap on the video shows the speed, as it shows the player's own controls; a tap anywhere
-    // else closes it. Seen first (capture), and never stopped: the page gets its tap as ever.
+    // A tap or click on the video shows the speed, as it shows the player's own controls; one
+    // anywhere else closes it. Seen first (capture), and never stopped: the page gets it as ever.
     this.listen(window, 'pointerdown', (e) => {
       const event = e as PointerEvent;
       if (this.host && event.composedPath().includes(this.host)) return;
@@ -152,6 +190,40 @@ export class TouchSpeedButton {
         this.hide();
       }
     });
+    // On a computer the mouse moving over the video shows it too, as it shows the player's own
+    // controls, and keeps it up while it moves. Only looked at a few times a second, since finding
+    // the video measures every player on the page; but the last move is always looked at, or a
+    // mouse that came onto the video and stopped there at once showed nothing.
+    const hoverAt = (x: number, y: number): void => {
+      this.lastHover = performance.now();
+      const box = this.videoBox();
+      if (!box || x < box.left || x > box.right || y < box.top || y > box.bottom) return;
+      if (this.shown) {
+        this.arm();
+      } else {
+        this.open = false;
+        this.show();
+      }
+    };
+    let last = { x: 0, y: 0 };
+    let later = 0;
+    this.listen(window, 'pointermove', (e) => {
+      const event = e as PointerEvent;
+      if (event.pointerType === 'touch') return;
+      // Over the button itself: `hovered` holds it up (see create).
+      if (this.host && event.composedPath().includes(this.host)) return;
+      last = { x: event.clientX, y: event.clientY };
+      const wait = this.lastHover + HOVER_MS - performance.now();
+      if (wait <= 0) {
+        hoverAt(last.x, last.y);
+      } else if (!later) {
+        later = window.setTimeout(() => {
+          later = 0;
+          hoverAt(last.x, last.y);
+        }, wait);
+      }
+    });
+    this.cleanups.push(() => clearTimeout(later));
     // Kept on the video while the page scrolls or turns, and over it in full screen.
     const follow = (): void => {
       if (this.shown && !this.place()) this.hide();
@@ -169,6 +241,7 @@ export class TouchSpeedButton {
     clearTimeout(this.timer);
     this.host?.remove();
     this.host = null;
+    this.shown = false;
   }
 
   /** A video started: show its speed for a moment. */
@@ -180,6 +253,11 @@ export class TouchSpeedButton {
   /** The speed changed (a key, the site's own menu): show the new one if the button is up. */
   refresh(): void {
     if (this.shown) this.render();
+  }
+
+  /** Where it is on screen, while it is up: the badge keeps out from under it. */
+  onScreen(): DOMRect | null {
+    return this.shown && this.host ? this.host.getBoundingClientRect() : null;
   }
 
   private show(): void {
@@ -201,6 +279,8 @@ export class TouchSpeedButton {
     clearTimeout(this.timer);
     this.open = false;
     this.shown = false;
+    // Hidden from under a still mouse, it is told of no leaving: shown again, it would never fade.
+    this.hovered = false;
     if (!this.host) return;
     this.host.style.display = 'none';
     lower(this.host);
@@ -208,17 +288,60 @@ export class TouchSpeedButton {
 
   private arm(): void {
     clearTimeout(this.timer);
+    // Its few seconds start once it is let go of, or the mouse leaves it.
+    if (this.pressed || this.hovered) return;
     this.timer = window.setTimeout(() => this.hide(), this.open ? OPEN_MS : SHOW_MS);
   }
 
-  /** On the video, where the viewer put it (the top-left corner at first); false when there is no video to sit on. */
+  /**
+   * On the video, where the viewer put it (the top-left corner at first), and up or down off the
+   * reading bar when that is in the way; false when there is no video to sit on, or no room on it.
+   */
   private place(): boolean {
     const box = this.videoBox();
     if (!box || !this.host) return false;
-    const at = placeAt(box, this.size(), this.spot, { width: window.innerWidth, height: window.innerHeight });
+    const size = this.size();
+    const view = { width: window.innerWidth, height: window.innerHeight };
+    const at = placeAt(box, size, this.spot, view);
+    const bar = this.readingBar();
+    if (bar) {
+      const min = Math.max(8, box.top + INSET);
+      const max = Math.min(view.height - size.height - 8, box.bottom - INSET - size.height);
+      const top = nearestClear(at.top, min, Math.max(min, max), BAR_STEP, (t) => this.onBar(bar, at.left, t, size));
+      if (top == null) return false;
+      at.top = Math.round(top);
+    }
     this.host.style.left = `${at.left}px`;
     this.host.style.top = `${at.top}px`;
     return true;
+  }
+
+  /**
+   * Aloud's reading bar, when it is on this page and can be in the way. Not in full screen: the
+   * browser draws only the full-screen element then, and the bar, though hidden, is still in place.
+   */
+  private readingBar(): Element | null {
+    if (typeof document.elementsFromPoint !== 'function') return null;
+    const bar = document.getElementById(READER_HOST_ID);
+    if (!bar) return null;
+    const full = document.fullscreenElement;
+    return full && !full.contains(bar) ? null : bar;
+  }
+
+  /**
+   * Would the button, at (`left`, `top`), cover any of the reading bar? The bar's box is in a
+   * closed shadow root, out of reach, so the window is asked what is under the button's corners,
+   * edges and middle. A bar slid away or hidden takes no pointer, so it is not found there.
+   */
+  private onBar(bar: Element, left: number, top: number, size: Size): boolean {
+    const x0 = left - BAR_GAP;
+    const y0 = top - BAR_GAP;
+    const x1 = left + size.width + BAR_GAP;
+    const y1 = top + size.height + BAR_GAP;
+    const xm = (x0 + x1) / 2;
+    const ym = (y0 + y1) / 2;
+    const points: Array<[number, number]> = [[x0, y0], [xm, y0], [x1, y0], [x0, ym], [xm, ym], [x1, ym], [x0, y1], [xm, y1], [x1, y1]];
+    return points.some(([x, y]) => document.elementsFromPoint(x, y).includes(bar));
   }
 
   /** The video it sits on, when there is one big enough and on screen. */
@@ -284,6 +407,11 @@ export class TouchSpeedButton {
         display: inline-flex; align-items: center; justify-content: center; border-radius: 9px;
         cursor: pointer; font: inherit; color: inherit;
       }
+      /* The mouse over a button lights it, as a player's own buttons do; not a finger, where it sticks. */
+      @media (hover: hover) {
+        button:hover { background: rgba(255, 255, 255, 0.12); }
+        .pill.dragging button:hover { background: none; }
+      }
       button:active { background: rgba(255, 255, 255, 0.18); }
       button:focus-visible { outline: 2px solid #ffd60a; outline-offset: 1px; }
       .step { font-size: 22px; font-weight: 500; }
@@ -318,7 +446,22 @@ export class TouchSpeedButton {
     pill.append(slower, value, faster);
     root.append(style, pill);
     this.draggable(pill);
-    // Its taps are its own: a tap on the player is play/pause to most sites.
+    // Held up while the mouse is on it, to be read or clicked at leisure. Not for a finger, whose
+    // press already holds it (see draggable) and which "leaves" only as it lifts.
+    pill.addEventListener('pointerenter', (e) => {
+      if (e.pointerType === 'touch') return;
+      this.hovered = true;
+      clearTimeout(this.timer);
+    });
+    pill.addEventListener('pointerleave', (e) => {
+      if (e.pointerType === 'touch' || !this.hovered) return;
+      this.hovered = false;
+      if (this.shown) this.arm();
+    });
+    // A click leaves the focus where it was. Left on the button, the page's Space (pause) and
+    // Enter pressed it again, and the speed changed instead of the video pausing.
+    pill.addEventListener('mousedown', (e) => e.preventDefault());
+    // Its taps and clicks are its own: one on the player is play/pause to most sites.
     for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'click', 'touchstart', 'touchmove', 'touchend', 'mousedown', 'mouseup', 'dblclick']) {
       root.addEventListener(type, (e) => e.stopPropagation());
     }
@@ -330,7 +473,7 @@ export class TouchSpeedButton {
   }
 
   /**
-   * Moved by dragging it, with a finger or the mouse. A touch that moves less than DRAG_PX is a tap,
+   * Moved by dragging it, with a finger or the mouse. A press that moves less than DRAG_PX is a tap,
    * left to the buttons; past that it is a drag, and the click it ends in is not acted on.
    */
   private draggable(pill: HTMLElement): void {
@@ -361,6 +504,7 @@ export class TouchSpeedButton {
       if (!drag || e.pointerId !== drag.id) return;
       const moved = drag.moving;
       drag = null;
+      this.pressed = false;
       for (const type of ['pointermove', 'pointerup', 'pointercancel']) window.removeEventListener(type, type === 'pointermove' ? move : end, true);
       pill.classList.remove('dragging');
       // Its few seconds start again from the release (they were held while the finger was on it).
@@ -374,7 +518,9 @@ export class TouchSpeedButton {
       const r = this.host.getBoundingClientRect();
       drag = { id: e.pointerId, x: e.clientX, y: e.clientY, left: r.left, top: r.top, moving: false };
       // Not hidden under the finger: a press held still, as one does to pick an icon up on a phone,
-      // outlasted the few seconds it shows for, and it vanished mid-drag.
+      // outlasted the few seconds it shows for, and it vanished mid-drag. Held, too, against the
+      // mouse moving over the video, which would start them again (arm).
+      this.pressed = true;
       clearTimeout(this.timer);
       window.addEventListener('pointermove', move, true);
       window.addEventListener('pointerup', end, true);

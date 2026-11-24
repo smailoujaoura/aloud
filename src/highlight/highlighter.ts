@@ -55,10 +55,32 @@ export interface HighlighterOptions {
    */
   keepReadable?: boolean;
   /**
-   * Pixels at the bottom of the window that something of Aloud's own covers (the reading bar).
-   * Following the reader keeps the sentence clear of it, rather than scrolling it underneath.
+   * Pixels at the top and bottom of the window that something of Aloud's own covers (the reading
+   * bar, at whichever edge it sits). Following the reader keeps the sentence clear of it, rather
+   * than scrolling it underneath.
    */
-  bottomInset?: () => number;
+  insets?: () => Insets;
+}
+
+/** What covers the edges of the window, in pixels. */
+export interface Insets {
+  top?: number;
+  bottom?: number;
+}
+
+/**
+ * The part of the window the sentence can be read in: between what covers its top and its bottom,
+ * and inside the panel that scrolls it (`box`) when that is not the page. With the bar at the top,
+ * a sentence set on the reading line a third of the way down the window sat under the bar on a
+ * short window; measured from the bar's foot, it is a third of the way down what can be seen.
+ */
+export function readingBand(viewHeight: number, insets: Insets = {}, box?: { top: number; bottom: number }): { top: number; bottom: number } {
+  const coveredTop = Math.max(0, insets.top ?? 0);
+  const coveredBottom = Math.max(0, insets.bottom ?? 0);
+  const top = Math.max(box?.top ?? 0, coveredTop);
+  const bottom = Math.min(box?.bottom ?? viewHeight, viewHeight - coveredBottom);
+  // Never an empty band: a window shorter than the bar still has somewhere to put the sentence.
+  return { top, bottom: Math.max(top + 1, bottom) };
 }
 
 export class Highlighter {
@@ -295,7 +317,7 @@ export class Highlighter {
   }
 
   /**
-   * Keep the sentence where it can be read: above the reading bar, not merely inside the window.
+   * Keep the sentence where it can be read: clear of the reading bar, not merely inside the window.
    *
    * `keep-visible` lets the sentence travel down the page and moves only when it nears an edge —
    * then sets it on the reading line, a third of the way down, so the next several sentences
@@ -309,12 +331,13 @@ export class Highlighter {
     const rect = range.getBoundingClientRect();
     if (rect.width === 0 && rect.height === 0) return;
     const view = this.doc.defaultView!;
-    const visible = view.innerHeight - Math.max(0, this.opts.bottomInset?.() ?? 0);
+    const band = readingBand(view.innerHeight, this.opts.insets?.());
+    const visible = band.bottom - band.top;
     const margin = visible * 0.15;
-    const outOfView = rect.top < margin || rect.bottom > visible - margin;
+    const outOfView = rect.top < band.top + margin || rect.bottom > band.bottom - margin;
     if (!snap && !outOfView) return;
     // Snap: a sentence already on the line, give or take a little, is left where it is.
-    if (snap && Math.abs(rect.top - visible * READING_LINE) < visible * 0.06) return;
+    if (snap && Math.abs(rect.top - band.top - visible * READING_LINE) < visible * 0.06) return;
     const el = range.startContainer.parentElement;
     if (!el) return;
     this.lastScroll = now;
@@ -324,13 +347,12 @@ export class Highlighter {
   /** Glide so `rect` (inside `el`) stands at `line` (a fraction) of the visible height. */
   private moveTo(el: Element, rect: DOMRect, line: number): void {
     const view = this.doc.defaultView!;
-    const covered = Math.max(0, this.opts.bottomInset?.() ?? 0);
     const container = scrollerOf(el);
-    const box = container ? container.getBoundingClientRect() : { top: 0, bottom: view.innerHeight - covered };
-    const height = Math.max(1, Math.min(box.bottom, view.innerHeight - covered) - box.top);
+    const band = readingBand(view.innerHeight, this.opts.insets?.(), container?.getBoundingClientRect());
+    const height = band.bottom - band.top;
     // A sentence taller than the space below the line starts higher, so all of it can be seen.
     const target = rect.height > height * (1 - line) - 16 ? Math.max(8, (height - rect.height) / 2) : height * line;
-    const delta = rect.top - box.top - target;
+    const delta = rect.top - band.top - target;
     if (this.scroller) this.scroller.by(container, delta);
     else el.scrollIntoView({ block: 'center' });
   }

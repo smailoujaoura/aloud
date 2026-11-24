@@ -22,6 +22,7 @@ import { applyGpuProbe, applyWorkerGpuProbe, capabilities } from '@/shared/brows
 import { probeGpu } from '@/shared/gpu-probe';
 import { loadWorkerGpu } from '@/shared/backend-memory';
 import { ReaderSession } from '@/content/session';
+import { READING_ATTR } from '@/annotate/palette';
 import { log } from '@/shared/log';
 import { answerTabQueries, findOwnTab } from '@/shared/own-tab';
 
@@ -196,7 +197,7 @@ async function toggleDemo(): Promise<void> {
 
   button.classList.add('busy');
   button.textContent = 'Starting…';
-  status.textContent = 'Preparing the voice. The bar at the bottom shows how far along it is.';
+  status.textContent = 'Preparing the voice. The reading bar shows how far along it is.';
 
   const root = $('demoText');
   const session = new ReaderSession();
@@ -209,7 +210,7 @@ async function toggleDemo(): Promise<void> {
     if (demo !== session) return;
     if (state === 'playing' && !spoke) {
       spoke = true;
-      status.textContent = 'That bar at the bottom is the real thing. Try its buttons.';
+      status.textContent = 'That reading bar is the real thing. Try its buttons.';
     } else if (state === 'error') {
       status.textContent = `The voice could not start${error ? `: ${error}` : ''}. The settings page can download a voice by hand.`;
       toast('The demo could not start. See the settings page', 'error');
@@ -280,13 +281,15 @@ function setAway(button: HTMLButtonElement, away: boolean): void {
 /**
  * The demo's reading bar sits at the bottom of the window, where the nav is pinned: lift the nav
  * above it for as long as it is there — however it went away (Stop, its own ✕, the next step).
+ * Docked at the top (settings: barDock), it is nowhere near the nav, which stays put.
  */
 function watchDemoBar(): void {
   const sync = (): void => {
-    document.body.classList.toggle('demo-bar-on', !!document.getElementById('aloud-control-host'));
+    const atBottom = document.documentElement.getAttribute(READING_ATTR) !== 'top';
+    document.body.classList.toggle('demo-bar-on', atBottom && !!document.getElementById('aloud-control-host'));
   };
-  // The bar attaches itself to <html>, not <body> (see ui/control-bar.ts).
-  new MutationObserver(sync).observe(document.documentElement, { childList: true });
+  // The bar attaches itself to <html>, not <body> (see ui/control-bar.ts); its edge is on <html> too.
+  new MutationObserver(sync).observe(document.documentElement, { childList: true, attributes: true, attributeFilter: [READING_ATTR] });
   sync();
 }
 watchDemoBar();

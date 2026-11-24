@@ -459,6 +459,7 @@ async function renderNow(): Promise<void> {
   $('sentencePauseOut').textContent = `${(settings.sentencePauseMs / 1000).toFixed(2)}s`;
   $<HTMLInputElement>('tapToSeek').checked = settings.tapToSeek;
   $<HTMLInputElement>('barAutoHide').checked = settings.barAutoHide;
+  $<HTMLSelectElement>('barDock').value = settings.barDock;
 
   $<HTMLInputElement>('skipUrls').checked = settings.skipUrls;
   $<HTMLInputElement>('expandAbbreviations').checked = settings.expandAbbreviations;
@@ -738,6 +739,9 @@ function wire(): void {
   });
   wireCheckbox('tapToSeek', 'tapToSeek');
   wireCheckbox('barAutoHide', 'barAutoHide');
+  $('barDock').addEventListener('change', (e) =>
+    save({ barDock: (e.target as HTMLSelectElement).value as Settings['barDock'] }),
+  );
   wireCheckbox('skipUrls', 'skipUrls');
   wireCheckbox('expandAbbreviations', 'expandAbbreviations');
   for (const [id, key] of SKIP_SWITCHES) {

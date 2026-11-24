@@ -9,8 +9,8 @@
  * - the sites given access ("Starts by itself on"): granted per device too, and a site listed
  *   without its permission would only look as though it worked;
  * - GPU and worker choices, debug logging;
- * - how PDFs are shown (pages or reflowed text) and tap-to-jump: one suits a phone, the other a
- *   computer.
+ * - how PDFs are shown (pages or reflowed text), tap-to-jump, and which edge the reading bar sits
+ *   at: one suits a phone, the other a computer.
  *
  * (1.0.4 first had these in the browser's own sync too. Most people are not signed in to their
  * browser, it cannot cross from Firefox to Chrome, and Firefox for Android never syncs add-on data,

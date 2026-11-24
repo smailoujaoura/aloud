@@ -2,9 +2,9 @@
  * The settings page's video & audio speed section.
  *
  * Three parts: where the control runs (its shortcut, and the sites it starts on by itself), how
- * it behaves (step, presets, preferred and opening speed, memory, badge), and the keys — each
- * one set by pressing the key you want, since that is the only way to say "the key left of L" on
- * a keyboard that is not the author's.
+ * it behaves (step, presets, preferred and opening speed, memory, badge, the button on the video),
+ * and the keys — each one set by pressing the key you want, since that is the only way to say
+ * "the key left of L" on a keyboard that is not the author's.
  */
 import { el } from '@/shared/dom';
 import { clampRate, formatRate } from '@/media-speed/rate';
@@ -94,6 +94,17 @@ export function renderMediaSpeedPanel(host: HTMLElement, opts: MediaSpeedPanelOp
     presetsRow(s, opts),
     checkboxRow('Remember the speed of each site', s.rememberPerSite, (on) => void opts.save({ rememberPerSite: on })),
     checkboxRow('Show the speed on the video when it changes', s.showBadge, (on) => void opts.save({ showBadge: on })),
+  );
+  // A phone always has the button: without it there is no way to change the speed there.
+  if (!phone) {
+    rows.push(checkboxRow(
+      'Show a speed button on videos',
+      s.showButton,
+      (on) => void opts.save({ showButton: on }),
+      'It appears when you move the mouse over a video. Click it for slower and faster, or drag it out of the way.',
+    ));
+  }
+  rows.push(
     checkboxRow(
       'Stop videos and audio from playing by themselves',
       s.blockAutoplay,
@@ -104,7 +115,7 @@ export function renderMediaSpeedPanel(host: HTMLElement, opts: MediaSpeedPanelOp
 
   const forget = el(document, 'button', { type: 'button', class: 'ghost btn-sm' }, 'Forget remembered site speeds');
   forget.addEventListener('click', async () => {
-    // And where the phone's speed button was moved on each site: both are "what Aloud remembers
+    // And where the speed button was moved on each site: both are "what Aloud remembers
     // about each site's videos", which the privacy policy says this clears.
     await Promise.all([clearSiteSpeeds(), clearTouchSpots()]);
     opts.toast('Site speeds forgotten');

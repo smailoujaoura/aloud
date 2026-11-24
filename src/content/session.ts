@@ -31,7 +31,7 @@ import { voicePortrait } from '@/ui/voice-portraits';
 import type { EngineConfig, WordTiming } from '@/engine/protocol';
 import type { ModelManifest } from '@/engine/engines/types';
 import { adoptFormerKey } from '@/shared/former-key';
-import { DEFAULT_SETTINGS, getSettings, setSettings, activeVoice, voiceKeyFor, type EngineId, type ReaderKeys, type Settings, type VoiceRef } from '@/shared/settings';
+import { DEFAULT_SETTINGS, getSettings, setSettings, activeVoice, voiceKeyFor, type BarDock, type EngineId, type ReaderKeys, type Settings, type VoiceRef } from '@/shared/settings';
 import { claimReaderKeys } from '@/shared/reader-keys';
 import { ENGINE_IDS, engineInfo, supertonicStepsFor } from '@/shared/engine-catalog';
 import { languageName, primaryLanguage, voiceLanguage, type CandidateVoice } from '@/shared/language-voice';
@@ -519,13 +519,15 @@ export class ReaderSession {
       server: () => (this.settings.server.url ? { url: this.settings.server.url, model: this.settings.server.model } : undefined),
     });
 
-    // Marks the page as being read (annotate/palette.ts: READING_ATTR): the notes panel moves above the bar.
-    document.documentElement.setAttribute(READING_ATTR, '');
+    // Marks the page as being read, with the edge the bar is at (annotate/palette.ts: READING_ATTR):
+    // the notes panel keeps clear of the bar.
+    document.documentElement.setAttribute(READING_ATTR, this.settings.barDock);
     this.bar = new ControlBar(document, this.controlCallbacks(), {
       speed: this.settings.speed,
       tapToSeek: this.settings.tapToSeek,
       theme: this.settings.theme,
       autoHide: this.settings.barAutoHide,
+      dock: this.settings.barDock,
     });
     this.renderFollow();
     this.bar.setKeyHints(this.settings.readerKeys);
@@ -540,7 +542,7 @@ export class ReaderSession {
       wordColor: this.settings.wordColor,
       wordStrength: this.settings.wordStrength,
       keepReadable: this.settings.highlightReadable,
-      bottomInset: () => this.bar?.coveredHeight() ?? 0,
+      insets: () => this.bar?.insets() ?? {},
     });
 
     this.media = new MediaControls(
@@ -858,6 +860,7 @@ export class ReaderSession {
       onPassageLanguage: (code: string) => void this.setPassageLanguage(code),
       onVoiceLock: (locked: boolean) => void this.setVoiceLock(locked),
       onAutoHide: (on: boolean) => void this.setBarAutoHide(on),
+      onDock: (edge: BarDock) => void this.setBarDock(edge),
       onLanguageVoice: (code: string, value: string) => void this.setLanguageVoice(code, value),
       onMissingVoice: (code: string, choice: 'get' | 'skip' | 'read') => void this.onMissingVoice(code, choice),
       onFollow: () => void this.toggleFollow(),
@@ -2680,6 +2683,12 @@ export class ReaderSession {
     if (!on) this.bar?.flash('The bar stays on screen', 'info');
   }
 
+  /** The bar was dragged to the other edge: there on every page from now on. */
+  private async setBarDock(edge: BarDock): Promise<void> {
+    if (!this.disposed) document.documentElement.setAttribute(READING_ATTR, edge);
+    await this.applyOwnChange({ barDock: edge });
+  }
+
   private async toggleSentenceHighlight(): Promise<void> {
     const on = !this.settings.highlight;
     await this.applyOwnChange({ highlight: on });
@@ -2756,6 +2765,10 @@ export class ReaderSession {
     if (prev.speed !== this.settings.speed) this.applySpeed(this.settings.speed, { flash: false });
     if (prev.theme !== this.settings.theme) this.bar?.setTheme(this.settings.theme);
     if (prev.barAutoHide !== this.settings.barAutoHide) this.bar?.setAutoHide(this.settings.barAutoHide);
+    if (prev.barDock !== this.settings.barDock && this.bar) {
+      this.bar.setDock(this.settings.barDock);
+      document.documentElement.setAttribute(READING_ATTR, this.settings.barDock);
+    }
     if (prev.scrollMode !== this.settings.scrollMode) this.renderFollow();
 
     if (!sameValue(prev.skip, this.settings.skip)) {

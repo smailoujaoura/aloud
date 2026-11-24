@@ -264,6 +264,11 @@ body.pages-view #article > h1 {
 .text-layer *::highlight(aloud-word-dark),
 .text-layer *::highlight(aloud-word-light) { color: transparent; }
 
+/* The reading bar docked at the top of the window (settings: barDock) sits where these are: they
+   go to the bottom corners for as long as it is there. */
+html[data-aloud-reading="top"] .doc-tools, html[data-aloud-reading="top"] .page-tools { top: auto; bottom: 12px; }
+html[data-aloud-reading="top"] .notes-panel { top: auto; bottom: 60px; }
+
 /* Where you are, and how big the pages are drawn (pdf/page-tools.ts). */
 .page-tools {
   position: fixed; top: 12px; left: 12px; z-index: 30;

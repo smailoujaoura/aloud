@@ -52,4 +52,21 @@ describe('video speed settings on a phone', () => {
     expect(host.textContent).toContain('Keys, while a page has a video');
     expect(host.textContent).not.toContain('Show the speed button on every video');
   });
+
+  it('on a computer the speed button on videos can be turned off', () => {
+    env.touchFirst = false;
+    const { host, save } = render();
+    const row = [...host.querySelectorAll('.row.check')].find((r) => r.textContent?.includes('Show a speed button on videos'))!;
+    const box = row.querySelector('input')!;
+    expect(box.checked).toBe(true);
+    box.checked = false;
+    box.dispatchEvent(new Event('change'));
+    expect(save).toHaveBeenCalledWith({ showButton: false });
+  });
+
+  it('a phone always has the button: no switch for it there', () => {
+    env.touchFirst = true;
+    const { host } = render();
+    expect(host.textContent).not.toContain('Show a speed button on videos');
+  });
 });

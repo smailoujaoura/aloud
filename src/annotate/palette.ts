@@ -10,7 +10,8 @@ import { DEFAULT_NOTE_COLORS, type NoteColor, type NoteStyle } from '@/shared/se
 import { washFor, type PageTone } from '@/highlight/contrast';
 
 /**
- * Set on the page's root element while Aloud is reading it (the notes panel moves above the bar).
+ * Set on the page's root element while Aloud is reading it, to the edge of the window the reading
+ * bar is at, `bottom` or `top` (settings: barDock): the notes panel keeps clear of the bar.
  * Marks keep their own style while reading: a highlight that turned into an underline whenever
  * the reader was open looked like the style choice being ignored.
  */

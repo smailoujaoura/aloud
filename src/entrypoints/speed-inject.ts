@@ -88,8 +88,10 @@ export default defineUnlistedScript(() => {
       settings: settings.mediaSpeed,
       onMedia: (media) => guard.track(media),
       initialRate: remembered ?? startAt,
-      // A phone has no keys: a speed button on the video instead. A phone asking for a site's
-      // desktop version says it is a computer, and was left with keys it has no way to press.
+      // A phone has no keys: the speed button on the video is always there. A phone asking for a
+      // site's desktop version says it is a computer, and was left with keys it has no way to
+      // press. A computer has the button too, unless turned off in Settings (`showButton`, which
+      // `setSettings` below follows as it changes).
       touchButton: capabilities().touchFirst || touchOnly(),
       // Only the top frame remembers: an embedded player would otherwise store its own host.
       onRate: (rate) => {

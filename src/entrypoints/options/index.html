@@ -300,10 +300,17 @@
           <!-- Built in main.ts, shared with the walkthrough (src/ui/theme-switch.ts). -->
           <span id="themeSwitchRow"></span>
         </label>
+        <label class="row">
+          <span>Reading bar</span>
+          <select id="barDock">
+            <option value="bottom">At the bottom</option>
+            <option value="top">At the top</option>
+          </select>
+        </label>
         <label class="row check">
           <input type="checkbox" id="barAutoHide" />
           <span>Hide the reading bar
-            <small class="check-hint muted">It comes back near the bottom of the window.</small></span>
+            <small class="check-hint muted">It comes back near its edge of the window.</small></span>
         </label>
         <label class="row check">
           <input type="checkbox" id="highlight" />

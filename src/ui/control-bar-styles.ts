@@ -9,7 +9,8 @@
  *    it, so the buttons never shift under the pointer.
  *  - **It has to work with a thumb.** Below the narrow breakpoint the controls wrap onto two
  *    rows, hit targets grow to the 44px normally recommended for touch, and the bar sits above
- *    the phone's home indicator via `env(safe-area-inset-bottom)`.
+ *    the phone's home indicator via `env(safe-area-inset-bottom)` (below the notch, by
+ *    `env(safe-area-inset-top)`, when it is docked at the top).
  *  - **It is themed by Aloud, not by the page.** Colours come from custom properties defined on
  *    `:host`, switched by the `data-theme` attribute the session stamps from the user's setting
  *    (src/ui/theme.ts). The `prefers-color-scheme` block below only covers the instant before
@@ -82,7 +83,8 @@ export const CONTROL_BAR_CSS = `
  * The dock is the fixed, viewport-anchored column that holds everything: the tips card, the
  * status pill and the bar, stacked bottom-up. It exists so the floating pieces are positioned
  * *against the bar* — as siblings in a column that grows upwards — rather than against the
- * viewport, and so the bar itself never moves when one of them appears.
+ * viewport, and so the bar itself never moves when one of them appears. Docked at the top
+ * (.at-top, settings: barDock) the column is turned over: it grows downwards from the bar.
  */
 .dock {
   position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px));
@@ -97,12 +99,20 @@ export const CONTROL_BAR_CSS = `
   pointer-events: none;
 }
 .dock > * { pointer-events: auto; }
-/* Slid below the window while you scroll down the page (control-bar.ts: watchScrolling). */
+.dock.at-top {
+  bottom: auto; top: calc(20px + env(safe-area-inset-top, 0px));
+  flex-direction: column-reverse;
+}
+/* Slid out of the window while you scroll down the page (control-bar.ts: watchScrolling): below
+   it from the bottom, above it from the top. */
 .dock { transition: transform 220ms ease, opacity 220ms ease; }
 .dock.is-tucked { transform: translate(-50%, calc(100% + 40px)); opacity: 0; }
+.dock.at-top.is-tucked { transform: translate(-50%, calc(-100% - 40px)); }
 .dock.is-tucked > * { pointer-events: none; }
 .hide.on { box-shadow: inset 0 0 0 1.5px var(--accent); }
-/* The handle left at the bottom edge while the bar is hidden, filled as far as the reading has got. */
+/* Its arrow points the way the bar goes when it hides: up, from the top. */
+.at-top .hide svg { transform: scaleY(-1); }
+/* The handle left at the bar's edge while it is hidden, filled as far as the reading has got. */
 .peek {
   position: fixed; left: 50%; bottom: calc(6px + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
@@ -113,6 +123,7 @@ export const CONTROL_BAR_CSS = `
   box-shadow: 0 2px 10px rgba(0, 0, 0, .25);
   cursor: pointer;
 }
+.peek.at-top { bottom: auto; top: calc(6px + env(safe-area-inset-top, 0px)); }
 .peek:hover { height: 16px; }
 .peek[hidden] { display: none; }
 @media (pointer: coarse) { .peek { width: 88px; height: 18px; border-radius: 9px; } }
@@ -131,7 +142,14 @@ export const CONTROL_BAR_CSS = `
   color: var(--bar-fg);
   font: var(--font);
   box-shadow: var(--bar-shadow);
+  /* Its own surface picks it up, to move it to the other edge (control-bar.ts: wireDrag). Every
+     control sets its own cursor. A finger on it moves the bar, not the page; nor does a drag
+     select the counter's text. */
+  cursor: grab; touch-action: none;
+  -webkit-user-select: none; user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
+.bar.dragging { cursor: grabbing; box-shadow: var(--bar-shadow), 0 14px 40px rgba(15,15,30,.22); }
 .bar:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 button {
@@ -263,6 +281,8 @@ button[disabled]:hover { background: none; }
   pointer-events: none;
 }
 .scrub[hidden] { display: none; }
+/* At the top of the window there is no room above the bar: under it instead. */
+.at-top .scrub { bottom: auto; top: calc(100% + 10px); }
 
 .count {
   flex: 0 0 auto; font-variant-numeric: tabular-nums; color: var(--bar-muted);
@@ -464,6 +484,12 @@ select optgroup { color: var(--bar-muted); font-weight: 600; }
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
+/* Menus and the tips open away from the bar's edge: downwards from a bar at the top. */
+@keyframes aloud-drop {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.at-top .pop-menu, .at-top .tips { animation-name: aloud-drop; }
 
 /* ---- narrow viewports and touch ---------------------------------------- */
 /*
@@ -478,6 +504,7 @@ select optgroup { color: var(--bar-muted); font-weight: 600; }
     bottom: calc(10px + env(safe-area-inset-bottom, 0px));
     gap: 6px;
   }
+  .dock.at-top { bottom: auto; top: calc(10px + env(safe-area-inset-top, 0px)); }
   .bar {
     flex-wrap: wrap;
     gap: 6px 6px;
@@ -562,7 +589,7 @@ select optgroup { color: var(--bar-muted); font-weight: 600; }
 @media (prefers-reduced-motion: reduce) {
   .spinner, .play .btn-spin { animation-duration: 2.4s; }
   .play.attn { animation: none; box-shadow: 0 0 0 3px rgba(255,214,10,.5); }
-  .tips, .pop-menu { animation: none; }
+  .tips, .pop-menu, .at-top .tips, .at-top .pop-menu { animation: none; }
   button, select, .progress > .track, .progress > .knob { transition: none; }
 }
 `;

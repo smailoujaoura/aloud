@@ -51,7 +51,10 @@ export interface ControllerHost {
   onRate(rate: number): void;
   /** Called for each media element as it is found (the autoplay guard); returns its unhook. */
   onMedia?(media: HTMLMediaElement): () => void;
-  /** A touch device, with no keys: put a speed button on the video (touch-button.ts). */
+  /**
+   * A touch device, with no keys: the speed button on the video (touch-button.ts) is always there,
+   * whatever `showButton` says, since it is the only way to change the speed.
+   */
   touchButton?: boolean;
 }
 
@@ -134,25 +137,34 @@ export class MediaSpeedController {
     for (const type of ['pointerdown', 'pointerup', 'click', 'keydown', 'touchstart', 'touchend']) {
       this.listen(window, type, () => this.onInput(type), true);
     }
-    if (this.host.touchButton) {
-      const touch = new TouchSpeedButton({
-        rate: () => this.rate ?? currentRateOf(this.known) ?? 1,
-        setRate: (rate) => {
-          if (this.known.size) this.setRate(rate, false);
-        },
-        stepFrom: (rate, direction) => stepRate(rate, this.settings.step, direction),
-        player: () => {
-          this.prune();
-          return activeMedia(this.known);
-        },
-      });
-      touch.start();
-      this.touch = touch;
-      this.cleanups.push(() => {
-        touch.stop();
-        this.touch = null;
-      });
+    this.syncButton();
+  }
+
+  /**
+   * The speed button on the video (touch-button.ts): always on a phone, and on a computer while
+   * the settings ask for it. Turned off in Settings, it goes from the page at once.
+   */
+  private syncButton(): void {
+    const wanted = !!this.observer && (!!this.host.touchButton || this.settings.showButton);
+    if (!wanted) {
+      this.touch?.stop();
+      this.touch = null;
+      return;
     }
+    if (this.touch) return;
+    const touch = new TouchSpeedButton({
+      rate: () => this.rate ?? currentRateOf(this.known) ?? 1,
+      setRate: (rate) => {
+        if (this.known.size) this.setRate(rate, false);
+      },
+      stepFrom: (rate, direction) => stepRate(rate, this.settings.step, direction),
+      player: () => {
+        this.prune();
+        return activeMedia(this.known);
+      },
+    });
+    touch.start();
+    this.touch = touch;
   }
 
   /** A click, tap or key: when it happened, and when the press it belongs to began. */
@@ -177,6 +189,7 @@ export class MediaSpeedController {
     if (farewell) this.showBadge(farewell, undefined, true);
     this.observer?.disconnect();
     this.observer = null;
+    this.syncButton();
     clearTimeout(this.rescanTimer);
     this.rescanTimer = 0;
     for (const off of this.cleanups) off();
@@ -198,6 +211,9 @@ export class MediaSpeedController {
 
   setSettings(settings: MediaSpeedSettings): void {
     this.settings = settings;
+    // The button follows `showButton` at once. A control that has stopped (its key, or switched
+    // off) still hears of every change, and puts nothing back (see syncButton).
+    this.syncButton();
   }
 
   /** Media found so far in this frame, not counting ones that have left the page. */
@@ -292,7 +308,7 @@ export class MediaSpeedController {
       if (this.chosen || this.reloaded.has(media)) this.apply(media);
     };
     const off: Array<() => void> = [];
-    // On a phone, a video starting shows its speed button for a moment.
+    // A video starting shows its speed button for a moment, where there is one.
     const wake = (): void => this.touch?.wake();
     media.addEventListener('play', wake);
     off.push(() => media.removeEventListener('play', wake));
@@ -588,11 +604,18 @@ export class MediaSpeedController {
     if (!badge) return;
     badge.text.textContent = text;
     const box = (over && largestBox([over])) ?? largestBox(this.known);
-    const top = box ? Math.max(8, box.top + 12) : 16;
+    let top = box ? Math.max(8, box.top + 12) : 16;
     const left = box ? Math.max(8, box.left + 12) : 16;
+    badge.host.style.display = 'block';
+    // Just below the speed button when that is up in the same corner: a key pressed with the mouse
+    // over the video put the two on top of each other.
+    const chip = this.touch?.onScreen();
+    if (chip) {
+      const size = badge.host.getBoundingClientRect();
+      if (left < chip.right && left + size.width > chip.left && top < chip.bottom && top + size.height > chip.top) top = chip.bottom + 6;
+    }
     badge.host.style.top = `${top}px`;
     badge.host.style.left = `${left}px`;
-    badge.host.style.display = 'block';
     raise(badge.host);
     clearTimeout(badge.timer);
     badge.timer = window.setTimeout(() => {
