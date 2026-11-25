@@ -275,8 +275,8 @@ compatibility functions it needs are in pdfjs-support/polyfills.mjs, plain and c
 ## Before pressing submit
 
 - [ ] The privacy policy deployed (website/privacy.html, in effect from 12 November 2026, updated
-      24 November 2026, for 1.0.2 to 1.0.5: 1.0.4 adds sync through the reader's own Dropbox, off until
-      they connect it; 1.0.5 lists the phone speed button's place per site and the GPU test result)
+      25 November 2026, for 1.0.2 to 1.0.5: 1.0.4 adds sync through the reader's own Dropbox, off until
+      they connect it; 1.0.5 lists where the speed button was moved and the GPU test result)
 - [ ] Chrome, Privacy practices: the identity and alarms justifications (table above) pasted, and
       **Web history** ticked as well as Website content (1.0.4)
 - [ ] Dropbox console: the redirect addresses saved, "Enable additional users" pressed
