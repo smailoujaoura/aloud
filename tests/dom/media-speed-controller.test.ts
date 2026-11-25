@@ -858,6 +858,64 @@ describe('mute and the speed, on a player that keeps its own state (Facebook)', 
     controller.stop();
   });
 
+  it("a feed's next video, starting while the last one still plays, gets the sound turned on with M", async () => {
+    const first = livePlayer(player());
+    first.muted = true;
+    first.getBoundingClientRect = () => new DOMRect(0, 0, 500, 400);
+    vi.advanceTimersByTime(10);
+    const { controller } = start(null);
+    vi.advanceTimersByTime(3000);
+    press('m');
+    expect(first.muted).toBe(false);
+    // Scrolled on: the next post's video, the same size, starts muted before the first one stops.
+    const next = livePlayer(document.createElement('video'));
+    next.muted = true;
+    Object.defineProperty(next, 'paused', { value: false, configurable: true });
+    Object.defineProperty(next, 'readyState', { value: 4, configurable: true });
+    next.getBoundingClientRect = () => new DOMRect(0, 300, 500, 400);
+    document.body.append(next);
+    await vi.advanceTimersByTimeAsync(600);
+    next.dispatchEvent(new Event('playing'));
+    vi.advanceTimersByTime(500);
+    expect(next.muted).toBe(false);
+    controller.stop();
+  });
+
+  it("a sound control of another player is not this one's viewer choosing", () => {
+    const watched = livePlayer(player());
+    vi.advanceTimersByTime(10);
+    const { controller } = start(null);
+    vi.advanceTimersByTime(3000);
+    press('m'); // muted by Aloud
+    expect(watched.muted).toBe(true);
+    vi.advanceTimersByTime(3000);
+    // An unmute pressed in another player, in a box of its own well away from this one.
+    const elsewhere = document.createElement('div');
+    elsewhere.getBoundingClientRect = () => new DOMRect(900, 0, 300, 200);
+    const other = document.createElement('button');
+    other.setAttribute('aria-label', 'Unmute');
+    elsewhere.append(other);
+    const frame = document.createElement('div');
+    frame.getBoundingClientRect = () => new DOMRect(0, 0, 500, 300);
+    watched.getBoundingClientRect = () => new DOMRect(0, 0, 500, 280);
+    document.body.append(frame, elsewhere);
+    frame.append(watched);
+    // A page, as a browser lays one out: far bigger than either player.
+    const body = document.body.getBoundingClientRect;
+    document.body.getBoundingClientRect = () => new DOMRect(0, 0, 1280, 3000);
+    other.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, composed: true }));
+    other.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
+    // This video starts again, the player setting it up with its own sound: M's mute goes back on.
+    watched.dispatchEvent(new Event('loadstart'));
+    watched.muted = false;
+    vi.advanceTimersByTime(50);
+    watched.dispatchEvent(new Event('playing'));
+    vi.advanceTimersByTime(500);
+    expect(watched.muted).toBe(true);
+    document.body.getBoundingClientRect = body;
+    controller.stop();
+  });
+
   it('a small muted preview elsewhere on the page is not given sound', async () => {
     const main = livePlayer(player());
     main.muted = true;
@@ -1005,6 +1063,18 @@ describe('Facebook: its seek bar, and its own mute button', () => {
     button.getBoundingClientRect = () => new DOMRect(350, 650, 32, 32);
     return { el, button, pressed: () => pressed };
   }
+
+  it("M presses a mute button that gives its name twice, as YouTube's does", () => {
+    const { el, button, pressed } = withButton('Mute keyboard shortcut m');
+    button.setAttribute('title', 'Mute (m)');
+    button.addEventListener('click', () => (el.muted = true));
+    const { controller } = start(null);
+    vi.advanceTimersByTime(3000);
+    press('m');
+    expect(pressed()).toBe(1);
+    expect(el.muted).toBe(true);
+    controller.stop();
+  });
 
   it("M never presses someone's microphone on a call, nor anything near a live camera", () => {
     const { el, pressed } = withButton("Mute Bob's microphone");

@@ -87,6 +87,8 @@ export class MediaSpeedController {
    * its volume slider): a change of sound that follows is theirs, whatever else is going on.
    */
   private soundControlAt = -Infinity;
+  /** The players that control belongs to. */
+  private soundControlFor = new WeakSet<Media>();
   /** When each player last began to seek (its `seeking` event). */
   private seekStarted = new WeakMap<Media, number>();
   /** When each player's sound last went off or on (its `volumechange`): see `onRateChange`. */
@@ -203,7 +205,16 @@ export class MediaSpeedController {
   private onInput(type: string, event?: Event): void {
     const now = Date.now();
     this.lastInput = now;
-    if (type !== 'keydown' && event && pressedSoundControl(event)) this.soundControlAt = now;
+    const control = type !== 'keydown' && event ? pressedSoundControl(event) : null;
+    if (control) {
+      // Whose it is, decided now: a player that redraws its button on a change of sound (React)
+      // has taken this one out of the page by the time the change is heard.
+      const players = [...this.known].filter((media) => inPlayerOf(media, control));
+      if (players.length) {
+        this.soundControlAt = now;
+        this.soundControlFor = new WeakSet(players);
+      }
+    }
     if (type === 'pointerdown' || type === 'touchstart') {
       this.pressing = true;
       this.gestureAt = now;
@@ -706,7 +717,9 @@ export class MediaSpeedController {
     // paused or playing, just started or not, and what the next videos get, when Aloud has a
     // sound to keep. M's sound overrode it: an unmute pressed while paused, dragged on the slider,
     // or as a video began was put back to muted.
-    if (Date.now() - this.soundControlAt <= VIEWER_SOUND_MS) {
+    // Only for the player whose control it was: a site that silences its other videos when one is
+    // unmuted, or sets up its next video meanwhile, makes those changes too.
+    if (Date.now() - this.soundControlAt <= VIEWER_SOUND_MS && this.soundControlFor.has(media)) {
       if (this.wantSilent != null) this.wantSilent = now;
       return;
     }
@@ -739,9 +752,11 @@ export class MediaSpeedController {
     const want = this.wantSilent;
     if (want == null || !media.isConnected || media.paused || silent(media) === want) return;
     if (!controllable(media)) return;
-    // Sound turned on is for the video being watched (a feed's next one), not for every video that
-    // starts: a muted advert beside it, or a page's decorative loop, was given sound too.
-    if (!want && (decorative(media) || activeMedia([...this.known].filter(controllable)) !== media)) return;
+    // Sound turned on is for what is watched (a feed's next video), not for every video that
+    // starts: a page's decorative loop, or a muted advert much smaller than a video playing beside
+    // it, was given sound too. Not "the one video on top": a feed's next video starts while the
+    // last one still plays, and was left muted.
+    if (!want && (decorative(media) || besideBigger(media, this.known))) return;
     const tries = (this.soundTries.get(media) ?? 0) + 1;
     this.soundTries.set(media, tries);
     if (tries > MAX_OVERRIDES) return;
@@ -980,6 +995,22 @@ export function controllable(media: Media): boolean {
 /** A change of sound this soon after the viewer pressed the player's own sound control is theirs. */
 const VIEWER_SOUND_MS = 1500;
 
+/** Is `media` playing beside a video at least twice its size on screen (an advert beside a film)? */
+function besideBigger(media: Media, known: Iterable<Media>): boolean {
+  const area = visibleArea(media);
+  for (const other of known) {
+    if (other !== media && !other.paused && controllable(other) && visibleArea(other) >= 2 * Math.max(area, 1)) return true;
+  }
+  return false;
+}
+
+function visibleArea(media: Media): number {
+  const box = media.getBoundingClientRect();
+  const width = Math.min(box.right, window.innerWidth) - Math.max(box.left, 0);
+  const height = Math.min(box.bottom, window.innerHeight) - Math.max(box.top, 0);
+  return width > 0 && height > 0 ? width * height : 0;
+}
+
 /**
  * A page's decoration, not something to watch: a video made to play by itself, silent, forever
  * (`<video autoplay muted loop>`), as behind a page's heading. A feed's videos are started by its
@@ -994,7 +1025,7 @@ function decorative(media: Media): boolean {
  * (`playerMuteButton`'s rules), or a volume slider? Looked for along the event's path, shadow
  * roots included, a few levels up from what was hit (the icon inside the button).
  */
-function pressedSoundControl(event: Event): boolean {
+function pressedSoundControl(event: Event): Element | null {
   const path = event.composedPath();
   for (let i = 0; i < Math.min(path.length, 6); i++) {
     const el = path[i];
@@ -1002,12 +1033,33 @@ function pressedSoundControl(event: Event): boolean {
     if (el instanceof HTMLInputElement && el.type === 'range') {
       // Labelled as the volume: an unlabelled slider may be the seek bar, whose drag mutes on some
       // players (Facebook), and that mute is no choice.
-      if (/volume|sound|\bson\b|lautst|volumen|звук/i.test(labelOf(el))) return true;
+      if (/volume|sound|\bson\b|lautst|volumen|звук/i.test(labelOf(el))) return el;
     }
     const role = el.getAttribute('role');
     if (el.tagName === 'BUTTON' || role === 'button' || role === 'slider') {
-      if (soundLabel(labelOf(el))) return true;
+      if (soundLabel(el)) return el;
     }
+  }
+  return null;
+}
+
+/**
+ * Is `control` part of the player `media` sits in: inside a box around the video no more than
+ * about its size (as `playerMuteButton` looks), shadow roots included?
+ */
+function inPlayerOf(media: Media, control: Element): boolean {
+  const video = media.getBoundingClientRect();
+  const area = video.width * video.height;
+  let node: Element | null = media.parentElement;
+  for (let depth = 0; node && depth < 8; depth++, node = node.parentElement) {
+    if (area) {
+      const box = node.getBoundingClientRect();
+      if (box.width * box.height > area * 2.5) break;
+    }
+    if (node.contains(control)) return true;
+    // A player built in a shadow root: the control is inside the host's tree.
+    const root = control.getRootNode();
+    if (root instanceof ShadowRoot && node.contains(root.host)) return true;
   }
   return false;
 }
@@ -1016,9 +1068,16 @@ function labelOf(el: Element): string {
   return `${el.getAttribute('aria-label') ?? ''} ${el.getAttribute('title') ?? ''}`.trim();
 }
 
-/** A label that names the player's sound control, and nothing else's (see MUTE_LABEL). */
-function soundLabel(label: string): boolean {
-  return !!label && label.split(/\s+/).length <= MAX_MUTE_WORDS && MUTE_LABEL.test(label) && !NOT_MUTE.test(label);
+/**
+ * Does `el`'s label name the player's sound control, and nothing else's (see MUTE_LABEL)? Its
+ * aria-label and its title each on their own: YouTube's says "Mute (m)" in one and "Mute keyboard
+ * shortcut m" in the other, and the two together were too long a name for a mute button. Neither
+ * may name something else.
+ */
+function soundLabel(el: Element): boolean {
+  const labels = [el.getAttribute('aria-label'), el.getAttribute('title')].map((l) => (l ?? '').trim()).filter(Boolean);
+  if (!labels.length || labels.some((l) => NOT_MUTE.test(l))) return false;
+  return labels.some((l) => MUTE_LABEL.test(l) && l.split(/\s+/).length <= MAX_MUTE_WORDS);
 }
 
 /** How long a player's own mute button is given to act before Aloud switches the sound itself. */
@@ -1032,8 +1091,11 @@ const MUTE_LABEL = /\b(un)?mute\b|\bsound\b|\bvolume\b|\baudio\b|\bson\b|stumm|\
  */
 const NOT_MUTE =
   /setting|réglage|option|menu|caption|subtit|sous-titre|track|piste|descri|language|langue|idioma|sprache|lingua|microph|\bmic\b|micro\b|camera|caméra|kamera|cámara|webcam|participant|everyone|\ball\b|tous\b|todos\b|alle\b|quality|qualité|download|share|partag|record/i;
-/** A mute button says what it does in a few words ("Mute (m)", "Turn sound on"), not a sentence. */
-const MAX_MUTE_WORDS = 4;
+/**
+ * A mute button says what it does in a few words ("Mute (m)", "Mute keyboard shortcut m",
+ * "Couper le son (m)"), not a sentence.
+ */
+const MAX_MUTE_WORDS = 6;
 
 /**
  * The mute button of the player `media` sits in, if it has one: a button inside the player (no
@@ -1052,7 +1114,7 @@ export function playerMuteButton(media: Media): HTMLElement | null {
     const box = node.getBoundingClientRect();
     if (box.width * box.height > area * 2.5) break;
     for (const button of node.querySelectorAll<HTMLElement>('button, [role="button"]')) {
-      if (!soundLabel(labelOf(button))) continue;
+      if (!soundLabel(button)) continue;
       const drawn = button.getBoundingClientRect();
       if (drawn.width && drawn.height) return button;
     }
