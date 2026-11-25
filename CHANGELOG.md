@@ -87,7 +87,9 @@ Website-only and documentation changes are not listed: they never reach the exte
   there from then on, on every site. A double-click on its title puts it back.
 - **Kokoro and Supertonic speak on Windows Firefox with a graphics card** (#10). Firefox on
   Windows gives Aloud WebGPU, and on some graphics cards Kokoro was silent and Supertonic made
-  noise, with nothing failing. A voice that loads on the graphics card now says a short test phrase
+  noise, with nothing failing. Kokoro was silent through a fault in ONNX Runtime 1.22.0, which
+  runs the voices: with 1.31.1 it reads on the graphics card there. And a voice that loads on the
+  graphics card now says a short test phrase
   first; if that is silent, noise, or (for Supertonic) not the sound the processor makes, the voice
   runs on the processor and says so, and that browser remembers until it is updated. Settings,
   Advanced, "Check for a GPU again" tries the graphics card again; unticking "Use WebGPU

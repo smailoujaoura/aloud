@@ -17,8 +17,8 @@ export const GPU_TEST_TEXT = 'Hello there. This is a short test of the voice.';
  * first build of Supertonic's test rejected kept Supertonic on the processor for good, and a GPU
  * making noise that the first Kokoro test let through was never tested again. And a verdict made
  * under one ONNX Runtime says nothing about the next: Kokoro was silent on the GPU in Firefox for
- * Windows under 1.22.0, while 1.31.1 spoke there (in its native WebGPU build; Aloud loads its JSEP
- * build, so whether that one speaks there is what the new test finds out).
+ * Windows under 1.22.0 and speaks there under 1.31.1 (its JSEP build, which Aloud loads: checked on
+ * the maintainer's Windows machine with Firefox 161, 25 November 2026).
  *
  * 4: ONNX Runtime Web 1.31.1.
  */

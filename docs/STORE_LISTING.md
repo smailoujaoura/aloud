@@ -58,7 +58,7 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 > • Muting a video with M no longer drops its speed to 1× (Facebook): M presses the player's own mute button, so the two agree on the sound, and sound turned on stays on for the next videos.
 > • Dragging Facebook's progress bar no longer sets the speed to 0.25× or loses the sound.
 > • Settings stay where you scrolled them when something is saved.
-> • Kokoro and Supertonic speak on Windows Firefox with a graphics card: a voice that loads there but comes out silent or as noise runs on the processor instead, and says so.
+> • Kokoro and Supertonic speak on Windows Firefox with a graphics card: Kokoro, silent there, now reads on the graphics card, and a voice that loads on one but comes out silent or as noise runs on the processor instead, and says so.
 > • Kokoro reads up to three times faster without a graphics card.
 > • On a phone, the speed button stays put while you swipe through YouTube Shorts, instead of moving all over the screen.
 > • Moving within a video no longer changes its speed: on some sites a click on the progress bar dropped it to 1× and remembered that.
