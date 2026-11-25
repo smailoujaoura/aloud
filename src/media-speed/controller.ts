@@ -174,18 +174,22 @@ export class MediaSpeedController {
       return;
     }
     if (this.touch) return;
-    const touch = new TouchSpeedButton({
-      rate: () => this.rate ?? currentRateOf(this.known) ?? 1,
-      setRate: (rate) => {
-        if (this.known.size) this.setRate(rate, false);
+    // On a phone or tablet, moved anywhere on the screen; on a computer, kept on the video.
+    const touch = new TouchSpeedButton(
+      {
+        rate: () => this.rate ?? currentRateOf(this.known) ?? 1,
+        setRate: (rate) => {
+          if (this.known.size) this.setRate(rate, false);
+        },
+        stepFrom: (rate, direction) => stepRate(rate, this.settings.step, direction),
+        player: () => {
+          this.prune();
+          return activeMedia(this.known);
+        },
+        playerAt: (x, y) => videoAt(this.known, x, y),
       },
-      stepFrom: (rate, direction) => stepRate(rate, this.settings.step, direction),
-      player: () => {
-        this.prune();
-        return activeMedia(this.known);
-      },
-      playerAt: (x, y) => videoAt(this.known, x, y),
-    });
+      !!this.host.touchButton,
+    );
     touch.start();
     this.touch = touch;
   }

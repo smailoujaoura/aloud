@@ -62,7 +62,7 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 > • Kokoro reads up to three times faster without a graphics card.
 > • On a phone, the speed button stays put while you swipe through YouTube Shorts, instead of moving all over the screen.
 > • Moving within a video no longer changes its speed: on some sites a click on the progress bar dropped it to 1× and remembered that.
-> • The speed button on a video can be dragged out of the way, and stays where you put it on each site; on a computer it now shows when the mouse moves over a video (Settings, Video speed turns it off).
+> • The speed button on a video can be dragged out of the way and stays where you put it: on a computer, on the video, for each site; on a phone or tablet, anywhere on the screen, for every video. On a computer it now shows when the mouse moves over a video (Settings, Video speed turns it off).
 > • The reading bar can be dragged to the top of the window, right against the edge, and the notes panel anywhere.
 > • Scanned PDFs show their pages (they were read over a blank or black page).
 

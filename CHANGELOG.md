@@ -21,6 +21,9 @@ Website-only and documentation changes are not listed: they never reach the exte
   being swiped away, then jumped to the bottom of the screen and slid up with the next one. It is
   now put away while a finger moves the page and comes back at its place once the next video is
   still.
+- **On a phone or tablet, the speed button can be moved anywhere on the screen,** not only over
+  the video, and stays in that place for every video on every site. On a computer it stays on the
+  video, on each site, where the mouse finds it.
 - **Kokoro reads up to three times faster in Firefox** without a graphics card, and somewhat
   faster in Chrome: ONNX Runtime, which runs the voices, is updated from 1.22.0 to 1.31.1.
 - **Muting a video no longer costs its speed, and sound turned on stays on.** On players that set

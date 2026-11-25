@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { nearestClear, placeAt, spotAt } from '@/media-speed/touch-button';
+import { nearestClear, placeAt, spotAt, windowBox } from '@/media-speed/touch-button';
 import { DEFAULT_MEDIA_SPEED, DEFAULT_SETTINGS, sanitizeSettings, withDefaults, type MediaSpeedSettings, type Settings } from '@/shared/settings';
 
 const video = { left: 50, top: 40, width: 640, height: 360 };
@@ -7,6 +7,19 @@ const pill = { width: 62, height: 46 };
 const view = { width: 800, height: 600 };
 
 describe('where the speed button sits on the video', () => {
+  it('on a phone, moved once, it keeps its place on the screen, below a small video too, and turns with it', () => {
+    const phone = { width: 390, height: 844 };
+    // Dropped below a video that only fills the top of the screen.
+    const spot = spotAt(windowBox(phone), pill, 250, 510);
+    expect(placeAt(windowBox(phone), pill, spot, phone)).toEqual({ left: 250, top: 510 });
+    // The same place for the next video, wherever that one is: the video is not part of it.
+    expect(placeAt(windowBox(phone), pill, spot, phone)).toEqual(placeAt(windowBox(phone), pill, spot, phone));
+    // Turned sideways: the same part of the screen, still inside it.
+    const turned = placeAt(windowBox({ width: 844, height: 390 }), pill, spot, { width: 844, height: 390 });
+    expect(turned.left).toBeGreaterThan(500);
+    expect(turned.top + pill.height).toBeLessThanOrEqual(390 - 8);
+  });
+
   it('starts at the top-left corner, just inside the video', () => {
     expect(placeAt(video, pill, { x: 0, y: 0 }, view)).toEqual({ left: 60, top: 50 });
   });

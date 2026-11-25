@@ -14,10 +14,16 @@
  * the video. Nor does it take the page's keys: a click leaves the focus where it was, so Space
  * still pauses the video instead of pressing the button again.
  *
- * It can be moved: dragged with a finger or the mouse anywhere on the video, off whatever of the
- * player's own it covered (a back button, a title, the site's menu), and it stays there, on that
- * site, from then on. Where it sits is kept as a fraction of the video, so it follows the video
- * when it is resized, turned or put in full screen.
+ * It can be moved: dragged with a finger or the mouse, off whatever of the player's own it covered
+ * (a back button, a title, the site's menu), and it stays there from then on.
+ *  - On a computer, anywhere on the video, on that site: kept as a fraction of the video, so it
+ *    follows the video when it is resized, scrolled or put in full screen. A page can hold several
+ *    videos, and the button shows on the one under the mouse; away from it, it would belong to none.
+ *  - On a phone or tablet (`screenWide`), anywhere on the screen, on every site: kept as a fraction
+ *    of the window, so it is in the same place whatever the video's size or place (Shorts, a video
+ *    at the top of the page, full screen), and turns with the phone. Until it is first moved it
+ *    sits at the video's top-left corner, as on a computer. A phone plays one video at a time, so
+ *    which one it is for is never in doubt.
  *
  * A finger swiping the page puts it away until the page is still, then it comes back at its spot
  * on the video in view. On YouTube Shorts it rode the video being swiped away, then appeared on the
@@ -65,6 +71,9 @@ const STILL_FRAMES = 3;
 const SETTLE_MS = 2000;
 /** A finger lifted this recently may still be moving the page (a flick goes on after it). */
 const FLICK_MS = 1000;
+/** Where it was moved on a phone or tablet: one place on the screen, for every site. No host name
+ * has spaces or brackets, so it is never a site's. */
+const SCREEN_SPOT = '[screen]';
 /** Kept this far clear of the reading bar, and moved off it in steps this big. */
 const BAR_GAP = 6;
 const BAR_STEP = 12;
@@ -94,6 +103,11 @@ export function placeAt(box: Box, size: Size, spot: TouchSpot, view: Size): { le
     left: Math.round(clampTo(left, 8, view.width - size.width - 8)),
     top: Math.round(clampTo(top, 8, view.height - size.height - 8)),
   };
+}
+
+/** The whole window as a box to sit on: on a phone or tablet, the button's place is on the screen. */
+export function windowBox(view: Size): Box & { bottom: number } {
+  return { left: 0, top: 0, width: view.width, height: view.height, bottom: view.height };
 }
 
 /** The spot a button of `size` at (`left`, `top`) is at on the video `box`. */
@@ -187,7 +201,10 @@ export class TouchSpeedButton {
   private focused = false;
   /** When it last opened to "− 1× +": the second click of a double-click is not a press of "−". */
   private openedAt = -Infinity;
-  private readonly site = location.hostname;
+  /** The key its place is kept under: the site, or one for the whole screen (SCREEN_SPOT). */
+  private readonly site: string;
+  /** On a phone or tablet, once moved: its spot is on the window, not on the video. */
+  private onWindow = false;
   /** Waiting for the video to stop moving before it is shown (whenStill). */
   private settling = 0;
   /** A finger is on the page (Infinity), or until when one lifted just now may still move it. */
@@ -195,12 +212,19 @@ export class TouchSpeedButton {
   /** Where a finger came down on the page, not on the button: a swipe once it moves DRAG_PX. */
   private touchStart: { id: number; x: number; y: number } | null = null;
 
-  constructor(private readonly target: TouchSpeedTarget) {}
+  /** `screenWide`: a phone or tablet, where it is moved anywhere on the screen (see the top). */
+  constructor(
+    private readonly target: TouchSpeedTarget,
+    private readonly screenWide = false,
+  ) {
+    this.site = screenWide ? SCREEN_SPOT : location.hostname;
+  }
 
   start(): void {
     void loadSpot(this.site).then((spot) => {
       if (!spot) return;
       this.spot = spot;
+      this.onWindow = this.screenWide;
       if (this.shown && !this.place()) this.hide();
     });
     // A tap or click on the video shows the speed, as it shows the player's own controls; one
@@ -404,14 +428,16 @@ export class TouchSpeedButton {
   }
 
   /**
-   * On the video, where the viewer put it (the top-left corner at first), and up or down off the
-   * reading bar when that is in the way; false when there is no video to sit on, or no room on it.
+   * Where the viewer put it, on the video (the top-left corner at first) or, moved on a phone, on
+   * the screen; up or down off the reading bar when that is in the way. False when there is no
+   * video in view for it, or no room.
    */
   private place(): boolean {
-    const box = this.videoBox();
-    if (!box || !this.host) return false;
+    const video = this.videoBox();
+    if (!video || !this.host) return false;
     const size = this.size();
     const view = { width: window.innerWidth, height: window.innerHeight };
+    const box = this.onWindow ? windowBox(view) : video;
     const at = placeAt(box, size, this.spot, view);
     const bar = this.readingBar();
     if (bar) {
@@ -468,10 +494,15 @@ export class TouchSpeedButton {
     return { width: r?.width ?? 0, height: r?.height ?? 0 };
   }
 
-  /** Dragged to (`left`, `top`): there, kept on the video, and remembered as a spot on it. */
+  /**
+   * Dragged to (`left`, `top`): there, and remembered as a spot on the video, or on a phone or
+   * tablet as a spot on the screen, wherever on it the finger takes it.
+   */
   private moveTo(left: number, top: number): void {
-    const box = this.videoBox();
-    if (!box || !this.host) return;
+    const video = this.videoBox();
+    if (!video || !this.host) return;
+    this.onWindow = this.screenWide;
+    const box = this.onWindow ? windowBox({ width: window.innerWidth, height: window.innerHeight }) : video;
     this.spot = spotAt(box, this.size(), left, top);
     this.place();
   }
