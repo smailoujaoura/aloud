@@ -123,7 +123,7 @@ published (Mozilla does not allow modified libraries). See `scripts/build-worker
      an entry that is imported a second time, see src/worker/entry.ts), plus `src/synth-host/entry.ts` →
      `.gen/worker/synth-host.js` (a classic IIFE). `onnxruntime-web` / `onnxruntime-common` are
      **external**, rewritten via `output.paths` to `./vendor/ort/ort.bundle.min.mjs`, so ORT's
-     ~33 MB of WASM is never base64-inlined. The output is copied into `public/`.
+     ~44 MB of WASM is never base64-inlined. The output is copied into `public/`.
 2. WXT builds `background`, `options`, `pdf`, `welcome` (the first-run walkthrough) and the
    `reader-inject` unlisted script, then assembles
    the output directory with a generated `manifest.json`.
@@ -159,7 +159,7 @@ is verified after download (`src/engine/model-cache.ts`).
 
 | Warning | Count | Why it is expected |
 |---|---|---|
-| `DANGEROUS_EVAL` in `vendor/ort/ort.bundle.min.mjs` and `vendor/ort/ort-wasm-simd-threaded.jsep.mjs` | 2 | Emscripten's way of finding the global object: `typeof globalThis == "object" ? globalThis : Function("return this")()`. Every browser Aloud supports has `globalThis`, so the `Function` branch never runs, and the extension CSP (no `'unsafe-eval'`) would refuse it if it did. (`'wasm-unsafe-eval'` is for compiling WebAssembly, not for this.) |
+| `DANGEROUS_EVAL` in `vendor/ort/ort.bundle.min.mjs` and `vendor/ort/ort-wasm-simd-threaded.jsep.mjs` | 2 | Emscripten's embind "method caller" (`new Function(...)`, in `_emval_get_method_caller`), which builds a JavaScript function when the WebAssembly calls a method on a JavaScript object through `emscripten::val`. The WebAssembly CPU and JSEP WebGPU paths Aloud runs never get there: every voice was run under the extension's own CSP (no `'unsafe-eval'`, which makes `new Function` throw) in Chromium and WebKit, on the CPU and the GPU, and in Firefox on the CPU, and all spoke (ONNX Runtime 1.31.1). Were it reached, the CSP would refuse it and the voice would fail to start, not run code. (`'wasm-unsafe-eval'` is for compiling WebAssembly, not for this. Up to ONNX Runtime 1.22.0 these two warnings were Emscripten's `Function("return this")` fallback for finding the global object instead.) |
 | `UNSAFE_VAR_ASSIGNMENT` "call to import" in `tts-worker.js`, `vendor/rt/ort-loader.js`, `vendor/rt/phonon.js`, `vendor/ort/ort.bundle.min.mjs`, `chunks/pdf.js` (twice: pdf.js, and the built-ins it needs first), `vendor/pdfjs/pdf.mjs` and `vendor/pdfjs/pdf.worker.mjs` | 8 | Deliberate runtime `import()` of a packaged module by URL (pdf.js: its own worker; `tts-worker.js`: the worker proper, `vendor/rt/worker-main.js`, see src/worker/entry.ts): resolved from the extension's own origin, so the argument is never page-controlled. |
 | `UNSAFE_VAR_ASSIGNMENT` "assignment to innerHTML" in `reader-inject.js` and `chunks/session.js` | 4 | Inside the bundled `@mozilla/readability`, which parses a *clone* of the document and is bundled into the content script and into the shared reader-session chunk the PDF page and the walkthrough both load. None of our own code assigns `innerHTML`; the control bar, options page, PDF reader and walkthrough build every node with `createElement` (see `src/shared/dom.ts`). |
 

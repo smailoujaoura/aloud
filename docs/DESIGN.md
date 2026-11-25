@@ -175,7 +175,7 @@ Where the shipped code deviates from the plan below, and why:
    `public/tts-worker.js`), not a WXT entrypoint, so its output format (ES-module worker) and
    externals are fully controlled.
 3. **`onnxruntime-web` / `onnxruntime-common` are external to the worker bundle.** Bundling them
-   makes Vite base64-inline ORT's ~33 MB of `.wasm` (a 119 MB bundle was observed). Instead
+   makes Vite base64-inline ORT's ~44 MB of `.wasm` (a 119 MB bundle was observed). Instead
    `ort.bundle.min.mjs` is vendored to `vendor/ort/` and loaded at runtime by URL
    (`src/engine/ort-loader.ts`); Rollup `output.paths` rewrites the transformers bundle's
    `import "onnxruntime-web"` to that same file, and `globalThis[Symbol.for('onnxruntime')]` is

@@ -858,7 +858,7 @@
 	/** For this browser version and this build of the test only (GPU_TEST_VERSION). */
 	async function gpuVerdictHere(engine) {
 		const verdict = (await readLocal(GPU_VERDICTS))?.[engine];
-		if (!verdict || verdict.browser !== navigator.userAgent || verdict.test !== 3) return null;
+		if (!verdict || verdict.browser !== navigator.userAgent || verdict.test !== 4) return null;
 		return verdict.ok ? "ok" : "bad";
 	}
 	async function rememberGpuVerdict(engine, ok, why) {
@@ -867,7 +867,7 @@
 			...verdicts,
 			[engine]: {
 				browser: navigator.userAgent,
-				test: 3,
+				test: 4,
 				ok,
 				...why ? { why } : {},
 				at: Date.now()

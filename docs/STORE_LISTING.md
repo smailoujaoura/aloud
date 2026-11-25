@@ -59,6 +59,7 @@ Reads any article or PDF aloud in a natural neural voice that runs on your devic
 > • Dragging Facebook's progress bar no longer sets the speed to 0.25× or loses the sound.
 > • Settings stay where you scrolled them when something is saved.
 > • Kokoro and Supertonic speak on Windows Firefox with a graphics card: a voice that loads there but comes out silent or as noise runs on the processor instead, and says so.
+> • Kokoro reads up to three times faster without a graphics card.
 > • Moving within a video no longer changes its speed: on some sites a click on the progress bar dropped it to 1× and remembered that.
 > • The speed button on a video can be dragged out of the way, and stays where you put it on each site; on a computer it now shows when the mouse moves over a video (Settings, Video speed turns it off).
 > • The reading bar can be dragged to the top of the window, right against the edge, and the notes panel anywhere.
@@ -254,7 +255,7 @@ compatibility functions it needs are in pdfjs-support/polyfills.mjs, plain and c
   >
   > Vendored, unmodified npm files (ONNX Runtime Web, pdf.js's modern build, piper-phonemize WASM, phonon-tts 0.4.2, Gradium's Phonon runtime built from https://github.com/gradium-ai/xn-ptts) are copied from node_modules by scripts/sync-assets.mjs, pinned by the lockfile; versions in THIRD_PARTY.md. pdfjs-support/ is Aloud's own: the few built-ins pdf.js's modern build needs that older browsers lack. phonon-tts gets its model as blob: URLs of files Aloud downloaded and checked, so its Hugging Face lookup never runs.
   >
-  > Validator warnings: the Function-constructor ones are inside ONNX Runtime and cannot run (CSP: no 'unsafe-eval'). The innerHTML ones are Mozilla Readability 0.6.0 on document.cloneNode(true), an inert copy. The import() ones load files from the package. Nothing loads from a CDN.
+  > Validator warnings: the Function-constructor ones are inside ONNX Runtime (Emscripten's embind method caller), on a path Aloud's use of it does not take; the CSP (no 'unsafe-eval') would refuse them if it did. The innerHTML ones are Mozilla Readability 0.6.0 on document.cloneNode(true), an inert copy. The import() ones load files from the package. Nothing loads from a CDN.
   >
   > Downloaded at run time: voice data from Hugging Face (ONNX and GGUF weights, JSON, voice vectors), never code, checked by SHA-256. Phonon's model (CC BY-NC 4.0) is an unmodified, ungated copy of Gradium's repository (smailoujaoura/phonon-40m-multilingual).
   >

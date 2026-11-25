@@ -29,7 +29,7 @@ package that kokoro-js uses for Kokoro's English voices.
 
 `onnxruntime-web` is intentionally **not** bundled into `tts-worker.js`; it is copied verbatim to
 `vendor/ort/` and loaded by URL at runtime (`src/engine/ort-loader.ts`). Bundling it makes Vite
-inline its ~33 MB of `.wasm` as base64.
+inline its ~44 MB of `.wasm` as base64.
 
 ## Voice / model files (downloaded at first use, never bundled)
 

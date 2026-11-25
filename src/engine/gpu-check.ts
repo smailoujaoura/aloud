@@ -15,9 +15,10 @@ export const GPU_TEST_TEXT = 'Hello there. This is a short test of the voice.';
  * it whenever the test or an engine's `checkGpu` changes, and whenever ONNX Runtime Web is updated:
  * a verdict from an earlier build is then tested again. Without it, a Mac whose working GPU the
  * first build of Supertonic's test rejected kept Supertonic on the processor for good, and a GPU
- * making noise that the first Kokoro test let through was never tested again. And Firefox for
- * Windows, silent on the GPU with ONNX Runtime 1.22.0 and speaking with 1.31.1, would have kept
- * the old runtime's verdict until Firefox itself was updated.
+ * making noise that the first Kokoro test let through was never tested again. And a verdict made
+ * under one ONNX Runtime says nothing about the next: Kokoro was silent on the GPU in Firefox for
+ * Windows under 1.22.0, while 1.31.1 spoke there (in its native WebGPU build; Aloud loads its JSEP
+ * build, so whether that one speaks there is what the new test finds out).
  *
  * 4: ONNX Runtime Web 1.31.1.
  */

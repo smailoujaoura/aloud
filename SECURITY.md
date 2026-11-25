@@ -13,7 +13,7 @@ developer's machine. What matters for users is what ships inside the extension. 
 2026-11-11, after upgrading the build and test tools (19 advisories, 5 critical, down to 9, none
 critical, none in what ships).
 
-**Shipped in the extension: no open advisories.** The packaged runtime is onnxruntime-web 1.22.0,
+**Shipped in the extension: no open advisories.** The packaged runtime is onnxruntime-web 1.31.1,
 @huggingface/transformers 3.7.5 (its browser build, `transformers.web.js`), kokoro-js 1.2.1,
 @diffusionstudio/piper-wasm 1.0.0, pdfjs-dist, pdf-lib 1.17.1, @mozilla/readability 0.6.0 and
 @breezystack/lamejs 1.2.7.
