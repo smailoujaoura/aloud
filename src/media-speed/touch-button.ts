@@ -18,6 +18,10 @@
  * player's own it covered (a back button, a title, the site's menu), and it stays there, on that
  * site, from then on. Where it sits is kept as a fraction of the video, so it follows the video
  * when it is resized, turned or put in full screen.
+ *
+ * A finger swiping the page puts it away until the page is still, then it comes back at its spot
+ * on the video in view. On YouTube Shorts it rode the video being swiped away, then appeared on the
+ * next one while that was still sliding in, pinned at the window's edge: all over the screen.
  */
 import { storage } from 'wxt/utils/storage';
 import { withStorageLock } from '@/shared/storage-lock';
@@ -56,6 +60,11 @@ const DRAG_PX = 8;
 const INSET = 10;
 /** The mouse moving over a video is looked at this often, at most. */
 const HOVER_MS = 200;
+/** A video is still once it has not moved for this many frames; shown anyway after SETTLE_MS. */
+const STILL_FRAMES = 3;
+const SETTLE_MS = 2000;
+/** A finger lifted this recently may still be moving the page (a flick goes on after it). */
+const FLICK_MS = 1000;
 /** Kept this far clear of the reading bar, and moved off it in steps this big. */
 const BAR_GAP = 6;
 const BAR_STEP = 12;
@@ -179,6 +188,12 @@ export class TouchSpeedButton {
   /** When it last opened to "− 1× +": the second click of a double-click is not a press of "−". */
   private openedAt = -Infinity;
   private readonly site = location.hostname;
+  /** Waiting for the video to stop moving before it is shown (whenStill). */
+  private settling = 0;
+  /** A finger is on the page (Infinity), or until when one lifted just now may still move it. */
+  private touchUntil = 0;
+  /** Where a finger came down on the page, not on the button: a swipe once it moves DRAG_PX. */
+  private touchStart: { id: number; x: number; y: number } | null = null;
 
   constructor(private readonly target: TouchSpeedTarget) {}
 
@@ -193,6 +208,10 @@ export class TouchSpeedButton {
     this.listen(window, 'pointerdown', (e) => {
       const event = e as PointerEvent;
       if (this.host && event.composedPath().includes(this.host)) return;
+      if (event.pointerType === 'touch' && event.isPrimary) {
+        this.touchStart = { id: event.pointerId, x: event.clientX, y: event.clientY };
+        this.touchUntil = Infinity;
+      }
       const media = this.target.player();
       const box = media?.getBoundingClientRect();
       if (box && event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom) {
@@ -224,9 +243,25 @@ export class TouchSpeedButton {
     };
     let last = { x: 0, y: 0 };
     let later = 0;
+    // A finger off the page: the page may go on moving a moment (a flick), and is watched that long.
+    const lifted = (e: Event): void => {
+      const event = e as PointerEvent;
+      if (event.pointerType !== 'touch' || event.pointerId !== this.touchStart?.id) return;
+      this.touchStart = null;
+      this.touchUntil = performance.now() + FLICK_MS;
+    };
+    this.listen(window, 'pointerup', lifted);
+    this.listen(window, 'pointercancel', lifted);
     this.listen(window, 'pointermove', (e) => {
       const event = e as PointerEvent;
-      if (event.pointerType === 'touch') return;
+      if (event.pointerType === 'touch') {
+        // A swipe, not a tap: what the page moves (a feed's next video) moves the video under it.
+        const start = this.touchStart;
+        if (start && event.pointerId === start.id && Math.hypot(event.clientX - start.x, event.clientY - start.y) >= DRAG_PX) {
+          this.awayWhileMoving();
+        }
+        return;
+      }
       // Over the button itself: `hovered` holds it up (see create).
       if (this.host && event.composedPath().includes(this.host)) return;
       last = { x: event.clientX, y: event.clientY };
@@ -241,9 +276,12 @@ export class TouchSpeedButton {
       }
     });
     this.cleanups.push(() => clearTimeout(later));
-    // Kept on the video while the page scrolls or turns, and over it in full screen.
+    // Kept on the video while the page scrolls or turns, and over it in full screen. Not while a
+    // finger scrolls it: then it is put away until the page is still (awayWhileMoving).
     const follow = (): void => {
-      if (this.shown && !this.place()) this.hide();
+      if (!this.shown) return;
+      if (!this.pressed && performance.now() < this.touchUntil) this.awayWhileMoving();
+      else if (!this.place()) this.hide();
     };
     this.listen(window, 'scroll', follow);
     this.listen(window, 'resize', follow);
@@ -256,16 +294,67 @@ export class TouchSpeedButton {
     for (const off of this.cleanups) off();
     this.cleanups.length = 0;
     clearTimeout(this.timer);
+    cancelAnimationFrame(this.settling);
+    this.settling = 0;
     this.host?.remove();
     this.host = null;
     this.shown = false;
   }
 
-  /** A video started: show its speed for a moment, on that video. */
+  /**
+   * A video started: show its speed for a moment, on that video, once it is still (a key that
+   * changed the speed shows it at once). The next video of a feed starts while it is still sliding
+   * into view, and the button placed then was left at the window's edge, or on the wrong part of
+   * the screen.
+   */
   wake(media?: HTMLMediaElement): void {
     this.media = media ?? null;
     this.open = false;
-    this.show();
+    // A key that changed the speed (no video given): shown at once, as the new speed is the answer.
+    if (media) this.whenStill(() => this.show());
+    else this.show();
+  }
+
+  /**
+   * A finger is moving the page while it is up: put away, and back once the page is still, on the
+   * video then in view (a feed's next one), at its spot there. Not while the finger is on the
+   * button itself: that is a drag of the button.
+   */
+  private awayWhileMoving(): void {
+    if (this.pressed || !this.shown) return;
+    this.hide();
+    this.whenStill(() => {
+      this.media = this.target.player() ?? this.media;
+      this.open = false;
+      this.show();
+    });
+  }
+
+  /**
+   * `then`, once the video it is for has stopped moving and no finger is on the page: the same box
+   * for STILL_FRAMES frames running. Never later than SETTLE_MS, for a video that never stops (an
+   * animated page) or a finger left resting on the screen.
+   */
+  private whenStill(then: () => void): void {
+    cancelAnimationFrame(this.settling);
+    const began = performance.now();
+    let last: DOMRect | null = null;
+    let still = 0;
+    const step = (): void => {
+      const media = (this.media?.isConnected ? this.media : null) ?? this.target.player();
+      const box = media?.getBoundingClientRect() ?? null;
+      const same = !!box && !!last && Math.abs(box.left - last.left) < 1 && Math.abs(box.top - last.top) < 1 && Math.abs(box.width - last.width) < 1 && Math.abs(box.height - last.height) < 1;
+      still = same ? still + 1 : 0;
+      last = box;
+      const fingerDown = this.touchUntil === Infinity;
+      if ((still >= STILL_FRAMES && !fingerDown) || performance.now() - began > SETTLE_MS) {
+        this.settling = 0;
+        then();
+        return;
+      }
+      this.settling = requestAnimationFrame(step);
+    };
+    this.settling = requestAnimationFrame(step);
   }
 
   /** The speed changed (a key, the site's own menu): show the new one if the button is up. */
@@ -295,6 +384,9 @@ export class TouchSpeedButton {
 
   private hide(): void {
     clearTimeout(this.timer);
+    // Put away by a tap elsewhere, or its time: not brought back by a wait for the page to settle.
+    cancelAnimationFrame(this.settling);
+    this.settling = 0;
     this.open = false;
     this.shown = false;
     // Hidden from under a still mouse, it is told of no leaving: shown again, it would never fade.

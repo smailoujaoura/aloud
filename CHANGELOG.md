@@ -17,6 +17,10 @@ Website-only and documentation changes are not listed: they never reach the exte
 ## 1.0.5 (unreleased: dated on release)
 
 ### Fixed
+- **On a phone, the speed button stays put while you swipe through Shorts.** It rode the video
+  being swiped away, then jumped to the bottom of the screen and slid up with the next one. It is
+  now put away while a finger moves the page and comes back at its place once the next video is
+  still.
 - **Kokoro reads up to three times faster in Firefox** without a graphics card, and somewhat
   faster in Chrome: ONNX Runtime, which runs the voices, is updated from 1.22.0 to 1.31.1.
 - **Muting a video no longer costs its speed, and sound turned on stays on.** On players that set
