@@ -2297,14 +2297,14 @@ onnxruntime-node 1.21.0 — MIT
 
 
 ==============================================================================
-onnxruntime-web 1.22.0 — MIT
+onnxruntime-web 1.31.1 — MIT
 ==============================================================================
 
 (no licence file in the package; see its "license" field above)
 
 
 ==============================================================================
-onnxruntime-common 1.22.0 — MIT
+onnxruntime-common 1.31.1 — MIT
 ==============================================================================
 
 (no licence file in the package; see its "license" field above)

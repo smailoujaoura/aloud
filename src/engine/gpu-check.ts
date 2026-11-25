@@ -12,12 +12,16 @@ export const GPU_TEST_TEXT = 'Hello there. This is a short test of the voice.';
 
 /**
  * Which build of this test a remembered verdict came from (synth-host/entry.ts: gpuVerdicts). Bump
- * it whenever the test or an engine's `checkGpu` changes: a verdict from an earlier build is then
- * tested again. Without it, a Mac whose working GPU the first build of Supertonic's test rejected
- * kept Supertonic on the processor for good, and a GPU making noise that the first Kokoro test let
- * through was never tested again.
+ * it whenever the test or an engine's `checkGpu` changes, and whenever ONNX Runtime Web is updated:
+ * a verdict from an earlier build is then tested again. Without it, a Mac whose working GPU the
+ * first build of Supertonic's test rejected kept Supertonic on the processor for good, and a GPU
+ * making noise that the first Kokoro test let through was never tested again. And Firefox for
+ * Windows, silent on the GPU with ONNX Runtime 1.22.0 and speaking with 1.31.1, would have kept
+ * the old runtime's verdict until Firefox itself was updated.
+ *
+ * 4: ONNX Runtime Web 1.31.1.
  */
-export const GPU_TEST_VERSION = 3;
+export const GPU_TEST_VERSION = 4;
 
 /**
  * How noise-like the loud part of a clip is: the spectral flatness of each 1024-sample frame within
