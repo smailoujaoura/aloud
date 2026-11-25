@@ -250,6 +250,26 @@ describe('one speed on the video, not two', () => {
     controller.stop();
   });
 
+  it('audio, or a video too small or out of sight for the button: the badge says it', () => {
+    const audio = document.createElement('audio');
+    Object.defineProperty(audio, 'paused', { value: false, configurable: true });
+    Object.defineProperty(audio, 'readyState', { value: 4, configurable: true });
+    document.body.append(audio);
+    const controller = start();
+    pressD();
+    expect(shown()).toBe(false);
+    expect(badgeShown()).toBe(true);
+    controller.stop();
+    document.body.replaceChildren();
+    const small = video(120, 68); // a small player, playing with its sound on
+    Object.defineProperty(small, 'paused', { value: false, configurable: true });
+    const again = start();
+    pressD();
+    expect(shown()).toBe(false);
+    expect(badgeShown()).toBe(true);
+    again.stop();
+  });
+
   it('with the button turned off, the badge says it instead', () => {
     video();
     const controller = start({ showButton: false });

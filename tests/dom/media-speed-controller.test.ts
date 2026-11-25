@@ -757,6 +757,107 @@ describe('mute and the speed, on a player that keeps its own state (Facebook)', 
     controller.stop();
   });
 
+  /** A press on the player's own mute button, as the viewer makes it, and the player acting on it. */
+  function ownMuteButton(el: HTMLMediaElement, muteTo: boolean): void {
+    const button = document.createElement('button');
+    button.setAttribute('aria-label', muteTo ? 'Mute' : 'Unmute');
+    document.body.append(button);
+    button.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, composed: true }));
+    button.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, composed: true }));
+    button.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
+    el.muted = muteTo;
+    button.remove();
+  }
+
+  it("the viewer's own unmute, pressed while paused, stays when the video plays again", () => {
+    const el = livePlayer(player());
+    vi.advanceTimersByTime(10);
+    const { controller } = start(null);
+    vi.advanceTimersByTime(3000);
+    press('m'); // muted by Aloud: the player never heard of it
+    expect(el.muted).toBe(true);
+    vi.advanceTimersByTime(3000);
+    Object.defineProperty(el, 'paused', { value: true, writable: true, configurable: true });
+    ownMuteButton(el, false);
+    vi.advanceTimersByTime(3000);
+    Object.defineProperty(el, 'paused', { value: false, writable: true, configurable: true });
+    el.dispatchEvent(new Event('playing'));
+    vi.advanceTimersByTime(500);
+    expect(el.muted).toBe(false);
+    controller.stop();
+  });
+
+  it('nor one pressed just as a video begins, nor sound brought back with its volume slider', () => {
+    const el = livePlayer(player());
+    vi.advanceTimersByTime(10);
+    const { controller } = start(null);
+    vi.advanceTimersByTime(3000);
+    press('m');
+    expect(el.muted).toBe(true);
+    // The next video begins, and the viewer unmutes it at once.
+    vi.advanceTimersByTime(3000);
+    el.dispatchEvent(new Event('loadstart'));
+    el.dispatchEvent(new Event('playing'));
+    vi.advanceTimersByTime(100);
+    ownMuteButton(el, false);
+    vi.advanceTimersByTime(2000);
+    expect(el.muted).toBe(false);
+    // M again (muted), then the slider dragged up from nothing: the sound comes back, and stays.
+    press('m');
+    expect(el.muted).toBe(true);
+    vi.advanceTimersByTime(3000);
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.setAttribute('aria-label', 'Volume');
+    document.body.append(slider);
+    slider.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, composed: true }));
+    el.muted = false;
+    vi.advanceTimersByTime(800);
+    slider.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, composed: true }));
+    vi.advanceTimersByTime(3000);
+    el.dispatchEvent(new Event('loadstart'));
+    el.dispatchEvent(new Event('playing'));
+    vi.advanceTimersByTime(500);
+    expect(el.muted).toBe(false);
+    controller.stop();
+  });
+
+  it('sound turned on with M is not forced onto a page decoration, nor a big video beside the one watched', async () => {
+    const main = livePlayer(player());
+    main.muted = true;
+    main.getBoundingClientRect = () => new DOMRect(0, 0, 800, 450);
+    vi.advanceTimersByTime(10);
+    const { controller } = start(null);
+    vi.advanceTimersByTime(3000);
+    press('m');
+    expect(main.muted).toBe(false);
+    // A looping background video, made to play silently by itself.
+    const loop = livePlayer(document.createElement('video'));
+    loop.autoplay = true;
+    loop.loop = true;
+    loop.defaultMuted = true;
+    loop.muted = true;
+    Object.defineProperty(loop, 'paused', { value: false, configurable: true });
+    Object.defineProperty(loop, 'readyState', { value: 4, configurable: true });
+    loop.getBoundingClientRect = () => new DOMRect(0, 500, 1000, 600);
+    document.body.append(loop);
+    // A muted advert, playing beside the main video, smaller than it.
+    const ad = livePlayer(document.createElement('video'));
+    ad.muted = true;
+    Object.defineProperty(ad, 'paused', { value: false, configurable: true });
+    Object.defineProperty(ad, 'readyState', { value: 4, configurable: true });
+    ad.getBoundingClientRect = () => new DOMRect(820, 0, 300, 250);
+    document.body.append(ad);
+    await vi.advanceTimersByTimeAsync(600);
+    loop.dispatchEvent(new Event('playing'));
+    ad.dispatchEvent(new Event('playing'));
+    vi.advanceTimersByTime(500);
+    expect(loop.muted).toBe(true);
+    expect(ad.muted).toBe(true);
+    expect(main.muted).toBe(false);
+    controller.stop();
+  });
+
   it('a small muted preview elsewhere on the page is not given sound', async () => {
     const main = livePlayer(player());
     main.muted = true;
@@ -890,7 +991,53 @@ describe('Facebook: its seek bar, and its own mute button', () => {
     controller.stop();
   });
 
-  it('a mute button that does nothing when pressed: Aloud switches the sound itself', () => {
+  /** A player with a button labelled `label` beside the video, counting its presses. */
+  function withButton(label: string, el: HTMLMediaElement = live(player())) {
+    const frame = document.createElement('div');
+    const button = document.createElement('button');
+    button.setAttribute('aria-label', label);
+    let pressed = 0;
+    button.addEventListener('click', () => pressed++);
+    frame.append(el, button);
+    document.body.append(frame);
+    el.getBoundingClientRect = () => new DOMRect(0, 0, 400, 700);
+    frame.getBoundingClientRect = () => new DOMRect(0, 0, 400, 760);
+    button.getBoundingClientRect = () => new DOMRect(350, 650, 32, 32);
+    return { el, button, pressed: () => pressed };
+  }
+
+  it("M never presses someone's microphone on a call, nor anything near a live camera", () => {
+    const { el, pressed } = withButton("Mute Bob's microphone");
+    const { controller } = start(null);
+    vi.advanceTimersByTime(3000);
+    press('m');
+    expect(pressed()).toBe(0);
+    expect(el.muted).toBe(true); // switched by Aloud instead
+    controller.stop();
+    document.body.innerHTML = '';
+    const call = live(player());
+    Object.defineProperty(call, 'srcObject', { value: {}, configurable: true }); // a MediaStream
+    const tile = withButton('Mute', call);
+    const again = start(null);
+    vi.advanceTimersByTime(3000);
+    press('m');
+    expect(tile.pressed()).toBe(0);
+    again.controller.stop();
+  });
+
+  it('nor a button that only mentions the sound: audio description, its language, its settings', () => {
+    for (const label of ['Audio description', 'Audio language', 'Audio settings', 'Download audio']) {
+      document.body.innerHTML = '';
+      const { pressed } = withButton(label);
+      const { controller } = start(null);
+      vi.advanceTimersByTime(3000);
+      press('m');
+      expect(pressed(), label).toBe(0);
+      controller.stop();
+    }
+  });
+
+    it('a mute button that does nothing when pressed: Aloud switches the sound itself', () => {
     const frame = document.createElement('div');
     const el = live(player());
     const button = document.createElement('button');

@@ -331,12 +331,17 @@ export class TouchSpeedButton {
    * into view, and the button placed then was left at the window's edge, or on the wrong part of
    * the screen.
    */
-  wake(media?: HTMLMediaElement): void {
+  wake(media?: HTMLMediaElement): boolean {
     this.media = media ?? null;
     this.open = false;
-    // A key that changed the speed (no video given): shown at once, as the new speed is the answer.
-    if (media) this.whenStill(() => this.show());
-    else this.show();
+    // A key that changed the speed (no video given): shown at once, as the new speed is the answer,
+    // and false when there is no video it can sit on (audio; a small one, or one out of sight).
+    if (!media) {
+      this.show();
+      return this.shown;
+    }
+    this.whenStill(() => this.show());
+    return true;
   }
 
   /**

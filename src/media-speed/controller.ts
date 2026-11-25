@@ -82,6 +82,11 @@ export class MediaSpeedController {
   private gestureAt = -Infinity;
   /** A pointer or finger is down, and its release belongs to the press that began `gestureAt`. */
   private pressing = false;
+  /**
+   * When the viewer last pressed or dragged one of a player's own sound controls (its mute button,
+   * its volume slider): a change of sound that follows is theirs, whatever else is going on.
+   */
+  private soundControlAt = -Infinity;
   /** When each player last began to seek (its `seeking` event). */
   private seekStarted = new WeakMap<Media, number>();
   /** When each player's sound last went off or on (its `volumechange`): see `onRateChange`. */
@@ -157,7 +162,7 @@ export class MediaSpeedController {
     // follows a click or key at once is a choice, even straight after a seek (see `onRateChange`).
     // `click` and `pointerup` too: a site's speed menu acts on the click, not the press.
     for (const type of ['pointerdown', 'pointerup', 'click', 'keydown', 'touchstart', 'touchend']) {
-      this.listen(window, type, () => this.onInput(type), true);
+      this.listen(window, type, (e) => this.onInput(type, e), true);
     }
     this.syncButton();
   }
@@ -195,9 +200,10 @@ export class MediaSpeedController {
   }
 
   /** A click, tap or key: when it happened, and when the press it belongs to began. */
-  private onInput(type: string): void {
+  private onInput(type: string, event?: Event): void {
     const now = Date.now();
     this.lastInput = now;
+    if (type !== 'keydown' && event && pressedSoundControl(event)) this.soundControlAt = now;
     if (type === 'pointerdown' || type === 'touchstart') {
       this.pressing = true;
       this.gestureAt = now;
@@ -275,9 +281,10 @@ export class MediaSpeedController {
     // One speed on the video, not two: the speed button, where the viewer dragged it, when it is
     // on (touch-button.ts); the fixed badge only when it is off. Both follow "Show the speed on the
     // video when it changes".
+    // The button cannot sit on audio, or on a video too small or out of sight: then the badge,
+    // at the window's corner if need be, or the new speed was shown nowhere.
     if (show && this.settings.showBadge) {
-      if (this.touch) this.touch.wake();
-      else this.showBadge(formatRate(this.rate));
+      if (!this.touch?.wake()) this.showBadge(formatRate(this.rate));
     }
     this.touch?.refresh();
     this.host.onRate(this.rate);
@@ -695,6 +702,14 @@ export class MediaSpeedController {
     const ours = this.soundSetTo.get(media);
     this.soundSetTo.delete(media);
     if (ours === now) return;
+    // The viewer's own hand on the player's sound (its mute button, its volume slider): theirs,
+    // paused or playing, just started or not, and what the next videos get, when Aloud has a
+    // sound to keep. M's sound overrode it: an unmute pressed while paused, dragged on the slider,
+    // or as a video began was put back to muted.
+    if (Date.now() - this.soundControlAt <= VIEWER_SOUND_MS) {
+      if (this.wantSilent != null) this.wantSilent = now;
+      return;
+    }
     const since = this.startedAt.get(media) ?? -Infinity;
     if (!this.begun.has(media) || Date.now() - since < SETTLE_MS) {
       this.keepSound(media);
@@ -724,6 +739,9 @@ export class MediaSpeedController {
     const want = this.wantSilent;
     if (want == null || !media.isConnected || media.paused || silent(media) === want) return;
     if (!controllable(media)) return;
+    // Sound turned on is for the video being watched (a feed's next one), not for every video that
+    // starts: a muted advert beside it, or a page's decorative loop, was given sound too.
+    if (!want && (decorative(media) || activeMedia([...this.known].filter(controllable)) !== media)) return;
     const tries = (this.soundTries.get(media) ?? 0) + 1;
     this.soundTries.set(media, tries);
     if (tries > MAX_OVERRIDES) return;
@@ -959,13 +977,63 @@ export function controllable(media: Media): boolean {
   return source && !(Number.isFinite(media.duration) && media.duration < 30);
 }
 
+/** A change of sound this soon after the viewer pressed the player's own sound control is theirs. */
+const VIEWER_SOUND_MS = 1500;
+
+/**
+ * A page's decoration, not something to watch: a video made to play by itself, silent, forever
+ * (`<video autoplay muted loop>`), as behind a page's heading. A feed's videos are started by its
+ * script, not by these attributes.
+ */
+function decorative(media: Media): boolean {
+  return media.autoplay && media.defaultMuted && media.loop;
+}
+
+/**
+ * Was this press or click on a player's own sound control: a button labelled as its mute
+ * (`playerMuteButton`'s rules), or a volume slider? Looked for along the event's path, shadow
+ * roots included, a few levels up from what was hit (the icon inside the button).
+ */
+function pressedSoundControl(event: Event): boolean {
+  const path = event.composedPath();
+  for (let i = 0; i < Math.min(path.length, 6); i++) {
+    const el = path[i];
+    if (!(el instanceof HTMLElement)) continue;
+    if (el instanceof HTMLInputElement && el.type === 'range') {
+      // Labelled as the volume: an unlabelled slider may be the seek bar, whose drag mutes on some
+      // players (Facebook), and that mute is no choice.
+      if (/volume|sound|\bson\b|lautst|volumen|звук/i.test(labelOf(el))) return true;
+    }
+    const role = el.getAttribute('role');
+    if (el.tagName === 'BUTTON' || role === 'button' || role === 'slider') {
+      if (soundLabel(labelOf(el))) return true;
+    }
+  }
+  return false;
+}
+
+function labelOf(el: Element): string {
+  return `${el.getAttribute('aria-label') ?? ''} ${el.getAttribute('title') ?? ''}`.trim();
+}
+
+/** A label that names the player's sound control, and nothing else's (see MUTE_LABEL). */
+function soundLabel(label: string): boolean {
+  return !!label && label.split(/\s+/).length <= MAX_MUTE_WORDS && MUTE_LABEL.test(label) && !NOT_MUTE.test(label);
+}
+
 /** How long a player's own mute button is given to act before Aloud switches the sound itself. */
 const MUTE_BUTTON_MS = 200;
 
 /** What a player calls its mute button, in the languages its label may be in. */
 const MUTE_LABEL = /\b(un)?mute\b|\bsound\b|\bvolume\b|\baudio\b|\bson\b|stumm|\bton\b|silenc|sonido|suono|geluid|\bsom\b|звук|كتم|الصوت/i;
-/** Labels that mention sound but are something else: a menu or settings, captions. */
-const NOT_MUTE = /setting|réglage|option|menu|caption|subtit|sous-titre|track|piste/i;
+/**
+ * Labels that mention sound but are something else: a menu or settings, captions, an audio
+ * description or language, and on a call someone's microphone or camera ("Mute Bob's microphone").
+ */
+const NOT_MUTE =
+  /setting|réglage|option|menu|caption|subtit|sous-titre|track|piste|descri|language|langue|idioma|sprache|lingua|microph|\bmic\b|micro\b|camera|caméra|kamera|cámara|webcam|participant|everyone|\ball\b|tous\b|todos\b|alle\b|quality|qualité|download|share|partag|record/i;
+/** A mute button says what it does in a few words ("Mute (m)", "Turn sound on"), not a sentence. */
+const MAX_MUTE_WORDS = 4;
 
 /**
  * The mute button of the player `media` sits in, if it has one: a button inside the player (no
@@ -973,6 +1041,9 @@ const NOT_MUTE = /setting|réglage|option|menu|caption|subtit|sous-titre|track|p
  * label says sound or mute, and that is drawn.
  */
 export function playerMuteButton(media: Media): HTMLElement | null {
+  // A call or a camera (a live stream, not a recording): its buttons are people's microphones and
+  // cameras, never a player's sound, and none of them is pressed.
+  if ((media as HTMLMediaElement & { srcObject?: unknown }).srcObject) return null;
   const video = media.getBoundingClientRect();
   const area = video.width * video.height;
   if (!area) return null;
@@ -981,8 +1052,7 @@ export function playerMuteButton(media: Media): HTMLElement | null {
     const box = node.getBoundingClientRect();
     if (box.width * box.height > area * 2.5) break;
     for (const button of node.querySelectorAll<HTMLElement>('button, [role="button"]')) {
-      const label = `${button.getAttribute('aria-label') ?? ''} ${button.getAttribute('title') ?? ''}`.trim();
-      if (!label || !MUTE_LABEL.test(label) || NOT_MUTE.test(label)) continue;
+      if (!soundLabel(labelOf(button))) continue;
       const drawn = button.getBoundingClientRect();
       if (drawn.width && drawn.height) return button;
     }
