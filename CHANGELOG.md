@@ -17,6 +17,8 @@ Website-only and documentation changes are not listed: they never reach the exte
 ## 1.0.5 (unreleased: dated on release)
 
 ### Fixed
+- **Kokoro reads up to three times faster in Firefox** without a graphics card, and somewhat
+  faster in Chrome: ONNX Runtime, which runs the voices, is updated from 1.22.0 to 1.31.1.
 - **Muting a video no longer costs its speed, and sound turned on stays on.** On players that set
   their own speed again when the sound changes (Facebook), muting or unmuting with M dropped the
   speed to 1× and stored 1× for the site. And sound turned on with M went off again on the next

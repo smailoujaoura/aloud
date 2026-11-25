@@ -40,7 +40,7 @@
     "@huggingface/transformers": "3.7.5",
     "@mozilla/readability": "0.6.0",
     "kokoro-js": "1.2.1",
-    "onnxruntime-web": "1.22.0",
+    "onnxruntime-web": "1.31.1",
     "pdf-lib": "1.17.1",
     "pdfjs-dist": "^6.5.438",
     "phonemizer": "1.2.1",
