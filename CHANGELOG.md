@@ -14,7 +14,7 @@ Website-only and documentation changes are not listed: they never reach the exte
   on a phone: at most two voices loaded at once, and the speed button on videos. Dropbox sign-in
   there uses the code Dropbox shows.
 
-## 1.0.5 (unreleased: dated on release)
+## 1.0.5 (2026-11-25)
 
 ### Fixed
 - **On a phone, the speed button stays put while you swipe through Shorts.** It rode the video
